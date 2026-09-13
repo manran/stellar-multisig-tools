@@ -13,10 +13,11 @@ import {
   getSigningRequest,
   submitSigningRequest,
 } from '../server/requestService';
-import { loadAccount } from '../src/stellar/horizon';
+import { loadAccount, loadNetworkParameters } from '../src/stellar/horizon';
 
 const network = 'testnet' as const;
 const horizonUrl = 'https://horizon-testnet.stellar.org';
+const serviceOptions = { accountLoader: loadAccount, networkParametersLoader: loadNetworkParameters };
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -131,45 +132,45 @@ async function run() {
   const signedByC = TransactionBuilder.fromXdr(baseXdr, Networks.TESTNET);
   signedByC.sign(signerC);
 
-  const created = await createSigningRequest(blobSigningRequestStore, { network, xdr: baseXdr });
+  const created = await createSigningRequest(blobSigningRequestStore, { network, xdr: baseXdr }, serviceOptions);
   assert(created.signatureCount === 0, 'New Blob-backed Request should start unsigned.');
   assert(created.status === 'awaiting_signatures', `Expected waiting status, got ${created.status}.`);
   console.log(`Created Blob-backed Request ${created.id}.`);
 
-  const loaded = await getSigningRequest(blobSigningRequestStore, created.id);
+  const loaded = await getSigningRequest(blobSigningRequestStore, created.id, serviceOptions);
   assert(loaded.transactionHash === created.transactionHash, 'Stored Request transaction hash changed after reload.');
   assert(loaded.signatureCount === 0, 'Stored Request unexpectedly contains signatures.');
   console.log('Reloaded Request from private Blob.');
 
-  const first = await contributeSigningRequest(blobSigningRequestStore, created.id, signedByB.toXdr());
+  const first = await contributeSigningRequest(blobSigningRequestStore, created.id, signedByB.toXdr(), serviceOptions);
   assert(first.addedSignatureCount === 1, 'Signer B contribution did not add exactly one signature.');
   assert(first.request.signatureCount === 1, 'Request should contain one signature after signer B.');
   assert(first.request.status === 'awaiting_signatures', `Expected waiting status after signer B, got ${first.request.status}.`);
   console.log('Accepted signer B contribution.');
 
-  const duplicate = await contributeSigningRequest(blobSigningRequestStore, created.id, signedByB.toXdr());
+  const duplicate = await contributeSigningRequest(blobSigningRequestStore, created.id, signedByB.toXdr(), serviceOptions);
   assert(duplicate.addedSignatureCount === 0, 'Repeated signer B contribution should be idempotent.');
   assert(duplicate.request.signatureCount === 1, 'Repeated contribution changed signature count.');
   console.log('Repeated signer B contribution remained idempotent.');
 
-  const second = await contributeSigningRequest(blobSigningRequestStore, created.id, signedByC.toXdr());
+  const second = await contributeSigningRequest(blobSigningRequestStore, created.id, signedByC.toXdr(), serviceOptions);
   assert(second.addedSignatureCount === 1, 'Signer C contribution did not add exactly one signature.');
   assert(second.request.signatureCount === 2, 'Request should contain two signatures after signer C.');
   assert(second.request.contributionCount === 2, 'Request should contain two unique signature contributions.');
   assert(second.request.status === 'ready', `Expected ready status after signer C, got ${second.request.status}.`);
   console.log('Accepted signer C contribution; Request is ready.');
 
-  const submitted = await submitSigningRequest(blobSigningRequestStore, created.id);
+  const submitted = await submitSigningRequest(blobSigningRequestStore, created.id, serviceOptions);
   assert(submitted.status === 'submitted', `Expected submitted status, got ${submitted.status}.`);
   assert(submitted.submission?.transactionHash === created.transactionHash, 'Submission hash does not match the Request transaction hash.');
   assert(typeof submitted.submission?.ledger === 'number', 'Submission ledger was not recorded.');
   console.log(`Request service submitted the merged XDR in ledger ${submitted.submission.ledger}.`);
 
-  const reloadedSubmitted = await getSigningRequest(blobSigningRequestStore, created.id);
+  const reloadedSubmitted = await getSigningRequest(blobSigningRequestStore, created.id, serviceOptions);
   assert(reloadedSubmitted.status === 'submitted', 'Submitted lifecycle state was not persisted in private Blob.');
   assert(reloadedSubmitted.submission?.ledger === submitted.submission.ledger, 'Persisted submission ledger changed after reload.');
 
-  const idempotentSubmit = await submitSigningRequest(blobSigningRequestStore, created.id);
+  const idempotentSubmit = await submitSigningRequest(blobSigningRequestStore, created.id, serviceOptions);
   assert(idempotentSubmit.status === 'submitted', 'Repeated submit should remain idempotently submitted.');
   assert(idempotentSubmit.submission?.ledger === submitted.submission.ledger, 'Repeated submit changed the stored result.');
   console.log('Submission lifecycle persisted and repeated submit remained idempotent.');
