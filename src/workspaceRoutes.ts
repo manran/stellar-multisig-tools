@@ -62,6 +62,10 @@ export const CANONICAL_STELLAR_ROUTES = [
   { path: '/terms', kind: 'legal', mode: null },
 ] as const satisfies readonly StellarWorkspaceRoute[];
 
+export function isStellarWorkspaceHost(hostname: string) {
+  return hostname === 'stellar.multisig.tools' || hostname === 'stellar-testnet.multisig.tools';
+}
+
 export function normalizedStellarWorkspacePath(pathname: string) {
   let path = pathname;
   if (path === '/stellar') path = '/';

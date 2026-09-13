@@ -24,7 +24,7 @@ import TreasuryApp from './TreasuryApp';
 import TreasuryBoxSettingsApp from './TreasuryBoxSettingsApp';
 import TransactionReceiptApp from './TransactionReceiptApp';
 import { navigateWorkspace, WORKSPACE_NAVIGATION_EVENT } from './workspaceNavigation';
-import { stellarWorkspaceRouteForPath } from './workspaceRoutes';
+import { isStellarWorkspaceHost, stellarWorkspaceRouteForPath } from './workspaceRoutes';
 import type { StellarWorkspaceRouteKind } from './workspaceRoutes';
 
 const App = lazy(() => import('./App.tsx'));
@@ -38,7 +38,7 @@ interface RouteMatch {
 }
 
 function routeFor(pathname: string, hostname = window.location.hostname): RouteMatch {
-  const isStellarHost = hostname.startsWith('stellar.');
+  const isStellarHost = isStellarWorkspaceHost(hostname);
   const isStellarPath = isStellarHost || pathname === '/stellar' || pathname.startsWith('/stellar/');
   if (!isStellarPath) return { kind: 'directory', isStellar: false };
 

@@ -3,6 +3,7 @@ import test from 'node:test';
 import { canonicalStellarPath } from '../src/workspaceNavigation.js';
 import {
   CANONICAL_STELLAR_ROUTES,
+  isStellarWorkspaceHost,
   stellarActivityScopeForPath,
   stellarWorkspaceRouteForPath,
 } from '../src/workspaceRoutes.js';
@@ -39,6 +40,13 @@ const expectedCanonicalPaths = [
   '/privacy',
   '/terms',
 ];
+
+test('Stellar workspace hosts include both Mainnet and Testnet deployments', () => {
+  assert.equal(isStellarWorkspaceHost('stellar.multisig.tools'), true);
+  assert.equal(isStellarWorkspaceHost('stellar-testnet.multisig.tools'), true);
+  assert.equal(isStellarWorkspaceHost('multisig.tools'), false);
+  assert.equal(isStellarWorkspaceHost('www.multisig.tools'), false);
+});
 
 test('canonical Stellar route inventory matches the public product routes', () => {
   assert.deepEqual(CANONICAL_STELLAR_ROUTES.map((route) => route.path), expectedCanonicalPaths);
