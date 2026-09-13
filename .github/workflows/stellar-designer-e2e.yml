@@ -1,0 +1,25 @@
+name: Stellar Designer Live E2E
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/liveDesignerE2e.ts'
+      - '.github/workflows/stellar-designer-e2e.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  testnet-designer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsx scripts/liveDesignerE2e.ts

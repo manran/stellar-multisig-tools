@@ -1,0 +1,13 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Workspace control documents live in /opt/MST, outside the repository.
+/CURRENT.md
+/TODO.md
+/HANDOFF*.md

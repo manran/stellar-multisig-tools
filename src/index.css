@@ -1,0 +1,483 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Enable class-based dark mode in Tailwind v4 */
+@variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    @apply antialiased;
+  }
+  
+  :root {
+    color-scheme: light;
+  }
+  
+  .dark {
+    color-scheme: dark;
+  }
+}
+
+@layer utilities {
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  @media (max-width: 639px) {
+    .fade-right-edge {
+      mask-image: linear-gradient(to right, black 90%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to right, black 90%, transparent 100%);
+    }
+  }
+}
+
+/* Stellar product readability baseline: minimal does not mean faint. */
+html.stellar-ui {
+  font-size: 17px;
+  min-width: 100%;
+  min-height: 100%;
+  background: #f6f6f2;
+
+  /* Firefly / Fchain green palette. Existing violet utilities are aliased here
+     so every Stellar surface changes together while components migrate to brand tokens. */
+  --color-violet-50: #ecfdf5;
+  --color-violet-100: #d1fae5;
+  --color-violet-200: #a7f3d0;
+  --color-violet-300: #6ee7b7;
+  --color-violet-400: #34d399;
+  --color-violet-500: #10b981;
+  --color-violet-600: #059669;
+  --color-violet-700: #047857;
+  --color-violet-800: #065f46;
+  --color-violet-900: #064e3b;
+  --color-violet-950: #022c22;
+}
+
+html.stellar-ui body,
+html.stellar-ui #root {
+  width: 100%;
+  min-width: 100%;
+  min-height: 100dvh;
+  background: #f6f6f2;
+}
+
+html.stellar-ui body {
+  margin: 0;
+  overflow-x: hidden;
+  line-height: 1.55;
+}
+
+html.stellar-ui.dark,
+html.stellar-ui.dark body,
+html.stellar-ui.dark #root {
+  background: #090909;
+}
+
+html.stellar-ui .opacity-40 { opacity: 0.64; }
+html.stellar-ui .opacity-45 { opacity: 0.67; }
+html.stellar-ui .opacity-50 { opacity: 0.70; }
+html.stellar-ui .opacity-55 { opacity: 0.73; }
+html.stellar-ui .opacity-60 { opacity: 0.76; }
+html.stellar-ui .opacity-65 { opacity: 0.80; }
+html.stellar-ui .opacity-70 { opacity: 0.84; }
+
+/* Network theme layer.
+
+   Mainnet uses the native emerald interaction palette. On Testnet, interactive
+   controls remap that same semantic palette to sky. Components therefore use
+   one set of interaction classes and the page network switches the theme in a
+   single place. Success, warning, and danger surfaces are intentionally not
+   remapped because they describe outcomes rather than network context. */
+html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textarea, select, [role="button"]) {
+  --color-emerald-50: var(--color-sky-50);
+  --color-emerald-100: var(--color-sky-100);
+  --color-emerald-200: var(--color-sky-200);
+  --color-emerald-300: var(--color-sky-300);
+  --color-emerald-400: var(--color-sky-400);
+  --color-emerald-500: var(--color-sky-500);
+  --color-emerald-600: var(--color-sky-600);
+  --color-emerald-700: var(--color-sky-700);
+  --color-emerald-800: var(--color-sky-800);
+  --color-emerald-900: var(--color-sky-900);
+  --color-emerald-950: var(--color-sky-950);
+}
+
+@media (max-width: 639px) {
+  html.stellar-ui {
+    font-size: 16px;
+  }
+}
+
+/* Landing hero: one scenario advances at each 12-second boundary. Dynamic
+   scenario text is fully hidden across that boundary so React never swaps
+   visible data. */
+.landing-demo-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  white-space: nowrap;
+}
+.landing-demo-stage-ready {
+  opacity: 1;
+}
+.landing-demo-waiting,
+.landing-demo-signed {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.landing-demo-waiting {
+  opacity: 0;
+  color: var(--color-neutral-400);
+}
+.landing-demo-signed {
+  opacity: 1;
+  font-weight: 600;
+  color: var(--color-emerald-700);
+}
+.dark .landing-demo-signed {
+  color: var(--color-emerald-300);
+}
+.landing-demo-scenario-swap {
+  opacity: 1;
+  will-change: opacity;
+}
+.landing-demo-progress { width: 68%; }
+.landing-demo-pulse { left: calc(68% - 0.375rem); }
+.landing-demo-submitted { opacity: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .landing-demo-cycle { animation: landing-cycle 12s linear infinite; }
+  .landing-demo-scenario-swap { animation: landing-scenario-swap 12s ease-in-out infinite; }
+  .landing-demo-stage-zero { animation: landing-stage-zero 12s linear infinite; }
+  .landing-demo-stage-one { animation: landing-stage-one 12s linear infinite; }
+  .landing-demo-stage-ready { animation: landing-stage-ready 12s linear infinite; }
+  .landing-demo-stage-submitted { animation: landing-stage-submitted 12s linear infinite; }
+  .landing-demo-waiting.landing-demo-first-check { animation: landing-waiting-first 12s linear infinite; }
+  .landing-demo-signed.landing-demo-first-check { animation: landing-signed-first 12s linear infinite; }
+  .landing-demo-waiting.landing-demo-second-check { animation: landing-waiting-second 12s linear infinite; }
+  .landing-demo-signed.landing-demo-second-check { animation: landing-signed-second 12s linear infinite; }
+  .landing-demo-ready-label { animation: landing-ready-label 12s linear infinite; }
+  .landing-demo-progress { animation: landing-progress 12s ease-in-out infinite; }
+  .landing-demo-pulse { animation: landing-pulse 12s ease-in-out infinite; }
+  .landing-demo-submitted { animation: landing-submitted 12s linear infinite; }
+}
+
+@keyframes landing-cycle {
+  0%, 100% { opacity: 1; }
+}
+@keyframes landing-scenario-swap {
+  0% { opacity: 0; }
+  3%, 94% { opacity: 1; }
+  99%, 100% { opacity: 0; }
+}
+@keyframes landing-stage-zero { 0%, 22% { opacity: 1; } 26%, 100% { opacity: 0; } }
+@keyframes landing-stage-one { 0%, 22%, 48%, 100% { opacity: 0; } 26%, 44% { opacity: 1; } }
+@keyframes landing-stage-ready { 0%, 46%, 75%, 100% { opacity: 0; } 50%, 71% { opacity: 1; } }
+@keyframes landing-stage-submitted { 0%, 73%, 93%, 100% { opacity: 0; } 78%, 89% { opacity: 1; } }
+@keyframes landing-waiting-first { 0%, 22% { opacity: 1; } 26%, 100% { opacity: 0; } }
+@keyframes landing-signed-first { 0%, 22%, 96%, 100% { opacity: 0; } 26%, 91% { opacity: 1; } }
+@keyframes landing-waiting-second { 0%, 46% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes landing-signed-second { 0%, 46%, 96%, 100% { opacity: 0; } 50%, 91% { opacity: 1; } }
+@keyframes landing-ready-label { 0%, 46%, 93%, 100% { opacity: 0; } 50%, 89% { opacity: 1; } }
+@keyframes landing-progress { 0%, 14% { width: 6%; } 30%, 44% { width: 34%; } 54%, 71% { width: 68%; } 79%, 92% { width: 100%; } 97%, 100% { width: 6%; } }
+@keyframes landing-pulse { 0%, 14% { left: 0; opacity: .45; } 30%, 44% { left: calc(34% - .375rem); opacity: 1; } 54%, 71% { left: calc(68% - .375rem); opacity: 1; } 79%, 92% { left: calc(100% - .75rem); opacity: 1; } 97%, 100% { left: 0; opacity: .45; } }
+@keyframes landing-submitted { 0%, 75%, 94%, 100% { opacity: 0; transform: translateY(3px); } 80%, 90% { opacity: 1; transform: translateY(0); } }
+
+/* Transaction evidence: browser print doubles as Save PDF. The printed view is
+   intentionally a document, not a screenshot of the application. */
+.transaction-evidence-print-authorization,
+.transaction-evidence-print-only,
+.transaction-evidence-print-brand,
+.transaction-evidence-print-footer,
+.transaction-evidence-portable-document {
+  display: none;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 9mm 10mm 10mm;
+}
+
+@media print {
+  html.stellar-transaction-evidence,
+  html.stellar-transaction-evidence body,
+  html.stellar-transaction-evidence #root {
+    background: #fff !important;
+    color: #111 !important;
+    font-size: 9.25pt !important;
+  }
+
+  html.stellar-transaction-evidence body,
+  html.stellar-transaction-evidence #root,
+  html.stellar-transaction-evidence #root > div {
+    overflow: visible !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-human-heading,
+  html.stellar-transaction-evidence .transaction-evidence-human-document,
+  html.stellar-transaction-evidence header,
+  html.stellar-transaction-evidence aside,
+  html.stellar-transaction-evidence footer,
+  html.stellar-transaction-evidence .transaction-evidence-screen-controls,
+  html.stellar-transaction-evidence .transaction-evidence-screen-only,
+  html.stellar-transaction-evidence .transaction-evidence-human-label,
+  html.stellar-transaction-evidence .transaction-evidence-print-hide,
+  html.stellar-transaction-evidence .transaction-evidence-print-authorization,
+  html.stellar-transaction-evidence .transaction-evidence-advanced {
+    display: none !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-print-only {
+    display: inline !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-portable-document {
+    display: block !important;
+  }
+
+  html.stellar-transaction-evidence .portable-evidence-label {
+    font-size: 7pt !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+    color: #666 !important;
+  }
+
+  html.stellar-transaction-evidence .portable-evidence-address {
+    overflow-wrap: anywhere !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 7.5pt !important;
+    line-height: 1.3 !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-address-short {
+    display: none !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-address-full {
+    display: inline !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-address-line {
+    margin-top: 0 !important;
+    font-size: 9pt !important;
+    line-height: 1.35 !important;
+  }
+
+  html.stellar-transaction-evidence [data-private-note-print="exclude"],
+  html.stellar-transaction-evidence [data-private-memo-print="exclude"] {
+    display: none !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-print-brand {
+    display: flex !important;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 5px;
+    border-bottom: 1.5px solid #222;
+    padding-bottom: 4px;
+    font-size: 8pt;
+    letter-spacing: 0.02em;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-print-brand strong {
+    font-size: 10pt;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-print-footer {
+    display: block !important;
+    margin-top: 6px;
+    border-top: 1px solid #ddd;
+    padding-top: 4px;
+    overflow-wrap: anywhere;
+    font-size: 6.8pt;
+    color: #666 !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-page {
+    padding: 0 !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-page > div {
+    max-width: none !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-heading {
+    margin-top: 0 !important;
+    padding-bottom: 6px !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-heading h1 {
+    font-size: 17pt !important;
+    line-height: 1.15 !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-heading p {
+    margin-top: 2px !important;
+    font-size: 8pt !important;
+    line-height: 1.35 !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-content {
+    margin-top: 6px !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-content > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 6px !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-page section:not(.transaction-evidence-record),
+  html.stellar-transaction-evidence .transaction-evidence-page [data-private-note-print="include"] {
+    border-radius: 4px !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #111 !important;
+    padding: 8px 9px !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-record {
+    break-inside: avoid;
+    border-radius: 4px !important;
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-record-status {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 7px 9px !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-record-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-record-grid > div {
+    border-bottom: 0 !important;
+    padding: 6px 9px !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-record-grid > div + div {
+    border-left: 1px solid #ddd !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-record-hash {
+    padding: 6px 9px !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-record-hash > :last-child {
+    font-size: 7.8pt !important;
+    line-height: 1.25 !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-record-status,
+  html.stellar-transaction-evidence .transaction-evidence-record-grid,
+  html.stellar-transaction-evidence .transaction-evidence-record-hash {
+    break-inside: avoid;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-summary {
+    break-inside: auto;
+  }
+
+  html.stellar-transaction-evidence [data-operation-details] details summary {
+    cursor: default !important;
+  }
+
+  html.stellar-transaction-evidence [data-operation-details] [data-operation-toggle-label],
+  html.stellar-transaction-evidence [data-operation-details] [data-operation-screen-fields] {
+    display: none !important;
+  }
+
+  html.stellar-transaction-evidence [data-operation-details] [data-operation-print-fields] {
+    display: block !important;
+  }
+
+  html.stellar-transaction-evidence [data-operation-details] > div:first-child {
+    break-after: avoid;
+  }
+
+  html.stellar-transaction-evidence [data-operation-details] > div:not(:first-child) {
+    break-inside: avoid;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-signature-grid {
+    display: block !important;
+    margin-top: 6px !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-signature-card {
+    break-inside: avoid;
+    padding: 5px 7px !important;
+    background: #fff !important;
+    border: 0 !important;
+    border-bottom: 1px solid #ddd !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-signature-card:last-child {
+    border-bottom: 0 !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-signature-account {
+    break-inside: auto;
+    padding-top: 6px !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-history > div > div {
+    break-inside: avoid;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-history-line {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: baseline !important;
+    gap: 10px !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-history-line time {
+    white-space: nowrap !important;
+    text-align: right !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-history-row {
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-history-actor {
+    margin-top: 1px !important;
+    font-size: 7pt !important;
+    line-height: 1.25 !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-page h2 {
+    font-size: 12pt !important;
+    line-height: 1.2 !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-page :where(.text-neutral-400, .text-neutral-500, .text-neutral-600) {
+    color: #555 !important;
+  }
+
+  html.stellar-transaction-evidence .transaction-evidence-address-line {
+    color: #333 !important;
+  }
+}

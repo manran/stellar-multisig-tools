@@ -1,0 +1,354 @@
+# MultiSigTools Agent API v1
+
+**Status:** beta integration contract  
+**Base origin:** `https://stellar.multisig.tools`  
+**Web quick start:** `https://stellar.multisig.tools/developers`
+
+MultiSigTools exposes one signer-oriented API shared by a Human and the Agents they explicitly delegate. A Treasury is a resource the signer may access; it is not the normal machine principal.
+
+```text
+Principal = Stellar signer identity (network + G-address)
+Actor     = Human session or one named Agent credential
+Credential != Stellar private key != Stellar signature
+```
+
+Two Agent credentials may represent the same Principal while remaining independently named, scoped, audited and revocable.
+
+## Agent access levels
+
+A Human connects the signer wallet, opens **Agent access**, unlocks private MultiSigTools data, names the Agent, and chooses one cumulative level:
+
+| Level | Authority |
+| --- | --- |
+| **Read** | Read the Principal's Inbox, Activity, Request details/status, saved contracts, personal contacts, and accessible Treasury metadata/names. |
+| **Write** | Includes Read. Create Signing Requests and shared Soroban authorization preparations, refresh/freeze preparation, keep/forget contracts, create/update personal contacts, and perform non-cryptographic Request collaboration actions such as decline. |
+| **Sign** | Includes Write. Submit signed XDR and contribute valid Stellar transaction or detached Soroban authorization signatures attributable to this Principal. |
+
+The complete `msa_...` credential secret is shown once. MultiSigTools stores only a verifier hash plus non-secret metadata.
+
+A Sign credential contains no Stellar secret key. It authorizes API operations carrying cryptographic authorization; MultiSigTools independently verifies every newly contributed signature.
+
+## One Request API
+
+Human and Agent clients use the same Request resource:
+
+```text
+POST  /api/request   create
+GET   /api/request   read
+PATCH /api/request   decline or contribute signature
+PUT   /api/request   final Stellar submission (Human only in v1)
+```
+
+There is no separate `/api/automation` product endpoint.
+
+Agent authentication:
+
+```text
+Authorization: Bearer <msa_... Agent credential>
+```
+
+Existing Human private-session/capability authentication continues on the same Request handlers.
+
+## Create a Request
+
+```text
+POST /api/request
+Authorization: Bearer <Agent credential>
+Content-Type: application/json
+Idempotency-Key: <stable business identifier>
+```
+
+```json
+{
+  "network": "public",
+  "xdr": "AAAA...",
+  "externalReference": "invoice-42",
+  "privateNote": "Vendor payment requested by Finance."
+}
+```
+
+Rules:
+
+- **Write** may create a Request from unsigned XDR.
+- XDR that already contains Stellar signatures requires **Sign**.
+- credential network must match the transaction network;
+- the Principal must currently be an authorized signer for the transaction;
+- MultiSigTools reuses the same XDR/signature/precondition/Request validation core as Human flows;
+- Agent Private Commitment creation is not supported in v1;
+- Agent-created Requests do not mint a share capability by default;
+- the Principal is persisted as a Request participant and the named Agent is persisted as actor provenance.
+
+The Agent credential is not bound to one Treasury. One signer may participate in multiple Treasuries or a multi-party transaction. Each transaction is authorized against fresh Stellar signer state.
+
+Response uses the normal Request projection plus Agent retry metadata:
+
+```json
+{
+  "request": {
+    "id": "0123456789ABCDEF",
+    "status": "awaiting_signatures",
+    "statusReason": "signatures_required",
+    "statusDetail": "Waiting for additional valid signatures.",
+    "signatureCount": 0,
+    "transactionHash": "..."
+  },
+  "replayed": false,
+  "externalReference": "invoice-42",
+  "access": {
+    "shareable": false,
+    "activityBound": true
+  }
+}
+```
+
+## Idempotency
+
+Agent `POST /api/request` requires `Idempotency-Key`.
+
+```text
+Agent credential + Idempotency-Key -> exactly one Signing Request
+```
+
+Retry the same business action with the same key. Reusing the same key with a different proposal returns `409 idempotency_conflict`.
+
+The idempotency claim reserves one Request id before the durable Request write. Once the Request store call begins, later failures do not release the claim merely because participant projection, credential usage, or response delivery failed. Retry reuses the reserved Request id.
+
+Only a failure before the Request store call begins may release a newly-created claim.
+
+This is the v131 financial no-duplicate invariant carried into the signer-owned Agent API without a second Agent Request mapping subsystem.
+
+## Read one Request
+
+```text
+GET /api/request
+Authorization: Bearer <Agent credential>
+x-multisig-request-id: 0123456789ABCDEF
+```
+
+Read requires **Read** and current Principal access to that transaction.
+
+Clients branch on typed `statusReason`, not Human-facing `statusDetail`.
+
+Current reason vocabulary includes:
+
+- `signatures_required`
+- `preconditions_not_met`
+- `preconditions_unavailable`
+- `authorization_complete`
+- `ledger_confirmed`
+- `request_expired`
+- `transaction_expired`
+- `sequence_stale`
+- `stored_signature_unrecognized`
+- `extra_signature_invalid`
+- `preconditions_failed`
+
+Unknown future values require a fresh read or Human review rather than parsing English text.
+
+## Decline
+
+```text
+PATCH /api/request
+Authorization: Bearer <Write-or-Sign Agent credential>
+x-multisig-request-id: 0123456789ABCDEF
+Content-Type: application/json
+
+{
+  "decision": "decline"
+}
+```
+
+Decline is non-cryptographic collaboration state. It requires **Write**, does not add Stellar signing weight, and does not cancel the transaction for other signers.
+
+## Contribute a signature
+
+```text
+PATCH /api/request
+Authorization: Bearer <Sign Agent credential>
+x-multisig-request-id: 0123456789ABCDEF
+Content-Type: application/json
+
+{
+  "signedXdr": "AAAA..."
+}
+```
+
+The newly-added valid signature must be attributable to the credential Principal. An Agent representing signer A cannot use its credential to contribute signer B's newly-added signature.
+
+Activity preserves two independent facts when available:
+
+```text
+actorAddress = cryptographic Stellar signer G...
+actor        = delegated Agent credential that submitted the contribution
+```
+
+If an Agent uploads already-signed XDR, MultiSigTools can prove which signer signed and which Agent credential submitted it. It does not claim the Agent generated that signature. Stronger provenance requires a future controlled signer/HSM invocation path.
+
+Agent contributions do not mint browser Contribution Grants.
+
+## Final Stellar submission
+
+Agent credentials cannot `PUT /api/request` in v1.
+
+`Sign` means **contribute Stellar authorization as the Principal**, not "execute everything". Final network submission remains a separate Human action. Agent submission attempts receive `agent_submit_denied`.
+
+A future execution permission should be introduced only for a concrete policy-controlled use case; it must never be implied by Sign accidentally.
+
+## Headless Contract operations
+
+Machine discovery, the operation catalog, and deployment network policy are public:
+
+```text
+HEAD /                         # Link: rel="service-desc" and rel="service-doc"
+GET  /openapi.json             # OpenAPI 3.1 transport contract
+GET  /api/operations           # stable business-operation catalog
+GET  /api/runtime-config       # deployment-owned network
+GET  /developers               # Human-readable integration and authority model
+```
+
+The root HTML repeats the same `service-desc` and `service-doc` links for DOM-only clients. Every catalog operation points to its OpenAPI path and method. A shared transport such as `PATCH /api/preparation` exposes each stable business id through `x-multisig-operation-ids`.
+
+A production domain owns exactly one Stellar network. Clients should discover it once and send only matching operation input; a cross-deployment request fails with HTTP 409 and `deployment_network_mismatch`.
+
+Contract inspection, unsigned call construction, and recording simulation/assembly do not require a Human session or Agent credential:
+
+```text
+GET  /api/contract-interface?network=testnet&contract=C...
+POST /api/contract-call
+POST /api/contract-prepare
+```
+
+```json
+{
+  "network": "testnet",
+  "transactionSource": "G...",
+  "contractId": "C...",
+  "method": "transfer",
+  "arguments": {
+    "from": "G...",
+    "to": "G...",
+    "amount": "10000000"
+  },
+  "lifetimeSeconds": 3600
+}
+```
+
+The build response includes operation id/version, current source sequence, expiry, and unsigned transaction XDR. It does not sign or submit. Pass that XDR to `contract.call.prepare`; its recording simulation returns current resource data, authorization requirements, and `assembledXdr`.
+
+When detached G-account authorization is required, the same `/api/preparation` resource is available to Agent clients:
+
+```text
+POST  /api/preparation  # Write + Idempotency-Key; create from assembledXdr
+GET   /api/preparation  # Read + x-multisig-request-id
+PATCH /api/preparation  # Sign contribution, or Write refresh
+PUT   /api/preparation  # Write; enforce-simulate/reassemble and freeze Proposal
+```
+
+Agent creation is idempotent and does not return a share capability. Current signers discover the preparation through Inbox or read it using their own Principal. Detached signatures are cryptographically verified and must belong to the credential Principal. Freeze preserves Agent actor provenance, re-simulates in enforce mode, and assembles the returned resource data into the ordinary immutable Proposal. There is no fixed instruction-budget leeway.
+
+Fresnica CLI, scripts, bots, Agents, and the Web UI are peer consumers of these operations. They must not reproduce a UI click sequence or invent a Contract-only Request lifecycle. Clients branch on typed error `code` values.
+
+## Signer workspace endpoints
+
+Use the same Bearer credential across the Principal's workspace:
+
+```text
+GET /api/treasuries
+GET /api/address-book
+PUT /api/address-book       # Write or Sign
+DELETE /api/address-book    # Write or Sign
+GET /api/contracts
+PUT /api/contracts          # Write or Sign
+DELETE /api/contracts       # Write or Sign
+GET /api/inbox
+GET /api/activity
+GET/PATCH/POST /api/request
+```
+
+### Inbox
+
+Inbox is signer-owned:
+
+```text
+Principal signer
+  -> Inbox
+  -> Requests that currently need this signer
+```
+
+It does not belong to a Treasury or to the Agent itself.
+
+### Saved contracts
+
+`/api/contracts` exposes the Principal's private Contract workspace references. Read lists; Write/Sign may keep or forget a C-address. The optional request network must match the credential Principal.
+
+```json
+{ "network": "testnet", "contractId": "C..." }
+```
+
+Saving a contract records work context only. It does not grant contract authority, Stellar signer access, or submission permission.
+
+### Contacts and Treasury names
+
+`/api/address-book` exposes the Principal's private personal aliases. Read lists; Write/Sign may create, update and delete.
+
+`/api/treasuries` discovers accounts the Principal currently controls and returns shared Treasury metadata, including shared names. Live Stellar signer state remains authorization truth.
+
+A future shared company/Box Contacts directory is a separate resource. One signer's personal Address Book must never be automatically promoted into shared company data.
+
+### Activity and private context
+
+Read authority follows the Principal but does not flatten narrower privacy boundaries. Current Treasury signer status does not automatically reveal participant-only Private Note context.
+
+## Treasury Audit access
+
+Treasury Settings no longer exposes ordinary transaction-capable API credentials.
+
+It may create a fixed-scope **Treasury Audit credential** (`mta_...`). This credential is resource-owned and observer-only.
+
+Allowed:
+
+- read Activity for that one Treasury.
+
+Not allowed:
+
+- Inbox;
+- personal Address Book;
+- full shared Contacts directory;
+- create a Request;
+- decline a Request;
+- contribute a signature;
+- submit a transaction;
+- rename/manage the Treasury;
+- manage credentials through the machine endpoint;
+- receive participant-only Private Note context merely because it audits the Treasury.
+
+The Treasury Audit credential is an observer, not a transaction Actor.
+
+## MCP, Skills and Agent adapters
+
+The HTTP API is the canonical machine contract. MCP servers, Skills and SDK helpers should be thin adapters rather than owners of Stellar transaction semantics or Request lifecycle.
+
+```text
+Human instruction
+  -> Agent / optional Skill
+  -> optional MCP/tool adapter
+  -> Signer Agent API
+  -> Request validation / coordination
+  -> Stellar network truth
+```
+
+An Agent may build XDR itself with the Stellar SDK. MultiSigTools owns delegated access, private semantic resolution, exact transaction validation, signature coordination and retained evidence.
+
+Never place `msa_...` or `mta_...` secrets in model-visible prompts, Skill text, URLs, source repositories, Private Notes or logs.
+
+## Client security requirements
+
+- Create one named credential per Agent actor.
+- Use the lowest sufficient level: Read, Write or Sign.
+- Treat Sign as high privilege even though it contains no Stellar private key.
+- Keep Stellar private keys in wallets, secure signers, HSM/MPC systems or other dedicated custody boundaries.
+- Revoke exposed Agent/Audit credentials immediately.
+- Use stable idempotency keys for financial Request creation.
+- Re-read Request/ledger state before changing upstream accounting state.
+- Do not treat `ready` as `submitted`.
+- Apply production edge/WAF abuse controls before broad public machine exposure.

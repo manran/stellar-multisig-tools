@@ -1,0 +1,63 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://stellar.creit.tech; font-src 'self' data:; connect-src 'self' https://horizon.stellar.org https://horizon-testnet.stellar.org https://rpc.lightsail.network https://soroban-testnet.stellar.org"
+        },
+        {
+          "key": "Link",
+          "value": "</openapi.json>; rel=\"service-desc\"; type=\"application/vnd.oai.openapi+json;version=3.1\", </developers>; rel=\"service-doc\"; type=\"text/html\""
+        },
+        { "key": "Access-Control-Expose-Headers", "value": "Link" },
+        { "key": "Referrer-Policy", "value": "no-referrer" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" }
+      ]
+    }
+  ],
+  "rewrites": [
+    { "source": "/.well-known/stellar.toml", "destination": "/api/stellar-toml" },
+    { "source": "/openapi.json", "destination": "/api/openapi" },
+    { "source": "/stellar", "destination": "/index.html" },
+    { "source": "/stellar/:path*", "destination": "/index.html" },
+    { "source": "/demo", "destination": "/index.html" },
+    { "source": "/demo/:path*", "destination": "/index.html" },
+    { "source": "/activity", "destination": "/index.html" },
+    { "source": "/activity/:path*", "destination": "/index.html" },
+    { "source": "/new", "destination": "/index.html" },
+    { "source": "/new/:path*", "destination": "/index.html" },
+    { "source": "/contracts", "destination": "/index.html" },
+    { "source": "/contract", "destination": "/index.html" },
+    { "source": "/contract/:path*", "destination": "/index.html" },
+    { "source": "/account/signing", "destination": "/index.html" },
+    { "source": "/account/signing/:path*", "destination": "/index.html" },
+    { "source": "/signing-room", "destination": "/index.html" },
+    { "source": "/signing-room/:path*", "destination": "/index.html" },
+    { "source": "/s", "destination": "/index.html" },
+    { "source": "/s/:path*", "destination": "/index.html" },
+    { "source": "/a", "destination": "/index.html" },
+    { "source": "/a/:path*", "destination": "/index.html" },
+    { "source": "/receipt", "destination": "/index.html" },
+    { "source": "/receipt/:path*", "destination": "/index.html" },
+    { "source": "/inbox", "destination": "/index.html" },
+    { "source": "/inbox/:path*", "destination": "/index.html" },
+    { "source": "/address-book", "destination": "/index.html" },
+    { "source": "/address-book/:path*", "destination": "/index.html" },
+    { "source": "/agent-access", "destination": "/index.html" },
+    { "source": "/agent-access/:path*", "destination": "/index.html" },
+    { "source": "/treasury", "destination": "/index.html" },
+    { "source": "/treasury/:path*", "destination": "/index.html" },
+    { "source": "/docs", "destination": "/index.html" },
+    { "source": "/docs/:path*", "destination": "/index.html" },
+    { "source": "/developers", "destination": "/index.html" },
+    { "source": "/developers/:path*", "destination": "/index.html" },
+    { "source": "/privacy", "destination": "/index.html" },
+    { "source": "/privacy/:path*", "destination": "/index.html" },
+    { "source": "/terms", "destination": "/index.html" },
+    { "source": "/terms/:path*", "destination": "/index.html" }
+  ]
+}

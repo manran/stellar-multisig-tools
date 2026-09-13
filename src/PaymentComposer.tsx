@@ -1,0 +1,536 @@
+import { useEffect, useMemo, useState } from 'react';
+import type { FormEvent } from 'react';
+import { ArrowLeft, ArrowRight, CircleAlert, LoaderCircle, Plus, Trash2 } from 'lucide-react';
+import { Account, Memo, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk/base';
+import AddressAliasEditor from './AddressAliasEditor';
+import { useAddressBook } from './AddressBookContext';
+import PaymentAssetPicker from './PaymentAssetPicker';
+import SigningAccountPicker from './SigningAccountPicker';
+import { useStellarWallet } from './StellarWalletContext';
+import { NetworkBadge, TransactionLifetimePicker, WorkflowProgress } from './MultiSigUi';
+import { AccountNotFoundError, isValidStellarAccountId, loadAccount, loadNetworkParameters } from './stellar/horizon';
+import type { StellarNetworkParameters } from './stellar/horizon';
+import { paymentAssetChoices, paymentDestinationIssue, stellarAssetForChoice } from './stellar/paymentAsset';
+import type { PaymentAssetChoice } from './stellar/paymentAsset';
+import { clearPaymentDraft, loadPaymentDraft, paymentDraftStorageKey, savePaymentDraft } from './stellar/paymentDraft';
+import type { PaymentRecipientDraft } from './stellar/paymentDraft';
+import { assessPaymentSpendability, paymentSourceIssue } from './stellar/paymentPreflight';
+import { peekAccountsForSigner } from './stellar/signerAccounts';
+import { isValidStellarTextMemo, stellarTextMemoByteLength } from './stellar/memo';
+import { normalizePrivateNote, MAX_PRIVATE_NOTE_BYTES, privateNoteByteLength } from './stellar/privateNote';
+import { createPrivateCommitment, hexToBytes } from './stellar/privateCommitment';
+import { stellarAmountToStroops, stroopsToStellarAmount } from './stellar/reserve';
+import { writeReviewHandoff } from './stellar/reviewHandoff';
+import { getDefaultTransactionLifetime, setDefaultTransactionLifetime, transactionLifetimeLabel } from './stellar/transactionPreferences';
+import { parseStructuredTransfers, validateTransferRows } from './stellar/structuredTransfers';
+import { buildTransferTransaction, transferDestinationIssues, transferFundingIssues } from './stellar/transferTransactions';
+import { hasSharedSigningControl } from './stellar/treasuryModel';
+import type { StellarAccountSnapshot, StellarNetwork } from './stellar/types';
+import { navigateWorkspace, stellarHref } from './workspaceNavigation';
+
+interface Props {
+  network: StellarNetwork;
+}
+
+function shortAddress(address: string) {
+  return address.length <= 18 ? address : `${address.slice(0, 7)}…${address.slice(-6)}`;
+}
+
+function networkPassphrase(network: StellarNetwork) {
+  return network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC;
+}
+
+function validAmount(value: string) {
+  return /^(?:0|[1-9]\d*)(?:\.\d{1,7})?$/.test(value) && Number(value) > 0;
+}
+
+function emptyRecipient(): PaymentRecipientDraft {
+  return { destination: '', amount: '', assetKey: 'native' };
+}
+
+function assetToken(asset: Pick<PaymentAssetChoice, 'code' | 'issuer'>) {
+  return asset.issuer ? `${asset.code}:${asset.issuer}` : 'XLM';
+}
+
+async function loadDestinations(ids: string[], network: StellarNetwork): Promise<Map<string, StellarAccountSnapshot | null>> {
+  const values = await Promise.all(ids.map(async (id) => {
+    try {
+      return [id, await loadAccount(id, network)] as const;
+    } catch (cause) {
+      if (cause instanceof AccountNotFoundError) return [id, null] as const;
+      throw cause;
+    }
+  }));
+  return new Map(values);
+}
+
+export default function PaymentComposer({ network }: Props) {
+  const { privateUnlocked, sessionAddress } = useStellarWallet();
+  const { entries, labelFor } = useAddressBook();
+  const [source, setSource] = useState('');
+  const [sourceAccount, setSourceAccount] = useState<StellarAccountSnapshot | null>(null);
+  const [sourceParameters, setSourceParameters] = useState<StellarNetworkParameters | null>(null);
+  const [recipients, setRecipients] = useState<PaymentRecipientDraft[]>(() => [emptyRecipient()]);
+  const [pasteInput, setPasteInput] = useState('');
+  const [memo, setMemo] = useState('');
+  const [privateNote, setPrivateNote] = useState('');
+  const [addOnChainProof, setAddOnChainProof] = useState(false);
+  const [memoClearArmed, setMemoClearArmed] = useState(false);
+  const [defaultSigningWindowSeconds, setDefaultSigningWindowSeconds] = useState(() => getDefaultTransactionLifetime(localStorage));
+  const [signingWindowSeconds, setSigningWindowSeconds] = useState(() => getDefaultTransactionLifetime(localStorage));
+  const [hydratedDraftKey, setHydratedDraftKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const sourceValid = useMemo(() => isValidStellarAccountId(source), [source]);
+  const memoBytes = useMemo(() => stellarTextMemoByteLength(memo), [memo]);
+  const memoValid = useMemo(() => isValidStellarTextMemo(memo), [memo]);
+  const privateNoteBytes = useMemo(() => privateNoteByteLength(privateNote.trim()), [privateNote]);
+  const privateNotePresent = privateNote.trim().length > 0;
+  const privateNoteValid = !privateNotePresent || privateNoteBytes <= MAX_PRIVATE_NOTE_BYTES;
+  const proofNeedsNote = addOnChainProof && !privateNotePresent;
+  const memoProofConflict = addOnChainProof && memo.trim().length > 0;
+  const contextValid = memoValid && privateNoteValid && !proofNeedsNote && !memoProofConflict;
+  const sourceHasSharedSigning = Boolean(sourceAccount && hasSharedSigningControl(sourceAccount));
+  const assets = useMemo(() => paymentAssetChoices(sourceAccount), [sourceAccount]);
+  const savedAccounts = useMemo(
+    () => entries
+      .filter((entry) => entry.subjectType === 'account')
+      .sort((left, right) => left.label.localeCompare(right.label) || left.address.localeCompare(right.address)),
+    [entries],
+  );
+  const recipientDetails = useMemo(() => recipients.map((recipient) => ({
+    recipient,
+    destinationValid: isValidStellarAccountId(recipient.destination),
+    amountValid: validAmount(recipient.amount),
+    asset: assets.find((asset) => asset.key === recipient.assetKey) ?? null,
+  })), [recipients, assets]);
+  const recipientsValid = recipientDetails.length > 0 && recipientDetails.every((row) => row.destinationValid && row.amountValid && row.asset);
+  const multipleRecipients = recipients.length > 1;
+
+  const fundingState = useMemo(() => {
+    if (!sourceAccount || !sourceParameters) return { error: '' };
+    const totals = new Map<string, bigint>();
+    for (const row of recipientDetails) {
+      if (!row.asset || !row.amountValid) continue;
+      try {
+        totals.set(row.asset.key, (totals.get(row.asset.key) ?? 0n) + stellarAmountToStroops(row.recipient.amount));
+      } catch {
+        // Field validation owns malformed amounts.
+      }
+    }
+    try {
+      for (const [assetKey, total] of totals) {
+        const asset = assets.find((choice) => choice.key === assetKey);
+        if (!asset) continue;
+        const spendability = assessPaymentSpendability(sourceAccount, asset, sourceParameters, Math.max(1, recipients.length));
+        const issue = paymentSourceIssue(spendability, asset, stroopsToStellarAmount(total));
+        if (issue) return { error: issue };
+      }
+      return { error: '' };
+    } catch (cause) {
+      return { error: cause instanceof Error ? cause.message : 'Unable to calculate the spendable balance.' };
+    }
+  }, [sourceAccount, sourceParameters, recipientDetails, assets, recipients.length]);
+
+  const canContinue = sourceValid && sourceHasSharedSigning && recipientsValid && contextValid
+    && !fundingState.error && !busy;
+  const testnet = network === 'testnet';
+  const focusClass = testnet ? 'focus:border-sky-500' : 'focus:border-emerald-500';
+  const primaryClass = testnet ? 'bg-sky-700 hover:bg-sky-800' : 'bg-emerald-700 hover:bg-emerald-800';
+
+  function saveSelectedTransactionLifetimeAsDefault() {
+    setDefaultTransactionLifetime(localStorage, signingWindowSeconds);
+    setDefaultSigningWindowSeconds(signingWindowSeconds);
+  }
+
+  function updateRecipient(index: number, patch: Partial<PaymentRecipientDraft>) {
+    setRecipients((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
+    setError('');
+  }
+
+  function addRecipient() {
+    setError('');
+    if (addOnChainProof) {
+      setError('Turn off on-chain proof before adding recipients. A Stellar transaction has one memo field, so MultiSig Tools does not silently change the proof format when a payment becomes multi-recipient.');
+      return;
+    }
+    setRecipients((current) => current.length >= 100 ? current : [...current, emptyRecipient()]);
+  }
+
+  function removeRecipient(index: number) {
+    setRecipients((current) => {
+      const next = current.filter((_, rowIndex) => rowIndex !== index);
+      return next.length > 0 ? next : [emptyRecipient()];
+    });
+    setError('');
+  }
+
+  function importRecipientList() {
+    if (!sourceAccount || !sourceValid || !pasteInput.trim()) return;
+    const parsed = parseStructuredTransfers('batch', pasteInput, entries);
+    if (parsed.issues.length > 0) {
+      setError(parsed.issues.map((issue) => issue.line ? `Recipient ${issue.line}: ${issue.message}` : issue.message).join('\n'));
+      return;
+    }
+    const validated = validateTransferRows('batch', parsed.rows, new Map([[sourceAccount.accountId, sourceAccount]]), sourceAccount.accountId);
+    if (validated.issues.length > 0) {
+      setError(validated.issues.map((issue) => issue.line ? `Recipient ${issue.line}: ${issue.message}` : issue.message).join('\n'));
+      return;
+    }
+    setRecipients(validated.rows.map((row) => ({
+      destination: row.destination,
+      amount: row.amount,
+      assetKey: row.asset.key,
+    })));
+    setPasteInput('');
+    setAddOnChainProof(false);
+    setError('');
+  }
+
+  useEffect(() => {
+    if (!sessionAddress) {
+      setHydratedDraftKey('');
+      return;
+    }
+    const key = paymentDraftStorageKey(sessionAddress, network);
+    const url = new URL(window.location.href);
+    const freshStart = url.searchParams.get('fresh') === '1';
+    if (freshStart) {
+      clearPaymentDraft(sessionStorage, sessionAddress, network);
+      url.searchParams.delete('fresh');
+      window.history.replaceState(window.history.state, '', url.toString());
+    }
+    const draft = freshStart ? null : loadPaymentDraft(sessionStorage, sessionAddress, network);
+    const requestedSource = url.searchParams.get('account')?.trim() ?? '';
+    setError('');
+    setSourceAccount(null);
+    setSourceParameters(null);
+    setSource(draft?.source ?? (isValidStellarAccountId(requestedSource) ? requestedSource : ''));
+    setRecipients(draft?.recipients?.length ? draft.recipients : [emptyRecipient()]);
+    setPasteInput('');
+    setMemo(draft?.memo ?? '');
+    setPrivateNote(draft?.privateNote ?? '');
+    setAddOnChainProof(draft?.addOnChainProof ?? false);
+    setSigningWindowSeconds(draft?.signingWindowSeconds ?? getDefaultTransactionLifetime(localStorage));
+    setHydratedDraftKey(key);
+  }, [sessionAddress, network]);
+
+  useEffect(() => {
+    if (!sessionAddress) return;
+    const key = paymentDraftStorageKey(sessionAddress, network);
+    if (hydratedDraftKey !== key) return;
+    savePaymentDraft(sessionStorage, sessionAddress, network, {
+      version: 3,
+      source,
+      recipients,
+      memo,
+      privateNote,
+      addOnChainProof,
+      signingWindowSeconds,
+    });
+  }, [sessionAddress, network, hydratedDraftKey, source, recipients, memo, privateNote, addOnChainProof, signingWindowSeconds]);
+
+  useEffect(() => {
+    if (!sourceValid) {
+      setSourceAccount(null);
+      setSourceParameters(null);
+      setRecipients((current) => current.map((row) => ({ ...row, assetKey: 'native' })));
+      return;
+    }
+    let cancelled = false;
+    const controller = new AbortController();
+    const cachedAccount = sessionAddress
+      ? peekAccountsForSigner(sessionAddress, network)?.find((account) => account.accountId === source) ?? null
+      : null;
+    if (cachedAccount) setSourceAccount(cachedAccount);
+    void Promise.all([
+      cachedAccount ? Promise.resolve(cachedAccount) : loadAccount(source, network, controller.signal),
+      sourceParameters ? Promise.resolve(sourceParameters) : loadNetworkParameters(network, controller.signal),
+    ])
+      .then(([account, parameters]) => {
+        if (cancelled) return;
+        setSourceAccount(account);
+        setSourceParameters(parameters);
+        const nextAssets = paymentAssetChoices(account);
+        setRecipients((current) => current.map((row) => ({
+          ...row,
+          assetKey: nextAssets.some((asset) => asset.key === row.assetKey) ? row.assetKey : 'native',
+        })));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSourceAccount(null);
+          setSourceParameters(null);
+        }
+      });
+    return () => { cancelled = true; controller.abort(); };
+  }, [source, network, sourceValid]);
+
+  async function buildPayment(event: FormEvent) {
+    event.preventDefault();
+    if (!canContinue) return;
+    setBusy(true);
+    setError('');
+    try {
+      const [freshSourceAccount, parameters] = await Promise.all([
+        loadAccount(source.trim(), network),
+        loadNetworkParameters(network),
+      ]);
+      if (!hasSharedSigningControl(freshSourceAccount)) {
+        throw new Error('Payments in MultiSig Tools are prepared from treasuries with shared signing control. This account is currently single-signature.');
+      }
+
+      const freshAssets = paymentAssetChoices(freshSourceAccount);
+      const structuredRows = recipients.map((recipient, index) => {
+        const asset = freshAssets.find((choice) => choice.key === recipient.assetKey);
+        if (!asset) throw new Error(`Recipient ${index + 1}: the selected asset is no longer available in this treasury.`);
+        return {
+          line: index + 1,
+          destination: recipient.destination.trim(),
+          amount: recipient.amount.trim(),
+          assetToken: assetToken(asset),
+        };
+      });
+      const validated = validateTransferRows('batch', structuredRows, new Map([[freshSourceAccount.accountId, freshSourceAccount]]), freshSourceAccount.accountId);
+      if (validated.issues.length > 0) {
+        throw new Error(validated.issues.map((issue) => issue.line ? `Recipient ${issue.line}: ${issue.message}` : issue.message).join('\n'));
+      }
+
+      const fundingProblems = transferFundingIssues(validated.rows, new Map([[freshSourceAccount.accountId, freshSourceAccount]]), freshSourceAccount.accountId, parameters);
+      if (fundingProblems.length > 0) throw new Error(fundingProblems.map((issue) => issue.message).join('\n'));
+
+      let transaction;
+      let privateCommitment = null;
+      let requestPrivateNote = '';
+
+      if (validated.rows.length === 1) {
+        const row = validated.rows[0];
+        const destinationAccount = await loadAccount(row.destination, network).catch((cause) => {
+          if (cause instanceof AccountNotFoundError) return null;
+          throw cause;
+        });
+        const destinationProblem = paymentDestinationIssue(row.asset, row.destination, destinationAccount, row.amount);
+        if (destinationProblem) throw new Error(destinationProblem);
+
+        const builder = new TransactionBuilder(new Account(freshSourceAccount.accountId, freshSourceAccount.sequence), {
+          fee: String(parameters.baseFeeInStroops),
+          networkPassphrase: networkPassphrase(network),
+        });
+        if (destinationAccount) {
+          builder.addOperation(Operation.payment({ destination: row.destination, asset: stellarAssetForChoice(row.asset), amount: row.amount }));
+        } else {
+          const minimumStartingBalance = BigInt(parameters.baseReserveInStroops) * 2n;
+          if (stellarAmountToStroops(row.amount) < minimumStartingBalance) {
+            const networkLabel = network === 'public' ? 'Mainnet' : 'Testnet';
+            throw new Error(`This address is not active on ${networkLabel}. Creating it requires at least ${stroopsToStellarAmount(minimumStartingBalance)} XLM.`);
+          }
+          builder.addOperation(Operation.createAccount({ destination: row.destination, startingBalance: row.amount }));
+        }
+
+        if (addOnChainProof) {
+          privateCommitment = createPrivateCommitment(privateNote);
+          builder.addMemo(Memo.hash(hexToBytes(privateCommitment.hashHex)));
+        } else {
+          if (memo.trim()) builder.addMemo(Memo.text(memo.trim()));
+          if (privateNotePresent) requestPrivateNote = normalizePrivateNote(privateNote);
+        }
+        transaction = builder.setTimeout(signingWindowSeconds).build();
+      } else {
+        if (addOnChainProof) throw new Error('On-chain proof is available only for a single-recipient payment.');
+        const destinations = await loadDestinations([...new Set(validated.rows.map((row) => row.destination))], network);
+        const destinationProblems = transferDestinationIssues(validated.rows, destinations);
+        if (destinationProblems.length > 0) {
+          throw new Error(destinationProblems.map((issue) => issue.line ? `Recipient ${issue.line}: ${issue.message}` : issue.message).join('\n'));
+        }
+        transaction = buildTransferTransaction({
+          rows: validated.rows,
+          transactionSource: freshSourceAccount.accountId,
+          transactionSourceSequence: freshSourceAccount.sequence,
+          parameters,
+          network,
+          lifetimeSeconds: signingWindowSeconds,
+          explicitOperationSources: false,
+          memo: memo.trim() || undefined,
+        });
+        if (privateNotePresent) requestPrivateNote = normalizePrivateNote(privateNote);
+      }
+
+      writeReviewHandoff(sessionStorage, {
+        xdr: transaction.toXDR(),
+        network,
+        privateNote: requestPrivateNote || null,
+        privateCommitment,
+      });
+      navigateWorkspace('/signing-room', { state: { returnTo: stellarHref('/new/payment'), returnLabel: 'Edit payment' } });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to prepare this payment.');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
+      <div className="mx-auto max-w-4xl">
+        <div className="mb-6"><WorkflowProgress current="prepare" /></div>
+        <a href={stellarHref('/new')} className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black dark:text-neutral-300 dark:hover:text-white"><ArrowLeft className="h-4 w-4" />New</a>
+        <div className="mt-4 flex flex-wrap items-center gap-3"><h1 className="text-3xl font-bold tracking-tight">Send payment</h1><NetworkBadge network={network} /></div>
+
+        <form onSubmit={buildPayment} className="mt-6 grid gap-5 rounded-2xl border border-black/10 bg-white p-5 shadow-sm shadow-black/[0.02] dark:border-white/10 dark:bg-white/5 sm:p-6 lg:grid-cols-2">
+          <div className="lg:col-span-2">
+            <SigningAccountPicker
+              id="payment-source"
+              label="From treasury"
+              network={network}
+              value={source}
+              onChange={setSource}
+              disabled={busy}
+              placeholder="G... treasury account"
+              sharedControlOnly
+            />
+            {source && sourceAccount && !sourceHasSharedSigning && <div className="mt-2 text-sm text-red-700 dark:text-red-300">This account is currently single-signature. Choose a treasury with shared signing control.</div>}
+          </div>
+
+          <section className="lg:col-span-2" aria-labelledby="payment-recipients-heading">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 id="payment-recipients-heading" className="text-sm font-semibold">Recipients</h2>
+                <p className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Add another recipient to include multiple payments in the same proposal.</p>
+              </div>
+              <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">{recipients.length} {recipients.length === 1 ? 'recipient' : 'recipients'}</span>
+            </div>
+
+            <div className="mt-3 space-y-3">
+              {recipientDetails.map(({ recipient, destinationValid, amountValid, asset }, index) => {
+                const destinationLabel = destinationValid ? labelFor(recipient.destination, 'account') : '';
+                return (
+                  <div key={index} className="rounded-xl border border-black/10 bg-black/[0.015] p-4 dark:border-white/10 dark:bg-white/[0.025]">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Recipient {index + 1}</div>
+                      {recipients.length > 1 && (
+                        <button type="button" disabled={busy} aria-label={`Remove recipient ${index + 1}`} onClick={() => removeRecipient(index)} className="rounded-lg p-1.5 text-neutral-400 hover:bg-black/5 hover:text-red-700 disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-red-300"><Trash2 className="h-4 w-4" /></button>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <label htmlFor={`payment-destination-${index}`} className="text-sm font-semibold">To</label>
+                        {privateUnlocked && savedAccounts.length > 0 ? (
+                          <select aria-label={`Choose saved recipient ${index + 1}`} value="" onChange={(event) => { if (event.target.value) updateRecipient(index, { destination: event.target.value }); }} className="rounded-lg border border-black/10 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-600 outline-none dark:border-white/10 dark:bg-neutral-900 dark:text-neutral-300">
+                            <option value="">Address Book…</option>
+                            {savedAccounts.map((entry) => <option key={entry.address} value={entry.address}>{labelFor(entry.address, 'account') || entry.label} · {shortAddress(entry.address)}</option>)}
+                          </select>
+                        ) : (
+                          <span className="text-xs text-neutral-400">Unlock to use Address Book</span>
+                        )}
+                      </div>
+                      <input id={`payment-destination-${index}`} value={recipient.destination} onChange={(event) => updateRecipient(index, { destination: event.target.value.trim() })} placeholder="G... destination" spellCheck={false} className={`mt-2 w-full rounded-xl border border-black/10 bg-white px-4 py-3 font-mono text-sm outline-none dark:border-white/10 dark:bg-white/[0.03] ${focusClass}`} />
+                      {destinationValid && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+                          {destinationLabel && <span>Saved as <span className="font-semibold text-neutral-700 dark:text-neutral-200">{destinationLabel}</span></span>}
+                          <AddressAliasEditor address={recipient.destination} subjectType="account" compact={Boolean(destinationLabel)} />
+                        </div>
+                      )}
+                      {recipient.destination && !destinationValid && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Enter a valid Stellar G... account.</div>}
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(15rem,0.9fr)]">
+                      <label htmlFor={`payment-amount-${index}`} className="text-sm font-semibold">Amount
+                        <input id={`payment-amount-${index}`} inputMode="decimal" value={recipient.amount} onChange={(event) => updateRecipient(index, { amount: event.target.value })} placeholder="0.0000000" className={`mt-2 w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-base outline-none dark:border-white/10 dark:bg-white/[0.03] ${focusClass}`} />
+                      </label>
+                      <div>
+                        <div className="mb-2 text-sm font-semibold">Asset</div>
+                        <PaymentAssetPicker assets={assets} value={asset?.key ?? 'native'} onChange={(assetKey) => updateRecipient(index, { assetKey })} disabled={!sourceAccount} ariaLabel={`Recipient ${index + 1} asset`} />
+                      </div>
+                    </div>
+                    {recipient.amount && !amountValid && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Enter an amount greater than 0 with up to 7 decimal places.</div>}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button type="button" disabled={busy || recipients.length >= 100} onClick={addRecipient} className="inline-flex items-center gap-2 rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold hover:bg-black/[0.03] disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/[0.06]"><Plus className="h-4 w-4" />Add recipient</button>
+              <span className="text-xs text-neutral-500 dark:text-neutral-400">Up to 100 payment operations in one Stellar transaction.</span>
+            </div>
+
+            <details className="mt-4 rounded-xl border border-dashed border-black/10 p-3 dark:border-white/10">
+              <summary className="cursor-pointer text-sm font-semibold">Paste a recipient list</summary>
+              <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Optional shortcut. Use recipient, amount, asset as CSV, tab-separated, or whitespace-separated rows. Saved Address Book names and held asset codes are resolved into the same editable rows above.</p>
+              <textarea value={pasteInput} onChange={(event) => setPasteInput(event.target.value)} rows={5} spellCheck={false} placeholder={'Alice, 150, USDC\nBob, 27.5, XLM'} className={`mt-2 w-full resize-y rounded-xl border border-black/10 bg-black/[0.015] p-3 font-mono text-sm leading-6 outline-none dark:border-white/10 dark:bg-white/[0.025] ${focusClass}`} />
+              <div className="mt-2 flex justify-end"><button type="button" disabled={busy || !pasteInput.trim() || !sourceAccount} onClick={importRecipientList} className="rounded-lg border border-black/10 px-3 py-2 text-sm font-semibold hover:bg-black/[0.03] disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/[0.06]">Use pasted rows</button></div>
+            </details>
+
+            {fundingState.error && <div className="mt-3 text-sm text-red-700 dark:text-red-300">{fundingState.error}</div>}
+          </section>
+
+          <div className="lg:col-span-2">
+            <div className="mb-3 text-sm font-semibold">Transaction context <span className="font-normal text-neutral-400">Optional</span></div>
+            <div className="space-y-3">
+              <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+                <div className="flex items-baseline justify-between gap-3">
+                  <label htmlFor="payment-memo" className="text-sm font-semibold">Stellar memo <span className="font-normal text-neutral-400">Public · on-chain</span></label>
+                  <span className={`text-xs ${memoValid ? 'text-neutral-400' : 'font-semibold text-red-700 dark:text-red-300'}`}>{memoBytes}/28 bytes</span>
+                </div>
+                <input id="payment-memo" value={memo} onChange={(event) => { setMemo(event.target.value); setMemoClearArmed(false); }} placeholder="Short public memo" className={`mt-2 w-full rounded-xl border border-black/10 bg-transparent px-4 py-3 text-sm outline-none dark:border-white/10 ${focusClass}`} />
+                {!memoValid && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Stellar text memos can contain at most 28 UTF-8 bytes.</div>}
+              </div>
+
+              <div className="rounded-xl border border-black/10 p-4 dark:border-white/10 sm:p-5">
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <div><label htmlFor="private-note" className="text-sm font-semibold">Private Note <span className="font-normal text-neutral-400">Private</span></label><p className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Stored privately by MultiSig Tools · not end-to-end encrypted.</p></div>
+                  <span className={`text-xs ${privateNoteValid ? 'text-neutral-400' : 'font-semibold text-red-700 dark:text-red-300'}`}>{privateNoteBytes}/{MAX_PRIVATE_NOTE_BYTES} bytes</span>
+                </div>
+                <textarea id="private-note" value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} rows={7} placeholder="Why are we making this payment? Add any private context signers should see." className={`mt-3 w-full resize-y rounded-xl border border-black/10 bg-transparent px-4 py-3 text-sm leading-6 outline-none dark:border-white/10 ${focusClass}`} />
+                <label className={`mt-3 flex items-start gap-3 rounded-xl border border-black/10 p-3 dark:border-white/10 ${multipleRecipients ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                  <input type="checkbox" checked={addOnChainProof} disabled={multipleRecipients} onChange={(event) => setAddOnChainProof(event.target.checked)} className="mt-1" />
+                  <span className="text-sm">
+                    <span className="font-semibold">Add on-chain proof</span>
+                    <span className="mt-1 block text-xs leading-5 text-neutral-500 dark:text-neutral-400">{multipleRecipients ? 'Available for single-recipient payments only.' : 'Anchor a hash of this note to Stellar. The note stays private.'}</span>
+                  </span>
+                </label>
+                {!privateNoteValid && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Private Note can contain at most {MAX_PRIVATE_NOTE_BYTES} UTF-8 bytes.</div>}
+                {proofNeedsNote && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Enter Private Note text before adding on-chain proof.</div>}
+              </div>
+            </div>
+            {memoProofConflict && (
+              <div className="mt-3 flex gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+                <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div>Stellar has one memo field. Keep either the public memo or the on-chain proof.</div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {!memoClearArmed ? (
+                      <button type="button" onClick={() => setMemoClearArmed(true)} className="rounded-lg border border-amber-600/30 bg-white/70 px-3 py-2 text-xs font-semibold text-amber-900 dark:bg-black/10 dark:text-amber-100">Remove public memo</button>
+                    ) : (
+                      <>
+                        <button type="button" onClick={() => setMemoClearArmed(false)} className="rounded-lg border border-amber-600/20 px-3 py-2 text-xs font-semibold">Keep memo</button>
+                        <button type="button" onClick={() => { setMemo(''); setMemoClearArmed(false); }} className="rounded-lg bg-amber-700 px-3 py-2 text-xs font-semibold text-white">Confirm remove memo</button>
+                      </>
+                    )}
+                    <button type="button" onClick={() => { setAddOnChainProof(false); setMemoClearArmed(false); }} className="rounded-lg border border-amber-600/30 bg-white/70 px-3 py-2 text-xs font-semibold text-amber-900 dark:bg-black/10 dark:text-amber-100">Turn off on-chain proof</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="lg:col-span-2">
+            <TransactionLifetimePicker network={network} value={signingWindowSeconds} onChange={setSigningWindowSeconds} disabled={busy} />
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-neutral-500 dark:text-neutral-400">
+              <span>Default for new transactions: {transactionLifetimeLabel(defaultSigningWindowSeconds)}. This transaction can override it.</span>
+              {signingWindowSeconds !== defaultSigningWindowSeconds && (
+                <button type="button" onClick={saveSelectedTransactionLifetimeAsDefault} className="font-semibold text-neutral-700 underline decoration-black/20 underline-offset-4 dark:text-neutral-200 dark:decoration-white/20">Use {transactionLifetimeLabel(signingWindowSeconds)} as default</button>
+              )}
+            </div>
+          </div>
+
+          {error && <div className="whitespace-pre-line rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-800 dark:text-red-200 lg:col-span-2"><div className="flex gap-2"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div></div>}
+
+          <div className="flex justify-end border-t border-black/10 pt-5 dark:border-white/10 lg:col-span-2">
+            <button type="submit" disabled={!canContinue} className={`flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-40 ${primaryClass}`}>{busy && <LoaderCircle className="h-4 w-4 animate-spin" />}Review payment <ArrowRight className="h-4 w-4" /></button>
+          </div>
+        </form>
+      </div>
+    </main>
+  );
+}

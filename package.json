@@ -1,0 +1,46 @@
+{
+  "name": "react-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": "24.19.0"
+  },
+  "scripts": {
+    "dev": "vite --port=3000 --host=0.0.0.0",
+    "build": "tsc -p tsconfig.stellar.json && tsc -p tsconfig.api.json && vite build",
+    "live:e2e:request": "tsx scripts/liveRequestServiceE2e.ts",
+    "preview": "vite preview",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit",
+    "test": "tsx --test src/stellar/*.test.ts server/*.test.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^1.29.0",
+    "@stellar/stellar-sdk": "^17.0.1",
+    "@tailwindcss/vite": "^4.1.14",
+    "@vercel/blob": "^2.8.0",
+    "@vercel/firewall": "1.2.5",
+    "@vitejs/plugin-react": "^5.0.4",
+    "buffer": "^6.0.3",
+    "lucide-react": "^0.546.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "vite": "^6.2.0",
+    "express": "^4.21.2",
+    "dotenv": "^17.2.3",
+    "motion": "^12.23.24",
+    "qrcode": "1.5.3",
+    "@creit.tech/stellar-wallets-kit": "2.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "autoprefixer": "^10.4.21",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0",
+    "@types/express": "^4.17.21"
+  },
+  "packageManager": "npm@11.17.0"
+}
