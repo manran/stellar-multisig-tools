@@ -1,7 +1,25 @@
 # MultiSig Tools — Soroban Authorization Architecture
 
-Status: S2 G-account authorization preparation + exact-XDR freeze
-Date: 2026-09-08
+Status: Historical S1-S3 checkpoints; current architecture is Intent-first
+Date: 2026-09-08; superseded lifecycle: 2026-09-14
+
+## Current architecture — Intent-first
+
+The active G-account coordination model is now:
+
+```text
+semantic Soroban Intent
+  -> recording simulation / immutable detached AuthorizationPlan
+  -> append-only detached AUTH contributions
+  -> authorization_ready
+  -> late-bound Execution source + fresh sequence
+  -> enforcing simulation / final unsigned transaction
+  -> ordinary Proposal only when envelope multisig is needed
+```
+
+The durable Intent stores no transaction source, sequence, fee, timebounds, resources, or envelope signatures. `SOURCE_ACCOUNT` authorization is rejected with `source_account_auth_unsupported` because it binds Soroban authority to the final transaction source and defeats source-late execution. Supported imported prepared XDR is converted into this same Intent model: valid detached AUTH evidence is retained, while the imported transaction shell is discarded.
+
+Sections S1-S3 below are retained as protocol research/history. Where they describe Review-owned G-account AUTH, a prepared-XDR freeze lifecycle, or SOURCE_ACCOUNT as an accepted collaboration mode, those lifecycle statements are superseded by this section and `OPERATION_ARCHITECTURE.md`. Contract-account adapter evidence remains relevant because custom `__check_auth` credentials are contract/network-enforced rather than ordinary G-account detached AUTH.
 
 This document defines how Soroban enters the existing MultiSig Tools transaction workflow. It does **not** create a separate Soroban workspace, lifecycle, or Request type.
 
@@ -235,20 +253,23 @@ S3C adds no new route, workspace, lifecycle step, durable storage schema, npm de
 
 ## 11. Spec-driven Human contract composer
 
-A later bounded milestone adds a generic **Prepare** surface without changing the S1-S3 authorization model:
+The guided composer now creates semantic Soroban Intent rather than an early transaction:
 
 ```text
 C... contract id
-  -> load live on-chain contract spec through the configured Stellar RPC
-  -> list non-reserved callable functions
-  -> encode supported typed arguments from the exact SCSpec type definitions
-  -> build one raw InvokeHostFunction transaction
-  -> existing Review recording simulation / auth preparation / assembly
-  -> Proposal -> Sign -> Submit -> Done
+  -> load live on-chain contract spec
+  -> select callable function + encode supported SCSpec arguments
+  -> POST /api/intent (no transaction source/lifetime)
+  -> recording simulation discovers detached AuthorizationPlan
+  -> collect detached AUTH on the durable Intent
+  -> authorization_ready
+  -> choose execution source
+  -> fresh sequence + enforcing simulation + final unsigned XDR
+  -> ordinary Proposal/Sign only when envelope multisig is required
 ```
 
-The first guided input set is intentionally conservative: `Address`/`MuxedAddress`, `Bool`, signed and unsigned integer widths, `Timepoint`, `Duration`, `String`, `Symbol`, `Bytes`, and exact-length `BytesN<N>`. Bytes are entered as hex and converted to bytes before SDK spec encoding. Reserved `__*` functions are excluded from the Human method list. Complex `Option`, `Result`, `Vec`, `Map`, `Tuple`, `Val`, and user-defined types remain visible through their method signature but require exact XDR import until a real contract use case justifies a precise editor.
+The guided input set remains conservative: supported primitive SCSpec types are encoded exactly; complex types stay visible but may require advanced tooling until a real editor is justified. Contract-provided names/docs are ABI facts, not trusted business semantics.
 
-Contract-provided names and docs are treated as ABI/spec facts, not trusted business semantics. MultiSigTools may display `update(new_wasm_hash: BytesN<32>)`; it must not claim that this means a particular project upgrade unless a separately verified semantic adapter provides that provenance.
+Import XDR remains an advanced entry point, but it no longer creates a second transaction-first authorization lifecycle. Supported unsigned prepared InvokeHostFunction XDR is converted into the same source-free Intent model. Existing detached AUTH evidence is retained; transaction source, sequence, fee, timebounds and resource shell are discarded. Envelope-signed imports and `SOURCE_ACCOUNT` authorization fail explicitly instead of being coerced into the Intent model.
 
-This composer creates only the unsigned/raw contract-call envelope. It does not duplicate simulation, invent authorization, or bypass the existing Proposal freeze. Hardware-wallet `signAuthEntry` remains unsupported where Wallets Kit does not expose it; a hardware wallet may still sign the ordinary transaction envelope when the contract call's required authorization is satisfied through that envelope path. Review must resolve that transport boundary before presenting an authorization CTA: a selected Ledger/Trezor signer is offered a shared authorization path for detached auth-entry work instead of an `Authorize contract call` action that the device cannot perform.
+Hardware wallets may still sign the final Stellar transaction envelope. Detached Soroban auth-entry signing depends on wallet transport support; when a hardware wallet cannot provide it, another current signer contributes AUTH to the shared Intent.

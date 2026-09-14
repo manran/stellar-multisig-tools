@@ -52,7 +52,7 @@ Existing Request records are migrated to the discovery index on first use. If di
 - Request capabilities stay in URL fragments and are not ordinary path/query credentials.
 - Accepted Request, signature, submission, participant, and Activity records are durable evidence. Request expiry closes collaboration; it does not trigger scheduled physical deletion.
 - Signer Agent secrets (`msa_...`) and Treasury Audit secrets (`mta_...`) are displayed only once; server storage keeps verifier hashes plus non-secret metadata.
-- Agent `POST /api/request` and `POST /api/preparation` require an `Idempotency-Key`; the credential Principal/network and current signer access are independently validated.
+- Agent `POST /api/request` and semantic `POST /api/intent` require an `Idempotency-Key`; the credential Principal/network and current signer access are independently validated. Soroban Intent AUTH is detached from the final transaction source.
 - A Sign Agent carries no Stellar private key. Signed XDR/signature contributions are cryptographically verified and may only add authorization attributable to that Principal.
 - Treasury Audit credentials are observer-only and cannot create Requests, contribute signatures, submit transactions, or administer the Treasury.
 - Private Note is server-private, not E2EE, and its plaintext is excluded from Treasury audit events.
@@ -83,6 +83,6 @@ Each deployment uses its own private Vercel Blob store and authentication cookie
 
 Accepted Request data is not subject to scheduled cleanup. Human Request creation requires an unlocked Stellar signer session and current signer access to the transaction; Agent creation requires a signer-owned credential and the same live signer check. Request bodies, XDR, and Private Note remain byte-limited before acceptance.
 
-Production must also apply edge/WAF abuse controls to write-heavy or upstream-consuming endpoints, especially `/api/request`, `/api/preparation`, `/api/contract-call`, `/api/contract-prepare`, `/api/contract-interface`, `/api/auth`, and credential management. Authentication and payload limits reduce anonymous storage abuse but are not substitutes for rate limiting, anomaly controls, or infrastructure quotas. Do not rely on process-local in-memory rate limiting as a serverless abuse-control boundary.
+Production must also apply edge/WAF abuse controls to write-heavy or upstream-consuming endpoints, especially `/api/request`, `/api/intent`, `/api/contract-call`, `/api/contract-prepare`, `/api/contract-interface`, `/api/auth`, and credential management. Authentication and payload limits reduce anonymous storage abuse but are not substitutes for rate limiting, anomaly controls, or infrastructure quotas. Do not rely on process-local in-memory rate limiting as a serverless abuse-control boundary.
 
 Do not commit Blob tokens, Agent/Audit credential secrets, Request capabilities or signer secrets.

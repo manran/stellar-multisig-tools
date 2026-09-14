@@ -56,11 +56,11 @@ const contractPrepareExample = `curl -X POST https://stellar.multisig.tools/api/
   -H "Content-Type: application/json" \\
   -d '{"network":"testnet","xdr":"AAAA..."}'`;
 
-const authorizationCreateExample = `curl -X POST https://stellar.multisig.tools/api/preparation \\
+const intentCreateExample = `curl -X POST https://stellar.multisig.tools/api/intent \\
   -H "Authorization: Bearer $MULTISIG_AGENT_KEY" \\
   -H "Content-Type: application/json" \\
-  -H "Idempotency-Key: fresnica-authorization-42" \\
-  -d '{"network":"testnet","xdr":"AAAA..."}'`;
+  -H "Idempotency-Key: fresnica-intent-42" \\
+  -d '{"network":"testnet","contractId":"C...","method":"reserve","arguments":{"wallet":"G..."}}'`;
 
 function CodeBlock({ children }: { children: string }) {
   return <pre className="overflow-x-auto rounded-2xl bg-[#111] p-4 text-xs leading-6 text-neutral-100"><code>{children}</code></pre>;
@@ -469,8 +469,8 @@ function AutomationPage() {
         <CodeBlock>{contractInterfaceExample}</CodeBlock>
         <CodeBlock>{contractCallExample}</CodeBlock>
         <CodeBlock>{contractPrepareExample}</CodeBlock>
-        <CodeBlock>{authorizationCreateExample}</CodeBlock>
-        <p className="text-sm leading-6 text-neutral-600 dark:text-neutral-300"><code>contract.call.build</code> returns unsigned XDR. <code>contract.call.prepare</code> recording-simulates and assembles current resources. When detached authorization is required, <code>/api/preparation</code> is the same Human/Agent lifecycle; freeze enforce-simulates and reassembles final resources into the ordinary Proposal without fixed instruction leeway.</p>
+        <CodeBlock>{intentCreateExample}</CodeBlock>
+        <p className="text-sm leading-6 text-neutral-600 dark:text-neutral-300"><code>contract.intent.create</code> starts from semantic contract intent without a transaction source. Detached AUTH is contributed with <code>PATCH /api/intent</code>; only after authorization is ready does <code>PUT /api/intent</code> choose an execution source and build the enforced final transaction. <code>SOURCE_ACCOUNT</code> authorization is rejected because it would bind AUTH back to the transaction source. The lower-level <code>contract.call.build</code> and <code>contract.call.prepare</code> operations remain available for diagnostics and external tooling.</p>
       </section>
 
       <section id="quick-start" className="space-y-5">

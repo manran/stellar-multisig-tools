@@ -88,11 +88,13 @@ A complete valid C-address auto-loads its contract interface; Load is not a sepa
 Contract UI is a consumer of the same Headless operations available to software:
 
 - `GET /api/contract-interface` inspects a live interface;
-- `POST /api/contract-call` builds unsigned transaction XDR;
-- `POST /api/contract-prepare` recording-simulates and assembles current Soroban resources and authorization requirements;
-- `GET/POST/PATCH/PUT /api/preparation` runs the shared authorization lifecycle for Human and Agent actors;
+- `POST /api/intent` creates a source-free Soroban Intent from semantic inputs, or converts a Human imported prepared XDR into an Intent;
+- `GET /api/intent` reads live Intent/AUTH state;
+- `PATCH /api/intent` contributes one verified detached AUTH signature;
+- `PUT /api/intent` late-binds an executor/source and returns the enforced final unsigned transaction;
+- `POST /api/contract-call` and `POST /api/contract-prepare` remain low-level construction/simulation primitives, not the shared authorization lifecycle;
 - `GET/PUT/DELETE /api/contracts` manages signer-owned workspace context;
 - `GET /api/operations` exposes the versioned operation catalog;
 - `GET /api/runtime-config` exposes the deployment-owned Stellar network boundary.
 
-Interface inspection, unsigned XDR construction, and recording simulation are public, side-effect-free operations. Workspace mutation and authorization preparation require the relevant Principal authority. Final authorization freeze uses enforce simulation and reassembles current resources before the ordinary Proposal is created; it does not use fixed instruction leeway. Final Stellar submission remains independently Human-authorized. See `OPERATION_ARCHITECTURE.md`.
+Intent creation deliberately omits transaction source, sequence, fee, and lifetime. `SOURCE_ACCOUNT` Soroban authorization is rejected because it binds AUTH to the eventual transaction source; MultiSigTools requires detached authorization so AUTH can finish before executor selection. After AUTH is ready, execution preparation uses fresh source state and enforcing simulation. Envelope signatures then use the ordinary Proposal/Signing Room path. Final Stellar submission remains independently Human-authorized. See `OPERATION_ARCHITECTURE.md`.

@@ -21,10 +21,7 @@ test('runtime policy and contract vertical slice are available to every transpor
   assert.equal(byId.get('contract.intent.execution.prepare')?.effect, 'none');
   assert.equal(byId.get('contract.call.build')?.effect, 'none');
   assert.equal(byId.get('contract.call.prepare')?.path, '/api/contract-prepare');
-  assert.equal(byId.get('contract.authorization.create')?.access, 'principal:write');
-  assert.equal(byId.get('contract.authorization.inspect')?.access, 'principal:read');
-  assert.equal(byId.get('contract.authorization.contribute')?.access, 'principal:sign');
-  assert.equal(byId.get('contract.authorization.freeze')?.effect, 'coordination-state');
+  assert.equal(byId.has('contract.authorization.create'), false);
   assert.equal(byId.get('contract.workspace.list')?.access, 'principal:read');
   assert.equal(byId.get('contract.workspace.keep')?.access, 'principal:write');
   assert.equal(byId.get('contract.workspace.forget')?.path, '/api/contracts');

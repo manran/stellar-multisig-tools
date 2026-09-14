@@ -17,6 +17,7 @@ import {
   DeploymentNetworkPolicyError,
 } from '../server/deploymentNetworkPolicy.js';
 import { createHumanSorobanIntent } from '../server/humanSorobanIntentService.js';
+import { createImportedSorobanIntent } from '../server/importedSorobanIntentService.js';
 import { noStoreJson, publicCorsHeaders } from '../server/httpResponse.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
@@ -179,6 +180,39 @@ export async function POST(request: Request): Promise<Response> {
     }
     assertDeploymentNetwork(network);
     const agent = await agentCredentialFor(request);
+    if (body.preparedXdr !== undefined) {
+      if (agent) {
+        throw new AgentCredentialServiceError(
+          'Prepared XDR import is a Human review transition. Agents should create semantic Soroban Intents directly.',
+          403,
+          'prepared_xdr_import_human_only',
+        );
+      }
+      const session = await humanSessionFor(request, network);
+      if (!session) {
+        throw new SorobanIntentAuthorizationServiceError(
+          'Confirm the selected Stellar wallet before importing this Soroban Intent.',
+          401,
+          'intent_creator_required',
+        );
+      }
+      const beforeCreate = beforeFirstDurableWrite(async () => {
+        await enforceSemanticRateLimit(request, {
+          rateLimitId: SEMANTIC_RATE_LIMIT_IDS.requestCreate,
+          rateLimitKey: semanticRateLimitKey(network, session.address),
+          errorCode: 'request_create_rate_limited',
+          errorMessage: 'This signer has created too many Intents recently. Try again later.',
+        });
+      });
+      const intent = await createImportedSorobanIntent(blobSorobanIntentStore, session.address, {
+        network,
+        preparedXdr: body.preparedXdr,
+        privateNote: body.privateNote,
+        externalReference: body.externalReference,
+      }, { beforeCreate });
+      const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, intent.id);
+      return json({ operation: 'contract.intent.create', version: 1, replayed: false, intent, authorization }, 201);
+    }
     if (agent) {
       const idempotencyKey = request.headers.get('idempotency-key')?.trim() ?? '';
       if (!idempotencyKey) {

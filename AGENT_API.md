@@ -206,22 +206,25 @@ GET  /api/runtime-config       # deployment-owned network
 GET  /developers               # Human-readable integration and authority model
 ```
 
-The root HTML repeats the same `service-desc` and `service-doc` links for DOM-only clients. Every catalog operation points to its OpenAPI path and method. A shared transport such as `PATCH /api/preparation` exposes each stable business id through `x-multisig-operation-ids`.
+The root HTML repeats the same `service-desc` and `service-doc` links for DOM-only clients. Every catalog operation points to its OpenAPI path and method.
 
 A production domain owns exactly one Stellar network. Clients should discover it once and send only matching operation input; a cross-deployment request fails with HTTP 409 and `deployment_network_mismatch`.
 
-Contract inspection, unsigned call construction, and recording simulation/assembly do not require a Human session or Agent credential:
+The canonical Soroban Agent workflow is Intent-first:
 
 ```text
-GET  /api/contract-interface?network=testnet&contract=C...
-POST /api/contract-call
-POST /api/contract-prepare
+GET   /api/contract-interface  # public interface discovery
+POST  /api/intent              # Write + Idempotency-Key; semantic contract Intent
+GET   /api/intent              # Read + X-MultiSig-Intent-Id
+PATCH /api/intent              # Sign; contribute detached Soroban AUTH
+PUT   /api/intent              # Write; choose executionSource after AUTH is ready
 ```
+
+Example semantic creation:
 
 ```json
 {
   "network": "testnet",
-  "transactionSource": "G...",
   "contractId": "C...",
   "method": "transfer",
   "arguments": {
@@ -229,22 +232,15 @@ POST /api/contract-prepare
     "to": "G...",
     "amount": "10000000"
   },
-  "lifetimeSeconds": 3600
+  "privateNote": "optional private workflow context"
 }
 ```
 
-The build response includes operation id/version, current source sequence, expiry, and unsigned transaction XDR. It does not sign or submit. Pass that XDR to `contract.call.prepare`; its recording simulation returns current resource data, authorization requirements, and `assembledXdr`.
+Creation stores no transaction source, sequence, fee, lifetime, or envelope. Recording simulation discovers an immutable detached AuthorizationPlan. Each PATCH contribution is cryptographically verified against the Agent Principal and current live signer policy. When authorization becomes `authorization_ready`, PUT late-binds `executionSource`, loads a fresh sequence, materializes the transaction, and runs enforcing simulation before returning final unsigned XDR. Envelope multisig then uses the ordinary Request lifecycle.
 
-When detached G-account authorization is required, the same `/api/preparation` resource is available to Agent clients:
+`SOURCE_ACCOUNT` authorization is rejected with `source_account_auth_unsupported`: it would bind Soroban authorization to the transaction source and defeat source-late execution. Contracts/integrations used with Intent coordination must expose detached address authorization.
 
-```text
-POST  /api/preparation  # Write + Idempotency-Key; create from assembledXdr
-GET   /api/preparation  # Read + x-multisig-request-id
-PATCH /api/preparation  # Sign contribution, or Write refresh
-PUT   /api/preparation  # Write; enforce-simulate/reassemble and freeze Proposal
-```
-
-Agent creation is idempotent and does not return a share capability. Current signers discover the preparation through Inbox or read it using their own Principal. Detached signatures are cryptographically verified and must belong to the credential Principal. Freeze preserves Agent actor provenance, re-simulates in enforce mode, and assembles the returned resource data into the ordinary immutable Proposal. There is no fixed instruction-budget leeway.
+For diagnostics and advanced tooling, `POST /api/contract-call` and `POST /api/contract-prepare` remain public low-level transaction construction / recording-simulation primitives. They do not replace the Intent coordination model. Human Import XDR may convert an unsigned, prepared single InvokeHostFunction transaction into an Intent; Agent clients should create semantic Intents directly.
 
 Fresnica CLI, scripts, bots, Agents, and the Web UI are peer consumers of these operations. They must not reproduce a UI click sequence or invent a Contract-only Request lifecycle. Clients branch on typed error `code` values.
 

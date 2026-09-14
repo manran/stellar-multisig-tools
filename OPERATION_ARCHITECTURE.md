@@ -52,16 +52,20 @@ Product neutrality does not flatten permissions:
 
 ## Canonical composition
 
-A contract workflow composes existing operations instead of creating a Contract-only signing lifecycle:
+Soroban contract work is Intent-first. Transaction construction is deliberately later than contract authorization:
 
     contract.interface.inspect
-    -> contract.call.build
-    -> contract.call.prepare
-    -> contract.authorization.create / contribute / freeze (when required)
-    -> proposal.contribute
+    -> contract.intent.create
+    -> contract.intent.contribute (until detached AUTH is satisfied)
+    -> contract.intent.execution.prepare (late-bind executor/source)
+    -> proposal.create / proposal.contribute
     -> proposal.submit
 
-**contract.call.build** returns unsigned transaction XDR based on fresh source sequence and fee data. **contract.call.prepare** runs recording simulation and assembles current resource/auth requirements; Review consumes this operation instead of owning RPC semantics. Shared authorization uses the existing `/api/preparation` resource. Its freeze operation runs enforce simulation after authorization is final, reassembles the returned resources without fixed leeway, and creates the ordinary immutable Proposal. Consumers may stop after any non-side-effecting step or hand the output to a different compatible client.
+**contract.intent.create** stores semantic contract intent plus an immutable detached AuthorizationPlan; it does not persist a transaction source, sequence, fee, lifetime, or envelope. **contract.intent.contribute** stores verified Soroban AUTH contributions independently of the plan. Only after authorization is ready does **contract.intent.execution.prepare** choose an execution source, load a fresh sequence, materialize the final transaction, and run enforcing simulation. If envelope multisig is required, the resulting XDR enters the ordinary Proposal lifecycle.
+
+`SOURCE_ACCOUNT` authorization is intentionally rejected by the Intent workflow because it binds contract authorization to the final transaction source and defeats source-late execution. Integrations must expose detached address authorization instead.
+
+`contract.call.build` and `contract.call.prepare` remain low-level public construction/simulation primitives for inspection, diagnostics, and external tooling. They are not the canonical shared-authorization lifecycle.
 
 ## Shipped operation discovery
 
@@ -72,7 +76,7 @@ A client that knows only the deployment origin can discover the operation contra
 - `GET /api/operations` returns the machine-readable v1 business-operation catalog, with an OpenAPI path/method pointer for every operation;
 - `/developers` is advertised with `service-doc` for Human-readable authority and integration guidance.
 
-One HTTP transport may carry more than one business operation. For example, authorization contribution and refresh intentionally share `PATCH /api/preparation`; OpenAPI records both stable ids in `x-multisig-operation-ids` rather than inventing duplicate endpoints.
+Each stable business operation is exposed through the operation catalog and OpenAPI. The `/api/intent` resource uses HTTP method semantics for create, inspect, AUTH contribution, and late execution preparation.
 
 The first complete Contract vertical slice is:
 
@@ -80,13 +84,12 @@ The first complete Contract vertical slice is:
 | --- | --- | --- | --- |
 | **runtime.config.inspect** | GET /api/runtime-config | Public | None; returns deployment network policy |
 | **contract.interface.inspect** | GET /api/contract-interface | Public | None |
-| **contract.call.build** | POST /api/contract-call | Public | None; returns unsigned XDR |
-| **contract.call.prepare** | POST /api/contract-prepare | Public | None; recording simulation + assembly |
-| **contract.authorization.create** | POST /api/preparation | Principal Write | Coordination state; idempotent for Agents |
-| **contract.authorization.inspect** | GET /api/preparation | Principal Read | None |
-| **contract.authorization.contribute** | PATCH /api/preparation | Principal Sign | Coordination state |
-| **contract.authorization.refresh** | PATCH /api/preparation | Principal Write | Coordination state |
-| **contract.authorization.freeze** | PUT /api/preparation | Principal Write | Enforce/reassemble into Proposal |
+| **contract.intent.create** | POST /api/intent | Principal Write | Coordination state; source-free Intent |
+| **contract.intent.inspect** | GET /api/intent | Principal Read | None |
+| **contract.intent.contribute** | PATCH /api/intent | Principal Sign | Append verified detached AUTH |
+| **contract.intent.execution.prepare** | PUT /api/intent | Principal Write | Late-bind source; build/enforce final unsigned TX |
+| **contract.call.build** | POST /api/contract-call | Public | Low-level unsigned XDR construction |
+| **contract.call.prepare** | POST /api/contract-prepare | Public | Low-level recording simulation + assembly |
 | **contract.workspace.list** | GET /api/contracts | Principal Read | None |
 | **contract.workspace.keep** | PUT /api/contracts | Principal Write | Private state |
 | **contract.workspace.forget** | DELETE /api/contracts | Principal Write | Private state |
@@ -98,7 +101,7 @@ The existing **/api/request** resource remains the canonical proposal create/rea
 The Web contract surfaces consume the same HTTP operations available to external clients:
 
 - Contract interface display does not load a second UI-owned ABI model;
-- the guided form sends typed string inputs to **contract.call.build** and receives XDR;
+- the guided form creates **contract.intent.create** directly from contract + method + arguments;
 - **/contracts** reads signer-owned workspaces from the private service;
 - old browser-only contract references are migration input, not continuing truth;
 - links may carry navigation context such as contract and method, but URLs never grant authority.

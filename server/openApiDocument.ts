@@ -34,7 +34,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
       parameter('contract', 'query', true, { type: 'string', pattern: '^C[A-Z2-7]{55}$' }, 'Stellar contract address.'),
     );
   }
-  if (path === '/api/preparation' || path === '/api/request') {
+  if (path === '/api/request') {
     values.push(
       parameter('x-multisig-request-id', 'header', method !== 'post', { type: 'string' }, 'Authorization or Proposal id.'),
       parameter('x-multisig-capability', 'header', false, { type: 'string' }, 'Private share capability when using capability access.'),
@@ -52,7 +52,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
   if (path === '/api/intent' && method === 'post') {
     values.push(parameter('Idempotency-Key', 'header', false, { type: 'string' }, 'Required for Agent Intent creation; Human sessions do not need it.'));
   }
-  if (['/api/preparation', '/api/request'].includes(path) && method === 'post') {
+  if (path === '/api/request' && method === 'post') {
     values.push(parameter('Idempotency-Key', 'header', false, { type: 'string' }, 'Required for Agent credential creation; ignored for Human sessions.'));
   }
   return values;
@@ -64,10 +64,6 @@ function requestBody(path: string, method: string): OpenApiObject | undefined {
   if (path === '/api/intent' && method === 'put') return body(schema('ContractIntentExecutionInput'));
   if (path === '/api/contract-call' && method === 'post') return body(schema('ContractCallBuildInput'));
   if (path === '/api/contract-prepare' && method === 'post') return body(schema('ContractPrepareInput'));
-  if (path === '/api/preparation' && method === 'post') return body(schema('AuthorizationCreateInput'));
-  if (path === '/api/preparation' && method === 'patch') {
-    return body({ oneOf: [schema('AuthorizationContributionInput'), schema('AuthorizationRefreshInput')] });
-  }
   if (path === '/api/contracts' && (method === 'put' || method === 'delete')) return body(schema('ContractWorkspaceInput'));
   if (path === '/api/request' && method === 'post') return body(schema('ProposalCreateInput'));
   if (path === '/api/request' && method === 'patch') return body(schema('ProposalPatchInput'));
@@ -86,10 +82,6 @@ function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/api/contracts' && method === 'get') return schema('ContractWorkspaceListResult');
   if (path === '/api/contracts' && method === 'put') return schema('ContractWorkspaceKeepResult');
   if (path === '/api/contracts' && method === 'delete') return schema('ContractWorkspaceForgetResult');
-  if (path === '/api/preparation' && method === 'get') return schema('AuthorizationResult');
-  if (path === '/api/preparation' && method === 'post') return schema('AuthorizationResult');
-  if (path === '/api/preparation' && method === 'patch') return schema('AuthorizationMutationResult');
-  if (path === '/api/preparation' && method === 'put') return schema('AuthorizationFreezeResult');
   if (path === '/api/request') return schema('ProposalResult');
   return { type: 'object', additionalProperties: true };
 }
@@ -104,7 +96,6 @@ function security(path: string, method: string, access: HeadlessOperationAccess)
 
 function transportOperationId(path: string, method: string, operations: readonly HeadlessOperationDescriptor[]): string {
   if (operations.length === 1) return operations[0].id;
-  if (path === '/api/preparation' && method === 'patch') return 'contract.authorization.mutate';
   return operations.map((item) => item.id).join('.');
 }
 
@@ -123,7 +114,7 @@ function openApiPaths(): OpenApiObject {
     const first = operations[0];
     const parameters = operationParameters(path, method);
     const request = requestBody(path, method);
-    const statuses = method === 'post' && ['/api/intent', '/api/preparation', '/api/request'].includes(path)
+    const statuses = method === 'post' && ['/api/intent', '/api/request'].includes(path)
       ? {
           '200': response('Idempotent replay.', successSchema(path, method)),
           '201': response('Created.', successSchema(path, method)),
@@ -232,12 +223,17 @@ const components: OpenApiObject = {
     },
     ContractIntentCreateInput: {
       type: 'object',
-      required: ['network', 'contractId', 'method', 'arguments'],
+      required: ['network'],
+      oneOf: [
+        { required: ['contractId', 'method', 'arguments'] },
+        { required: ['preparedXdr'] },
+      ],
       properties: {
         network: stellarNetwork,
         contractId,
         method: { type: 'string', minLength: 1, maxLength: 64 },
         arguments: { type: 'object', maxProperties: 64, additionalProperties: { type: 'string' } },
+        preparedXdr: xdr,
         privateNote: { type: 'string' },
         externalReference: { type: 'string' },
       },
@@ -270,7 +266,7 @@ const components: OpenApiObject = {
     },
     StoredSorobanIntent: {
       type: 'object',
-      required: ['version', 'id', 'network', 'intent', 'authorizationPlan', 'createdAt', 'creatorAddress'],
+      required: ['version', 'id', 'network', 'intent', 'authorizationPlan', 'createdAt', 'creatorAddress', 'discoverySignerKeys'],
       properties: {
         version: operationVersion,
         id: { type: 'string' },
@@ -279,6 +275,7 @@ const components: OpenApiObject = {
         authorizationPlan: schema('SorobanAuthorizationPlan'),
         createdAt: timestamp,
         creatorAddress: accountId,
+        discoverySignerKeys: { type: 'array', items: accountId },
         creatorActor: { type: 'object', additionalProperties: true },
         privateContext: { type: 'object', additionalProperties: true },
       },
@@ -512,83 +509,6 @@ const components: OpenApiObject = {
         principal: schema('Principal'),
         contractId,
         removed: { type: 'boolean', const: true },
-      },
-      additionalProperties: false,
-    },
-    AuthorizationCreateInput: {
-      type: 'object',
-      required: ['network', 'xdr'],
-      properties: { network: stellarNetwork, xdr },
-      additionalProperties: false,
-    },
-    AuthorizationContributionInput: {
-      type: 'object',
-      required: ['entryIndex', 'signerAddress', 'signatureBase64'],
-      properties: {
-        entryIndex: { type: 'integer', minimum: 0 },
-        signerAddress: accountId,
-        signatureBase64: { type: 'string', minLength: 1 },
-      },
-      additionalProperties: false,
-    },
-    AuthorizationRefreshInput: {
-      type: 'object',
-      required: ['action'],
-      properties: { action: { type: 'string', const: 'refresh' } },
-      additionalProperties: false,
-    },
-    SorobanPreparation: {
-      type: 'object',
-      required: ['id', 'network', 'preparedXdr', 'createdAt', 'expiresAt', 'transactionSourceAccount', 'transactionSignerKeys', 'contributionCount', 'status', 'authorizers'],
-      properties: {
-        id: { type: 'string' },
-        network: stellarNetwork,
-        preparedXdr: xdr,
-        createdAt: timestamp,
-        expiresAt: timestamp,
-        transactionSourceAccount: accountId,
-        transactionSignerKeys: { type: 'array', items: { type: 'string' } },
-        contributionCount: { type: 'integer', minimum: 0 },
-        status: { type: 'string', enum: ['awaiting_authorization', 'ready_to_freeze', 'frozen', 'expired', 'blocked'] },
-        authorizers: { type: 'array', items: { type: 'object', additionalProperties: true } },
-        statusDetail: { type: 'string' },
-        proposalId: { type: 'string' },
-      },
-      additionalProperties: false,
-    },
-    AuthorizationResult: {
-      type: 'object',
-      required: ['operation', 'version', 'preparation'],
-      properties: {
-        operation: { type: 'string', enum: ['contract.authorization.inspect', 'contract.authorization.create'] },
-        version: operationVersion,
-        preparation: schema('SorobanPreparation'),
-        capability: { type: 'string' },
-        replayed: { type: 'boolean' },
-        access: { type: 'object', additionalProperties: true },
-      },
-      additionalProperties: false,
-    },
-    AuthorizationMutationResult: {
-      type: 'object',
-      required: ['operation', 'version', 'preparation'],
-      properties: {
-        operation: { type: 'string', enum: ['contract.authorization.contribute', 'contract.authorization.refresh'] },
-        version: operationVersion,
-        preparation: schema('SorobanPreparation'),
-        added: { type: 'boolean' },
-        access: { type: 'object', additionalProperties: true },
-      },
-      additionalProperties: false,
-    },
-    AuthorizationFreezeResult: {
-      type: 'object',
-      required: ['operation', 'version', 'proposal'],
-      properties: {
-        operation: { type: 'string', const: 'contract.authorization.freeze' },
-        version: operationVersion,
-        proposal: schema('SigningRequest'),
-        capability: { type: 'string' },
       },
       additionalProperties: false,
     },

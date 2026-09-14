@@ -11,6 +11,7 @@ const inspector = source('../TransactionInspectorSummary.tsx');
 const authorization = source('../TransactionAuthorizationResults.tsx');
 const sorobanAuthorization = source('../SorobanAuthorizationResults.tsx');
 const sorobanPreparation = source('../SorobanAuthorizationPreparation.tsx');
+const sorobanIntentApp = source('../SorobanIntentApp.tsx');
 const sorobanAuthCore = source('./sorobanAuthorization.ts');
 const sorobanCustomAuthCore = source('./sorobanCustomAuthorization.ts');
 const sorobanContractAdapter = source('./sorobanContractAdapter.ts');
@@ -18,7 +19,8 @@ const walletKit = source('./walletKit.ts');
 const sorobanRpc = source('./sorobanRpc.ts');
 const contractOperationsClient = source('../contractOperationsClient.ts');
 const contractPrepareApi = source('../../api/contract-prepare.ts');
-const preparationApi = source('../../api/preparation.ts');
+const intentApi = source('../../api/intent.ts');
+const importedIntentService = source('../../server/importedSorobanIntentService.ts');
 const viteConfig = source('../../vite.config.ts');
 const envExample = source('../../.env.example');
 const requestService = source('../../server/requestService.ts');
@@ -46,14 +48,13 @@ test('Soroban G-account authorization completes before the exact-XDR Proposal fr
   assert.match(signingRoom, /createStoredRequest\(effectiveXdr\)/);
   assert.match(signingRoom, /selectedWalletCanStartProposal/);
   assert.match(signingRoom, /Choose transaction signer/);
-  assert.match(sorobanPreparation, /medium threshold/);
-  assert.match(sorobanPreparation, /Authorize contract call/);
-  assert.doesNotMatch(sorobanPreparation, /This wallet is not an unsigned active signer for the remaining authorization/);
-  assert.match(sorobanPreparation, /Choose another signer/);
+  assert.match(sorobanPreparation, /Continue as Soroban Intent/);
+  assert.match(sorobanPreparation, /Prepared transaction fields are discarded here/);
+  assert.match(sorobanPreparation, /fetch\('\/api\/intent'/);
+  assert.doesNotMatch(sorobanPreparation, /fetch\('\/api\/preparation'/);
   assert.match(walletKit, /signAuthEntry/);
-  assert.match(sorobanPreparation, /hardwareWalletSelected/);
-  assert.match(sorobanPreparation, /do not support detached Soroban authorization-entry signing/);
-  assert.match(sorobanPreparation, /targetsForWallet.length > 0 && !hardwareWalletSelected/);
+  assert.match(sorobanIntentApp, /signAuthEntry/);
+  assert.match(sorobanIntentApp, /authorization_ready/);
   assert.match(sorobanAuthCore, /buildAuthorizationEntryPreimage/);
   assert.match(sorobanAuthCore, /thresholds\.medium/);
   assert.match(requestService, /soroban_authorization_incomplete/);
@@ -61,46 +62,47 @@ test('Soroban G-account authorization completes before the exact-XDR Proposal fr
   assert.match(requestService, /verifySorobanExecutionForBoundary/);
   assert.match(requestApi, /enforcePreparedSorobanTransaction/);
   assert.match(requestApi, /status: 'verified'/);
-  assert.match(sorobanPreparation, /server sends this exact frozen XDR/);
-  assert.match(sorobanPreparation, /again immediately before Submit/);
+  assert.match(sorobanIntentApp, /prepareExecution/);
+  assert.match(sorobanIntentApp, /executionSource/);
 });
 
-test('pre-freeze Soroban authorization uses durable online collaboration with XDR only as fallback', () => {
-  assert.match(sorobanPreparation, /Share authorization request/);
-  assert.match(sorobanPreparation, /fetch\('\/api\/preparation'/);
+test('imported prepared Soroban XDR crosses into the source-free Intent workflow', () => {
+  assert.match(sorobanPreparation, /Continue as Soroban Intent/);
+  assert.match(sorobanPreparation, /preparedXdr: state\.xdr/);
   assert.match(sorobanPreparation, /navigateWorkspace\('\/a'/);
+  assert.match(importedIntentService, /createImportedSorobanIntent/);
+  assert.match(importedIntentService, /prepared_xdr_already_signed/);
+  assert.match(importedIntentService, /source_account_auth_unsupported/);
+  assert.match(importedIntentService, /createSorobanAuthorizationPlan/);
   assert.match(sorobanAuthorization, /Prepared Soroban XDR/);
-  assert.match(sorobanAuthorization, /preserves existing pre-freeze signatures/);
   assert.match(sorobanAuthorization, /assertSorobanTransactionPreparedForFreeze/);
-  assert.match(signingRoom, /Ready for transaction signing/);
-  assert.match(signingRoom, /Copy prepared XDR/);
-  assert.match(signingRoom, /Choose transaction signer/);
-  assert.doesNotMatch(signingRoom, /Soroban authorization is complete\. The selected wallet signed pre-freeze authorization but is not a current signer/);
 });
 
-test('Soroban architecture preserves one Human workflow and auto-checks guided Contract Calls only', () => {
+test('Soroban architecture is Intent-first while preserving the one Human transaction workflow', () => {
   assert.match(productSemantics, /1 Prepare -> 2 Review -> 3 Sign -> 4 Submit -> 5 Done/);
-  assert.match(productSemantics, /Soroban authorization entry/);
-  assert.match(sorobanContract, /S1A — shipped local Import\/Review foundation/);
-  assert.match(sorobanContract, /Guided Contract Call Review runs recording simulation automatically/);
-  assert.match(sorobanContract, /Imported XDR keeps simulation explicit/);
+  assert.match(productSemantics, /durable \*\*Intent\*\*/);
+  assert.match(productSemantics, /authorization_ready/);
+  assert.match(productSemantics, /SOURCE_ACCOUNT.*rejected/);
+  assert.match(sorobanContract, /Current architecture — Intent-first/);
+  assert.match(sorobanContract, /semantic Soroban Intent/);
+  assert.match(sorobanContract, /late-bound Execution source/);
+  assert.match(sorobanContract, /imported transaction shell is discarded/);
   assert.match(sorobanContract, /auth-entry signatures change the transaction body/);
-  assert.match(sorobanContract, /offered a shared authorization path for detached auth-entry work/);
-  assert.match(sorobanContract, /envelope signatures are collected only after Soroban authorization entries are finalized/);
 });
 
 
-test('recording simulation and shared authorization are Headless operations consumed by Review and Agents', () => {
+test('recording simulation and shared authorization are Headless Intent operations', () => {
   assert.match(sorobanAuthorization, /prepareContractCallOperation/);
   assert.doesNotMatch(sorobanAuthorization, /simulateSorobanTransaction/);
   assert.match(contractOperationsClient, /fetch\('\/api\/contract-prepare'/);
   assert.match(contractPrepareApi, /simulateSorobanTransaction/);
-  assert.match(preparationApi, /createAgentSorobanPreparation/);
-  assert.match(preparationApi, /requireAgentAccess\(access\.agent, 'sign'\)/);
-  assert.match(preparationApi, /sorobanTransactionPreparer: prepareEnforcedSorobanTransaction/);
+  assert.match(intentApi, /createImportedSorobanIntent/);
+  assert.match(intentApi, /contributeSorobanIntentAuthorization/);
+  assert.match(intentApi, /prepareSorobanIntentExecution/);
+  assert.doesNotMatch(intentApi, /SorobanPreparation/);
 });
 
-test('S1B RPC simulation is project-configurable and automatic only for guided Contract Call Review', () => {
+test('Soroban RPC supports recording and enforcing simulation around Intent planning/execution', () => {
   assert.match(envExample, /STELLAR_RPC_PUBLIC_URL="https:\/\/rpc\.lightsail\.network\/"/);
   assert.match(envExample, /STELLAR_RPC_TESTNET_URL="https:\/\/soroban-testnet\.stellar\.org\/"/);
   assert.match(viteConfig, /process\.env\.STELLAR_RPC_PUBLIC_URL/);
@@ -111,7 +113,8 @@ test('S1B RPC simulation is project-configurable and automatic only for guided C
   assert.match(sorobanAuthorization, /sends the exact pre-submission XDR/);
   assert.match(sorobanContract, /simulation unavailable/);
   assert.match(sorobanContract, /execution\/review evidence only/);
-  assert.match(sorobanContract, /S2 — G-account authorization preparation and freeze/);
+  assert.match(sorobanContract, /recording simulation \/ immutable detached AuthorizationPlan/);
+  assert.match(sorobanContract, /enforcing simulation \/ final unsigned transaction/);
 });
 
 test('S3A presents contract-account authorization as read-only contract/network evidence', () => {
@@ -124,7 +127,7 @@ test('S3A presents contract-account authorization as read-only contract/network 
   assert.match(sorobanContract, /S3A — read-only contract-account authorization foundation/);
   assert.match(sorobanContract, /signature `ScVal` is contract-defined evidence/);
   assert.match(sorobanContract, /Authorization preparation remains blocked for those shapes/);
-  assert.match(productSemantics, /S3A may inspect C-account\/delegated authorization as contract\/network-enforced evidence/);
+  assert.match(productSemantics, /contract-account work remains a separate contract\/network-enforced credential path/);
 });
 
 test('S3B keeps contract-defined credentials challenge-bound and network-enforced before freeze', () => {
@@ -140,7 +143,7 @@ test('S3B keeps contract-defined credentials challenge-bound and network-enforce
   assert.match(sorobanContract, /S3B — contract-defined credential transport and enforced preparation/);
   assert.match(sorobanContract, /resource re-preparation/);
   assert.match(sorobanContract, /S3B checkpoint.*Request creation still failed closed/);
-  assert.match(productSemantics, /re-prepared from that enforcing simulation's resource output/);
+  assert.match(productSemantics, /configured C-account adapter may stage contract-defined `ScVal` evidence[\s\S]*must pass enforcing simulation/);
 });
 
 test('S3C exposes one configured contract-account adapter with explicit provenance and server revalidation', () => {
@@ -158,5 +161,5 @@ test('S3C exposes one configured contract-account adapter with explicit provenan
   assert.match(requestService, /verifySorobanExecutionForBoundary/);
   assert.match(sorobanContract, /S3C — one explicit Human contract-account adapter/);
   assert.match(sorobanContract, /unknown C-accounts remain inspect-only\/fail-closed/);
-  assert.match(productSemantics, /S3C exposes that path only for one explicitly configured Simple Ed25519 contract-account adapter/);
+  assert.match(productSemantics, /configured C-account adapter[\s\S]*explicit provenance/);
 });

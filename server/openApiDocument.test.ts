@@ -69,7 +69,6 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   const intentExecution = paths['/api/intent'].put as JsonObject;
   const build = paths['/api/contract-call'].post as JsonObject;
   const prepare = paths['/api/contract-prepare'].post as JsonObject;
-  const mutation = paths['/api/preparation'].patch as JsonObject;
 
   assert.deepEqual(inspect.security, []);
   assert.equal(inspect.operationId, 'contract.interface.inspect');
@@ -82,15 +81,15 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(intentExecution.security, [{ agentBearer: [] }, { humanSession: [] }]);
   assert.equal(build.operationId, 'contract.call.build');
   assert.equal(prepare.operationId, 'contract.call.prepare');
-  assert.equal(mutation.operationId, 'contract.authorization.mutate');
-  assert.deepEqual(mutation['x-multisig-operation-ids'], [
-    'contract.authorization.contribute',
-    'contract.authorization.refresh',
-  ]);
+  assert.equal(paths['/api/preparation'], undefined);
 
   const components = document.components as JsonObject;
   const schemas = (components.schemas as Record<string, JsonObject>);
-  assert.deepEqual(schemas.ContractIntentCreateInput.required, ['network', 'contractId', 'method', 'arguments']);
+  assert.deepEqual(schemas.ContractIntentCreateInput.required, ['network']);
+  assert.deepEqual(schemas.ContractIntentCreateInput.oneOf, [
+    { required: ['contractId', 'method', 'arguments'] },
+    { required: ['preparedXdr'] },
+  ]);
   assert.deepEqual(schemas.ContractIntentContributionInput.required, ['entryIndex', 'signatureBase64']);
   assert.deepEqual(schemas.ContractIntentExecutionInput.required, ['executionSource']);
   assert.deepEqual(schemas.ContractCallBuildInput.required, [

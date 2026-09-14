@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { CircleAlert, ClipboardCopy, KeyRound, LoaderCircle, QrCode, Share2, ShieldCheck } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CircleAlert, KeyRound, LoaderCircle, Share2, ShieldCheck } from 'lucide-react';
 import { ActionButton } from './MultiSigUi';
-import XdrQrCode from './XdrQrCode';
 import { useStellarWallet } from './StellarWalletContext';
 import { loadAccount, loadNetworkParameters } from './stellar/horizon';
 import {
   DEFAULT_SOROBAN_AUTH_EXPIRATION_LEDGERS,
   analyzeSorobanGAccountAuthorization,
-  mergeSorobanGAccountSignature,
-  sorobanAuthorizationPreimageXdr,
 } from './stellar/sorobanAuthorization';
 import type { SorobanGAccountAuthorizationStatus } from './stellar/sorobanAuthorization';
 import {
@@ -21,7 +18,7 @@ import {
   stageSorobanContractCredentialContribution,
 } from './stellar/sorobanCustomAuthorization';
 import { prepareEnforcedSorobanTransaction } from './stellar/sorobanRpc';
-import type { SorobanPreparationResponse } from './stellar/sorobanPreparationTypes';
+import { privateSessionAddressHeaders } from './stellar/privateSessionTransport';
 import type { StellarNetwork } from './stellar/types';
 import { navigateWorkspace } from './workspaceNavigation';
 
@@ -55,15 +52,11 @@ export default function SorobanAuthorizationPreparation({ preparation, onPrepare
   const [state, setState] = useState<PreparationState>({ status: 'loading' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [copiedHandoff, setCopiedHandoff] = useState(false);
-  const [showHandoffQr, setShowHandoffQr] = useState(false);
   const [startingShared, setStartingShared] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setError('');
-    setCopiedHandoff(false);
-    setShowHandoffQr(false);
     setState({ status: 'loading' });
     try {
       const contractAuthorization = analyzeKnownSorobanContractAuthorization({
@@ -107,7 +100,7 @@ export default function SorobanAuthorizationPreparation({ preparation, onPrepare
         return;
       }
       setState({ status: 'ready', xdr: preparation.xdr, analysis, currentLedger: preparation.currentLedger });
-      onPreparedXdrChange(preparation.xdr, analysis.ready);
+      onPreparedXdrChange(null, false);
     }).catch((cause) => {
       if (cancelled) return;
       const message = cause instanceof Error ? cause.message : 'Unable to load Soroban authorizer policies.';
@@ -119,44 +112,6 @@ export default function SorobanAuthorizationPreparation({ preparation, onPrepare
 
   const hardwareWalletSelected = wallet.networkSource === 'application';
   const hardwareAuthEntryMessage = 'The selected hardware wallet can sign the final Stellar transaction envelope, but Ledger and Trezor do not support detached Soroban authorization-entry signing. Choose another current signer wallet for this authorization step.';
-
-  const targetsForWallet = useMemo(() => {
-    if (state.status !== 'ready' || !wallet.address) return [];
-    return state.analysis.authorizers.filter((authorizer) =>
-      !authorizer.ready
-      && authorizer.activeSigners.some((signer) => signer.publicKey === wallet.address)
-      && !authorizer.signerEvidence.some((signer) => signer.publicKey === wallet.address),
-    );
-  }, [state, wallet.address]);
-
-  const selectedWalletCanFinishAuthorization = useMemo(() => {
-    if (state.status !== 'ready' || state.analysis.ready || !wallet.address) return false;
-    return state.analysis.authorizers.filter((authorizer) => !authorizer.ready).every((authorizer) => {
-      const signer = authorizer.activeSigners.find((candidate) => candidate.publicKey === wallet.address);
-      if (!signer || authorizer.signerEvidence.some((evidence) => evidence.publicKey === wallet.address)) return false;
-      return authorizer.threshold === 0 || authorizer.signedWeight + signer.weight >= authorizer.threshold;
-    });
-  }, [state, wallet.address]);
-
-  const preferSharedAuthorization = state.status === 'ready'
-    && !state.analysis.ready
-    && state.analysis.authorizers.some((authorizer) => !authorizer.ready)
-    && !selectedWalletCanFinishAuthorization;
-
-  const signerGuidance = useMemo(() => {
-    if (state.status !== 'ready' || state.analysis.ready || !wallet.address) return '';
-    if (hardwareWalletSelected && targetsForWallet.length > 0) return hardwareAuthEntryMessage;
-    if (targetsForWallet.length > 0) return '';
-    const remaining = state.analysis.authorizers.filter((authorizer) => !authorizer.ready);
-    const activeFor = remaining.filter((authorizer) => authorizer.activeSigners.some((signer) => signer.publicKey === wallet.address));
-    if (activeFor.some((authorizer) => authorizer.signerEvidence.some((signer) => signer.publicKey === wallet.address))) {
-      return 'Your signature is already included. Another current signer can continue this authorization here or on another device.';
-    }
-    const account = remaining[0]?.authorizer;
-    return account
-      ? `The remaining authorization belongs to ${compactAddress(account)}. Choose one of that account's current signers.`
-      : 'Choose a current signer for the remaining contract authorization.';
-  }, [state, wallet.address, targetsForWallet, hardwareWalletSelected]);
 
   async function chooseSignerWallet() {
     setError('');
@@ -176,25 +131,22 @@ export default function SorobanAuthorizationPreparation({ preparation, onPrepare
         ? wallet.unlockedAddress
         : await wallet.unlock(undefined, preparation.network);
       if (!verifiedAddress) throw new Error('Confirm a current signer wallet before starting shared authorization.');
-      const response = await fetch('/api/preparation', {
+      const response = await fetch('/api/intent', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ network: preparation.network, xdr: state.xdr }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...privateSessionAddressHeaders(verifiedAddress),
+        },
+        body: JSON.stringify({ network: preparation.network, preparedXdr: state.xdr }),
       });
-      const body = await response.json() as SorobanPreparationResponse & { error?: string };
-      if (!response.ok) throw new Error(body.error || 'Unable to start shared contract authorization.');
-      if (!body.preparation?.id || !body.capability) throw new Error('MultiSigTools did not return a valid private authorization request.');
-      navigateWorkspace('/a', { hash: `${body.preparation.id}${body.capability}` });
+      const body = await response.json() as { intent?: { id?: string }; error?: string };
+      if (!response.ok) throw new Error(body.error || 'Unable to convert this prepared XDR into a Soroban Intent.');
+      if (!body.intent?.id) throw new Error('MultiSigTools did not return a valid Soroban Intent.');
+      navigateWorkspace('/a', { hash: body.intent.id });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to start shared contract authorization.');
       setStartingShared(false);
     }
-  }
-
-  async function copyAuthorizationHandoff() {
-    if (state.status !== 'ready') return;
-    await navigator.clipboard.writeText(state.xdr);
-    setCopiedHandoff(true);
   }
 
   async function authorizeContractAccountWithWallet() {
@@ -252,71 +204,6 @@ export default function SorobanAuthorizationPreparation({ preparation, onPrepare
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to prepare this contract-account authorization.');
       onPreparedXdrChange(null, false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function authorizeWithWallet() {
-    if (state.status !== 'ready' || busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      if (hardwareWalletSelected) throw new Error(hardwareAuthEntryMessage);
-      let signerAddress = wallet.address;
-      if (!signerAddress) signerAddress = await wallet.connect();
-      const parameters = await loadNetworkParameters(preparation.network);
-      const currentLedger = parameters.ledgerSequence;
-      let workingXdr = state.xdr;
-      let analysis = await analyzeSorobanGAccountAuthorization({
-        envelopeXdr: workingXdr,
-        network: preparation.network,
-        currentLedger,
-        accountLoader: loadAccount,
-      });
-      if (!analysis.supported) throw new Error(analysis.reason ?? 'This Soroban authorization shape is not supported yet.');
-      const targets = analysis.authorizers.filter((authorizer) =>
-        !authorizer.ready
-        && authorizer.activeSigners.some((signer) => signer.publicKey === signerAddress)
-        && !authorizer.signerEvidence.some((signer) => signer.publicKey === signerAddress),
-      );
-      if (targets.length === 0) {
-        throw new Error('Choose a current signer for the remaining contract authorization.');
-      }
-      for (const target of targets) {
-        const expirationLedger = target.expirationLedger > currentLedger
-          ? target.expirationLedger
-          : currentLedger + DEFAULT_SOROBAN_AUTH_EXPIRATION_LEDGERS;
-        const preimageXdr = sorobanAuthorizationPreimageXdr({
-          envelopeXdr: workingXdr,
-          network: preparation.network,
-          entryIndex: target.entryIndex,
-          expirationLedger,
-        });
-        const signed = await wallet.signAuthEntry(preimageXdr, preparation.network);
-        if (!target.activeSigners.some((signer) => signer.publicKey === signed.signerAddress)) {
-          throw new Error('The wallet that signed this authorization is not an active signer for the G-account authorizer.');
-        }
-        workingXdr = await mergeSorobanGAccountSignature({
-          envelopeXdr: workingXdr,
-          network: preparation.network,
-          entryIndex: target.entryIndex,
-          signerPublicKey: signed.signerAddress,
-          signatureBase64: signed.signatureBase64,
-          expirationLedger,
-        });
-      }
-      analysis = await analyzeSorobanGAccountAuthorization({
-        envelopeXdr: workingXdr,
-        network: preparation.network,
-        currentLedger,
-        accountLoader: loadAccount,
-      });
-      if (!analysis.supported) throw new Error(analysis.reason ?? 'Unable to verify the updated Soroban authorization.');
-      setState({ status: 'ready', xdr: workingXdr, analysis, currentLedger });
-      onPreparedXdrChange(workingXdr, analysis.ready);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to add this Soroban authorization signature.');
     } finally {
       setBusy(false);
     }
@@ -385,36 +272,13 @@ export default function SorobanAuthorizationPreparation({ preparation, onPrepare
           <div className="flex items-center gap-2 text-xs font-semibold"><KeyRound className="h-4 w-4" /> Sign with a current G-account signer</div>
           <div className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Selected wallet: {wallet.address ? compactAddress(wallet.address) : 'none'}. Each wallet signature is verified against the exact CAP-71 authorization payload and current Horizon signer weights before it is retained.</div>
           <div className="mt-3 flex flex-wrap gap-2">
-            {preferSharedAuthorization ? (
-              <>
-                <ActionButton variant="primary" size="sm" disabled={busy || startingShared || wallet.authBusy} onClick={() => void startSharedAuthorization()}>{startingShared || wallet.authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}{startingShared || wallet.authBusy ? 'Starting…' : 'Share authorization request'}</ActionButton>
-                <ActionButton variant="secondary" size="sm" disabled={busy || startingShared || wallet.busy} onClick={() => void chooseSignerWallet()}>Choose another signer</ActionButton>
-              </>
-            ) : targetsForWallet.length > 0 && !hardwareWalletSelected ? (
-              <>
-                <ActionButton variant="primary" size="sm" disabled={busy} onClick={() => void authorizeWithWallet()}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}{busy ? 'Authorizing…' : 'Authorize contract call'}</ActionButton>
-                <ActionButton variant="secondary" size="sm" disabled={busy || wallet.busy} onClick={() => void chooseSignerWallet()}>Choose another signer</ActionButton>
-              </>
-            ) : (
-              <ActionButton variant="primary" size="sm" disabled={busy || wallet.busy} onClick={() => void chooseSignerWallet()}>{wallet.address ? 'Choose another signer' : 'Choose signer'}</ActionButton>
-            )}
+            <ActionButton variant="primary" size="sm" disabled={busy || startingShared || wallet.authBusy} onClick={() => void startSharedAuthorization()}>{startingShared || wallet.authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}{startingShared || wallet.authBusy ? 'Creating Intent…' : 'Continue as Soroban Intent'}</ActionButton>
           </div>
-          {preferSharedAuthorization && <div className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Another signer is needed. Create a private authorization request so another signer can review and authorize from their own device; MultiSig Tools combines the valid contributions.</div>}
-          {!preferSharedAuthorization && signerGuidance && <div className="mt-2 text-xs text-amber-700 dark:text-amber-300">{signerGuidance}</div>}
-          <details className="mt-4 border-t border-black/10 pt-4 dark:border-white/10">
-            <summary className="cursor-pointer text-xs font-semibold text-neutral-500 dark:text-neutral-400">Offline / XDR fallback</summary>
-            <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Use XDR only for an offline signer, an external signing tool, or recovery. Online signers should use the shared authorization request instead.</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <ActionButton variant="secondary" size="sm" onClick={() => void copyAuthorizationHandoff()}><ClipboardCopy className="h-4 w-4" />{copiedHandoff ? 'Authorization XDR copied' : 'Copy authorization XDR'}</ActionButton>
-              <ActionButton variant="secondary" size="sm" aria-expanded={showHandoffQr} onClick={() => setShowHandoffQr((visible) => !visible)}><QrCode className="h-4 w-4" />{showHandoffQr ? 'Hide authorization QR' : 'Show authorization QR'}</ActionButton>
-            </div>
-            {showHandoffQr && <div className="mt-4"><XdrQrCode xdr={state.xdr} /></div>}
-          </details>
+          <div className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Prepared transaction fields are discarded here. Authorization continues as a source-free Intent; the executor and final transaction are chosen only after detached authorization is complete.</div>
         </div>
       )}
 
-      {state.analysis.ready && state.analysis.authorizers.length > 0 && <div className="mt-4 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-4 text-sm"><div className="font-semibold text-emerald-800 dark:text-emerald-300">Soroban authorization complete</div><div className="mt-1 text-xs text-neutral-600 dark:text-neutral-300">Every detached G-account authorization meets its current medium threshold. This exact XDR can now be frozen before transaction-envelope signatures are collected.</div></div>}
-      {state.analysis.ready && <p className="mt-3 text-[11px] leading-5 text-neutral-500 dark:text-neutral-400">When you continue to signatures, the server sends this exact frozen XDR to its configured Stellar RPC provider once in enforce mode to verify contract authorization before creating the Proposal. The same enforce check runs again immediately before Submit.</p>}
+      {state.analysis.ready && <div className="mt-4 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-4 text-sm"><div className="font-semibold text-emerald-800 dark:text-emerald-300">Detached authorization evidence found</div><div className="mt-1 text-xs text-neutral-600 dark:text-neutral-300">Continue as an Intent. MultiSig Tools will preserve detached authorization evidence but discard the imported transaction shell before any final transaction is constructed.</div></div>}
       {error && <div className="mt-3 flex gap-2 rounded-xl border border-red-500/25 bg-red-500/[0.08] p-3 text-xs"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />{error}</div>}
     </div>
   );
