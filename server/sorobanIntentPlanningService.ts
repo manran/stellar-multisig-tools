@@ -68,7 +68,7 @@ export async function planSorobanIntent(
   const plan = createSorobanAuthorizationPlan(intent, initializedXdr);
   if (plan.executionBinding === 'source_bound') {
     throw new SorobanIntentPlanningError(
-      'Source-account Soroban authorization is not supported by source-free Intent planning. Use detached auth-entry authorization.',
+      'This contract call uses SOURCE_ACCOUNT Soroban authorization, which binds authorization to the final transaction source. MultiSigTools Intent workflows intentionally collect authorization before choosing an executor, so this source-bound authorization cannot be used here. Use detached address authorization instead, or change the contract/integration so authorization is not supplied by the transaction source.',
       'source_account_auth_unsupported',
     );
   }

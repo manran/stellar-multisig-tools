@@ -64,29 +64,31 @@ test('Contract Workspace methods deep-link into the exact call', () => {
   assert.doesNotMatch(composer, /Keep this contract for later\?/);
 });
 
-test('Web contract flows consume headless operations instead of rebuilding business logic', () => {
+test('Web contract flows consume headless Intent operations instead of rebuilding business logic', () => {
   const workspace = source('../ContractWorkspaceApp.tsx');
   const composer = source('../ContractCallComposer.tsx');
 
   assert.match(workspace, /inspectContractOperation/);
   assert.match(composer, /inspectContractOperation/);
-  assert.match(composer, /buildContractCallOperation/);
+  assert.match(composer, /fetch\('\/api\/intent'/);
+  assert.match(composer, /privateSessionAddressHeaders\(verifiedAddress\)/);
+  assert.doesNotMatch(composer, /buildContractCallOperation/);
   assert.doesNotMatch(composer, /new TransactionBuilder/);
   assert.doesNotMatch(composer, /loadNetworkParameters/);
   assert.doesNotMatch(composer, /contractArgumentsToScVals/);
 });
 
-test('Contract Call keeps transaction source neutral and input-first', () => {
+test('Guided Contract Call is Intent-first and defers transaction execution choices', () => {
   const composer = source('../ContractCallComposer.tsx');
 
   assert.doesNotMatch(composer, /SigningAccountPicker/);
   assert.doesNotMatch(composer, /Choose a treasury/);
-  assert.match(composer, /sessionAddress/);
-  assert.match(composer, /Use my account/);
-  assert.match(composer, /Usually this is your signed-in account/);
-  assert.match(composer, /Contract authorization is resolved separately/);
-  assert.match(composer, /explicitSource \|\|/);
-  assert.match(composer, /TransactionLifetimePicker/);
+  assert.doesNotMatch(composer, /contract-source/);
+  assert.doesNotMatch(composer, /transactionSource/);
+  assert.doesNotMatch(composer, /TransactionLifetimePicker/);
+  assert.match(composer, /source-free Soroban Intent/);
+  assert.match(composer, /No transaction source, sequence, fee, lifetime or envelope signature is chosen/);
+  assert.match(composer, /Continue to authorization/);
+  assert.match(composer, /navigateWorkspace\('\/a'/);
   assert.match(composer, /Auto-load the interface once a complete C-address is valid/);
-  assert.match(composer, /autoSorobanSimulation: true/);
 });

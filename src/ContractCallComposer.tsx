@@ -1,18 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, Braces, CircleAlert, LoaderCircle } from 'lucide-react';
-import { NetworkBadge, TransactionLifetimePicker, WorkflowProgress } from './MultiSigUi';
+import { NetworkBadge, WorkflowProgress } from './MultiSigUi';
 import { useContractWorkspaces } from './ContractWorkspaceContext';
-import { buildContractCallOperation, inspectContractOperation, keepContractOperation } from './contractOperationsClient';
+import { inspectContractOperation, keepContractOperation } from './contractOperationsClient';
 import { useStellarWallet } from './StellarWalletContext';
-import { isValidStellarAccountId } from './stellar/horizon';
 import { isValidContractId } from './stellar/contractSpec';
 import type { ContractInputDescriptor, ContractMethodDescriptor } from './stellar/contractSpec';
 import { MAX_PRIVATE_NOTE_BYTES, normalizePrivateNote, privateNoteByteLength } from './stellar/privateNote';
-import { writeReviewHandoff } from './stellar/reviewHandoff';
-import { getDefaultTransactionLifetime } from './stellar/transactionPreferences';
+import { privateSessionAddressHeaders } from './stellar/privateSessionTransport';
+import type { SorobanIntentResponse } from './stellar/sorobanIntentApiTypes';
 import type { StellarNetwork } from './stellar/types';
-import { parseTreasuryRoute } from './treasuryNavigation';
 import { navigateWorkspace, stellarHref, stellarHrefWithSearch } from './workspaceNavigation';
 
 interface Props {
@@ -55,22 +53,17 @@ function MethodFact({ method }: { method: ContractMethodDescriptor }) {
 }
 
 export default function ContractCallComposer({ network }: Props) {
-  const { sessionAddress, unlock, authBusy } = useStellarWallet();
+  const { unlock, authBusy, privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
   const { contracts, ready: workspaceReady } = useContractWorkspaces();
   const params = new URLSearchParams(window.location.search);
-  const route = parseTreasuryRoute(window.location.search);
   const routeContractId = (params.get('contract') ?? '').trim();
   const routeMethod = (params.get('method') ?? '').trim();
   const fromWorkspace = params.get('from') === 'workspace';
-  const explicitSource = isValidStellarAccountId(route.accountId) ? route.accountId : '';
-  const sourceEdited = useRef(false);
-  const [source, setSource] = useState(() => explicitSource || (sessionAddress && isValidStellarAccountId(sessionAddress) ? sessionAddress : ''));
   const [contractId, setContractId] = useState(() => isValidContractId(routeContractId) ? routeContractId : '');
   const [loaded, setLoaded] = useState<{ methods: ContractMethodDescriptor[] } | null>(null);
   const [methodName, setMethodName] = useState('');
   const [rawArgs, setRawArgs] = useState<Record<string, string>>({});
   const [privateNote, setPrivateNote] = useState('');
-  const [lifetimeSeconds, setLifetimeSeconds] = useState(() => getDefaultTransactionLifetime(localStorage));
   const [loadingSpec, setLoadingSpec] = useState(false);
   const [building, setBuilding] = useState(false);
   const [savingContract, setSavingContract] = useState(false);
@@ -84,7 +77,6 @@ export default function ContractCallComposer({ network }: Props) {
     () => loaded?.methods.find((method) => method.name === methodName) ?? null,
     [loaded, methodName],
   );
-  const sourceValid = isValidStellarAccountId(source);
   const contractValid = isValidContractId(contractId);
   const privateNoteBytes = privateNoteByteLength(privateNote.trim());
   const privateNoteValid = privateNoteBytes <= MAX_PRIVATE_NOTE_BYTES;
@@ -92,11 +84,6 @@ export default function ContractCallComposer({ network }: Props) {
   const focusClass = testnet ? 'focus:border-sky-500' : 'focus:border-emerald-500';
   const primaryClass = testnet ? 'bg-sky-700 hover:bg-sky-800' : 'bg-emerald-700 hover:bg-emerald-800';
   const autoLoadContractRef = useRef('');
-
-  useEffect(() => {
-    if (explicitSource || sourceEdited.current || source || !sessionAddress || !isValidStellarAccountId(sessionAddress)) return;
-    setSource(sessionAddress);
-  }, [explicitSource, sessionAddress, source]);
 
   // Auto-load the interface once a complete C-address is valid.
   useEffect(() => {
@@ -153,28 +140,32 @@ export default function ContractCallComposer({ network }: Props) {
 
   async function reviewContractCall(event: FormEvent) {
     event.preventDefault();
-    if (!loaded || !selectedMethod?.guided || !sourceValid || !contractValid || !privateNoteValid || building) return;
+    if (!loaded || !selectedMethod?.guided || !contractValid || !privateNoteValid || building) return;
     setBuilding(true);
     setError('');
     try {
-      const built = await buildContractCallOperation({
-        network,
-        transactionSource: source,
-        contractId,
-        method: selectedMethod.name,
-        arguments: rawArgs,
-        lifetimeSeconds,
+      const verifiedAddress = privateUnlocked && unlockedNetwork === network
+        ? unlockedAddress
+        : await unlock(undefined, network);
+      const response = await fetch('/api/intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...privateSessionAddressHeaders(verifiedAddress),
+        },
+        body: JSON.stringify({
+          network,
+          contractId,
+          method: selectedMethod.name,
+          arguments: rawArgs,
+          privateNote: privateNote.trim() ? normalizePrivateNote(privateNote) : undefined,
+        }),
       });
-      writeReviewHandoff(sessionStorage, {
-        xdr: built.xdr,
-        network,
-        privateNote: privateNote.trim() ? normalizePrivateNote(privateNote) : null,
-      });
-      navigateWorkspace('/signing-room', {
-        state: { returnTo: window.location.href, returnLabel: 'Edit contract call', autoSorobanSimulation: true },
-      });
+      const body = await response.json() as SorobanIntentResponse & { error?: string };
+      if (!response.ok) throw new Error(body.error || 'Unable to create this Soroban Intent.');
+      navigateWorkspace('/a', { hash: body.intent.id });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to prepare this contract call.');
+      setError(cause instanceof Error ? cause.message : 'Unable to create this Soroban Intent.');
       setBuilding(false);
     }
   }
@@ -203,7 +194,7 @@ export default function ContractCallComposer({ network }: Props) {
         <div className="mb-6"><WorkflowProgress current="prepare" /></div>
         <a href={backHref} className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black dark:text-neutral-300 dark:hover:text-white"><ArrowLeft className="h-4 w-4" />{fromWorkspace ? 'Contract Workspace' : 'New'}</a>
         <div className="mt-4 flex flex-wrap items-center gap-3"><Braces className="h-6 w-6 text-violet-600 dark:text-violet-300" /><h1 className="text-3xl font-bold tracking-tight">Call a contract</h1><NetworkBadge network={network} /></div>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-600 dark:text-neutral-300">Load the contract's on-chain spec, choose a callable method, and build its exact Soroban transaction. MultiSig Tools shows ABI facts from the contract; it does not infer business intent from a function name.</p>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-600 dark:text-neutral-300">Load the contract's on-chain spec, choose a callable method, and define the contract Intent. Transaction construction happens only after the required Soroban authorization is complete.</p>
         {loaded && fromWorkspace && (
           <div className="mt-4 rounded-xl border border-violet-500/20 bg-violet-500/[0.04] p-4 text-sm leading-6 text-neutral-600 dark:border-violet-400/20 dark:text-neutral-300">
             <div className="font-semibold text-neutral-900 dark:text-white">Contract Workspace call</div>
@@ -225,18 +216,6 @@ export default function ContractCallComposer({ network }: Props) {
         )}
 
         <form onSubmit={reviewContractCall} className="mt-6 space-y-5 rounded-2xl border border-black/10 bg-white p-5 shadow-sm shadow-black/[0.02] dark:border-white/10 dark:bg-white/5 sm:p-6">
-          <div>
-            <div className="flex items-center justify-between gap-3">
-              <label htmlFor="contract-source" className="text-sm font-semibold">Transaction source</label>
-              {sessionAddress && isValidStellarAccountId(sessionAddress) && source !== sessionAddress && (
-                <button type="button" disabled={building} onClick={() => { sourceEdited.current = true; setSource(sessionAddress); }} className="text-sm font-semibold text-violet-700 hover:text-violet-800 disabled:opacity-50 dark:text-violet-300">Use my account</button>
-              )}
-            </div>
-            <input id="contract-source" value={source} disabled={building} onChange={(event) => { sourceEdited.current = true; setSource(event.target.value.trim()); }} placeholder="G... transaction source" spellCheck={false} className={`mt-2 w-full rounded-xl border border-black/10 bg-transparent px-4 py-3 font-mono text-sm outline-none disabled:opacity-50 dark:border-white/10 ${focusClass}`} />
-            <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Usually this is your signed-in account. Paste another G... account only when it should provide the transaction sequence and pay the transaction fee. Contract authorization is resolved separately.</p>
-            {source && !sourceValid && <p className="mt-2 text-sm text-red-700 dark:text-red-300">Enter a valid Stellar G... account.</p>}
-          </div>
-
           <div>
             <label htmlFor="contract-id" className="text-sm font-semibold">Contract</label>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row">
@@ -288,16 +267,14 @@ export default function ContractCallComposer({ network }: Props) {
 
           <div className="border-t border-black/10 pt-5 dark:border-white/10">
             <label htmlFor="contract-private-note" className="text-sm font-semibold">Private Note <span className="font-normal text-neutral-400">optional</span></label>
-            <textarea id="contract-private-note" value={privateNote} disabled={building} onChange={(event) => setPrivateNote(event.target.value)} rows={3} placeholder="Context for people reviewing this Proposal." className={`mt-2 w-full resize-y rounded-xl border border-black/10 bg-transparent px-4 py-3 text-sm leading-6 outline-none disabled:opacity-50 dark:border-white/10 ${focusClass}`} />
+            <textarea id="contract-private-note" value={privateNote} disabled={building} onChange={(event) => setPrivateNote(event.target.value)} rows={3} placeholder="Context for people reviewing this contract Intent." className={`mt-2 w-full resize-y rounded-xl border border-black/10 bg-transparent px-4 py-3 text-sm leading-6 outline-none disabled:opacity-50 dark:border-white/10 ${focusClass}`} />
             <div className={`mt-1 text-xs ${privateNoteValid ? 'text-neutral-400' : 'text-red-600 dark:text-red-300'}`}>{privateNoteBytes}/{MAX_PRIVATE_NOTE_BYTES} UTF-8 bytes</div>
           </div>
 
-          <TransactionLifetimePicker network={network} value={lifetimeSeconds} onChange={setLifetimeSeconds} disabled={building} />
-
-          <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.06] px-4 py-3 text-xs leading-5 text-neutral-600 dark:text-neutral-300">Review will run the existing Soroban simulation and authorization flow before the final XDR is frozen for signatures. Nothing is submitted from this screen.</div>
+          <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.06] px-4 py-3 text-xs leading-5 text-neutral-600 dark:text-neutral-300">MultiSig Tools first creates a source-free Soroban Intent and discovers detached AUTH requirements. No transaction source, sequence, fee, lifetime or envelope signature is chosen at this stage.</div>
 
           <div className="flex justify-end border-t border-black/10 pt-5 dark:border-white/10">
-            <button type="submit" disabled={building || loadingSpec || !sourceValid || !contractValid || !selectedMethod?.guided || !privateNoteValid} className={`inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-40 ${primaryClass}`}>{building && <LoaderCircle className="h-4 w-4 animate-spin" />}{building ? 'Preparing review…' : 'Review contract call'} <ArrowRight className="h-4 w-4" /></button>
+            <button type="submit" disabled={building || loadingSpec || !contractValid || !selectedMethod?.guided || !privateNoteValid || authBusy} className={`inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-40 ${primaryClass}`}>{building && <LoaderCircle className="h-4 w-4 animate-spin" />}{building ? 'Creating Intent…' : 'Continue to authorization'} <ArrowRight className="h-4 w-4" /></button>
           </div>
         </form>
 

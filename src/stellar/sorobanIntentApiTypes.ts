@@ -1,0 +1,65 @@
+import type { SorobanGAccountAuthorizerStatus } from './sorobanAuthorization.js';
+import type { SorobanAuthorizationPlan } from './sorobanAuthorizationPlan.js';
+import type { SorobanIntent } from './sorobanIntent.js';
+import type { PrivateNoteRevision } from './privateNote.js';
+import type { StellarNetwork } from './types.js';
+
+export interface StoredSorobanIntentSnapshot {
+  version: 1;
+  id: string;
+  network: StellarNetwork;
+  intent: SorobanIntent;
+  authorizationPlan: SorobanAuthorizationPlan;
+  createdAt: string;
+  creatorAddress: string;
+  privateContext?: {
+    externalReference?: string;
+    initialPrivateNote?: PrivateNoteRevision;
+  };
+}
+
+export interface SorobanIntentAuthorizationSnapshot {
+  id: string;
+  network: StellarNetwork;
+  intentDigest: string;
+  authorizationPlanDigest: string;
+  executionBinding: 'detached';
+  status: 'awaiting_authorization' | 'authorization_ready' | 'expired' | 'blocked';
+  statusDetail?: string;
+  authorizationEntriesXdr: string[];
+  contributionCount: number;
+  authorizers: SorobanGAccountAuthorizerStatus[];
+}
+
+export interface SorobanIntentResponse {
+  operation: 'contract.intent.create' | 'contract.intent.inspect';
+  version: 1;
+  replayed?: boolean;
+  intent: StoredSorobanIntentSnapshot;
+  authorization: SorobanIntentAuthorizationSnapshot;
+}
+
+export interface SorobanIntentContributionResponse {
+  operation: 'contract.intent.contribute';
+  version: 1;
+  added: boolean;
+  authorization: SorobanIntentAuthorizationSnapshot;
+}
+
+export interface SorobanIntentExecutionResponse {
+  operation: 'contract.intent.execution.prepare';
+  version: 1;
+  execution: {
+    version: 1;
+    intentId: string;
+    network: StellarNetwork;
+    intentDigest: string;
+    authorizationPlanDigest: string;
+    executionSource: string;
+    transactionSequence: string;
+    transactionHash: string;
+    validUntil: string | null;
+    latestLedger: number;
+    xdr: string;
+  };
+}

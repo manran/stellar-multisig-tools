@@ -50,7 +50,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
     values.push(parameter('X-MultiSig-Intent-Id', 'header', true, { type: 'string' }, 'Soroban Intent id.'));
   }
   if (path === '/api/intent' && method === 'post') {
-    values.push(parameter('Idempotency-Key', 'header', true, { type: 'string' }, 'Required for Agent Intent creation.'));
+    values.push(parameter('Idempotency-Key', 'header', false, { type: 'string' }, 'Required for Agent Intent creation; Human sessions do not need it.'));
   }
   if (['/api/preparation', '/api/request'].includes(path) && method === 'post') {
     values.push(parameter('Idempotency-Key', 'header', false, { type: 'string' }, 'Required for Agent credential creation; ignored for Human sessions.'));
@@ -96,7 +96,7 @@ function successSchema(path: string, method: string): OpenApiObject {
 
 function security(path: string, method: string, access: HeadlessOperationAccess): OpenApiObject[] {
   if (access === 'public') return [];
-  if (path === '/api/intent') return [{ agentBearer: [] }];
+  if (path === '/api/intent') return [{ agentBearer: [] }, { humanSession: [] }];
   if (path === '/api/contracts') return [{ agentBearer: [] }, { humanSession: [] }];
   if (path === '/api/request' && method === 'put') return [{ humanSession: [] }, { requestCapability: [] }];
   return [{ agentBearer: [] }, { humanSession: [] }, { requestCapability: [] }];

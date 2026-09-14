@@ -51,10 +51,10 @@ test('new transaction entry keeps primary actions separate from low-frequency St
   assert.match(app, /Call a contract/);
   assert.match(app, /stellarHrefWithSearch\('\/new\/contract'/);
   assert.match(contractComposer, /inspectContractOperation\(contractId, network\)/);
-  assert.match(contractComposer, /buildContractCallOperation/);
+  assert.match(contractComposer, /fetch\('\/api\/intent'/);
   assert.doesNotMatch(contractComposer, /contractArgumentsToScVals/);
-  assert.match(contractComposer, /Review will run the existing Soroban simulation and authorization flow/);
-  assert.match(contractComposer, /does not infer business intent from a function name/);
+  assert.match(contractComposer, /source-free Soroban Intent/);
+  assert.match(contractComposer, /Transaction construction happens only after the required Soroban authorization is complete/);
   assert.ok(app.indexOf('Import transaction (XDR)') < app.indexOf('More Stellar actions'));
   assert.match(app, /stellarHref\('\/new\/import'\)/);
   assert.doesNotMatch(app, /stellarHrefWithSearch\('\/new\/import'/);
@@ -76,9 +76,11 @@ test('transaction lifetime uses one shared button-group primitive across Human c
   const contractCall = source('../ContractCallComposer.tsx');
 
   assert.match(ui, /export function TransactionLifetimePicker/);
-  for (const composer of [payment, transfer, claimable, contractCall]) {
+  for (const composer of [payment, transfer, claimable]) {
     assert.match(composer, /TransactionLifetimePicker/);
   }
+  assert.doesNotMatch(contractCall, /TransactionLifetimePicker/);
+  assert.match(contractCall, /No transaction source, sequence, fee, lifetime or envelope signature is chosen/);
 });
 
 test('connected home switches to an actionable Dashboard without a first-use choice modal', () => {

@@ -74,12 +74,12 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(inspect.security, []);
   assert.equal(inspect.operationId, 'contract.interface.inspect');
   assert.equal(intent.operationId, 'contract.intent.create');
-  assert.deepEqual(intent.security, [{ agentBearer: [] }]);
+  assert.deepEqual(intent.security, [{ agentBearer: [] }, { humanSession: [] }]);
   assert.equal(intentInspect.operationId, 'contract.intent.inspect');
   assert.equal(intentContribute.operationId, 'contract.intent.contribute');
-  assert.deepEqual(intentContribute.security, [{ agentBearer: [] }]);
+  assert.deepEqual(intentContribute.security, [{ agentBearer: [] }, { humanSession: [] }]);
   assert.equal(intentExecution.operationId, 'contract.intent.execution.prepare');
-  assert.deepEqual(intentExecution.security, [{ agentBearer: [] }]);
+  assert.deepEqual(intentExecution.security, [{ agentBearer: [] }, { humanSession: [] }]);
   assert.equal(build.operationId, 'contract.call.build');
   assert.equal(prepare.operationId, 'contract.call.prepare');
   assert.equal(mutation.operationId, 'contract.authorization.mutate');

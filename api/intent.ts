@@ -1,4 +1,5 @@
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
+import { blobAuthStore } from '../server/blobAuthStore.js';
 import { blobSorobanIntentStore } from '../server/blobSorobanIntentStore.js';
 import {
   AgentCredentialServiceError,
@@ -7,12 +8,15 @@ import {
   requireAgentAccess,
 } from '../server/agentCredentialService.js';
 import { createAgentSorobanIntent } from '../server/agentSorobanIntentService.js';
+import { authConfigForRequest } from '../server/authConfig.js';
+import { AuthServiceError, privateWorkspaceSessionFromRequest } from '../server/authService.js';
 import { BoxServiceError } from '../server/boxService.js';
 import { ContractIntentServiceError } from '../server/contractIntentService.js';
 import {
   assertDeploymentNetwork,
   DeploymentNetworkPolicyError,
 } from '../server/deploymentNetworkPolicy.js';
+import { createHumanSorobanIntent } from '../server/humanSorobanIntentService.js';
 import { noStoreJson, publicCorsHeaders } from '../server/httpResponse.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
@@ -29,6 +33,7 @@ import {
   SorobanIntentAuthorizationServiceError,
 } from '../server/sorobanIntentAuthorizationService.js';
 import { isValidSigningRequestId } from '../server/requestLocator.js';
+import { privateSessionAddressFromRequest } from '../src/stellar/privateSessionTransport.js';
 import {
   beforeFirstDurableWrite,
   enforceSemanticRateLimit,
@@ -42,7 +47,7 @@ const METHODS = 'GET, POST, PATCH, PUT, OPTIONS';
 const INTENT_ID_HEADER = 'x-multisig-intent-id';
 const CORS_HEADERS = {
   ...publicCorsHeaders(METHODS),
-  'Access-Control-Allow-Headers': 'Authorization, Content-Type, Idempotency-Key, X-MultiSig-Intent-Id',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type, Idempotency-Key, X-MultiSig-Intent-Id, X-MultiSig-Session-Address',
 };
 
 function json(data: unknown, status = 200): Response {
@@ -81,16 +86,29 @@ function errorResponse(cause: unknown): Response {
 }
 
 async function agentCredentialFor(request: Request) {
-  const authorization = request.headers.get('authorization') ?? '';
+  const authorization = request.headers.get('authorization')?.trim() ?? '';
+  if (!authorization) return null;
   const match = /^Bearer\s+(.+)$/i.exec(authorization);
   if (!match) {
-    throw new AgentCredentialServiceError(
-      'Agent credential is required.',
-      401,
-      'agent_credential_required',
-    );
+    throw new AgentCredentialServiceError('Invalid Agent authorization header.', 401, 'invalid_agent_credential');
   }
   return authenticateAgentCredential(blobAgentCredentialStore, match[1].trim());
+}
+
+async function humanSessionFor(request: Request, network: 'public' | 'testnet') {
+  const selectedAddress = privateSessionAddressFromRequest(request);
+  if (!selectedAddress) return null;
+  try {
+    const session = await privateWorkspaceSessionFromRequest(
+      blobAuthStore,
+      request,
+      authConfigForRequest(request),
+    );
+    return session && session.network === network && session.address === selectedAddress ? session : null;
+  } catch (cause) {
+    if (cause instanceof AuthServiceError) return null;
+    throw cause;
+  }
 }
 
 function intentIdFromRequest(request: Request): string {
@@ -102,25 +120,40 @@ function intentIdFromRequest(request: Request): string {
 }
 
 async function storedIntentAccess(request: Request, required: 'read' | 'write' | 'sign') {
-  const agent = await agentCredentialFor(request);
-  requireAgentAccess(agent, required);
   const id = intentIdFromRequest(request);
   const stored = await blobSorobanIntentStore.getIntent(id);
   if (!stored) throw new SorobanIntentAuthorizationServiceError('Soroban Intent not found.', 404, 'intent_not_found');
   assertDeploymentNetwork(stored.network);
-  if (agent.principal.network !== stored.network) {
-    throw new AgentCredentialServiceError('Agent credential network does not match this Soroban Intent.', 403, 'principal_network_mismatch');
-  }
+  const agent = await agentCredentialFor(request);
+  const session = agent ? null : await humanSessionFor(request, stored.network);
   const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, id);
-  const address = agent.principal.address;
+
+  if (agent) {
+    requireAgentAccess(agent, required);
+    if (agent.principal.network !== stored.network) {
+      throw new AgentCredentialServiceError('Agent credential network does not match this Soroban Intent.', 403, 'principal_network_mismatch');
+    }
+  } else if (!session) {
+    throw new SorobanIntentAuthorizationServiceError(
+      'Confirm the selected Stellar wallet before opening this Soroban Intent.',
+      401,
+      'intent_authentication_required',
+    );
+  }
+
+  const address = agent?.principal.address ?? session!.address;
   const participant = stored.creatorAddress === address || authorization.authorizers.some(
     (authorizer) => authorizer.activeSigners.some((signer) => signer.publicKey === address),
   );
   if (!participant) {
-    throw new SorobanIntentAuthorizationServiceError('This Agent Principal is not a participant in this Soroban Intent.', 403, 'intent_access_denied');
+    throw new SorobanIntentAuthorizationServiceError(
+      'This wallet is not the Intent creator or a current signer for its remaining Soroban authorization.',
+      403,
+      'intent_access_denied',
+    );
   }
-  await blobAgentCredentialStore.touchCredential(agent.credentialId, new Date().toISOString());
-  return { id, agent, stored, authorization };
+  if (agent) await blobAgentCredentialStore.touchCredential(agent.credentialId, new Date().toISOString());
+  return { id, agent, session, stored, authorization, address };
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -145,49 +178,92 @@ export async function POST(request: Request): Promise<Response> {
       throw new ContractIntentServiceError('Network must be public or testnet.', 400, 'invalid_network');
     }
     assertDeploymentNetwork(network);
-    const idempotencyKey = request.headers.get('idempotency-key')?.trim() ?? '';
-    if (!idempotencyKey) {
-      throw new BoxServiceError('Idempotency-Key header is required.', 400, 'idempotency_key_required');
-    }
     const agent = await agentCredentialFor(request);
+    if (agent) {
+      const idempotencyKey = request.headers.get('idempotency-key')?.trim() ?? '';
+      if (!idempotencyKey) {
+        throw new BoxServiceError('Idempotency-Key header is required for Agent Intent creation.', 400, 'idempotency_key_required');
+      }
+      const beforeCreate = beforeFirstDurableWrite(async () => {
+        await enforceSemanticRateLimit(request, {
+          rateLimitId: SEMANTIC_RATE_LIMIT_IDS.requestCreate,
+          rateLimitKey: semanticRateLimitKey(network, agent.principal.address),
+          errorCode: 'request_create_rate_limited',
+          errorMessage: 'This signer has created too many Intents recently. Try again later.',
+        });
+      });
+      const quotaStore = {
+        ...blobAgentCredentialStore,
+        claimIdempotency: async (...args: Parameters<typeof blobAgentCredentialStore.claimIdempotency>) => {
+          await beforeCreate();
+          return blobAgentCredentialStore.claimIdempotency(...args);
+        },
+      };
+      const result = await createAgentSorobanIntent(
+        quotaStore,
+        blobSorobanIntentStore,
+        agent,
+        {
+          network,
+          contractId: body.contractId,
+          method: body.method,
+          arguments: body.arguments,
+          idempotencyKey,
+          privateNote: body.privateNote,
+          externalReference: body.externalReference,
+        },
+        { planningSource: configuredSorobanPlanningSource(network) },
+      );
+      const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, result.intent.id);
+      return json({
+        operation: 'contract.intent.create',
+        version: 1,
+        replayed: result.replayed,
+        intent: result.intent,
+        authorization,
+      }, result.replayed ? 200 : 201);
+    }
+
+    const session = await humanSessionFor(request, network);
+    if (!session) {
+      throw new SorobanIntentAuthorizationServiceError(
+        'Confirm the selected Stellar wallet before creating this Soroban Intent.',
+        401,
+        'intent_creator_required',
+      );
+    }
     const beforeCreate = beforeFirstDurableWrite(async () => {
       await enforceSemanticRateLimit(request, {
         rateLimitId: SEMANTIC_RATE_LIMIT_IDS.requestCreate,
-        rateLimitKey: semanticRateLimitKey(network, agent.principal.address),
+        rateLimitKey: semanticRateLimitKey(network, session.address),
         errorCode: 'request_create_rate_limited',
         errorMessage: 'This signer has created too many Intents recently. Try again later.',
       });
     });
-    const quotaStore = {
-      ...blobAgentCredentialStore,
-      claimIdempotency: async (...args: Parameters<typeof blobAgentCredentialStore.claimIdempotency>) => {
-        await beforeCreate();
-        return blobAgentCredentialStore.claimIdempotency(...args);
-      },
-    };
-    const result = await createAgentSorobanIntent(
-      quotaStore,
+    const intent = await createHumanSorobanIntent(
       blobSorobanIntentStore,
-      agent,
+      session.address,
       {
         network,
         contractId: body.contractId,
         method: body.method,
         arguments: body.arguments,
-        idempotencyKey,
         privateNote: body.privateNote,
         externalReference: body.externalReference,
       },
-      { planningSource: configuredSorobanPlanningSource(network) },
+      {
+        planningSource: configuredSorobanPlanningSource(network),
+        beforeCreate,
+      },
     );
-    const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, result.intent.id);
+    const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, intent.id);
     return json({
       operation: 'contract.intent.create',
       version: 1,
-      replayed: result.replayed,
-      intent: result.intent,
+      replayed: false,
+      intent,
       authorization,
-    }, result.replayed ? 200 : 201);
+    }, 201);
   } catch (cause) {
     return errorResponse(cause);
   }
@@ -202,10 +278,10 @@ export async function PATCH(request: Request): Promise<Response> {
       access.id,
       {
         entryIndex: body.entryIndex as number,
-        signerAddress: access.agent.principal.address,
+        signerAddress: access.address,
         signatureBase64: typeof body.signatureBase64 === 'string' ? body.signatureBase64 : '',
       },
-      { contributionActor: agentActorForCredential(access.agent) },
+      access.agent ? { contributionActor: agentActorForCredential(access.agent) } : {},
     );
     return json({
       operation: 'contract.intent.contribute',

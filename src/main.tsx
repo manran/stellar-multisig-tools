@@ -17,7 +17,7 @@ import MultisigDesignerApp from './MultisigDesignerApp';
 import NewTransactionApp from './NewTransactionApp';
 import RequestApp from './RequestApp';
 import SigningRoomApp from './SigningRoomApp';
-import SorobanPreparationApp from './SorobanPreparationApp';
+import SorobanIntentApp from './SorobanIntentApp';
 import StellarHomeApp from './StellarHomeApp';
 import { StellarWalletProvider } from './StellarWalletContext';
 import TreasuryApp from './TreasuryApp';
@@ -156,7 +156,7 @@ function RoutedApp() {
     case 'agent-access': Component = AgentAccessApp; break;
     case 'activity': Component = ActivityApp; break;
     case 'request': Component = RequestApp; break;
-    case 'authorization': Component = SorobanPreparationApp; break;
+    case 'authorization': Component = SorobanIntentApp; break;
     case 'receipt': Component = TransactionReceiptApp; break;
     case 'signing-room': Component = SigningRoomApp; break;
     case 'designer': Component = MultisigDesignerApp; break;
