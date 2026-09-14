@@ -31,6 +31,10 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'public', effect: 'none', summary: 'Resolve the callable interface of one Soroban contract.',
   },
   {
+    id: 'contract.intent.create', version: 1, method: 'POST', path: '/api/intent',
+    access: 'principal:write', effect: 'coordination-state', summary: 'Create a source-free Soroban Intent and discover its authorization plan.',
+  },
+  {
     id: 'contract.call.build', version: 1, method: 'POST', path: '/api/contract-call',
     access: 'public', effect: 'none', summary: 'Build an unsigned contract-call transaction from typed string inputs.',
   },

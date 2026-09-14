@@ -46,6 +46,9 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
       parameter('account', 'query', false, { type: 'string', pattern: '^G[A-Z2-7]{55}$' }, 'Optional Treasury scope for history.'),
     );
   }
+  if (path === '/api/intent' && method === 'post') {
+    values.push(parameter('Idempotency-Key', 'header', true, { type: 'string' }, 'Required for Agent Intent creation.'));
+  }
   if (['/api/preparation', '/api/request'].includes(path) && method === 'post') {
     values.push(parameter('Idempotency-Key', 'header', false, { type: 'string' }, 'Required for Agent credential creation; ignored for Human sessions.'));
   }
@@ -53,6 +56,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
 }
 
 function requestBody(path: string, method: string): OpenApiObject | undefined {
+  if (path === '/api/intent' && method === 'post') return body(schema('ContractIntentCreateInput'));
   if (path === '/api/contract-call' && method === 'post') return body(schema('ContractCallBuildInput'));
   if (path === '/api/contract-prepare' && method === 'post') return body(schema('ContractPrepareInput'));
   if (path === '/api/preparation' && method === 'post') return body(schema('AuthorizationCreateInput'));
@@ -68,6 +72,7 @@ function requestBody(path: string, method: string): OpenApiObject | undefined {
 function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/api/runtime-config') return schema('RuntimeConfigResult');
   if (path === '/api/contract-interface') return schema('ContractInterfaceResult');
+  if (path === '/api/intent') return schema('ContractIntentCreateResult');
   if (path === '/api/contract-call') return schema('ContractCallBuildResult');
   if (path === '/api/contract-prepare') return schema('ContractPrepareResult');
   if (path === '/api/contracts' && method === 'get') return schema('ContractWorkspaceListResult');
@@ -83,6 +88,7 @@ function successSchema(path: string, method: string): OpenApiObject {
 
 function security(path: string, method: string, access: HeadlessOperationAccess): OpenApiObject[] {
   if (access === 'public') return [];
+  if (path === '/api/intent') return [{ agentBearer: [] }];
   if (path === '/api/contracts') return [{ agentBearer: [] }, { humanSession: [] }];
   if (path === '/api/request' && method === 'put') return [{ humanSession: [] }, { requestCapability: [] }];
   return [{ agentBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
@@ -109,7 +115,7 @@ function openApiPaths(): OpenApiObject {
     const first = operations[0];
     const parameters = operationParameters(path, method);
     const request = requestBody(path, method);
-    const statuses = method === 'post' && ['/api/preparation', '/api/request'].includes(path)
+    const statuses = method === 'post' && ['/api/intent', '/api/preparation', '/api/request'].includes(path)
       ? {
           '200': response('Idempotent replay.', successSchema(path, method)),
           '201': response('Created.', successSchema(path, method)),
@@ -213,6 +219,72 @@ const components: OpenApiObject = {
         network: stellarNetwork,
         contractId,
         methods: { type: 'array', items: schema('ContractMethod') },
+      },
+      additionalProperties: false,
+    },
+    ContractIntentCreateInput: {
+      type: 'object',
+      required: ['network', 'contractId', 'method', 'arguments'],
+      properties: {
+        network: stellarNetwork,
+        contractId,
+        method: { type: 'string', minLength: 1, maxLength: 64 },
+        arguments: { type: 'object', maxProperties: 64, additionalProperties: { type: 'string' } },
+        privateNote: { type: 'string' },
+        externalReference: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+    SorobanIntent: {
+      type: 'object',
+      required: ['version', 'network', 'hostFunctionXdr', 'intentDigest'],
+      properties: {
+        version: operationVersion,
+        network: stellarNetwork,
+        hostFunctionXdr: { type: 'string', minLength: 1 },
+        intentDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+      },
+      additionalProperties: false,
+    },
+    SorobanAuthorizationPlan: {
+      type: 'object',
+      required: ['version', 'network', 'intentDigest', 'authorizationPlanDigest', 'authorizationEntriesXdr', 'executionBinding'],
+      properties: {
+        version: operationVersion,
+        network: stellarNetwork,
+        intentDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        authorizationPlanDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        authorizationEntriesXdr: { type: 'array', items: { type: 'string' } },
+        executionBinding: { type: 'string', enum: ['detached', 'source_bound'] },
+        boundSourceAccount: accountId,
+      },
+      additionalProperties: false,
+    },
+    StoredSorobanIntent: {
+      type: 'object',
+      required: ['version', 'id', 'network', 'intent', 'createdAt', 'creatorAddress'],
+      properties: {
+        version: operationVersion,
+        id: { type: 'string' },
+        network: stellarNetwork,
+        intent: schema('SorobanIntent'),
+        authorizationPlan: schema('SorobanAuthorizationPlan'),
+        planningRequirement: { type: 'string', enum: ['execution_source'] },
+        createdAt: timestamp,
+        creatorAddress: accountId,
+        creatorActor: { type: 'object', additionalProperties: true },
+        privateContext: { type: 'object', additionalProperties: true },
+      },
+      additionalProperties: false,
+    },
+    ContractIntentCreateResult: {
+      type: 'object',
+      required: ['operation', 'version', 'replayed', 'intent'],
+      properties: {
+        operation: { type: 'string', const: 'contract.intent.create' },
+        version: operationVersion,
+        replayed: { type: 'boolean' },
+        intent: schema('StoredSorobanIntent'),
       },
       additionalProperties: false,
     },

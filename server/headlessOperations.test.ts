@@ -13,6 +13,8 @@ test('runtime policy and contract vertical slice are available to every transpor
   assert.equal(byId.get('runtime.config.inspect')?.path, '/api/runtime-config');
   assert.equal(byId.get('runtime.config.inspect')?.access, 'public');
   assert.equal(byId.get('contract.interface.inspect')?.access, 'public');
+  assert.equal(byId.get('contract.intent.create')?.path, '/api/intent');
+  assert.equal(byId.get('contract.intent.create')?.access, 'principal:write');
   assert.equal(byId.get('contract.call.build')?.effect, 'none');
   assert.equal(byId.get('contract.call.prepare')?.path, '/api/contract-prepare');
   assert.equal(byId.get('contract.authorization.create')?.access, 'principal:write');
