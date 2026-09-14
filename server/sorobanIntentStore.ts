@@ -28,6 +28,7 @@ export interface StoredSorobanIntent {
   createdAt: string;
   creatorAddress: string;
   creatorActor?: AgentActorProvenance;
+  discoverySignerKeys: string[];
   privateContext?: SorobanIntentPrivateContext;
 }
 
@@ -35,6 +36,7 @@ export interface SorobanIntentStore {
   createIntent(value: StoredSorobanIntent): Promise<void>;
   getIntent(id: string): Promise<StoredSorobanIntent | null>;
   updateIntent(value: StoredSorobanIntent): Promise<void>;
+  listIntentsBySigner?(network: StellarNetwork, signerAddress: string): Promise<StoredSorobanIntent[]>;
   listContributions(id: string): Promise<StoredSorobanIntentAuthorizationContribution[]>;
   putContribution(id: string, contribution: StoredSorobanIntentAuthorizationContribution): Promise<void>;
 }

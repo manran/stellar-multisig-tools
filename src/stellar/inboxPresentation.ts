@@ -1,5 +1,5 @@
 import type { SigningRequestSnapshot, SigningRequestStatus } from './requestTypes.js';
-import type { InboxSorobanPreparationSnapshot } from './sorobanPreparationTypes.js';
+import type { InboxSorobanIntentSnapshot } from './sorobanIntentApiTypes.js';
 
 export type InboxViewerAction =
   | 'sign'
@@ -45,7 +45,7 @@ export function inboxViewerActionNeedsAction(action: InboxViewerAction): boolean
 
 export function summarizeInboxActions(
   requests: readonly Pick<InboxRequestSnapshot, 'viewerAction'>[],
-  preparations: readonly Pick<InboxSorobanPreparationSnapshot, 'viewerAction'>[] = [],
+  intents: readonly Pick<InboxSorobanIntentSnapshot, 'viewerAction'>[] = [],
 ): InboxActionCounts {
   const counts: InboxActionCounts = {
     actionRequired: 0,
@@ -64,13 +64,16 @@ export function summarizeInboxActions(
     else if (request.viewerAction === 'attention') counts.needsAttention += 1;
     else counts.waiting += 1;
   }
-  for (const preparation of preparations) {
-    if (preparation.viewerAction === 'authorize') {
+  for (const intent of intents) {
+    if (intent.viewerAction === 'authorize') {
       counts.actionRequired += 1;
       counts.contractAuthorizationNeeded += 1;
-    } else if (preparation.viewerAction === 'freeze') {
+    } else if (intent.viewerAction === 'execute') {
       counts.actionRequired += 1;
       counts.readyForTransactionSigning += 1;
+    } else if (intent.viewerAction === 'attention') {
+      counts.actionRequired += 1;
+      counts.needsAttention += 1;
     } else {
       counts.waiting += 1;
     }

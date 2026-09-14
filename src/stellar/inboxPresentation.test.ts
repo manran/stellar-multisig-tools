@@ -39,16 +39,17 @@ test('Inbox action counts describe what the current viewer can do now', () => {
   assert.equal(inboxViewerActionNeedsAction('sign'), true);
   assert.equal(inboxViewerActionNeedsAction('waiting_for_others'), false);
 
-  const withPreparation = summarizeInboxActions([], [
+  const withIntents = summarizeInboxActions([], [
     { viewerAction: 'authorize' },
-    { viewerAction: 'freeze' },
+    { viewerAction: 'execute' },
+    { viewerAction: 'attention' },
     { viewerAction: 'waiting' },
   ]);
-  assert.deepEqual(withPreparation, {
-    actionRequired: 2,
+  assert.deepEqual(withIntents, {
+    actionRequired: 3,
     signatureNeeded: 0,
     readyToSubmit: 0,
-    needsAttention: 0,
+    needsAttention: 1,
     waiting: 1,
     contractAuthorizationNeeded: 1,
     readyForTransactionSigning: 1,

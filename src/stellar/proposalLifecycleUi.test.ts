@@ -209,7 +209,7 @@ test('Human Inbox separates Request status from the current signer next action',
   assert.match(requestInbox, /signerHasSignedTransaction/);
   assert.match(requestInbox, /approval_declined/);
   assert.match(inboxApi, /context\.actor === 'human'/);
-  assert.match(inboxApi, /summarizeInboxActions\(humanRequests, preparations\)/);
+  assert.match(inboxApi, /summarizeInboxActions\(humanRequests, intents\)/);
   assert.match(inboxApi, /actor: context\.actor,[\s\S]*pending_count: requests\.length,[\s\S]*requests,/);
   assert.match(inboxPresentation, /'sign'[\s\S]*'submit'[\s\S]*'waiting_for_others'[\s\S]*'waiting_preconditions'[\s\S]*'attention'[\s\S]*'declined'/);
   assert.match(inbox, /Needs me/);

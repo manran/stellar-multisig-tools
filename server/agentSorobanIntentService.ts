@@ -18,7 +18,7 @@ import {
   normalizeIdempotencyKey,
 } from './boxService.js';
 import { createSigningRequestId } from './requestLocator.js';
-import { planSorobanIntent } from './sorobanIntentPlanningService.js';
+import { planSorobanIntentForStorage } from './sorobanIntentPlanningService.js';
 import { createStoredSorobanIntent } from './sorobanIntentService.js';
 import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';
 
@@ -30,7 +30,7 @@ interface AgentSorobanIntentOptions {
   now?: Date;
   idFactory?: () => string;
   contractDependencies?: Parameters<typeof buildContractIntent>[1];
-  planningDependencies?: Parameters<typeof planSorobanIntent>[2];
+  planningDependencies?: Parameters<typeof planSorobanIntentForStorage>[2];
 }
 
 export interface AgentSorobanIntentCreationResult {
@@ -139,7 +139,7 @@ export async function createAgentSorobanIntent(
   }
   let durableWriteAttempted = false;
   try {
-    const planned = await planSorobanIntent(
+    const planned = await planSorobanIntentForStorage(
       built.intent,
       options.planningSource,
       options.planningDependencies,
@@ -153,8 +153,9 @@ export async function createAgentSorobanIntent(
     };
     const stored = await createStoredSorobanIntent(guardedStore, {
       intent: built.intent,
-      authorizationPlan: planned,
+      authorizationPlan: planned.authorizationPlan,
       creatorAddress: credential.principal.address,
+      discoverySignerKeys: planned.discoverySignerKeys,
       creatorActor: agentActorForCredential(credential),
       privateNote: input.privateNote,
       externalReference,

@@ -101,20 +101,21 @@ test('connected home switches to an actionable Dashboard without a first-use cho
   assert.doesNotMatch(dashboard, /meta=\{sessionAddress/);
 });
 
-test('Inbox and Dashboard surface pre-freeze contract authorization as the same work queue without calling it a Proposal', () => {
+test('Inbox and Dashboard surface source-free Soroban Intents in the same work queue', () => {
   const inbox = source('../InboxApp.tsx');
   const dashboard = source('../StellarDashboardApp.tsx');
-  const preparation = source('../SorobanPreparationApp.tsx');
+  const intent = source('../SorobanIntentApp.tsx');
   const routes = source('../workspaceRoutes.ts');
 
-  assert.match(inbox, /preparations: InboxSorobanPreparationSnapshot\[\]/);
-  assert.match(inbox, /openPreparationDetails/);
+  assert.match(inbox, /intents: InboxSorobanIntentSnapshot\[\]/);
+  assert.match(inbox, /openIntentDetails/);
   assert.match(inbox, /navigateWorkspace\('\/a'/);
-  assert.match(inbox, /Contract authorization/);
-  assert.match(dashboard, /preparationAttention/);
-  assert.match(dashboard, /preparationViewerActionPresentation/);
-  assert.match(preparation, /Advanced · XDR \/ offline/);
-  assert.match(preparation, /Continue to transaction signing/);
+  assert.match(inbox, /Soroban Intent/);
+  assert.doesNotMatch(inbox, /transactionSourceAccount|openPreparationDetails/);
+  assert.match(dashboard, /intentAttention/);
+  assert.match(dashboard, /intentViewerActionPresentation/);
+  assert.match(intent, /Contract authorization complete/);
+  assert.match(intent, /Prepare transaction/);
   assert.match(routes, /path: '\/a', kind: 'authorization'/);
 });
 

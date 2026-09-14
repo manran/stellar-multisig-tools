@@ -12,8 +12,8 @@ import {
 } from './stellar/inboxPresentation';
 import type { InboxActionCounts, InboxRequestSnapshot } from './stellar/inboxPresentation';
 import { describeInboxRequest, inboxDeadlineLabel } from './stellar/inboxRequestPresentation';
-import { preparationDeadlineLabel, preparationViewerActionNeedsAction, preparationViewerActionPresentation } from './stellar/sorobanPreparationPresentation';
-import type { InboxSorobanPreparationSnapshot } from './stellar/sorobanPreparationTypes';
+import { intentAuthorizationWindowLabel, intentViewerActionNeedsAction, intentViewerActionPresentation } from './stellar/sorobanIntentPresentation';
+import type { InboxSorobanIntentSnapshot } from './stellar/sorobanIntentApiTypes';
 import type { InboxRequestDescription } from './stellar/inboxRequestPresentation';
 import type { StellarNetwork } from './stellar/types';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
@@ -25,7 +25,7 @@ interface InboxResponse {
   action_count: number;
   action_counts: InboxActionCounts;
   requests: InboxRequestSnapshot[];
-  preparations: InboxSorobanPreparationSnapshot[];
+  intents: InboxSorobanIntentSnapshot[];
 }
 
 type InboxView = 'inbox' | 'needs' | 'waiting';
@@ -41,9 +41,9 @@ function openRequestDetails(request: InboxRequestSnapshot) {
   });
 }
 
-function openPreparationDetails(preparation: InboxSorobanPreparationSnapshot) {
+function openIntentDetails(intent: InboxSorobanIntentSnapshot) {
   navigateWorkspace('/a', {
-    hash: preparation.id,
+    hash: intent.id,
     state: {
       returnTo: window.location.href,
       returnLabel: 'Back to Inbox',
@@ -138,14 +138,14 @@ export default function InboxApp() {
     return requests;
   }, [data, view]);
 
-  const visiblePreparations = useMemo(() => {
-    const preparations = [...(data?.preparations ?? [])].sort((left, right) =>
-      Number(preparationViewerActionNeedsAction(right.viewerAction)) - Number(preparationViewerActionNeedsAction(left.viewerAction))
+  const visibleIntents = useMemo(() => {
+    const intents = [...(data?.intents ?? [])].sort((left, right) =>
+      Number(intentViewerActionNeedsAction(right.viewerAction)) - Number(intentViewerActionNeedsAction(left.viewerAction))
       || right.createdAt.localeCompare(left.createdAt),
     );
-    if (view === 'needs') return preparations.filter((item) => preparationViewerActionNeedsAction(item.viewerAction));
-    if (view === 'waiting') return preparations.filter((item) => !preparationViewerActionNeedsAction(item.viewerAction));
-    return preparations;
+    if (view === 'needs') return intents.filter((item) => intentViewerActionNeedsAction(item.viewerAction));
+    if (view === 'waiting') return intents.filter((item) => !intentViewerActionNeedsAction(item.viewerAction));
+    return intents;
   }, [data, view]);
 
   useEffect(() => {
@@ -199,7 +199,7 @@ export default function InboxApp() {
               </section>
             )}
 
-            {data && view !== 'inbox' && visibleRequests.length === 0 && visiblePreparations.length === 0 && (
+            {data && view !== 'inbox' && visibleRequests.length === 0 && visibleIntents.length === 0 && (
               <section className="mx-auto max-w-xl py-16 text-center sm:py-24">
                 <Inbox className="mx-auto h-8 w-8 text-neutral-400" />
                 <h2 className="mt-4 text-2xl font-bold">{view === 'needs' ? 'Nothing needs your action.' : 'Nothing is waiting.'}</h2>
@@ -207,20 +207,20 @@ export default function InboxApp() {
               </section>
             )}
 
-            {data && visiblePreparations.length > 0 && (
+            {data && visibleIntents.length > 0 && (
               <section className="mt-5">
                 <div className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-neutral-400">Contract authorization</div>
                 <div className="grid gap-3">
-                  {visiblePreparations.map((preparation) => {
-                    const action = preparationViewerActionPresentation(preparation.viewerAction);
+                  {visibleIntents.map((intent) => {
+                    const action = intentViewerActionPresentation(intent.viewerAction);
                     return (
-                      <button key={preparation.id} type="button" onClick={() => openPreparationDetails(preparation)} className="group w-full rounded-2xl border border-black/10 bg-white p-4 text-left transition hover:border-violet-500/30 dark:border-white/10 dark:bg-white/5 sm:p-5">
+                      <button key={intent.id} type="button" onClick={() => openIntentDetails(intent)} className="group w-full rounded-2xl border border-black/10 bg-white p-4 text-left transition hover:border-violet-500/30 dark:border-white/10 dark:bg-white/5 sm:p-5">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <StatusBadge tone={action.tone}>{action.label}</StatusBadge>
-                          <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"><NetworkBadge network={preparation.network} /><span>{preparationDeadlineLabel(preparation)}</span></div>
+                          <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"><NetworkBadge network={intent.network} /><span>{intentAuthorizationWindowLabel(intent)}</span></div>
                         </div>
                         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                          <div className="min-w-0"><h2 className="text-lg font-bold">Contract authorization</h2><p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{action.detail}</p><div className="mt-2 font-mono text-xs text-neutral-400">Source {shortAddress(preparation.transactionSourceAccount)}</div></div>
+                          <div className="min-w-0"><h2 className="text-lg font-bold">Soroban Intent</h2><p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{action.detail}</p><div className="mt-2 font-mono text-xs text-neutral-400">Created by {shortAddress(intent.creatorAddress)}</div></div>
                           <span className="inline-flex shrink-0 items-center gap-2 self-start text-sm font-bold text-violet-700 dark:text-violet-300 sm:self-auto">{action.cta} <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></span>
                         </div>
                       </button>

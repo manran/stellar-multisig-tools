@@ -31,6 +31,21 @@ export interface SorobanIntentAuthorizationSnapshot {
   authorizers: SorobanGAccountAuthorizerStatus[];
 }
 
+
+export type SorobanIntentViewerAction = 'authorize' | 'execute' | 'waiting' | 'attention';
+
+export interface InboxSorobanIntentSnapshot {
+  id: string;
+  network: StellarNetwork;
+  createdAt: string;
+  creatorAddress: string;
+  status: SorobanIntentAuthorizationSnapshot['status'];
+  statusDetail?: string;
+  contributionCount: number;
+  authorizers: SorobanGAccountAuthorizerStatus[];
+  viewerAction: SorobanIntentViewerAction;
+}
+
 export interface SorobanIntentResponse {
   operation: 'contract.intent.create' | 'contract.intent.inspect';
   version: 1;

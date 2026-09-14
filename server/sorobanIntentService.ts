@@ -36,6 +36,7 @@ export async function createStoredSorobanIntent(
     authorizationPlan: SorobanAuthorizationPlan;
     creatorAddress: string;
     creatorActor?: AgentActorProvenance;
+    discoverySignerKeys?: string[];
     privateNote?: unknown;
     externalReference?: unknown;
   },
@@ -77,6 +78,7 @@ export async function createStoredSorobanIntent(
     createdAt,
     creatorAddress: input.creatorAddress,
     ...(input.creatorActor ? { creatorActor: input.creatorActor } : {}),
+    discoverySignerKeys: [...new Set([input.creatorAddress, ...(input.discoverySignerKeys ?? [])])].sort(),
     ...(privateContext ? { privateContext } : {}),
   };
   await store.createIntent(record);

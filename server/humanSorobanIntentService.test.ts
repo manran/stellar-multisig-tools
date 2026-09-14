@@ -85,7 +85,14 @@ async function options(sourceBound = false) {
     planningSource: planningSource.publicKey(),
     contractDependencies: { interfaceLoader: async () => loadedInterface() },
     planningDependencies: {
-      accountLoader: async () => ({ accountId: planningSource.publicKey(), sequence: '7' } as never),
+      accountLoader: async (address: string) => address === authorizer.publicKey()
+        ? ({
+            accountId: authorizer.publicKey(), sequence: '1', subentryCount: 0,
+            numSponsoring: 0, numSponsored: 0,
+            thresholds: { low: 1, medium: 1, high: 1 },
+            signers: [{ key: authorizer.publicKey(), type: 'ed25519_public_key' as const, weight: 1 }],
+          } as never)
+        : ({ accountId: planningSource.publicKey(), sequence: '7' } as never),
       networkParametersLoader: async () => ({ baseFeeInStroops: 100 } as never),
       simulator: async () => ({ assembledXdr: assembled.toXDR(), latestLedger: 100 } as never),
     },

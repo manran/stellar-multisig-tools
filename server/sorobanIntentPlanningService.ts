@@ -1,8 +1,10 @@
 import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../src/stellar/horizon.js';
 import {
+  analyzeSorobanGAccountAuthorizationEntries,
   initializeSorobanGAccountAuthorizationWindow,
 } from '../src/stellar/sorobanAuthorization.js';
 import {
+  authorizationEntriesFromPlan,
   createSorobanAuthorizationPlan,
   type SorobanAuthorizationPlan,
 } from '../src/stellar/sorobanAuthorizationPlan.js';
@@ -25,11 +27,12 @@ interface PlanningDependencies {
   networkParametersLoader?: NetworkParametersLoader;
   simulator?: Simulator;
 }
-export async function planSorobanIntent(
+
+async function planInternal(
   intent: SorobanIntent,
   planningSource: string,
-  dependencies: PlanningDependencies = {},
-): Promise<SorobanAuthorizationPlan> {
+  dependencies: PlanningDependencies,
+): Promise<{ authorizationPlan: SorobanAuthorizationPlan; currentLedger: number }> {
   const sourceAddress = planningSource.trim();
   if (!isValidStellarAccountId(sourceAddress)) {
     throw new SorobanIntentPlanningError(
@@ -37,7 +40,6 @@ export async function planSorobanIntent(
       'invalid_planning_source',
     );
   }
-
   const [source, parameters] = await Promise.all([
     (dependencies.accountLoader ?? loadAccount)(sourceAddress, intent.network),
     (dependencies.networkParametersLoader ?? loadNetworkParameters)(intent.network),
@@ -49,7 +51,6 @@ export async function planSorobanIntent(
     fee: String(parameters.baseFeeInStroops),
     lifetimeSeconds: 300,
   });
-
   const simulation = await (dependencies.simulator ?? simulateSorobanTransaction)({
     envelopeXdr: planningTransaction.toXDR(),
     network: intent.network,
@@ -65,12 +66,52 @@ export async function planSorobanIntent(
     network: intent.network,
     currentLedger: simulation.latestLedger,
   });
-  const plan = createSorobanAuthorizationPlan(intent, initializedXdr);
-  if (plan.executionBinding === 'source_bound') {
+  const authorizationPlan = createSorobanAuthorizationPlan(intent, initializedXdr);
+  if (authorizationPlan.executionBinding === 'source_bound') {
     throw new SorobanIntentPlanningError(
       'This contract call uses SOURCE_ACCOUNT Soroban authorization, which binds authorization to the final transaction source. MultiSigTools Intent workflows intentionally collect authorization before choosing an executor, so this source-bound authorization cannot be used here. Use detached address authorization instead, or change the contract/integration so authorization is not supplied by the transaction source.',
       'source_account_auth_unsupported',
     );
   }
-  return plan;
+  return { authorizationPlan, currentLedger: simulation.latestLedger };
+}
+
+export async function discoverSorobanIntentSignerKeys(
+  plan: SorobanAuthorizationPlan,
+  currentLedger: number,
+  dependencies: Pick<PlanningDependencies, 'accountLoader'> = {},
+): Promise<string[]> {
+  const analysis = await analyzeSorobanGAccountAuthorizationEntries({
+    authEntries: authorizationEntriesFromPlan(plan),
+    network: plan.network,
+    currentLedger,
+    accountLoader: dependencies.accountLoader ?? loadAccount,
+  });
+  return [...new Set(analysis.authorizers.flatMap((authorizer) =>
+    authorizer.activeSigners.map((signer) => signer.publicKey),
+  ))].sort();
+}
+
+export async function planSorobanIntent(
+  intent: SorobanIntent,
+  planningSource: string,
+  dependencies: PlanningDependencies = {},
+): Promise<SorobanAuthorizationPlan> {
+  return (await planInternal(intent, planningSource, dependencies)).authorizationPlan;
+}
+
+export async function planSorobanIntentForStorage(
+  intent: SorobanIntent,
+  planningSource: string,
+  dependencies: PlanningDependencies = {},
+): Promise<{ authorizationPlan: SorobanAuthorizationPlan; discoverySignerKeys: string[] }> {
+  const result = await planInternal(intent, planningSource, dependencies);
+  return {
+    authorizationPlan: result.authorizationPlan,
+    discoverySignerKeys: await discoverSorobanIntentSignerKeys(
+      result.authorizationPlan,
+      result.currentLedger,
+      dependencies,
+    ),
+  };
 }

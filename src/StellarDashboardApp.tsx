@@ -8,8 +8,8 @@ import { isWalletUserRejected } from './stellar/walletKit';
 import { inboxActionCountPresentations, inboxViewerActionNeedsAction, inboxViewerActionPresentation } from './stellar/inboxPresentation';
 import type { InboxActionCounts, InboxRequestSnapshot } from './stellar/inboxPresentation';
 import { describeInboxRequest, inboxDeadlineLabel } from './stellar/inboxRequestPresentation';
-import { preparationDeadlineLabel, preparationViewerActionNeedsAction, preparationViewerActionPresentation } from './stellar/sorobanPreparationPresentation';
-import type { InboxSorobanPreparationSnapshot } from './stellar/sorobanPreparationTypes';
+import { intentAuthorizationWindowLabel, intentViewerActionNeedsAction, intentViewerActionPresentation } from './stellar/sorobanIntentPresentation';
+import type { InboxSorobanIntentSnapshot } from './stellar/sorobanIntentApiTypes';
 import { navigateWorkspace, stellarHref, stellarHrefWithSearch } from './workspaceNavigation';
 
 interface InboxCountResponse {
@@ -17,14 +17,14 @@ interface InboxCountResponse {
   action_count?: number;
   action_counts?: InboxActionCounts;
   requests?: InboxRequestSnapshot[];
-  preparations?: InboxSorobanPreparationSnapshot[];
+  intents?: InboxSorobanIntentSnapshot[];
 }
 
 interface DashboardInboxSummary {
   pendingCount: number;
   actionCounts: InboxActionCounts;
   requests: InboxRequestSnapshot[];
-  preparations: InboxSorobanPreparationSnapshot[];
+  intents: InboxSorobanIntentSnapshot[];
 }
 
 function inboxAttentionCopy(summary: DashboardInboxSummary | null) {
@@ -76,7 +76,7 @@ export default function StellarDashboardApp() {
           && typeof body.action_counts.actionRequired === 'number'
           && Array.isArray(body.requests)
         ) {
-          setInboxSummary({ pendingCount: body.pending_count, actionCounts: body.action_counts, requests: body.requests, preparations: Array.isArray(body.preparations) ? body.preparations : [] });
+          setInboxSummary({ pendingCount: body.pending_count, actionCounts: body.action_counts, requests: body.requests, intents: Array.isArray(body.intents) ? body.intents : [] });
         }
       })
       .catch(() => {
@@ -109,9 +109,9 @@ export default function StellarDashboardApp() {
     });
   }
 
-  function openPreparationDetails(preparation: InboxSorobanPreparationSnapshot) {
+  function openIntentDetails(intent: InboxSorobanIntentSnapshot) {
     navigateWorkspace('/a', {
-      hash: preparation.id,
+      hash: intent.id,
       state: {
         returnTo: window.location.href,
         returnLabel: 'Back to Home',
@@ -119,10 +119,10 @@ export default function StellarDashboardApp() {
     });
   }
 
-  const preparationAttention = (inboxSummary?.preparations ?? [])
-    .filter((item) => preparationViewerActionNeedsAction(item.viewerAction))
+  const intentAttention = (inboxSummary?.intents ?? [])
+    .filter((item) => intentViewerActionNeedsAction(item.viewerAction))
     .slice(0, 3);
-  const requestAttentionLimit = Math.max(0, 3 - preparationAttention.length);
+  const requestAttentionLimit = Math.max(0, 3 - intentAttention.length);
 
   const testnet = sessionNetwork === 'testnet';
   const accentText = testnet ? 'text-sky-700 dark:text-sky-300' : 'text-emerald-700 dark:text-emerald-300';
@@ -191,12 +191,12 @@ export default function StellarDashboardApp() {
 
             {inboxSummary && inboxSummary.actionCounts.actionRequired > 0 && (
               <div className="space-y-3">
-                {preparationAttention.map((preparation) => {
-                  const action = preparationViewerActionPresentation(preparation.viewerAction);
+                {intentAttention.map((intent) => {
+                  const action = intentViewerActionPresentation(intent.viewerAction);
                   return (
-                    <button key={`prep-${preparation.id}`} type="button" onClick={() => openPreparationDetails(preparation)} className="group w-full rounded-2xl border border-violet-500/15 bg-white p-4 text-left transition hover:border-violet-500/35 dark:border-violet-400/15 dark:bg-white/[0.04] sm:p-5">
-                      <div className="flex flex-wrap items-center justify-between gap-2"><StatusBadge tone={action.tone}>{action.label}</StatusBadge><div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"><NetworkBadge network={preparation.network} /><span>{preparationDeadlineLabel(preparation)}</span></div></div>
-                      <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div className="min-w-0"><h2 className="text-lg font-bold leading-6">Contract authorization</h2><p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{action.detail}</p><div className="mt-2 font-mono text-xs text-neutral-400">{shortAddress(preparation.transactionSourceAccount)}</div></div><span className="inline-flex shrink-0 items-center gap-2 self-start text-sm font-bold text-violet-700 dark:text-violet-300 sm:self-auto">{action.cta} <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></span></div>
+                    <button key={`intent-${intent.id}`} type="button" onClick={() => openIntentDetails(intent)} className="group w-full rounded-2xl border border-violet-500/15 bg-white p-4 text-left transition hover:border-violet-500/35 dark:border-violet-400/15 dark:bg-white/[0.04] sm:p-5">
+                      <div className="flex flex-wrap items-center justify-between gap-2"><StatusBadge tone={action.tone}>{action.label}</StatusBadge><div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"><NetworkBadge network={intent.network} /><span>{intentAuthorizationWindowLabel(intent)}</span></div></div>
+                      <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div className="min-w-0"><h2 className="text-lg font-bold leading-6">Soroban Intent</h2><p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{action.detail}</p><div className="mt-2 font-mono text-xs text-neutral-400">Created by {shortAddress(intent.creatorAddress)}</div></div><span className="inline-flex shrink-0 items-center gap-2 self-start text-sm font-bold text-violet-700 dark:text-violet-300 sm:self-auto">{action.cta} <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></span></div>
                     </button>
                   );
                 })}

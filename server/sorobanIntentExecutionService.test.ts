@@ -69,6 +69,7 @@ function fixture() {
     authorizationPlan: plan,
     createdAt: '2026-09-14T00:00:00.000Z',
     creatorAddress: authorizer.publicKey(),
+    discoverySignerKeys: [authorizer.publicKey()],
   };
   const authorization: SorobanIntentAuthorizationSnapshot = {
     id: stored.id,

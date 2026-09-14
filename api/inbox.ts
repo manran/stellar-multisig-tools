@@ -1,7 +1,7 @@
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
 import { blobAuthStore } from '../server/blobAuthStore.js';
 import { blobSigningRequestStore, RequestStorageUnavailableError } from '../server/blobRequestStore.js';
-import { blobSorobanPreparationStore } from '../server/blobSorobanPreparationStore.js';
+import { blobSorobanIntentStore } from '../server/blobSorobanIntentStore.js';
 import { authConfigForRequest } from '../server/authConfig.js';
 import { AuthServiceError, requirePrivateWorkspaceSession } from '../server/authService.js';
 import {
@@ -10,7 +10,7 @@ import {
   requireAgentAccess,
 } from '../server/agentCredentialService.js';
 import { listSignerInbox, projectHumanInboxRequests } from '../server/requestInbox.js';
-import { listSorobanPreparationInbox } from '../server/sorobanPreparationService.js';
+import { listSorobanIntentInbox } from '../server/sorobanIntentInbox.js';
 import { noStoreJson } from '../server/httpResponse.js';
 import { summarizeInboxActions } from '../src/stellar/inboxPresentation.js';
 
@@ -37,20 +37,20 @@ export async function GET(request: Request): Promise<Response> {
     const context = await signerContext(request);
     const requests = await listSignerInbox(blobSigningRequestStore, context.address, { network: context.network });
     if (context.actor === 'human') {
-      const [humanRequests, preparations] = await Promise.all([
+      const [humanRequests, intents] = await Promise.all([
         projectHumanInboxRequests(blobSigningRequestStore, context.address, requests),
-        listSorobanPreparationInbox(blobSorobanPreparationStore, context.address, context.network),
+        listSorobanIntentInbox(blobSorobanIntentStore, context.address, context.network),
       ]);
-      const actionCounts = summarizeInboxActions(humanRequests, preparations);
+      const actionCounts = summarizeInboxActions(humanRequests, intents);
       return noStoreJson({
         address: context.address,
         network: context.network,
         actor: context.actor,
-        pending_count: humanRequests.length + preparations.length,
+        pending_count: humanRequests.length + intents.length,
         action_count: actionCounts.actionRequired,
         action_counts: actionCounts,
         requests: humanRequests,
-        preparations,
+        intents,
       });
     }
     return noStoreJson({

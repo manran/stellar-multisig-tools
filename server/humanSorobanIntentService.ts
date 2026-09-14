@@ -1,6 +1,6 @@
 import type { StellarNetwork } from '../src/stellar/types.js';
 import { buildContractIntent } from './contractIntentService.js';
-import { planSorobanIntent } from './sorobanIntentPlanningService.js';
+import { planSorobanIntentForStorage } from './sorobanIntentPlanningService.js';
 import { createStoredSorobanIntent } from './sorobanIntentService.js';
 import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';
 
@@ -10,7 +10,7 @@ interface HumanSorobanIntentOptions {
   idFactory?: () => string;
   beforeCreate?: () => Promise<void>;
   contractDependencies?: Parameters<typeof buildContractIntent>[1];
-  planningDependencies?: Parameters<typeof planSorobanIntent>[2];
+  planningDependencies?: Parameters<typeof planSorobanIntentForStorage>[2];
 }
 
 export async function createHumanSorobanIntent(
@@ -32,7 +32,7 @@ export async function createHumanSorobanIntent(
     method: input.method,
     arguments: input.arguments,
   }, options.contractDependencies);
-  const plan = await planSorobanIntent(
+  const planned = await planSorobanIntentForStorage(
     built.intent,
     options.planningSource,
     options.planningDependencies,
@@ -40,8 +40,9 @@ export async function createHumanSorobanIntent(
   await options.beforeCreate?.();
   return createStoredSorobanIntent(store, {
     intent: built.intent,
-    authorizationPlan: plan,
+    authorizationPlan: planned.authorizationPlan,
     creatorAddress,
+    discoverySignerKeys: planned.discoverySignerKeys,
     privateNote: input.privateNote,
     externalReference: input.externalReference,
   }, {

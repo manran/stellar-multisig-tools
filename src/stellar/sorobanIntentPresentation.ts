@@ -1,0 +1,57 @@
+import type {
+  InboxSorobanIntentSnapshot,
+  SorobanIntentViewerAction,
+} from './sorobanIntentApiTypes.js';
+
+export function intentViewerActionNeedsAction(action: SorobanIntentViewerAction): boolean {
+  return action === 'authorize' || action === 'execute' || action === 'attention';
+}
+
+export function intentViewerActionPresentation(action: SorobanIntentViewerAction): {
+  label: string;
+  detail: string;
+  cta: string;
+  tone: 'warning' | 'success' | 'danger' | 'neutral';
+} {
+  if (action === 'authorize') {
+    return {
+      label: 'Contract authorization needed',
+      detail: 'Review the Intent and add your Soroban authorization.',
+      cta: 'Review & authorize',
+      tone: 'warning',
+    };
+  }
+  if (action === 'execute') {
+    return {
+      label: 'Authorization complete',
+      detail: 'Required Soroban authorization is complete. Build the final transaction when you are ready.',
+      cta: 'Prepare transaction',
+      tone: 'success',
+    };
+  }
+  if (action === 'attention') {
+    return {
+      label: 'Authorization needs review',
+      detail: 'This Intent cannot continue normally until the authorization issue is reviewed.',
+      cta: 'Review issue',
+      tone: 'danger',
+    };
+  }
+  return {
+    label: 'Waiting for another signer',
+    detail: 'No action is needed from this wallet right now.',
+    cta: 'View status',
+    tone: 'neutral',
+  };
+}
+
+export function intentAuthorizationWindowLabel(
+  intent: Pick<InboxSorobanIntentSnapshot, 'authorizers' | 'status'>,
+): string {
+  if (intent.status === 'expired') return 'Authorization expired';
+  const expirations = intent.authorizers
+    .map((authorizer) => authorizer.expirationLedger)
+    .filter((ledger) => Number.isInteger(ledger) && ledger > 0);
+  if (expirations.length === 0) return 'Authorization window';
+  return `Until ledger ${Math.min(...expirations).toLocaleString()}`;
+}
