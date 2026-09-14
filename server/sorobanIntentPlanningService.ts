@@ -65,5 +65,12 @@ export async function planSorobanIntent(
     network: intent.network,
     currentLedger: simulation.latestLedger,
   });
-  return createSorobanAuthorizationPlan(intent, initializedXdr);
+  const plan = createSorobanAuthorizationPlan(intent, initializedXdr);
+  if (plan.executionBinding === 'source_bound') {
+    throw new SorobanIntentPlanningError(
+      'Source-account Soroban authorization is not supported by source-free Intent planning. Use detached auth-entry authorization.',
+      'source_account_auth_unsupported',
+    );
+  }
+  return plan;
 }

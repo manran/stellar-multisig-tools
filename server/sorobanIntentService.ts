@@ -33,8 +33,7 @@ export async function createStoredSorobanIntent(
   store: SorobanIntentStore,
   input: {
     intent: SorobanIntent;
-    authorizationPlan?: SorobanAuthorizationPlan;
-    planningRequirement?: 'execution_source';
+    authorizationPlan: SorobanAuthorizationPlan;
     creatorAddress: string;
     creatorActor?: AgentActorProvenance;
     privateNote?: unknown;
@@ -42,40 +41,21 @@ export async function createStoredSorobanIntent(
   },
   options: { now?: Date; idFactory?: () => string } = {},
 ): Promise<StoredSorobanIntent> {
-  if (input.authorizationPlan) {
-    if (
-      input.authorizationPlan.network !== input.intent.network
-      || input.authorizationPlan.intentDigest !== input.intent.intentDigest
-    ) {
-      throw new SorobanIntentServiceError(
-        'Authorization Plan does not belong to this Soroban Intent.',
-        409,
-        'authorization_plan_mismatch',
-      );
-    }
-    if (
-      input.authorizationPlan.executionBinding === 'source_bound'
-      && !input.authorizationPlan.boundSourceAccount
-    ) {
-      throw new SorobanIntentServiceError(
-        'Source-bound authorization is missing its bound transaction source.',
-        409,
-        'authorization_plan_invalid',
-      );
-    }
-  }
-  if (!input.authorizationPlan && input.planningRequirement !== 'execution_source') {
+  if (
+    input.authorizationPlan.network !== input.intent.network
+    || input.authorizationPlan.intentDigest !== input.intent.intentDigest
+  ) {
     throw new SorobanIntentServiceError(
-      'Soroban Intent requires an Authorization Plan or an execution-source planning requirement.',
+      'Authorization Plan does not belong to this Soroban Intent.',
       409,
-      'authorization_plan_required',
+      'authorization_plan_mismatch',
     );
   }
-  if (input.authorizationPlan && input.planningRequirement) {
+  if (input.authorizationPlan.executionBinding !== 'detached') {
     throw new SorobanIntentServiceError(
-      'Soroban Intent cannot have both an Authorization Plan and a planning requirement.',
+      'Source-account Soroban authorization is not supported by source-free Intent planning.',
       409,
-      'authorization_plan_invalid',
+      'source_account_auth_unsupported',
     );
   }
 
@@ -93,8 +73,7 @@ export async function createStoredSorobanIntent(
     id: options.idFactory?.() ?? createSigningRequestId(),
     network: input.intent.network,
     intent: input.intent,
-    ...(input.authorizationPlan ? { authorizationPlan: input.authorizationPlan } : {}),
-    ...(input.planningRequirement ? { planningRequirement: input.planningRequirement } : {}),
+    authorizationPlan: input.authorizationPlan,
     createdAt,
     creatorAddress: input.creatorAddress,
     ...(input.creatorActor ? { creatorActor: input.creatorActor } : {}),

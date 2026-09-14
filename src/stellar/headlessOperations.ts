@@ -35,6 +35,14 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'principal:write', effect: 'coordination-state', summary: 'Create a source-free Soroban Intent and discover its authorization plan.',
   },
   {
+    id: 'contract.intent.inspect', version: 1, method: 'GET', path: '/api/intent',
+    access: 'principal:read', effect: 'none', summary: 'Inspect one Soroban Intent and its live authorization state.',
+  },
+  {
+    id: 'contract.intent.contribute', version: 1, method: 'PATCH', path: '/api/intent',
+    access: 'principal:sign', effect: 'coordination-state', summary: 'Add one verified detached Soroban authorization signature.',
+  },
+  {
     id: 'contract.call.build', version: 1, method: 'POST', path: '/api/contract-call',
     access: 'public', effect: 'none', summary: 'Build an unsigned contract-call transaction from typed string inputs.',
   },

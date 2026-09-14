@@ -144,10 +144,6 @@ export async function createAgentSorobanIntent(
       options.planningSource,
       options.planningDependencies,
     );
-    const recordInput = planned.executionBinding === 'source_bound'
-      ? { planningRequirement: 'execution_source' as const }
-      : { authorizationPlan: planned };
-
     const guardedStore: SorobanIntentStore = {
       ...intentStore,
       createIntent: async (value) => {
@@ -157,7 +153,7 @@ export async function createAgentSorobanIntent(
     };
     const stored = await createStoredSorobanIntent(guardedStore, {
       intent: built.intent,
-      ...recordInput,
+      authorizationPlan: planned,
       creatorAddress: credential.principal.address,
       creatorActor: agentActorForCredential(credential),
       privateNote: input.privateNote,

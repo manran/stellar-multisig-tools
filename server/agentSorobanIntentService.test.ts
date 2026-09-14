@@ -54,6 +54,8 @@ class MemoryIntentStore implements SorobanIntentStore {
   }
   async getIntent(id: string) { return this.values.get(id) ?? null; }
   async updateIntent(value: StoredSorobanIntent) { this.values.set(value.id, value); }
+  async listContributions() { return []; }
+  async putContribution() {}
 }
 
 function loadedInterface() {
@@ -161,7 +163,6 @@ test('Write Agent creates a source-free Intent with detached AuthorizationPlan a
   assert.equal(result.replayed, false);
   assert.equal(result.intent.id, 'A'.repeat(16));
   assert.equal(result.intent.authorizationPlan?.executionBinding, 'detached');
-  assert.equal(result.intent.planningRequirement, undefined);
   assert.equal(result.intent.privateContext?.initialPrivateNote?.text, 'Treasury reserve');
   assert.equal(result.intent.privateContext?.externalReference, 'job-42');
   assert.equal('baseXdr' in result.intent, false);
@@ -181,21 +182,24 @@ test('Agent Intent creation replays the same durable resource through existing i
   assert.equal(intents.values.size, 1);
 });
 
-test('SOURCE_ACCOUNT discovery becomes execution_source_required instead of persisting planning source', async () => {
+test('SOURCE_ACCOUNT planning is rejected instead of binding Intent to a transaction source', async () => {
   const agents = new MemoryAgentStore();
   const intents = new MemoryIntentStore();
   const key = credential('write');
   agents.credentials.set(key.credentialId, key);
-  const result = await createAgentSorobanIntent(
-    agents,
-    intents,
-    key,
-    { ...createInput, idempotencyKey: 'source-bound' },
-    { ...(await serviceOptions(true)), idFactory: () => 'C'.repeat(16) },
+  const options = { ...(await serviceOptions(true)), idFactory: () => 'C'.repeat(16) };
+  await assert.rejects(
+    () => createAgentSorobanIntent(
+      agents,
+      intents,
+      key,
+      { ...createInput, idempotencyKey: 'source-bound' },
+      options,
+    ),
+    (cause: unknown) => cause instanceof Error && 'code' in cause && cause.code === 'source_account_auth_unsupported',
   );
-  assert.equal(result.intent.authorizationPlan, undefined);
-  assert.equal(result.intent.planningRequirement, 'execution_source');
-  assert.equal('boundSourceAccount' in result.intent, false);
+  assert.equal(intents.values.size, 0);
+  assert.equal(agents.claims.size, 0);
 });
 test('Intent creation requires Write access and Principal network match', async () => {
   const agents = new MemoryAgentStore();

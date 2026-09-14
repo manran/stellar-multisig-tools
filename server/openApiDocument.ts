@@ -46,6 +46,9 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
       parameter('account', 'query', false, { type: 'string', pattern: '^G[A-Z2-7]{55}$' }, 'Optional Treasury scope for history.'),
     );
   }
+  if (path === '/api/intent' && method !== 'post') {
+    values.push(parameter('X-MultiSig-Intent-Id', 'header', true, { type: 'string' }, 'Soroban Intent id.'));
+  }
   if (path === '/api/intent' && method === 'post') {
     values.push(parameter('Idempotency-Key', 'header', true, { type: 'string' }, 'Required for Agent Intent creation.'));
   }
@@ -57,6 +60,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
 
 function requestBody(path: string, method: string): OpenApiObject | undefined {
   if (path === '/api/intent' && method === 'post') return body(schema('ContractIntentCreateInput'));
+  if (path === '/api/intent' && method === 'patch') return body(schema('ContractIntentContributionInput'));
   if (path === '/api/contract-call' && method === 'post') return body(schema('ContractCallBuildInput'));
   if (path === '/api/contract-prepare' && method === 'post') return body(schema('ContractPrepareInput'));
   if (path === '/api/preparation' && method === 'post') return body(schema('AuthorizationCreateInput'));
@@ -72,7 +76,9 @@ function requestBody(path: string, method: string): OpenApiObject | undefined {
 function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/api/runtime-config') return schema('RuntimeConfigResult');
   if (path === '/api/contract-interface') return schema('ContractInterfaceResult');
-  if (path === '/api/intent') return schema('ContractIntentCreateResult');
+  if (path === '/api/intent' && method === 'post') return schema('ContractIntentCreateResult');
+  if (path === '/api/intent' && method === 'get') return schema('ContractIntentInspectResult');
+  if (path === '/api/intent' && method === 'patch') return schema('ContractIntentContributionResult');
   if (path === '/api/contract-call') return schema('ContractCallBuildResult');
   if (path === '/api/contract-prepare') return schema('ContractPrepareResult');
   if (path === '/api/contracts' && method === 'get') return schema('ContractWorkspaceListResult');
@@ -255,21 +261,20 @@ const components: OpenApiObject = {
         intentDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
         authorizationPlanDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
         authorizationEntriesXdr: { type: 'array', items: { type: 'string' } },
-        executionBinding: { type: 'string', enum: ['detached', 'source_bound'] },
+        executionBinding: { type: 'string', const: 'detached' },
         boundSourceAccount: accountId,
       },
       additionalProperties: false,
     },
     StoredSorobanIntent: {
       type: 'object',
-      required: ['version', 'id', 'network', 'intent', 'createdAt', 'creatorAddress'],
+      required: ['version', 'id', 'network', 'intent', 'authorizationPlan', 'createdAt', 'creatorAddress'],
       properties: {
         version: operationVersion,
         id: { type: 'string' },
         network: stellarNetwork,
         intent: schema('SorobanIntent'),
         authorizationPlan: schema('SorobanAuthorizationPlan'),
-        planningRequirement: { type: 'string', enum: ['execution_source'] },
         createdAt: timestamp,
         creatorAddress: accountId,
         creatorActor: { type: 'object', additionalProperties: true },
@@ -277,14 +282,63 @@ const components: OpenApiObject = {
       },
       additionalProperties: false,
     },
+    SorobanIntentAuthorizationSnapshot: {
+      type: 'object',
+      required: ['id', 'network', 'intentDigest', 'authorizationPlanDigest', 'executionBinding', 'status', 'authorizationEntriesXdr', 'contributionCount', 'authorizers'],
+      properties: {
+        id: { type: 'string' },
+        network: stellarNetwork,
+        intentDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        authorizationPlanDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        executionBinding: { type: 'string', const: 'detached' },
+        status: { type: 'string', enum: ['awaiting_authorization', 'authorization_ready', 'expired', 'blocked'] },
+        statusDetail: { type: 'string' },
+        authorizationEntriesXdr: { type: 'array', items: { type: 'string' } },
+        contributionCount: { type: 'integer', minimum: 0 },
+        authorizers: { type: 'array', items: { type: 'object', additionalProperties: true } },
+      },
+      additionalProperties: false,
+    },
     ContractIntentCreateResult: {
       type: 'object',
-      required: ['operation', 'version', 'replayed', 'intent'],
+      required: ['operation', 'version', 'replayed', 'intent', 'authorization'],
       properties: {
         operation: { type: 'string', const: 'contract.intent.create' },
         version: operationVersion,
         replayed: { type: 'boolean' },
         intent: schema('StoredSorobanIntent'),
+        authorization: schema('SorobanIntentAuthorizationSnapshot'),
+      },
+      additionalProperties: false,
+    },
+    ContractIntentInspectResult: {
+      type: 'object',
+      required: ['operation', 'version', 'intent', 'authorization'],
+      properties: {
+        operation: { type: 'string', const: 'contract.intent.inspect' },
+        version: operationVersion,
+        intent: schema('StoredSorobanIntent'),
+        authorization: schema('SorobanIntentAuthorizationSnapshot'),
+      },
+      additionalProperties: false,
+    },
+    ContractIntentContributionInput: {
+      type: 'object',
+      required: ['entryIndex', 'signatureBase64'],
+      properties: {
+        entryIndex: { type: 'integer', minimum: 0 },
+        signatureBase64: { type: 'string', minLength: 1 },
+      },
+      additionalProperties: false,
+    },
+    ContractIntentContributionResult: {
+      type: 'object',
+      required: ['operation', 'version', 'added', 'authorization'],
+      properties: {
+        operation: { type: 'string', const: 'contract.intent.contribute' },
+        version: operationVersion,
+        added: { type: 'boolean' },
+        authorization: schema('SorobanIntentAuthorizationSnapshot'),
       },
       additionalProperties: false,
     },

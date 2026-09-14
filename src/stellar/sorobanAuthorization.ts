@@ -132,23 +132,18 @@ function operationAuthEntries(envelopeXdr: string, network: StellarNetwork) {
   return { transaction, operation, authEntries: [...(operation.auth ?? [])] };
 }
 
-export function sorobanAuthorizationPreimageXdr({
-  envelopeXdr,
+export function sorobanAuthorizationEntryPreimageXdr({
+  entry,
   network,
-  entryIndex,
   expirationLedger,
 }: {
-  envelopeXdr: string;
+  entry: xdr.SorobanAuthorizationEntry;
   network: StellarNetwork;
-  entryIndex: number;
   expirationLedger: number;
 }): string {
   if (!Number.isInteger(expirationLedger) || expirationLedger <= 0 || expirationLedger > 0xffffffff) {
     throw new Error('Soroban authorization expiration must be a valid future ledger sequence.');
   }
-  const { authEntries } = operationAuthEntries(envelopeXdr, network);
-  const entry = authEntries[entryIndex];
-  if (!entry) throw new Error(`Soroban authorization entry #${entryIndex + 1} does not exist.`);
   const info = inspectAuthEntry(entry);
   if (info.credentialType === 'sourceAccount') {
     throw new Error('The transaction source authorization is covered by the transaction envelope.');
@@ -162,11 +157,24 @@ export function sorobanAuthorizationPreimageXdr({
   if (info.signed && info.signatureExpirationLedger !== expirationLedger) {
     throw new Error('Existing Soroban signatures use a different expiration ledger. Start from one shared authorization window.');
   }
-  return buildAuthorizationEntryPreimage(
-    entry,
-    expirationLedger,
-    passphrase(network),
-  ).toXdr('base64');
+  return buildAuthorizationEntryPreimage(entry, expirationLedger, passphrase(network)).toXdr('base64');
+}
+
+export function sorobanAuthorizationPreimageXdr({
+  envelopeXdr,
+  network,
+  entryIndex,
+  expirationLedger,
+}: {
+  envelopeXdr: string;
+  network: StellarNetwork;
+  entryIndex: number;
+  expirationLedger: number;
+}): string {
+  const { authEntries } = operationAuthEntries(envelopeXdr, network);
+  const entry = authEntries[entryIndex];
+  if (!entry) throw new Error(`Soroban authorization entry #${entryIndex + 1} does not exist.`);
+  return sorobanAuthorizationEntryPreimageXdr({ entry, network, expirationLedger });
 }
 
 export async function initializeSorobanGAccountAuthorizationWindow({
@@ -225,27 +233,22 @@ export async function initializeSorobanGAccountAuthorizationWindow({
   return workingXdr;
 }
 
-export async function mergeSorobanGAccountSignature({
-  envelopeXdr,
+export async function mergeSorobanGAccountSignatureEntry({
+  entry,
   network,
-  entryIndex,
   signerPublicKey,
   signatureBase64,
   expirationLedger,
 }: {
-  envelopeXdr: string;
+  entry: xdr.SorobanAuthorizationEntry;
   network: StellarNetwork;
-  entryIndex: number;
   signerPublicKey: string;
   signatureBase64: string;
   expirationLedger: number;
-}): Promise<string> {
+}): Promise<xdr.SorobanAuthorizationEntry> {
   if (!StrKey.isValidEd25519PublicKey(signerPublicKey)) {
     throw new Error('The wallet did not return a valid Stellar Ed25519 signer address.');
   }
-  const { authEntries } = operationAuthEntries(envelopeXdr, network);
-  const entry = authEntries[entryIndex];
-  if (!entry) throw new Error(`Soroban authorization entry #${entryIndex + 1} does not exist.`);
   const info = inspectAuthEntry(entry);
   if (info.credentialType === 'sourceAccount') {
     throw new Error('The transaction source authorization is covered by the transaction envelope.');
@@ -278,20 +281,53 @@ export async function mergeSorobanGAccountSignature({
   }));
   const duplicate = existing.find((item) => item.publicKey === signerPublicKey);
   if (duplicate) {
-    if (compareBytes(duplicate.signature, signature) === 0) return envelopeXdr;
+    if (compareBytes(duplicate.signature, signature) === 0) return entry;
     throw new Error('This Stellar signer already contributed a different Soroban authorization signature.');
   }
   if (existing.length >= MAX_G_ACCOUNT_AUTH_SIGNATURES) {
     throw new Error('A Soroban G-account authorization cannot carry more than 20 signatures.');
   }
-  const signatureScVal = standardSignatureScVal([...existing, { publicKey: signerPublicKey, signature }]);
-  const signedEntry = await authorizeEntry(
+  return authorizeEntry(
     entry,
-    async () => ({ signatureScVal }),
+    async () => ({
+      signatureScVal: standardSignatureScVal([...existing, { publicKey: signerPublicKey, signature }]),
+    }),
     expirationLedger,
     passphrase(network),
   );
-  return replaceSorobanAuthorizationEntryXdr({ envelopeXdr, network, entryIndex, replacement: signedEntry });
+}
+
+export async function mergeSorobanGAccountSignature({
+  envelopeXdr,
+  network,
+  entryIndex,
+  signerPublicKey,
+  signatureBase64,
+  expirationLedger,
+}: {
+  envelopeXdr: string;
+  network: StellarNetwork;
+  entryIndex: number;
+  signerPublicKey: string;
+  signatureBase64: string;
+  expirationLedger: number;
+}): Promise<string> {
+  const { authEntries } = operationAuthEntries(envelopeXdr, network);
+  const entry = authEntries[entryIndex];
+  if (!entry) throw new Error(`Soroban authorization entry #${entryIndex + 1} does not exist.`);
+  const signedEntry = await mergeSorobanGAccountSignatureEntry({
+    entry,
+    network,
+    signerPublicKey,
+    signatureBase64,
+    expirationLedger,
+  });
+  return replaceSorobanAuthorizationEntryXdr({
+    envelopeXdr,
+    network,
+    entryIndex,
+    replacement: signedEntry,
+  });
 }
 
 function isCanonicalSignerOrder(signatures: Array<{ publicKey: string }>): boolean {
@@ -301,13 +337,13 @@ function isCanonicalSignerOrder(signatures: Array<{ publicKey: string }>): boole
   return true;
 }
 
-export async function analyzeSorobanGAccountAuthorization({
-  envelopeXdr,
+export async function analyzeSorobanGAccountAuthorizationEntries({
+  authEntries,
   network,
   currentLedger,
   accountLoader,
 }: {
-  envelopeXdr: string;
+  authEntries: xdr.SorobanAuthorizationEntry[];
   network: StellarNetwork;
   currentLedger: number;
   accountLoader: SorobanAccountLoader;
@@ -315,7 +351,6 @@ export async function analyzeSorobanGAccountAuthorization({
   if (!Number.isInteger(currentLedger) || currentLedger < 0) {
     throw new Error('A current Stellar ledger sequence is required to verify Soroban authorization.');
   }
-  const { authEntries } = operationAuthEntries(envelopeXdr, network);
   const authorizers: SorobanGAccountAuthorizerStatus[] = [];
   let expired = false;
 
@@ -433,4 +468,24 @@ export async function analyzeSorobanGAccountAuthorization({
     expired,
     authorizers,
   };
+}
+
+export async function analyzeSorobanGAccountAuthorization({
+  envelopeXdr,
+  network,
+  currentLedger,
+  accountLoader,
+}: {
+  envelopeXdr: string;
+  network: StellarNetwork;
+  currentLedger: number;
+  accountLoader: SorobanAccountLoader;
+}): Promise<SorobanGAccountAuthorizationStatus> {
+  const { authEntries } = operationAuthEntries(envelopeXdr, network);
+  return analyzeSorobanGAccountAuthorizationEntries({
+    authEntries,
+    network,
+    currentLedger,
+    accountLoader,
+  });
 }

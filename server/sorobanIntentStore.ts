@@ -9,13 +9,22 @@ export interface SorobanIntentPrivateContext {
   initialPrivateNote?: PrivateNoteRevision;
 }
 
+export interface StoredSorobanIntentAuthorizationContribution {
+  version: 1;
+  digest: string;
+  entryIndex: number;
+  signerAddress: string;
+  signatureBase64: string;
+  receivedAt: string;
+  submittedBy?: AgentActorProvenance;
+}
+
 export interface StoredSorobanIntent {
   version: 1;
   id: string;
   network: StellarNetwork;
   intent: SorobanIntent;
-  authorizationPlan?: SorobanAuthorizationPlan;
-  planningRequirement?: 'execution_source';
+  authorizationPlan: SorobanAuthorizationPlan;
   createdAt: string;
   creatorAddress: string;
   creatorActor?: AgentActorProvenance;
@@ -26,4 +35,6 @@ export interface SorobanIntentStore {
   createIntent(value: StoredSorobanIntent): Promise<void>;
   getIntent(id: string): Promise<StoredSorobanIntent | null>;
   updateIntent(value: StoredSorobanIntent): Promise<void>;
+  listContributions(id: string): Promise<StoredSorobanIntentAuthorizationContribution[]>;
+  putContribution(id: string, contribution: StoredSorobanIntentAuthorizationContribution): Promise<void>;
 }

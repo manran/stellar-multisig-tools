@@ -11,6 +11,8 @@ class MemoryIntentStore implements SorobanIntentStore {
   async createIntent(value: StoredSorobanIntent) { this.values.set(value.id, value); }
   async getIntent(id: string) { return this.values.get(id) ?? null; }
   async updateIntent(value: StoredSorobanIntent) { this.values.set(value.id, value); }
+  async listContributions() { return []; }
+  async putContribution() {}
 }
 
 function fixture(invoice = 'invoice-42') {
@@ -50,18 +52,30 @@ test('stores Intent, AuthorizationPlan and off-chain context without a transacti
   assert.equal('baseXdr' in stored, false);
   assert.equal('transactionSource' in stored, false);
 });
-test('stores an execution-source requirement without persisting a transient source-bound plan', async () => {
+test('rejects source-account authorization instead of binding Intent to a transient source', async () => {
   const store = new MemoryIntentStore();
-  const { intent } = fixture();
+  const { intent, args } = fixture();
   const creator = Keypair.random();
-  const stored = await createStoredSorobanIntent(store, {
+  const sourceAuth = new xdr.SorobanAuthorizationEntry({
+    credentials: xdr.SorobanCredentials.sorobanCredentialsSourceAccount(),
+    rootInvocation: new xdr.SorobanAuthorizedInvocation({
+      function: xdr.SorobanAuthorizedFunction.sorobanAuthorizedFunctionTypeContractFn(args),
+      subInvocations: [],
+    }),
+  });
+  const plan = createSorobanAuthorizationPlan(intent, materializeSorobanIntent({
     intent,
-    planningRequirement: 'execution_source',
-    creatorAddress: creator.publicKey(),
-  }, { idFactory: () => 'B'.repeat(16) });
+    sourceAccount: creator.publicKey(),
+    sourceSequence: '1',
+    fee: '100',
+    lifetimeSeconds: 3600,
+    authorizationEntries: [sourceAuth],
+  }).toXDR());
 
-  assert.equal(stored.planningRequirement, 'execution_source');
-  assert.equal(stored.authorizationPlan, undefined);
+  await assert.rejects(
+    () => createStoredSorobanIntent(store, { intent, authorizationPlan: plan, creatorAddress: creator.publicKey() }),
+    (cause: unknown) => cause instanceof SorobanIntentServiceError && cause.code === 'source_account_auth_unsupported',
+  );
 });
 
 test('rejects mismatched or incomplete authorization planning state', async () => {
@@ -80,9 +94,5 @@ test('rejects mismatched or incomplete authorization planning state', async () =
   await assert.rejects(
     () => createStoredSorobanIntent(store, { intent: first, authorizationPlan: plan, creatorAddress: source.publicKey() }),
     (cause: unknown) => cause instanceof SorobanIntentServiceError && cause.code === 'authorization_plan_mismatch',
-  );
-  await assert.rejects(
-    () => createStoredSorobanIntent(store, { intent: first, creatorAddress: source.publicKey() }),
-    (cause: unknown) => cause instanceof SorobanIntentServiceError && cause.code === 'authorization_plan_required',
   );
 });
