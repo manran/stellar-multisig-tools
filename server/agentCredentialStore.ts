@@ -21,7 +21,7 @@ export interface StoredSignerAgentCredential {
 export interface StoredAgentIdempotencyClaim {
   version: 1;
   credentialId: string;
-  operation?: 'proposal.create' | 'contract.authorization.create';
+  operation?: 'proposal.create' | 'contract.authorization.create' | 'intent.create';
   /** Reserved durable resource id; legacy field name retained for stored-claim compatibility. */
   requestId: string;
   principal: SignerPrincipalRef;

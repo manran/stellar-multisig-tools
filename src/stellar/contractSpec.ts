@@ -209,7 +209,7 @@ export function contractArgumentsToScVals(
   return spec.funcArgsToScVals(methodName, args);
 }
 
-export function contractCallOperation(
+export function contractCallHostFunction(
   contractId: string,
   methodName: string,
   args: ScVal[],
@@ -219,8 +219,16 @@ export function contractCallOperation(
     functionName: methodName,
     args,
   });
+  return xdr.HostFunction.hostFunctionTypeInvokeContract(invokeArgs);
+}
+
+export function contractCallOperation(
+  contractId: string,
+  methodName: string,
+  args: ScVal[],
+) {
   return Operation.invokeHostFunction({
-    func: xdr.HostFunction.hostFunctionTypeInvokeContract(invokeArgs),
+    func: contractCallHostFunction(contractId, methodName, args),
     auth: [],
   });
 }
