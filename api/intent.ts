@@ -20,6 +20,10 @@ import { configuredSorobanPlanningSource } from '../server/sorobanIntentConfig.j
 import { SorobanIntentPlanningError } from '../server/sorobanIntentPlanningService.js';
 import { SorobanIntentServiceError } from '../server/sorobanIntentService.js';
 import {
+  prepareSorobanIntentExecution,
+  SorobanIntentExecutionServiceError,
+} from '../server/sorobanIntentExecutionService.js';
+import {
   contributeSorobanIntentAuthorization,
   getSorobanIntentAuthorization,
   SorobanIntentAuthorizationServiceError,
@@ -34,7 +38,7 @@ import {
 } from '../server/semanticRateLimit.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
-const METHODS = 'GET, POST, PATCH, OPTIONS';
+const METHODS = 'GET, POST, PATCH, PUT, OPTIONS';
 const INTENT_ID_HEADER = 'x-multisig-intent-id';
 const CORS_HEADERS = {
   ...publicCorsHeaders(METHODS),
@@ -58,11 +62,13 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof ContractIntentServiceError
     || cause instanceof SorobanIntentServiceError
     || cause instanceof SorobanIntentAuthorizationServiceError
+    || cause instanceof SorobanIntentExecutionServiceError
   ) {
     return json({ error: cause.message, code: cause.code }, cause.status);
   }
   if (cause instanceof SorobanIntentPlanningError) {
-    return json({ error: cause.message, code: cause.code }, 503);
+    const status = cause.code === 'source_account_auth_unsupported' ? 409 : 503;
+    return json({ error: cause.message, code: cause.code }, status);
   }
   if (cause instanceof SemanticRateLimitError) {
     return json({ error: cause.message, code: cause.code }, cause.status);
@@ -95,7 +101,7 @@ function intentIdFromRequest(request: Request): string {
   return id;
 }
 
-async function storedIntentAccess(request: Request, required: 'read' | 'sign') {
+async function storedIntentAccess(request: Request, required: 'read' | 'write' | 'sign') {
   const agent = await agentCredentialFor(request);
   requireAgentAccess(agent, required);
   const id = intentIdFromRequest(request);
@@ -206,6 +212,27 @@ export async function PATCH(request: Request): Promise<Response> {
       version: 1,
       added: result.added,
       authorization: result.authorization,
+    });
+  } catch (cause) {
+    return errorResponse(cause);
+  }
+}
+
+export async function PUT(request: Request): Promise<Response> {
+  try {
+    const access = await storedIntentAccess(request, 'write');
+    const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    const executionSource = typeof body.executionSource === 'string' ? body.executionSource : '';
+    const execution = await prepareSorobanIntentExecution(
+      blobSorobanIntentStore,
+      access.id,
+      executionSource,
+      { authorization: access.authorization },
+    );
+    return json({
+      operation: 'contract.intent.execution.prepare',
+      version: 1,
+      execution,
     });
   } catch (cause) {
     return errorResponse(cause);

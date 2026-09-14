@@ -61,6 +61,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
 function requestBody(path: string, method: string): OpenApiObject | undefined {
   if (path === '/api/intent' && method === 'post') return body(schema('ContractIntentCreateInput'));
   if (path === '/api/intent' && method === 'patch') return body(schema('ContractIntentContributionInput'));
+  if (path === '/api/intent' && method === 'put') return body(schema('ContractIntentExecutionInput'));
   if (path === '/api/contract-call' && method === 'post') return body(schema('ContractCallBuildInput'));
   if (path === '/api/contract-prepare' && method === 'post') return body(schema('ContractPrepareInput'));
   if (path === '/api/preparation' && method === 'post') return body(schema('AuthorizationCreateInput'));
@@ -79,6 +80,7 @@ function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/api/intent' && method === 'post') return schema('ContractIntentCreateResult');
   if (path === '/api/intent' && method === 'get') return schema('ContractIntentInspectResult');
   if (path === '/api/intent' && method === 'patch') return schema('ContractIntentContributionResult');
+  if (path === '/api/intent' && method === 'put') return schema('ContractIntentExecutionResult');
   if (path === '/api/contract-call') return schema('ContractCallBuildResult');
   if (path === '/api/contract-prepare') return schema('ContractPrepareResult');
   if (path === '/api/contracts' && method === 'get') return schema('ContractWorkspaceListResult');
@@ -339,6 +341,40 @@ const components: OpenApiObject = {
         version: operationVersion,
         added: { type: 'boolean' },
         authorization: schema('SorobanIntentAuthorizationSnapshot'),
+      },
+      additionalProperties: false,
+    },
+    ContractIntentExecutionInput: {
+      type: 'object',
+      required: ['executionSource'],
+      properties: { executionSource: accountId },
+      additionalProperties: false,
+    },
+    SorobanIntentExecutionPreparation: {
+      type: 'object',
+      required: ['version', 'intentId', 'network', 'intentDigest', 'authorizationPlanDigest', 'executionSource', 'transactionSequence', 'transactionHash', 'validUntil', 'latestLedger', 'xdr'],
+      properties: {
+        version: operationVersion,
+        intentId: { type: 'string' },
+        network: stellarNetwork,
+        intentDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        authorizationPlanDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        executionSource: accountId,
+        transactionSequence: { type: 'string' },
+        transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        validUntil: { oneOf: [timestamp, { type: 'null' }] },
+        latestLedger: { type: 'integer', minimum: 1 },
+        xdr,
+      },
+      additionalProperties: false,
+    },
+    ContractIntentExecutionResult: {
+      type: 'object',
+      required: ['operation', 'version', 'execution'],
+      properties: {
+        operation: { type: 'string', const: 'contract.intent.execution.prepare' },
+        version: operationVersion,
+        execution: schema('SorobanIntentExecutionPreparation'),
       },
       additionalProperties: false,
     },

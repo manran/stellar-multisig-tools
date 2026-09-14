@@ -66,6 +66,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   const intent = paths['/api/intent'].post as JsonObject;
   const intentInspect = paths['/api/intent'].get as JsonObject;
   const intentContribute = paths['/api/intent'].patch as JsonObject;
+  const intentExecution = paths['/api/intent'].put as JsonObject;
   const build = paths['/api/contract-call'].post as JsonObject;
   const prepare = paths['/api/contract-prepare'].post as JsonObject;
   const mutation = paths['/api/preparation'].patch as JsonObject;
@@ -77,6 +78,8 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.equal(intentInspect.operationId, 'contract.intent.inspect');
   assert.equal(intentContribute.operationId, 'contract.intent.contribute');
   assert.deepEqual(intentContribute.security, [{ agentBearer: [] }]);
+  assert.equal(intentExecution.operationId, 'contract.intent.execution.prepare');
+  assert.deepEqual(intentExecution.security, [{ agentBearer: [] }]);
   assert.equal(build.operationId, 'contract.call.build');
   assert.equal(prepare.operationId, 'contract.call.prepare');
   assert.equal(mutation.operationId, 'contract.authorization.mutate');
@@ -89,6 +92,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   const schemas = (components.schemas as Record<string, JsonObject>);
   assert.deepEqual(schemas.ContractIntentCreateInput.required, ['network', 'contractId', 'method', 'arguments']);
   assert.deepEqual(schemas.ContractIntentContributionInput.required, ['entryIndex', 'signatureBase64']);
+  assert.deepEqual(schemas.ContractIntentExecutionInput.required, ['executionSource']);
   assert.deepEqual(schemas.ContractCallBuildInput.required, [
     'network',
     'transactionSource',
