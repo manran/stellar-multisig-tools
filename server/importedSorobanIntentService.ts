@@ -6,6 +6,7 @@ import {
 import { assertSorobanTransactionPreparedForFreeze } from '../src/stellar/sorobanAuthorization.js';
 import { createSorobanAuthorizationPlan } from '../src/stellar/sorobanAuthorizationPlan.js';
 import { createSorobanIntent } from '../src/stellar/sorobanIntent.js';
+import { initializeSorobanContractAccountAuthorizationWindow } from '../src/stellar/sorobanCustomAuthorization.js';
 import type { StellarNetwork } from '../src/stellar/types.js';
 import { loadAccount, loadNetworkParameters } from '../src/stellar/horizon.js';
 import { discoverSorobanIntentSignerKeys } from './sorobanIntentPlanningService.js';
@@ -92,7 +93,22 @@ export async function createImportedSorobanIntent(
   }
 
   const intent = createSorobanIntent(input.network, operation.func);
-  const authorizationPlan = createSorobanAuthorizationPlan(intent, envelopeXdr);
+  const parameters = await (options.networkParametersLoader ?? loadNetworkParameters)(input.network);
+  let initializedXdr = envelopeXdr;
+  try {
+    initializedXdr = await initializeSorobanContractAccountAuthorizationWindow({
+      envelopeXdr,
+      network: input.network,
+      currentLedger: parameters.ledgerSequence,
+    });
+  } catch (cause) {
+    throw new SorobanIntentServiceError(
+      cause instanceof Error ? cause.message : 'Unable to initialize contract-account authorization.',
+      409,
+      'contract_account_auth_import_unsupported',
+    );
+  }
+  const authorizationPlan = createSorobanAuthorizationPlan(intent, initializedXdr);
   if (authorizationPlan.executionBinding !== 'detached') {
     throw new SorobanIntentServiceError(
       'This contract call uses SOURCE_ACCOUNT Soroban authorization, which binds authorization to the final transaction source. MultiSigTools Intent workflows intentionally collect authorization before choosing an executor, so this source-bound authorization cannot be used here. Use detached address authorization instead, or change the contract/integration so authorization is not supplied by the transaction source.',
@@ -101,7 +117,6 @@ export async function createImportedSorobanIntent(
     );
   }
 
-  const parameters = await (options.networkParametersLoader ?? loadNetworkParameters)(input.network);
   const discoverySignerKeys = await discoverSorobanIntentSignerKeys(
     authorizationPlan,
     parameters.ledgerSequence,

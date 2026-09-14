@@ -149,10 +149,10 @@ export function sorobanAuthorizationEntryPreimageXdr({
     throw new Error('The transaction source authorization is covered by the transaction envelope.');
   }
   if (info.credentialType === 'addressWithDelegates') {
-    throw new Error('Delegated Soroban authorization is not supported in the G-account signing milestone.');
+    throw new Error('Delegated Soroban authorization is not supported in the Intent signing milestone.');
   }
-  if (!info.address?.startsWith('G')) {
-    throw new Error('Only Stellar G-account Soroban authorizers are supported in this milestone.');
+  if (!info.address) {
+    throw new Error('This Soroban authorization entry does not expose a detached address authorizer.');
   }
   if (info.signed && info.signatureExpirationLedger !== expirationLedger) {
     throw new Error('Existing Soroban signatures use a different expiration ledger. Start from one shared authorization window.');
@@ -384,7 +384,7 @@ export async function analyzeSorobanGAccountAuthorizationEntries({
         supported: false,
         ready: false,
         expired: false,
-        reason: 'Contract-account authorization is read-only in this milestone. MultiSig Tools can inspect __check_auth evidence, but custom credential creation and local policy verification are not enabled.',
+        reason: 'This C-account authorization is not handled by the G-account analyzer. Explicitly configured C-account adapters are coordinated through Soroban Intent; unknown C-account credentials remain unsupported and fail closed.',
         authorizers,
       };
     }

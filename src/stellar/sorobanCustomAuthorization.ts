@@ -9,6 +9,7 @@ import {
   inspectAuthEntry,
   xdr,
 } from '@stellar/stellar-sdk/base';
+import { DEFAULT_SOROBAN_AUTH_EXPIRATION_LEDGERS } from './sorobanAuthorization.js';
 import type { StellarNetwork } from './types.js';
 import { replaceSorobanAuthorizationEntryXdr } from './sorobanEnvelope.js';
 
@@ -34,6 +35,12 @@ export interface SorobanContractCredentialContribution {
 
 export interface StagedSorobanContractCredential {
   envelopeXdr: string;
+  challenge: SorobanContractAuthorizationChallenge;
+  validation: 'requires-rpc-enforce';
+}
+
+export interface StagedSorobanContractCredentialEntry {
+  entry: xdr.SorobanAuthorizationEntry;
   challenge: SorobanContractAuthorizationChallenge;
   validation: 'requires-rpc-enforce';
 }
@@ -71,14 +78,10 @@ function operationAuthEntries(envelopeXdr: string, network: StellarNetwork) {
   return [...(operation.auth ?? [])];
 }
 
-function contractEntryForChallenge(
-  envelopeXdr: string,
-  network: StellarNetwork,
+function contractEntryForChallengeValue(
+  entry: xdr.SorobanAuthorizationEntry,
   entryIndex: number,
 ) {
-  const authEntries = operationAuthEntries(envelopeXdr, network);
-  const entry = authEntries[entryIndex];
-  if (!entry) throw new Error(`Soroban authorization entry #${entryIndex + 1} does not exist.`);
   const info = inspectAuthEntry(entry);
   if (info.credentialType === 'sourceAccount') {
     throw new Error('Transaction-source authorization is covered by the transaction envelope.');
@@ -92,7 +95,45 @@ function contractEntryForChallenge(
   if (info.signed) {
     throw new Error('This contract-account authorization entry already contains credential evidence. Start from a fresh recorded authorization entry.');
   }
-  return { entry, info };
+  return { entry, info, entryIndex };
+}
+
+function contractEntryForChallenge(
+  envelopeXdr: string,
+  network: StellarNetwork,
+  entryIndex: number,
+) {
+  const authEntries = operationAuthEntries(envelopeXdr, network);
+  const entry = authEntries[entryIndex];
+  if (!entry) throw new Error(`Soroban authorization entry #${entryIndex + 1} does not exist.`);
+  return contractEntryForChallengeValue(entry, entryIndex);
+}
+
+export function createSorobanContractAuthorizationChallengeForEntry({
+  entry,
+  network,
+  entryIndex,
+  expirationLedger,
+}: {
+  entry: xdr.SorobanAuthorizationEntry;
+  network: StellarNetwork;
+  entryIndex: number;
+  expirationLedger: number;
+}): SorobanContractAuthorizationChallenge {
+  if (!Number.isInteger(expirationLedger) || expirationLedger <= 0 || expirationLedger > 0xffffffff) {
+    throw new Error('Soroban authorization expiration must be a valid future ledger sequence.');
+  }
+  const { info } = contractEntryForChallengeValue(entry, entryIndex);
+  const preimage = buildAuthorizationEntryPreimage(entry, expirationLedger, passphrase(network));
+  return {
+    version: 1,
+    network,
+    entryIndex,
+    authorizer: info.address!,
+    expirationLedger,
+    preimageXdr: preimage.toXdr('base64'),
+    payloadHashHex: bytesToHex(hash(preimage.toXdr())),
+  };
 }
 
 export function createSorobanContractAuthorizationChallenge({
@@ -106,20 +147,64 @@ export function createSorobanContractAuthorizationChallenge({
   entryIndex: number;
   expirationLedger: number;
 }): SorobanContractAuthorizationChallenge {
-  if (!Number.isInteger(expirationLedger) || expirationLedger <= 0 || expirationLedger > 0xffffffff) {
-    throw new Error('Soroban authorization expiration must be a valid future ledger sequence.');
+  const { entry } = contractEntryForChallenge(envelopeXdr, network, entryIndex);
+  return createSorobanContractAuthorizationChallengeForEntry({ entry, network, entryIndex, expirationLedger });
+}
+
+export async function initializeSorobanContractAccountAuthorizationWindow({
+  envelopeXdr,
+  network,
+  currentLedger,
+  expirationLedgers = DEFAULT_SOROBAN_AUTH_EXPIRATION_LEDGERS,
+}: {
+  envelopeXdr: string;
+  network: StellarNetwork;
+  currentLedger: number;
+  expirationLedgers?: number;
+}): Promise<string> {
+  if (!Number.isInteger(currentLedger) || currentLedger < 0) {
+    throw new Error('A current Stellar ledger sequence is required to initialize contract-account authorization.');
   }
-  const { entry, info } = contractEntryForChallenge(envelopeXdr, network, entryIndex);
-  const preimage = buildAuthorizationEntryPreimage(entry, expirationLedger, passphrase(network));
-  return {
-    version: 1,
-    network,
-    entryIndex,
-    authorizer: info.address!,
-    expirationLedger,
-    preimageXdr: preimage.toXdr('base64'),
-    payloadHashHex: bytesToHex(hash(preimage.toXdr())),
-  };
+  if (!Number.isInteger(expirationLedgers) || expirationLedgers <= 0) {
+    throw new Error('Soroban authorization lifetime must be a positive ledger count.');
+  }
+  const expirationLedger = currentLedger + expirationLedgers;
+  if (expirationLedger > 0xffffffff) throw new Error('Soroban authorization expiration exceeds the supported ledger range.');
+
+  let workingXdr = envelopeXdr;
+  const initial = operationAuthEntries(workingXdr, network);
+  for (let entryIndex = 0; entryIndex < initial.length; entryIndex += 1) {
+    const current = operationAuthEntries(workingXdr, network)[entryIndex];
+    const info = inspectAuthEntry(current);
+    if (info.credentialType === 'sourceAccount') continue;
+    if (info.credentialType === 'addressWithDelegates') {
+      throw new Error('Delegated contract authorization requires its own adapter and is not supported by Intent coordination.');
+    }
+    if (!info.address || !StrKey.isValidContract(info.address)) continue;
+    if (info.signed) {
+      throw new Error('Existing contract-account credential evidence cannot be re-windowed. Start from an unsigned authorization entry.');
+    }
+    const existingExpiration = info.signatureExpirationLedger ?? 0;
+    if (existingExpiration > 0) {
+      if (existingExpiration <= currentLedger) {
+        throw new Error('Existing contract-account authorization has expired. Create a fresh Soroban Intent.');
+      }
+      continue;
+    }
+    const initialized = await authorizeEntry(
+      current,
+      async () => ({ signatureScVal: xdr.ScVal.scvVoid() }),
+      expirationLedger,
+      passphrase(network),
+    );
+    workingXdr = replaceSorobanAuthorizationEntryXdr({
+      envelopeXdr: workingXdr,
+      network,
+      entryIndex,
+      replacement: initialized,
+    });
+  }
+  return workingXdr;
 }
 
 function decodeSignatureScVal(value: string): xdr.ScVal {
@@ -135,20 +220,20 @@ function decodeSignatureScVal(value: string): xdr.ScVal {
   return signatureScVal;
 }
 
-export async function stageSorobanContractCredentialContribution({
-  envelopeXdr,
+export async function stageSorobanContractCredentialContributionEntry({
+  entry,
   challenge,
   contribution,
 }: {
-  envelopeXdr: string;
+  entry: xdr.SorobanAuthorizationEntry;
   challenge: SorobanContractAuthorizationChallenge;
   contribution: SorobanContractCredentialContribution;
-}): Promise<StagedSorobanContractCredential> {
+}): Promise<StagedSorobanContractCredentialEntry> {
   if (challenge.version !== 1 || contribution.version !== 1) {
     throw new Error('Unsupported contract authorization challenge or contribution version.');
   }
-  const currentChallenge = createSorobanContractAuthorizationChallenge({
-    envelopeXdr,
+  const currentChallenge = createSorobanContractAuthorizationChallengeForEntry({
+    entry,
     network: challenge.network,
     entryIndex: challenge.entryIndex,
     expirationLedger: challenge.expirationLedger,
@@ -158,7 +243,7 @@ export async function stageSorobanContractCredentialContribution({
     || challenge.preimageXdr !== currentChallenge.preimageXdr
     || challenge.payloadHashHex.toLowerCase() !== currentChallenge.payloadHashHex
   ) {
-    throw new Error('The contract authorization challenge is stale or belongs to a different transaction state.');
+    throw new Error('The contract authorization challenge is stale or belongs to a different authorization state.');
   }
   if (
     contribution.network !== challenge.network
@@ -172,25 +257,35 @@ export async function stageSorobanContractCredentialContribution({
     throw new Error('The contract credential does not match this exact Soroban authorization payload.');
   }
   const signatureScVal = decodeSignatureScVal(contribution.signatureScValXdr);
-  const { entry } = contractEntryForChallenge(
-    envelopeXdr,
-    challenge.network,
-    challenge.entryIndex,
-  );
+  const { entry: currentEntry } = contractEntryForChallengeValue(entry, challenge.entryIndex);
   const signedEntry = await authorizeEntry(
-    entry,
+    currentEntry,
     async () => ({ signatureScVal }),
     challenge.expirationLedger,
     passphrase(challenge.network),
   );
+  return { entry: signedEntry, challenge: currentChallenge, validation: 'requires-rpc-enforce' };
+}
+
+export async function stageSorobanContractCredentialContribution({
+  envelopeXdr,
+  challenge,
+  contribution,
+}: {
+  envelopeXdr: string;
+  challenge: SorobanContractAuthorizationChallenge;
+  contribution: SorobanContractCredentialContribution;
+}): Promise<StagedSorobanContractCredential> {
+  const { entry } = contractEntryForChallenge(envelopeXdr, challenge.network, challenge.entryIndex);
+  const staged = await stageSorobanContractCredentialContributionEntry({ entry, challenge, contribution });
   return {
     envelopeXdr: replaceSorobanAuthorizationEntryXdr({
       envelopeXdr,
       network: challenge.network,
       entryIndex: challenge.entryIndex,
-      replacement: signedEntry,
+      replacement: staged.entry,
     }),
-    challenge: currentChallenge,
-    validation: 'requires-rpc-enforce',
+    challenge: staged.challenge,
+    validation: staged.validation,
   };
 }

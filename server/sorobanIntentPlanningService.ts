@@ -1,3 +1,4 @@
+import { StrKey, inspectAuthEntry } from '@stellar/stellar-sdk/base';
 import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../src/stellar/horizon.js';
 import {
   analyzeSorobanGAccountAuthorizationEntries,
@@ -9,6 +10,8 @@ import {
   type SorobanAuthorizationPlan,
 } from '../src/stellar/sorobanAuthorizationPlan.js';
 import { materializeSorobanIntent, type SorobanIntent } from '../src/stellar/sorobanIntent.js';
+import { analyzeKnownSorobanContractAuthorizationEntries } from '../src/stellar/sorobanContractAdapter.js';
+import { initializeSorobanContractAccountAuthorizationWindow } from '../src/stellar/sorobanCustomAuthorization.js';
 import { simulateSorobanTransaction } from '../src/stellar/sorobanRpc.js';
 
 export class SorobanIntentPlanningError extends Error {
@@ -61,8 +64,13 @@ async function planInternal(
       'planning_simulation_unassembled',
     );
   }
-  const initializedXdr = await initializeSorobanGAccountAuthorizationWindow({
+  const initializedGAccountXdr = await initializeSorobanGAccountAuthorizationWindow({
     envelopeXdr: simulation.assembledXdr,
+    network: intent.network,
+    currentLedger: simulation.latestLedger,
+  });
+  const initializedXdr = await initializeSorobanContractAccountAuthorizationWindow({
+    envelopeXdr: initializedGAccountXdr,
     network: intent.network,
     currentLedger: simulation.latestLedger,
   });
@@ -73,7 +81,32 @@ async function planInternal(
       'source_account_auth_unsupported',
     );
   }
+  assertSupportedContractAuthorization(authorizationPlan, simulation.latestLedger);
   return { authorizationPlan, currentLedger: simulation.latestLedger };
+}
+
+function assertSupportedContractAuthorization(
+  plan: SorobanAuthorizationPlan,
+  currentLedger: number,
+) {
+  const authEntries = authorizationEntriesFromPlan(plan);
+  const hasContractAuthorizer = authEntries.some((entry) => {
+    const info = inspectAuthEntry(entry);
+    return Boolean(info.address && StrKey.isValidContract(info.address));
+  });
+  if (!hasContractAuthorizer) return null;
+  const analysis = analyzeKnownSorobanContractAuthorizationEntries({
+    authEntries,
+    network: plan.network,
+    currentLedger,
+  });
+  if (!analysis.supported || !analysis.authorizer) {
+    throw new SorobanIntentPlanningError(
+      analysis.reason ?? 'This contract-account authorization is not supported by the configured Intent adapter.',
+      'contract_account_auth_unsupported',
+    );
+  }
+  return analysis;
 }
 
 export async function discoverSorobanIntentSignerKeys(
@@ -81,6 +114,8 @@ export async function discoverSorobanIntentSignerKeys(
   currentLedger: number,
   dependencies: Pick<PlanningDependencies, 'accountLoader'> = {},
 ): Promise<string[]> {
+  const contractAnalysis = assertSupportedContractAuthorization(plan, currentLedger);
+  if (contractAnalysis?.authorizer) return [contractAnalysis.authorizer.adapter.ownerAddress];
   const analysis = await analyzeSorobanGAccountAuthorizationEntries({
     authEntries: authorizationEntriesFromPlan(plan),
     network: plan.network,

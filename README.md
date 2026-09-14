@@ -25,7 +25,7 @@ The service is non-custodial. It never asks for or stores Stellar seed phrases o
 - [`UX_LANGUAGE_AND_DISCOVERY.md`](UX_LANGUAGE_AND_DISCOVERY.md) — current workspace navigation, language hierarchy, and Inbox discovery contract.
 - [`PRODUCT.md`](PRODUCT.md) — broader historical Human product contract; the UX document supersedes older naming/navigation wording where they conflict.
 - [`BRAND.md`](BRAND.md) — product-name, mark semantics, descriptor discussion, and the professionally bounded 虎符 / tiger-tally historical analogy.
-- [`BOX_AUTOMATION_V1.md`](BOX_AUTOMATION_V1.md) — historical Box/Treasury automation decisions that remain valid plus the superseded ownership model.
+- [`SOROBAN_AUTHORIZATION.md`](SOROBAN_AUTHORIZATION.md) — current Intent-first Soroban AUTH, configured C-account adapter, and late Execution boundary.
 - [`AGENT_API.md`](AGENT_API.md) — current signer-owned machine integration contract and examples.
 - [`OPERATION_ARCHITECTURE.md`](OPERATION_ARCHITECTURE.md) — operation-first product rule and composition contract for every consumer.
 - [`CONTRACT_WORKSPACE.md`](CONTRACT_WORKSPACE.md) — Contract workspace, discovery, and authority boundaries.

@@ -154,7 +154,7 @@ test('contract credential staging preserves CLI-style precondNone exactly', asyn
   assert.equal(envelope.value.tx.ext.type, 'sorobanData');
 });
 
-test('staging rejects a challenge whose network was rewritten after Review', async () => {
+test('staging rejects a challenge whose network was rewritten after authorization planning', async () => {
   const { transaction } = preparedContractAccountTransaction();
   const challenge = createSorobanContractAuthorizationChallenge({
     envelopeXdr: transaction.toXdr(),
@@ -172,7 +172,7 @@ test('staging rejects a challenge whose network was rewritten after Review', asy
         signatureScValXdr: customCredentialXdr(),
       },
     }),
-    /challenge is stale or belongs to a different transaction state/,
+    /challenge is stale or belongs to a different authorization state/,
   );
 });
 

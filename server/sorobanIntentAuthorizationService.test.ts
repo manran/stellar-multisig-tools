@@ -4,6 +4,7 @@ import {
   Address,
   Contract,
   Keypair,
+  SorobanDataBuilder,
   hash,
   nativeToScVal,
   xdr,
@@ -13,6 +14,7 @@ import {
   sorobanAuthorizationEntryPreimageXdr,
 } from '../src/stellar/sorobanAuthorization.js';
 import { createSorobanAuthorizationPlan, authorizationEntriesFromPlan } from '../src/stellar/sorobanAuthorizationPlan.js';
+import { initializeSorobanContractAccountAuthorizationWindow } from '../src/stellar/sorobanCustomAuthorization.js';
 import { createSorobanIntent, materializeSorobanIntent } from '../src/stellar/sorobanIntent.js';
 import { createStoredSorobanIntent } from './sorobanIntentService.js';
 import {
@@ -176,4 +178,122 @@ test('Intent AUTH rejects a signer outside the current authorizer policy', async
     }, f.options),
     (cause: unknown) => cause instanceof Error && 'code' in cause && cause.code === 'authorization_signer_not_current',
   );
+});
+
+const CONTRACT_ACCOUNT = 'CBUGCD3J6RCTJ5RVK7SGDV63JKV7E5YMULD5HAXQ7BGHNLB5DYVVZIEH';
+
+async function withTestnetContractAdapter<T>(ownerAddress: string, run: () => Promise<T>): Promise<T> {
+  const contractKey = 'STELLAR_SOROBAN_SIMPLE_ACCOUNT_TESTNET_CONTRACT';
+  const ownerKey = 'STELLAR_SOROBAN_SIMPLE_ACCOUNT_TESTNET_OWNER';
+  const previousContract = process.env[contractKey];
+  const previousOwner = process.env[ownerKey];
+  process.env[contractKey] = CONTRACT_ACCOUNT;
+  process.env[ownerKey] = ownerAddress;
+  try {
+    return await run();
+  } finally {
+    if (previousContract === undefined) delete process.env[contractKey];
+    else process.env[contractKey] = previousContract;
+    if (previousOwner === undefined) delete process.env[ownerKey];
+    else process.env[ownerKey] = previousOwner;
+  }
+}
+
+async function contractFixture(owner: Keypair) {
+  const source = Keypair.random();
+  const contract = new Contract('CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE');
+  const args = new xdr.InvokeContractArgs({
+    contractAddress: contract.address().toScAddress(),
+    functionName: 'authorize',
+    args: [nativeToScVal(CONTRACT_ACCOUNT), nativeToScVal(303)],
+  });  const invocation = new xdr.SorobanAuthorizedInvocation({
+    function: xdr.SorobanAuthorizedFunction.sorobanAuthorizedFunctionTypeContractFn(args),
+    subInvocations: [],
+  });
+  const auth = new xdr.SorobanAuthorizationEntry({
+    credentials: xdr.SorobanCredentials.sorobanCredentialsAddressV2(new xdr.SorobanAddressCredentials({
+      address: new Address(CONTRACT_ACCOUNT).toScAddress(),
+      nonce: xdr.Int64(77n),
+      signatureExpirationLedger: 0,
+      signature: xdr.ScVal.scvVoid(),
+    })),
+    rootInvocation: invocation,
+  });
+  const intent = createSorobanIntent('testnet', xdr.HostFunction.hostFunctionTypeInvokeContract(args));
+  const raw = materializeSorobanIntent({
+    intent,
+    sourceAccount: source.publicKey(),
+    sourceSequence: '9',
+    fee: '100',
+    lifetimeSeconds: 300,
+    authorizationEntries: [auth],
+    sorobanData: new SorobanDataBuilder().build(),
+  });
+  const initialized = await initializeSorobanContractAccountAuthorizationWindow({
+    envelopeXdr: raw.toXDR(),
+    network: 'testnet',
+    currentLedger: 100,
+  });
+  const plan = createSorobanAuthorizationPlan(intent, initialized);
+  const store = new MemoryIntentStore();
+  const stored = await createStoredSorobanIntent(store, {
+    intent,
+    authorizationPlan: plan,
+    creatorAddress: owner.publicKey(),
+  }, { idFactory: () => 'C'.repeat(16), now: new Date('2026-09-14T10:00:00Z') });
+  const options = {
+    accountLoader: async () => { throw new Error('C-account authorization must not load a Horizon account for the contract address.'); },
+    networkParametersLoader: async () => ({
+      ledgerSequence: 100,
+      ledgerClosedAt: '2026-09-14T10:00:00Z',
+      baseFeeInStroops: 100,
+      baseReserveInStroops: 5_000_000,
+    }),
+  };
+  return { store, stored, plan, owner, options };
+}
+
+function contractSignature(plan: Awaited<ReturnType<typeof contractFixture>>['plan'], owner: Keypair): string {
+  const entry = authorizationEntriesFromPlan(plan)[0];
+  const preimageXdr = sorobanAuthorizationEntryPreimageXdr({
+    entry,
+    network: 'testnet',
+    expirationLedger: 460,
+  });
+  const preimage = xdr.HashIdPreimage.fromXdr(preimageXdr, 'base64');
+  return Buffer.from(owner.sign(hash(preimage.toXdr()))).toString('base64');
+}
+test('configured C-account AUTH uses the same Intent contribution lifecycle', async () => {
+  const owner = Keypair.random();
+  await withTestnetContractAdapter(owner.publicKey(), async () => {
+    const f = await contractFixture(owner);
+    const initial = await getSorobanIntentAuthorization(f.store, f.stored.id, f.options);
+    assert.equal(initial.status, 'awaiting_authorization');
+    assert.equal(initial.authorizers[0]?.authorizer, CONTRACT_ACCOUNT);
+    assert.equal(initial.authorizers[0]?.activeSigners[0]?.publicKey, owner.publicKey());
+    assert.equal(initial.authorizers[0]?.signedWeight, 0);
+
+    const signatureBase64 = contractSignature(f.plan, owner);
+    const added = await contributeSorobanIntentAuthorization(f.store, f.stored.id, {
+      entryIndex: 0,
+      signerAddress: owner.publicKey(),
+      signatureBase64,
+    }, f.options);
+    assert.equal(added.added, true);
+    assert.equal(added.authorization.status, 'authorization_ready');
+    assert.equal(added.authorization.authorizers[0]?.signedWeight, 1);
+    assert.equal(added.authorization.authorizers[0]?.signerEvidence[0]?.publicKey, owner.publicKey());
+
+    const replay = await contributeSorobanIntentAuthorization(f.store, f.stored.id, {
+      entryIndex: 0,
+      signerAddress: owner.publicKey(),
+      signatureBase64,
+    }, f.options);
+    assert.equal(replay.added, false);
+    assert.equal(replay.authorization.contributionCount, 1);
+
+    const persisted = await f.store.getIntent(f.stored.id);
+    assert.equal(persisted?.authorizationPlan.authorizationPlanDigest, f.plan.authorizationPlanDigest);
+    assert.deepEqual(persisted?.authorizationPlan.authorizationEntriesXdr, f.plan.authorizationEntriesXdr);
+  });
 });

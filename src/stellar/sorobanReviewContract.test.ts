@@ -21,6 +21,8 @@ const contractOperationsClient = source('../contractOperationsClient.ts');
 const contractPrepareApi = source('../../api/contract-prepare.ts');
 const intentApi = source('../../api/intent.ts');
 const importedIntentService = source('../../server/importedSorobanIntentService.ts');
+const intentAuthorizationService = source('../../server/sorobanIntentAuthorizationService.ts');
+const intentPlanningService = source('../../server/sorobanIntentPlanningService.ts');
 const viteConfig = source('../../vite.config.ts');
 const envExample = source('../../.env.example');
 const requestService = source('../../server/requestService.ts');
@@ -37,7 +39,7 @@ test('Soroban Review separates envelope authorization from contract authorizatio
   assert.match(sorobanAuthorization, /Authorized invocation tree/);
 });
 
-test('Soroban G-account authorization completes before the exact-XDR Proposal freeze', () => {
+test('Soroban Review routes detached authorization into Intent before envelope signing', () => {
   assert.match(sorobanAuthorization, /Contract authorization/);
   assert.ok(signingRoom.indexOf('<SorobanAuthorizationResults') < signingRoom.indexOf('<details className=\"group rounded-2xl'));
   assert.match(signingRoom, /sorobanAuthorizationReady/);
@@ -83,11 +85,11 @@ test('Soroban architecture is Intent-first while preserving the one Human transa
   assert.match(productSemantics, /durable \*\*Intent\*\*/);
   assert.match(productSemantics, /authorization_ready/);
   assert.match(productSemantics, /SOURCE_ACCOUNT.*rejected/);
-  assert.match(sorobanContract, /Current architecture — Intent-first/);
+  assert.match(sorobanContract, /Status: Current architecture/);
   assert.match(sorobanContract, /semantic Soroban Intent/);
-  assert.match(sorobanContract, /late-bound Execution source/);
-  assert.match(sorobanContract, /imported transaction shell is discarded/);
-  assert.match(sorobanContract, /auth-entry signatures change the transaction body/);
+  assert.match(sorobanContract, /late-bound execution source/);
+  assert.match(sorobanContract, /discards transaction source, sequence, fee, timebounds, resource shell/);
+  assert.match(sorobanContract, /auth-entry signatures are never treated as transaction-envelope signatures/);
 });
 
 
@@ -111,55 +113,52 @@ test('Soroban RPC supports recording and enforcing simulation around Intent plan
   assert.match(sorobanRpc, /authMode: 'enforce'/);
   assert.match(sorobanAuthorization, /Run RPC simulation/);
   assert.match(sorobanAuthorization, /sends the exact pre-submission XDR/);
-  assert.match(sorobanContract, /simulation unavailable/);
-  assert.match(sorobanContract, /execution\/review evidence only/);
-  assert.match(sorobanContract, /recording simulation \/ immutable detached AuthorizationPlan/);
-  assert.match(sorobanContract, /enforcing simulation \/ final unsigned transaction/);
+  assert.match(sorobanContract, /recording simulation/);
+  assert.match(sorobanContract, /immutable detached AuthorizationPlan/);
+  assert.match(sorobanContract, /enforcing simulation/);
+  assert.match(sorobanContract, /final unsigned transaction/);
 });
 
-test('S3A presents contract-account authorization as read-only contract/network evidence', () => {
+test('unknown C-account authorization remains fail-closed outside configured Intent adapters', () => {
   assert.match(sorobanAuthorization, /Contract account \(__check_auth\)/);
   assert.match(sorobanAuthorization, /Contract\/network-enforced authorization/);
   assert.match(sorobanAuthorization, /does not locally prove custom account policy or credential validity/);
   assert.match(sorobanAuthorization, /unknown C-accounts and delegated credentials remain inspect-only/i);
-  assert.match(sorobanAuthCore, /Contract-account authorization is read-only in this milestone/);
-  assert.match(sorobanAuthCore, /custom credential creation and local policy verification are not enabled/);
-  assert.match(sorobanContract, /S3A — read-only contract-account authorization foundation/);
+  assert.match(sorobanAuthCore, /not handled by the G-account analyzer/);
+  assert.match(sorobanAuthCore, /Explicitly configured C-account adapters are coordinated through Soroban Intent/);
   assert.match(sorobanContract, /signature `ScVal` is contract-defined evidence/);
-  assert.match(sorobanContract, /Authorization preparation remains blocked for those shapes/);
-  assert.match(productSemantics, /contract-account work remains a separate contract\/network-enforced credential path/);
+  assert.match(sorobanContract, /Unknown C-accounts, multiple detached C-account authorizers, and delegated authorization remain fail-closed/);
+  assert.match(productSemantics, /Configured C-account authorization uses the same durable Intent lifecycle/);
 });
 
-test('S3B keeps contract-defined credentials challenge-bound and network-enforced before freeze', () => {
+test('S3B keeps contract-defined credentials challenge-bound inside Intent authorization', () => {
   assert.match(sorobanCustomAuthCore, /SorobanContractAuthorizationChallenge/);
-  assert.match(sorobanCustomAuthCore, /preimageXdr/);
+  assert.match(sorobanCustomAuthCore, /createSorobanContractAuthorizationChallengeForEntry/);
+  assert.match(sorobanCustomAuthCore, /initializeSorobanContractAccountAuthorizationWindow/);
   assert.match(sorobanCustomAuthCore, /payloadHashHex/);
-  assert.match(sorobanCustomAuthCore, /challenge: SorobanContractAuthorizationChallenge/);
   assert.match(sorobanCustomAuthCore, /requires-rpc-enforce/);
-  assert.match(sorobanCustomAuthCore, /stale or belongs to a different transaction state/);
+  assert.match(sorobanCustomAuthCore, /stale or belongs to a different authorization state/);
+  assert.match(intentAuthorizationService, /stageSorobanContractCredentialContributionEntry/);
   assert.match(sorobanRpc, /prepareEnforcedSorobanTransaction/);
   assert.match(sorobanRpc, /authMode: 'enforce'/);
   assert.match(sorobanRpc, /changed finalized authorization entries/);
-  assert.match(sorobanContract, /S3B — contract-defined credential transport and enforced preparation/);
-  assert.match(sorobanContract, /resource re-preparation/);
-  assert.match(sorobanContract, /S3B checkpoint.*Request creation still failed closed/);
-  assert.match(productSemantics, /configured C-account adapter may stage contract-defined `ScVal` evidence[\s\S]*must pass enforcing simulation/);
+  assert.match(productSemantics, /configured adapter may derive and stage its contract-defined `ScVal` evidence[\s\S]*late Execution must still pass enforcing simulation/);
 });
 
-test('S3C exposes one configured contract-account adapter with explicit provenance and server revalidation', () => {
+test('S3C routes the configured contract-account adapter through Intent-first coordination', () => {
   assert.match(envExample, /STELLAR_SOROBAN_SIMPLE_ACCOUNT_TESTNET_CONTRACT/);
   assert.match(envExample, /STELLAR_SOROBAN_SIMPLE_ACCOUNT_TESTNET_OWNER/);
   assert.match(viteConfig, /process\.env\.STELLAR_SOROBAN_SIMPLE_ACCOUNT_TESTNET_CONTRACT/);
-  assert.match(sorobanPreparation, /Known contract-account adapter/);
-  assert.match(sorobanPreparation, /Adapter provenance/);
-  assert.match(sorobanPreparation, /Authorize contract account/);
-  assert.match(sorobanPreparation, /prepareEnforcedSorobanTransaction/);
+  assert.match(sorobanPreparation, /Configured contract-account authorization/);
+  assert.match(sorobanPreparation, /Intent-first · detached custom credential/);
+  assert.match(sorobanPreparation, /Continue as Soroban Intent/);
+  assert.doesNotMatch(sorobanPreparation, /prepareEnforcedSorobanTransaction/);
   assert.match(sorobanContractAdapter, /project-configured/);
   assert.match(sorobanContractAdapter, /exactly one detached contract authorizer/);
   assert.match(sorobanContractAdapter, /exact 64-byte signature/);
-  assert.match(requestService, /analyzeKnownSorobanContractAuthorization/);
-  assert.match(requestService, /verifySorobanExecutionForBoundary/);
-  assert.match(sorobanContract, /S3C — one explicit Human contract-account adapter/);
-  assert.match(sorobanContract, /unknown C-accounts remain inspect-only\/fail-closed/);
-  assert.match(productSemantics, /configured C-account adapter[\s\S]*explicit provenance/);
+  assert.match(intentPlanningService, /initializeSorobanContractAccountAuthorizationWindow/);
+  assert.match(intentPlanningService, /adapter\.ownerAddress/);
+  assert.match(intentAuthorizationService, /resolveSimpleEd25519ContractAccountAdapter/);
+  assert.match(importedIntentService, /contract_account_auth_import_unsupported/);
+  assert.match(productSemantics, /Configured C-account authorization uses the same durable Intent lifecycle/);
 });

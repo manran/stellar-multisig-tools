@@ -323,7 +323,7 @@ test('auth-entry mutation is forbidden after transaction-envelope signing begins
   );
 });
 
-test('C-account authorization stays read-only and never enters the G-account policy verifier', async () => {
+test('C-account authorization stays outside the generic G-account policy verifier', async () => {
   const source = Keypair.random();
   const contract = new Contract(CONTRACT_ID);
   const invokeArgs = new xdr.InvokeContractArgs({
@@ -365,5 +365,5 @@ test('C-account authorization stays read-only and never enters the G-account pol
   });
   assert.equal(status.supported, false);
   assert.equal(status.ready, false);
-  assert.match(status.reason ?? '', /read-only.*__check_auth/i);
+  assert.match(status.reason ?? '', /not handled by the G-account analyzer.*fail closed/i);
 });

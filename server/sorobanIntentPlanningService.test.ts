@@ -11,7 +11,7 @@ import {
 import { inspectAuthEntry } from '@stellar/stellar-sdk/base';
 import { authorizationEntriesFromPlan } from '../src/stellar/sorobanAuthorizationPlan.js';
 import { createSorobanIntent, materializeSorobanIntent } from '../src/stellar/sorobanIntent.js';
-import { planSorobanIntent } from './sorobanIntentPlanningService.js';
+import { planSorobanIntent, planSorobanIntentForStorage } from './sorobanIntentPlanningService.js';
 
 function fixture() {
   const source = Keypair.random();
@@ -103,4 +103,69 @@ test('planning rejects an invalid deployment planning source before simulation',
     () => planSorobanIntent(f.intent, 'not-a-g-address'),
     /valid deployment Soroban planning source/i,
   );
+});
+
+const CONTRACT_ACCOUNT = 'CBUGCD3J6RCTJ5RVK7SGDV63JKV7E5YMULD5HAXQ7BGHNLB5DYVVZIEH';
+
+async function withPlanningContractAdapter<T>(ownerAddress: string, run: () => Promise<T>): Promise<T> {
+  const contractKey = 'STELLAR_SOROBAN_SIMPLE_ACCOUNT_TESTNET_CONTRACT';
+  const ownerKey = 'STELLAR_SOROBAN_SIMPLE_ACCOUNT_TESTNET_OWNER';
+  const previousContract = process.env[contractKey];
+  const previousOwner = process.env[ownerKey];
+  process.env[contractKey] = CONTRACT_ACCOUNT;
+  process.env[ownerKey] = ownerAddress;
+  try {
+    return await run();
+  } finally {
+    if (previousContract === undefined) delete process.env[contractKey];
+    else process.env[contractKey] = previousContract;
+    if (previousOwner === undefined) delete process.env[ownerKey];
+    else process.env[ownerKey] = previousOwner;
+  }
+}
+
+test('planning initializes configured C-account AUTH and discovers its owner', async () => {
+  const source = Keypair.random();
+  const owner = Keypair.random();
+  await withPlanningContractAdapter(owner.publicKey(), async () => {
+    const contract = new Contract('CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE');
+    const args = new xdr.InvokeContractArgs({
+      contractAddress: contract.address().toScAddress(),
+      functionName: 'authorize',
+      args: [nativeToScVal(CONTRACT_ACCOUNT), nativeToScVal(303)],
+    });    const invocation = new xdr.SorobanAuthorizedInvocation({
+      function: xdr.SorobanAuthorizedFunction.sorobanAuthorizedFunctionTypeContractFn(args),
+      subInvocations: [],
+    });
+    const auth = new xdr.SorobanAuthorizationEntry({
+      credentials: xdr.SorobanCredentials.sorobanCredentialsAddressV2(new xdr.SorobanAddressCredentials({
+        address: new Address(CONTRACT_ACCOUNT).toScAddress(),
+        nonce: xdr.Int64(88n),
+        signatureExpirationLedger: 0,
+        signature: xdr.ScVal.scvVoid(),
+      })),
+      rootInvocation: invocation,
+    });
+    const intent = createSorobanIntent('testnet', xdr.HostFunction.hostFunctionTypeInvokeContract(args));
+    const assembled = materializeSorobanIntent({
+      intent,
+      sourceAccount: source.publicKey(),
+      sourceSequence: '7',
+      fee: '100',
+      lifetimeSeconds: 300,
+      authorizationEntries: [auth],
+      sorobanData: new SorobanDataBuilder().build(),
+    });
+    const result = await planSorobanIntentForStorage(intent, source.publicKey(), {
+      accountLoader: async () => ({ accountId: source.publicKey(), sequence: '7' } as never),
+      networkParametersLoader: async () => ({ baseFeeInStroops: 100 } as never),
+      simulator: async () => ({ assembledXdr: assembled.toXDR(), latestLedger: 100 } as never),
+    });    assert.deepEqual(result.discoverySignerKeys, [owner.publicKey()]);
+    const entries = authorizationEntriesFromPlan(result.authorizationPlan);
+    assert.equal(entries.length, 1);
+    const info = inspectAuthEntry(entries[0]);
+    assert.equal(info.address, CONTRACT_ACCOUNT);
+    assert.equal(info.signatureExpirationLedger, 460);
+    assert.equal(info.signed, false);
+  });
 });

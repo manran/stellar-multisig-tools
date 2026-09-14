@@ -98,19 +98,16 @@ function parsedSorobanTransaction(envelopeXdr: string, network: StellarNetwork) 
   return parsed;
 }
 
-export function analyzeKnownSorobanContractAuthorization({
-  envelopeXdr,
+export function analyzeKnownSorobanContractAuthorizationEntries({
+  authEntries,
   network,
   currentLedger,
 }: {
-  envelopeXdr: string;
+  authEntries: readonly xdr.SorobanAuthorizationEntry[];
   network: StellarNetwork;
   currentLedger: number;
 }): KnownSorobanContractAuthorizationStatus {
-  const parsed = parsedSorobanTransaction(envelopeXdr, network);
-  const operation = parsed.operations[0];
-  if (operation.type !== 'invokeHostFunction') throw new Error('Unexpected non-Soroban operation.');
-  const detached = (operation.auth ?? [])
+  const detached = authEntries
     .map((entry, entryIndex) => ({ entryIndex, info: inspectAuthEntry(entry) }))
     .filter(({ info }) => info.credentialType !== 'sourceAccount');
   if (detached.length !== 1) {
@@ -118,7 +115,7 @@ export function analyzeKnownSorobanContractAuthorization({
       supported: false,
       ready: false,
       expired: false,
-      reason: 'Known contract-account preparation supports exactly one detached contract authorizer in this milestone.',
+      reason: 'Known contract-account authorization supports exactly one detached contract authorizer in this milestone.',
     };
   }
   const [{ entryIndex, info }] = detached;
@@ -148,7 +145,7 @@ export function analyzeKnownSorobanContractAuthorization({
     };
   }
   const expirationLedger = info.signatureExpirationLedger ?? 0;
-  const expired = info.signed && expirationLedger <= currentLedger;
+  const expired = expirationLedger > 0 && expirationLedger <= currentLedger;
   return {
     supported: true,
     ready: info.signed && !expired,
@@ -161,6 +158,25 @@ export function analyzeKnownSorobanContractAuthorization({
       adapter,
     },
   };
+}
+
+export function analyzeKnownSorobanContractAuthorization({
+  envelopeXdr,
+  network,
+  currentLedger,
+}: {
+  envelopeXdr: string;
+  network: StellarNetwork;
+  currentLedger: number;
+}): KnownSorobanContractAuthorizationStatus {
+  const parsed = parsedSorobanTransaction(envelopeXdr, network);
+  const operation = parsed.operations[0];
+  if (operation.type !== 'invokeHostFunction') throw new Error('Unexpected non-Soroban operation.');
+  return analyzeKnownSorobanContractAuthorizationEntries({
+    authEntries: operation.auth ?? [],
+    network,
+    currentLedger,
+  });
 }
 
 function decodeHex32(value: string): Uint8Array {

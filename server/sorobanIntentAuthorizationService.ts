@@ -1,10 +1,20 @@
 import { createHash } from 'node:crypto';
-import { inspectAuthEntry, xdr } from '@stellar/stellar-sdk/base';
+import { StrKey, inspectAuthEntry, xdr } from '@stellar/stellar-sdk/base';
 import type { AgentActorProvenance } from '../src/stellar/agentAccessTypes.js';
 import {
   analyzeSorobanGAccountAuthorizationEntries,
   mergeSorobanGAccountSignatureEntry,
+  type SorobanGAccountAuthorizerStatus,
 } from '../src/stellar/sorobanAuthorization.js';
+import {
+  analyzeKnownSorobanContractAuthorizationEntries,
+  resolveSimpleEd25519ContractAccountAdapter,
+  simpleEd25519ContractCredentialContribution,
+} from '../src/stellar/sorobanContractAdapter.js';
+import {
+  createSorobanContractAuthorizationChallengeForEntry,
+  stageSorobanContractCredentialContributionEntry,
+} from '../src/stellar/sorobanCustomAuthorization.js';
 import { authorizationEntriesFromPlan } from '../src/stellar/sorobanAuthorizationPlan.js';
 import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../src/stellar/horizon.js';
 import type { SorobanIntentStore, StoredSorobanIntentAuthorizationContribution } from './sorobanIntentStore.js';
@@ -41,7 +51,7 @@ export interface SorobanIntentAuthorizationSnapshot {
   statusDetail?: string;
   authorizationEntriesXdr: string[];
   contributionCount: number;
-  authorizers: Awaited<ReturnType<typeof analyzeSorobanGAccountAuthorizationEntries>>['authorizers'];
+  authorizers: SorobanGAccountAuthorizerStatus[];
 }
 
 function digestContribution(entryIndex: number, signerAddress: string, signatureBase64: string): string {
@@ -49,6 +59,53 @@ function digestContribution(entryIndex: number, signerAddress: string, signature
     .update(JSON.stringify({ entryIndex, signerAddress, signatureBase64 }))
     .digest('hex');
 }
+async function applyContributionToEntry({
+  entry,
+  network,
+  entryIndex,
+  signerAddress,
+  signatureBase64,
+}: {
+  entry: xdr.SorobanAuthorizationEntry;
+  network: 'public' | 'testnet';
+  entryIndex: number;
+  signerAddress: string;
+  signatureBase64: string;
+}): Promise<xdr.SorobanAuthorizationEntry> {
+  const info = inspectAuthEntry(entry);
+  const expirationLedger = info.signatureExpirationLedger ?? 0;
+  if (info.address && StrKey.isValidContract(info.address)) {
+    const adapter = resolveSimpleEd25519ContractAccountAdapter(network, info.address);
+    if (!adapter) {
+      throw new Error('This contract account has no explicitly configured authorization adapter.');
+    }
+    const challenge = createSorobanContractAuthorizationChallengeForEntry({
+      entry,
+      network,
+      entryIndex,
+      expirationLedger,
+    });
+    const contribution = simpleEd25519ContractCredentialContribution({
+      challenge,
+      adapter,
+      signerAddress,
+      signatureBase64,
+    });
+    return (await stageSorobanContractCredentialContributionEntry({
+      entry,
+      challenge,
+      contribution,
+    })).entry;
+  }
+  return mergeSorobanGAccountSignatureEntry({
+    entry,
+    network,
+    signerPublicKey: signerAddress,
+    signatureBase64,
+    expirationLedger,
+  });
+}
+
 async function applyContributions(
   entries: xdr.SorobanAuthorizationEntry[],
   network: 'public' | 'testnet',
@@ -60,17 +117,80 @@ async function applyContributions(
   )) {
     const entry = working[contribution.entryIndex];
     if (!entry) throw new Error(`Stored authorization contribution targets missing entry #${contribution.entryIndex + 1}.`);
-    const info = inspectAuthEntry(entry);
-    const expirationLedger = info.signatureExpirationLedger ?? 0;
-    working[contribution.entryIndex] = await mergeSorobanGAccountSignatureEntry({
+    working[contribution.entryIndex] = await applyContributionToEntry({
       entry,
       network,
-      signerPublicKey: contribution.signerAddress,
+      entryIndex: contribution.entryIndex,
+      signerAddress: contribution.signerAddress,
       signatureBase64: contribution.signatureBase64,
-      expirationLedger,
     });
   }
   return working;
+}
+
+async function analyzeIntentAuthorizationEntries({
+  entries,
+  network,
+  currentLedger,
+  accountLoader,
+}: {
+  entries: xdr.SorobanAuthorizationEntry[];
+  network: 'public' | 'testnet';
+  currentLedger: number;
+  accountLoader: AccountLoader;
+}): Promise<{
+  supported: boolean;
+  ready: boolean;
+  expired: boolean;
+  reason?: string;
+  authorizers: SorobanGAccountAuthorizerStatus[];
+}> {
+  const hasContractAuthorizer = entries.some((entry) => {
+    const info = inspectAuthEntry(entry);
+    return Boolean(info.address && StrKey.isValidContract(info.address));
+  });
+  if (!hasContractAuthorizer) {
+    return analyzeSorobanGAccountAuthorizationEntries({
+      authEntries: entries,
+      network,
+      currentLedger,
+      accountLoader,
+    });
+  }
+
+  const analysis = analyzeKnownSorobanContractAuthorizationEntries({
+    authEntries: entries,
+    network,
+    currentLedger,
+  });
+  if (!analysis.supported || !analysis.authorizer) {
+    return {
+      supported: false,
+      ready: false,
+      expired: analysis.expired,
+      ...(analysis.reason ? { reason: analysis.reason } : {}),
+      authorizers: [],
+    };
+  }
+  const authorizer = analysis.authorizer;
+  const entryInfo = inspectAuthEntry(entries[authorizer.entryIndex]);
+  const signer = { publicKey: authorizer.adapter.ownerAddress, weight: 1 };
+  return {
+    supported: true,
+    ready: analysis.ready,
+    expired: analysis.expired,
+    authorizers: [{
+      entryIndex: authorizer.entryIndex,
+      authorizer: authorizer.authorizer,
+      credentialType: entryInfo.credentialType === 'addressV2' ? 'addressV2' : 'address',
+      expirationLedger: authorizer.expirationLedger,
+      threshold: 1,
+      signedWeight: authorizer.signed ? 1 : 0,
+      signerEvidence: authorizer.signed ? [signer] : [],
+      activeSigners: [signer],
+      ready: analysis.ready,
+    }],
+  };
 }
 
 export async function getSorobanIntentAuthorization(
@@ -87,8 +207,8 @@ export async function getSorobanIntentAuthorization(
     contributions,
   );
   const parameters = await (options.networkParametersLoader ?? loadNetworkParameters)(stored.network);
-  const analysis = await analyzeSorobanGAccountAuthorizationEntries({
-    authEntries: entries,
+  const analysis = await analyzeIntentAuthorizationEntries({
+    entries,
     network: stored.network,
     currentLedger: parameters.ledgerSequence,
     accountLoader: options.accountLoader ?? loadAccount,
@@ -157,12 +277,12 @@ export async function contributeSorobanIntentAuthorization(
     throw new SorobanIntentAuthorizationServiceError('Authorization entry is unavailable.', 409, 'authorization_not_pending');
   }
   try {
-    await mergeSorobanGAccountSignatureEntry({
+    await applyContributionToEntry({
       entry: xdr.SorobanAuthorizationEntry.fromXdr(currentEntryXdr, 'base64'),
       network: before.network,
-      signerPublicKey: input.signerAddress,
+      entryIndex: input.entryIndex,
+      signerAddress: input.signerAddress,
       signatureBase64: input.signatureBase64,
-      expirationLedger: target.expirationLedger,
     });
   } catch (cause) {
     throw new SorobanIntentAuthorizationServiceError(
