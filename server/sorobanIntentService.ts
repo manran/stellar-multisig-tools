@@ -1,4 +1,5 @@
-import type { CoordinationActorProvenance, SorobanIntentIntegrationContext } from '../src/stellar/integrationTypes.js';
+import type { MachineCallerProvenance } from '../src/stellar/coordinationActorTypes.js';
+import type { SorobanIntentIntegrationContext, IntegrationExecutionPolicy } from '../src/stellar/integrationTypes.js';
 import { normalizePrivateNote } from '../src/stellar/privateNote.js';
 import type { PrivateNoteRevision } from '../src/stellar/privateNote.js';
 import type { SorobanAuthorizationPlan } from '../src/stellar/sorobanAuthorizationPlan.js';
@@ -35,9 +36,10 @@ export async function createStoredSorobanIntent(
     intent: SorobanIntent;
     authorizationPlan: SorobanAuthorizationPlan;
     creatorAddress?: string;
-    creatorActor?: CoordinationActorProvenance;
+    creatorActor?: MachineCallerProvenance;
     discoverySignerKeys?: string[];
     integration?: SorobanIntentIntegrationContext;
+    executionPolicy?: IntegrationExecutionPolicy;
     privateNote?: unknown;
     externalReference?: unknown;
   },
@@ -82,6 +84,7 @@ export async function createStoredSorobanIntent(
     ...(input.creatorActor ? { creatorActor: input.creatorActor } : {}),
     discoverySignerKeys: [...new Set([...(input.creatorAddress ? [input.creatorAddress] : []), ...(input.discoverySignerKeys ?? [])])].sort(),
     ...(input.integration ? { integration: input.integration } : {}),
+    ...(input.executionPolicy ? { executionPolicy: input.executionPolicy } : {}),
     ...(privateContext ? { privateContext } : {}),
   };
   await store.createIntent(record);

@@ -4,7 +4,7 @@ import type { SigningRequestSnapshot } from '../src/stellar/requestTypes.js';
 import type { StellarNetwork } from '../src/stellar/types.js';
 import { inspectTransactionXdr } from '../src/stellar/transactionXdr.js';
 import type { ConfiguredIntegrationCredential } from './integrationCredentialService.js';
-import { integrationActorForCredential } from './integrationCredentialService.js';
+import { integrationCallerForCredential } from './integrationCredentialService.js';
 import {
   BoxServiceError,
   normalizeExternalReference,
@@ -72,17 +72,17 @@ function integrationClassicExecutionMode(
       'integration_soroban_request_unsupported',
     );
   }
-  const allowedAccounts = new Set(credential.classicAccounts);
+  const allowedAccounts = new Set(credential.classicSourceAccounts);
   const requiredAccounts = [...new Set<string>(inspection.sourceRequirements.map((item) => String(item.accountId)))];
   const deniedAccounts = requiredAccounts.filter((accountId) => !allowedAccounts.has(accountId));
   if (deniedAccounts.length > 0) {
     throw new BoxServiceError(
       `This Integration credential is not allowed to coordinate Classic authorization for ${deniedAccounts.join(', ')}.`,
       403,
-      'integration_classic_account_not_allowed',
+      'integration_classic_source_account_not_allowed',
     );
   }
-  const externalAccounts = new Set(credential.classicExternalExecutionAccounts);
+  const externalAccounts = new Set(credential.classicExternalExecutionSourceAccounts);
   const externalCount = requiredAccounts.filter((accountId) => externalAccounts.has(accountId)).length;
   if (externalCount > 0 && externalCount !== requiredAccounts.length) {
     throw new BoxServiceError(
@@ -119,7 +119,7 @@ function assertReservedRequestMatchesInput(
     request.network !== input.network
     || request.baseXdr !== input.xdr.trim()
     || request.integration?.serviceId !== credential.serviceId
-    || request.integration.executionMode !== input.executionMode
+    || request.executionPolicy?.mode !== input.executionMode
     || request.integration.correlationId !== input.externalReference
     || !sameCommitment(request.privateCommitment, input.privateCommitment)
   ) {
@@ -169,7 +169,7 @@ export async function createIntegrationSigningRequest(
   }
 
   let requestWriteAttempted = false;
-  const actor = integrationActorForCredential(credential);
+  const actor = integrationCallerForCredential(credential);
   const contextualStore: SigningRequestStore = {
     ...requestStore,
     createRequest: async (stored) => {
@@ -181,9 +181,9 @@ export async function createIntegrationSigningRequest(
           version: 1,
           serviceId: credential.serviceId,
           serviceLabel: credential.label,
-          executionMode,
           ...(externalReference ? { correlationId: externalReference } : {}),
         },
+        executionPolicy: { mode: executionMode },
         ...(input.privateCommitment
           ? { privateCommitment: { ...input.privateCommitment, createdAt: stored.createdAt } }
           : {}),

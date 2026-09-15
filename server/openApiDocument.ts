@@ -163,7 +163,7 @@ const timestamp = { type: 'string', format: 'date-time' };
 const components: OpenApiObject = {
   securitySchemes: {
     agentBearer: { type: 'http', scheme: 'bearer', description: 'Signer Agent credential (msa_...). Human SEP-10 bearer sessions are also accepted where documented.' },
-    integrationBearer: { type: 'http', scheme: 'bearer', description: 'Non-signer external service credential (msi_...). Deployment scope restricts networks, Classic authorization accounts, Soroban contracts/methods, and Soroban execution accounts.' },
+    integrationBearer: { type: 'http', scheme: 'bearer', description: 'Non-signer external service credential (msi_...). Deployment scope restricts networks, Classic source accounts, Soroban contracts/methods, and Soroban execution source accounts.' },
     humanSession: { type: 'apiKey', in: 'cookie', name: 'mst_auth', description: 'Human SEP-10 session cookie.' },
     requestCapability: { type: 'apiKey', in: 'header', name: 'x-multisig-capability', description: 'Private share capability paired with x-multisig-request-id.' },
   },
@@ -334,6 +334,7 @@ const components: OpenApiObject = {
         discoverySignerKeys: { type: 'array', items: accountId },
         creatorActor: { type: 'object', additionalProperties: true },
         integration: schema('ServiceIntegrationContext'),
+        executionPolicy: schema('IntegrationExecutionPolicy'),
         privateContext: { type: 'object', additionalProperties: true },
       },
       additionalProperties: false,
@@ -573,13 +574,20 @@ const components: OpenApiObject = {
     },
     ServiceIntegrationContext: {
       type: 'object',
-      required: ['version', 'serviceId', 'executionMode'],
+      required: ['version', 'serviceId'],
       properties: {
         version: operationVersion,
         serviceId: { type: 'string' },
         serviceLabel: { type: 'string' },
-        executionMode: { type: 'string', enum: ['multisigtools', 'external'] },
         correlationId: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+    IntegrationExecutionPolicy: {
+      type: 'object',
+      required: ['mode'],
+      properties: {
+        mode: { type: 'string', enum: ['multisigtools', 'external'] },
       },
       additionalProperties: false,
     },

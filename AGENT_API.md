@@ -14,6 +14,8 @@ Credential != Stellar private key != Stellar signature
 
 Two Agent credentials may represent the same Principal while remaining independently named, scoped, audited and revocable.
 
+External `msi_...` Service integrations are intentionally **not** Signer Agents. A Service workload is not bound to one signer Principal; it receives explicit Classic source-account / Soroban contract scope and must still collect the real chain authorization. See `PLATFORM_EXTENSION_POINTS.md` and `OPERATION_ARCHITECTURE.md`.
+
 ## Agent access levels
 
 A Human connects the signer wallet, opens **Agent access**, unlocks private MultiSigTools data, names the Agent, and chooses one cumulative level:

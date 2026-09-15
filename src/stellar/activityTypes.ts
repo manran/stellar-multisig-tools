@@ -1,4 +1,4 @@
-import type { RequestActorProvenance } from './integrationTypes.js';
+import type { MachineCallerProvenance } from './coordinationActorTypes.js';
 import type { StellarNetwork } from './types.js';
 
 export type ActivityFactType =
@@ -27,7 +27,7 @@ interface ActivityEventBase {
   /** Cryptographic Stellar signer identity when one is known. */
   actorAddress?: string;
   /** Actual delegated Agent or Integration service that performed the API action, when applicable. */
-  actor?: RequestActorProvenance;
+  actor?: MachineCallerProvenance;
   detail?: string;
   ledger?: number;
 }

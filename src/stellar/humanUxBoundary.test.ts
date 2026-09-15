@@ -142,7 +142,7 @@ test('external-service work keeps final execution out of signer UI', () => {
   assert.match(request, /MultiSigTools will not broadcast this transaction/);
   assert.match(requestApi, /external_executor_required/);
   assert.match(requestApi, /integration_submit_denied/);
-  assert.match(intent, /intent\.integration\?\.executionMode === 'external'/);
+  assert.match(intent, /intent\.executionPolicy\?\.mode === 'external'/);
   assert.match(intent, /is the external executor for this Intent/);
   assert.match(intentApi, /external_executor_required/);
   assert.match(intentApi, /assertIntegrationSorobanExecutionAccount/);

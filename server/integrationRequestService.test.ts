@@ -55,8 +55,8 @@ function integrationFor(accountId: string, external = false): ConfiguredIntegrat
   return {
     serviceId: 'fednetwork', label: 'FedNetwork', secretHash: 'ab'.repeat(32),
     networks: ['testnet'],
-    classicAccounts: [accountId],
-    classicExternalExecutionAccounts: external ? [accountId] : [],
+    classicSourceAccounts: [accountId],
+    classicExternalExecutionSourceAccounts: external ? [accountId] : [],
     sorobanContracts: [],
     sorobanExecutionAccounts: [],
   };
@@ -79,8 +79,10 @@ test('Integration creates an unsigned external-execution Request without pretend
   const stored = store.requests.get(result.request.id);
   assert.equal(stored?.creatorAddress, undefined);
   assert.deepEqual(stored?.creatorActor, { type: 'service', id: 'fednetwork', label: 'FedNetwork' });
-  assert.equal(stored?.integration?.executionMode, 'external');
-  assert.equal(stored?.integration?.correlationId, 'transfer-42');
+  assert.equal(stored?.executionPolicy?.mode, 'external');
+  assert.deepEqual(stored?.integration, {
+    version: 1, serviceId: 'fednetwork', serviceLabel: 'FedNetwork', correlationId: 'transfer-42',
+  });
   assert.ok(stored?.discoverySignerKeys?.includes(snapshot.accountId));
 });
 
@@ -94,7 +96,9 @@ test('Integration Classic treasury defaults to the ordinary MultiSigTools execut
   }, { accountLoader: async () => snapshot });
 
   assert.equal(result.request.execution, undefined);
-  assert.equal(store.requests.get(result.request.id)?.integration?.executionMode, 'multisigtools');
+  const stored = store.requests.get(result.request.id);
+  assert.equal(stored?.executionPolicy?.mode, 'multisigtools');
+  assert.deepEqual(stored?.integration, { version: 1, serviceId: 'fednetwork', serviceLabel: 'FedNetwork' });
 });
 
 test('Integration idempotency replays the exact Request and rejects a changed payload', async () => {
@@ -134,6 +138,51 @@ test('Integration cannot smuggle existing Stellar signatures into Request creati
   );
 });
 
+test('Integration Classic source scope includes operation-level source accounts', async () => {
+  const store = new MemoryRequestStore();
+  const primary = Keypair.random();
+  const operationSource = Keypair.random();
+  const transaction = new TransactionBuilder(new Account(primary.publicKey(), '1'), {
+    fee: '100', networkPassphrase: Networks.TESTNET,
+  })
+    .addOperation(Operation.payment({
+      source: operationSource.publicKey(),
+      destination: Keypair.random().publicKey(),
+      asset: Asset.native(),
+      amount: '1',
+    }))
+    .setTimeout(TimeoutInfinite)
+    .build();
+  await assert.rejects(
+    () => createIntegrationSigningRequest(store, integrationFor(primary.publicKey()), {
+      network: 'testnet', xdr: transaction.toXdr(), idempotencyKey: 'operation-source-out-of-scope',
+    }),
+    (cause: unknown) => cause instanceof Error
+      && 'code' in cause
+      && cause.code === 'integration_classic_source_account_not_allowed',
+  );
+});
+
+test('Integration Classic source scope includes fee-bump source accounts', async () => {
+  const store = new MemoryRequestStore();
+  const { transaction, snapshot } = setup();
+  const feeSource = Keypair.random();
+  const feeBump = TransactionBuilder.buildFeeBumpTransaction(
+    feeSource,
+    '200',
+    transaction,
+    Networks.TESTNET,
+  );
+  await assert.rejects(
+    () => createIntegrationSigningRequest(store, integrationFor(snapshot.accountId), {
+      network: 'testnet', xdr: feeBump.toXdr(), idempotencyKey: 'fee-source-out-of-scope',
+    }),
+    (cause: unknown) => cause instanceof Error
+      && 'code' in cause
+      && cause.code === 'integration_classic_source_account_not_allowed',
+  );
+});
+
 test('Integration Classic Request rejects mixed internal and external execution policy', async () => {
   const store = new MemoryRequestStore();
   const primary = Keypair.random();
@@ -151,8 +200,8 @@ test('Integration Classic Request rejects mixed internal and external execution 
     .build();
   const credential: ConfiguredIntegrationCredential = {
     ...integrationFor(primary.publicKey(), true),
-    classicAccounts: [primary.publicKey(), secondary.publicKey()],
-    classicExternalExecutionAccounts: [primary.publicKey()],
+    classicSourceAccounts: [primary.publicKey(), secondary.publicKey()],
+    classicExternalExecutionSourceAccounts: [primary.publicKey()],
   };
   await assert.rejects(
     () => createIntegrationSigningRequest(store, credential, {
@@ -174,6 +223,6 @@ test('Integration Classic Request rejects unbound source accounts', async () => 
     }, { accountLoader: async () => snapshot }),
     (cause: unknown) => cause instanceof Error
       && 'code' in cause
-      && cause.code === 'integration_classic_account_not_allowed',
+      && cause.code === 'integration_classic_source_account_not_allowed',
   );
 });

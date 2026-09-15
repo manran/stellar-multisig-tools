@@ -2,22 +2,18 @@ import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js'
 import { blobAuthStore } from '../server/blobAuthStore.js';
 import { blobSigningRequestStore, RequestStorageUnavailableError } from '../server/blobRequestStore.js';
 import { authConfigForRequest } from '../server/authConfig.js';
-import { AuthServiceError, privateWorkspaceSessionFromRequest } from '../server/authService.js';
 import {
   AgentCredentialServiceError,
   agentActorForCredential,
-  authenticateAgentCredential,
-  looksLikeAgentCredential,
   requireAgentAccess,
 } from '../server/agentCredentialService.js';
 import type { StoredSignerAgentCredential } from '../server/agentCredentialStore.js';
 import { createAgentSigningRequest } from '../server/agentRequestService.js';
 import {
-  authenticateIntegrationCredential,
   IntegrationCredentialServiceError,
-  looksLikeIntegrationCredential,
 } from '../server/integrationCredentialService.js';
 import type { ConfiguredIntegrationCredential } from '../server/integrationCredentialService.js';
+import { CallerAuthenticationError, machineCallerFromRequest, verifiedSignerSessionFromRequest } from '../server/callerAuthentication.js';
 import { createIntegrationSigningRequest } from '../server/integrationRequestService.js';
 import { BoxServiceError } from '../server/boxService.js';
 import {
@@ -57,7 +53,6 @@ import type { PrivateNoteRevision } from '../src/stellar/privateNote.js';
 import type { SigningRequestApiError, SigningRequestStatus } from '../src/stellar/requestTypes.js';
 import type { StellarNetwork } from '../src/stellar/types.js';
 import { loadTransactionSourceAnalyses } from '../src/stellar/transactionReviewAnalysis.js';
-import { privateSessionAddressFromRequest } from '../src/stellar/privateSessionTransport.js';
 import { inspectTransactionXdr } from '../src/stellar/transactionXdr.js';
 import {
   enforcePreparedSorobanTransaction,
@@ -123,7 +118,7 @@ function errorResponse(cause: unknown): Response {
   if (cause instanceof RequestBodyError) {
     return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
   }
-  if (cause instanceof AgentCredentialServiceError || cause instanceof IntegrationCredentialServiceError || cause instanceof BoxServiceError) {
+  if (cause instanceof CallerAuthenticationError || cause instanceof AgentCredentialServiceError || cause instanceof IntegrationCredentialServiceError || cause instanceof BoxServiceError) {
     return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
   }
   if (cause instanceof SigningRequestServiceError) {
@@ -141,36 +136,6 @@ function errorResponse(cause: unknown): Response {
   }
   console.error('Signing request API error', cause);
   return noStoreJson({ error: 'Signing request service is temporarily unavailable.', code: 'internal_error' } satisfies SigningRequestApiError, 500);
-}
-
-function bearerCredentialFromRequest(request: Request): string | null {
-  const authorization = request.headers.get('authorization') ?? '';
-  if (!authorization) return null;
-  const match = /^Bearer\s+(.+)$/i.exec(authorization);
-  if (!match) throw new SigningRequestServiceError('Invalid authorization header.', 401, 'invalid_credential');
-  return match[1].trim();
-}
-
-async function agentCredentialFromRequest(request: Request): Promise<StoredSignerAgentCredential | null> {
-  const value = bearerCredentialFromRequest(request);
-  if (!value || looksLikeIntegrationCredential(value)) return null;
-  if (!looksLikeAgentCredential(value)) {
-    throw new SigningRequestServiceError('Invalid Agent credential.', 401, 'invalid_agent_credential');
-  }
-  try {
-    return await authenticateAgentCredential(blobAgentCredentialStore, value);
-  } catch (cause) {
-    if (cause instanceof AgentCredentialServiceError) {
-      throw new SigningRequestServiceError(cause.message, cause.status, cause.code);
-    }
-    throw cause;
-  }
-}
-
-function integrationCredentialFromRequest(request: Request): ConfiguredIntegrationCredential | null {
-  const value = bearerCredentialFromRequest(request);
-  if (!value || !looksLikeIntegrationCredential(value)) return null;
-  return authenticateIntegrationCredential(value);
 }
 
 function requestCreationQuota(
@@ -217,18 +182,6 @@ function requestLocator(request: Request): { id: string; capability: string } {
     throw new SigningRequestServiceError('A valid signing request id is required.', 400, 'invalid_request_id');
   }
   return { id, capability };
-}
-
-async function verifiedSession(request: Request, network: StellarNetwork) {
-  const selectedAddress = privateSessionAddressFromRequest(request);
-  if (!selectedAddress) return null;
-  try {
-    const session = await privateWorkspaceSessionFromRequest(blobAuthStore, request, authConfigForRequest(request));
-    return session && session.network === network && session.address === selectedAddress ? session : null;
-  } catch (cause) {
-    if (cause instanceof AuthServiceError) return null;
-    throw cause;
-  }
 }
 
 async function bindRequestParticipant(id: string, address: string): Promise<void> {
@@ -282,9 +235,10 @@ async function authorizeRequest(
 
   const capabilityMatched = Boolean(capability && requestCapabilityMatches(stored, capability));
   const config = authConfigForRequest(request);
-  const integrationCredential = integrationCredentialFromRequest(request);
-  const agentCredential = integrationCredential ? null : await agentCredentialFromRequest(request);
-  const session = await verifiedSession(request, stored.network);
+  const machineCaller = await machineCallerFromRequest(blobAgentCredentialStore, request);
+  const integrationCredential = machineCaller?.kind === 'service' ? machineCaller.credential : null;
+  const agentCredential = machineCaller?.kind === 'agent' ? machineCaller.credential : null;
+  const session = machineCaller ? null : await verifiedSignerSessionFromRequest(blobAuthStore, request, stored.network);
   const contributionGrant = await contributionGrantFromRequest(blobAuthStore, request, config);
   if (integrationCredential) {
     if (stored.integration?.serviceId !== integrationCredential.serviceId) {
@@ -708,8 +662,9 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const body = await readJsonBody(request);
     const xdr = typeof body.xdr === 'string' ? body.xdr : '';
-    const integrationCredential = integrationCredentialFromRequest(request);
-    const agentCredential = integrationCredential ? null : await agentCredentialFromRequest(request);
+    const machineCaller = await machineCallerFromRequest(blobAgentCredentialStore, request);
+    const integrationCredential = machineCaller?.kind === 'service' ? machineCaller.credential : null;
+    const agentCredential = machineCaller?.kind === 'agent' ? machineCaller.credential : null;
     if (integrationCredential) {
       if (body.network !== 'public' && body.network !== 'testnet') {
         throw new SigningRequestServiceError('Network must be public or testnet.', 400, 'invalid_network');
@@ -825,7 +780,7 @@ export async function POST(request: Request): Promise<Response> {
       throw new SigningRequestServiceError('Network must be public or testnet.', 400, 'invalid_network');
     }
     assertDeploymentNetwork(requestNetwork);
-    const creatorSession = await verifiedSession(request, requestNetwork);
+    const creatorSession = await verifiedSignerSessionFromRequest(blobAuthStore, request, requestNetwork);
     if (!creatorSession) {
       throw new SigningRequestServiceError(
         'Unlock a signer wallet before starting a durable proposal.',
@@ -1043,7 +998,7 @@ export async function PATCH(request: Request): Promise<Response> {
 export async function PUT(request: Request): Promise<Response> {
   try {
     const access = await authorizeRequest(request);
-    if (access.stored.integration?.executionMode === 'external') {
+    if (access.stored.executionPolicy?.mode === 'external') {
       throw new SigningRequestServiceError(
         'This Request is externally executed. MultiSigTools coordinates signer authorization but does not broadcast the final transaction.',
         409,

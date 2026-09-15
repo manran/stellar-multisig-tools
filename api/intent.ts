@@ -4,24 +4,18 @@ import { blobSorobanIntentStore } from '../server/blobSorobanIntentStore.js';
 import {
   AgentCredentialServiceError,
   agentActorForCredential,
-  authenticateAgentCredential,
-  looksLikeAgentCredential,
   requireAgentAccess,
 } from '../server/agentCredentialService.js';
 import { createAgentSorobanIntent } from '../server/agentSorobanIntentService.js';
 import {
-  authenticateIntegrationCredential,
   IntegrationCredentialServiceError,
-  looksLikeIntegrationCredential,
 } from '../server/integrationCredentialService.js';
-import type { ConfiguredIntegrationCredential } from '../server/integrationCredentialService.js';
 import {
   assertIntegrationSorobanExecutionAccount,
   createIntegrationSorobanIntent,
 } from '../server/integrationSorobanIntentService.js';
-import { authConfigForRequest } from '../server/authConfig.js';
-import { AuthServiceError, privateWorkspaceSessionFromRequest } from '../server/authService.js';
 import { BoxServiceError } from '../server/boxService.js';
+import { CallerAuthenticationError, machineCallerFromRequest, verifiedSignerSessionFromRequest } from '../server/callerAuthentication.js';
 import { ContractIntentServiceError } from '../server/contractIntentService.js';
 import {
   assertDeploymentNetwork,
@@ -46,7 +40,6 @@ import {
   SorobanIntentAuthorizationServiceError,
 } from '../server/sorobanIntentAuthorizationService.js';
 import { isValidSigningRequestId } from '../server/requestLocator.js';
-import { privateSessionAddressFromRequest } from '../src/stellar/privateSessionTransport.js';
 import {
   beforeFirstDurableWrite,
   enforceSemanticRateLimit,
@@ -78,6 +71,7 @@ function errorResponse(cause: unknown): Response {
   if (
     cause instanceof DeploymentNetworkPolicyError
     || cause instanceof RequestBodyError
+    || cause instanceof CallerAuthenticationError
     || cause instanceof AgentCredentialServiceError
     || cause instanceof IntegrationCredentialServiceError
     || cause instanceof BoxServiceError
@@ -102,47 +96,6 @@ function errorResponse(cause: unknown): Response {
   return json({ error: 'Soroban Intent service is temporarily unavailable.', code: 'internal_error' }, 500);
 }
 
-function bearerCredentialFromRequest(request: Request): string | null {
-  const authorization = request.headers.get('authorization')?.trim() ?? '';
-  if (!authorization) return null;
-  const match = /^Bearer\s+(.+)$/i.exec(authorization);
-  if (!match) {
-    throw new SorobanIntentAuthorizationServiceError('Invalid authorization header.', 401, 'invalid_credential');
-  }
-  return match[1].trim();
-}
-
-async function agentCredentialFor(request: Request) {
-  const value = bearerCredentialFromRequest(request);
-  if (!value || looksLikeIntegrationCredential(value)) return null;
-  if (!looksLikeAgentCredential(value)) {
-    throw new AgentCredentialServiceError('Invalid Agent credential.', 401, 'invalid_agent_credential');
-  }
-  return authenticateAgentCredential(blobAgentCredentialStore, value);
-}
-
-function integrationCredentialFor(request: Request): ConfiguredIntegrationCredential | null {
-  const value = bearerCredentialFromRequest(request);
-  if (!value || !looksLikeIntegrationCredential(value)) return null;
-  return authenticateIntegrationCredential(value);
-}
-
-async function humanSessionFor(request: Request, network: 'public' | 'testnet') {
-  const selectedAddress = privateSessionAddressFromRequest(request);
-  if (!selectedAddress) return null;
-  try {
-    const session = await privateWorkspaceSessionFromRequest(
-      blobAuthStore,
-      request,
-      authConfigForRequest(request),
-    );
-    return session && session.network === network && session.address === selectedAddress ? session : null;
-  } catch (cause) {
-    if (cause instanceof AuthServiceError) return null;
-    throw cause;
-  }
-}
-
 function intentIdFromRequest(request: Request): string {
   const id = request.headers.get(INTENT_ID_HEADER)?.trim().toUpperCase() ?? '';
   if (!isValidSigningRequestId(id)) {
@@ -156,9 +109,10 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
   const stored = await blobSorobanIntentStore.getIntent(id);
   if (!stored) throw new SorobanIntentAuthorizationServiceError('Soroban Intent not found.', 404, 'intent_not_found');
   assertDeploymentNetwork(stored.network);
-  const integrationCredential = integrationCredentialFor(request);
-  const agent = integrationCredential ? null : await agentCredentialFor(request);
-  const session = integrationCredential || agent ? null : await humanSessionFor(request, stored.network);
+  const machineCaller = await machineCallerFromRequest(blobAgentCredentialStore, request);
+  const integrationCredential = machineCaller?.kind === 'service' ? machineCaller.credential : null;
+  const agent = machineCaller?.kind === 'agent' ? machineCaller.credential : null;
+  const session = machineCaller ? null : await verifiedSignerSessionFromRequest(blobAuthStore, request, stored.network);
   const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, id);
 
   if (integrationCredential) {
@@ -229,8 +183,9 @@ export async function POST(request: Request): Promise<Response> {
       throw new ContractIntentServiceError('Network must be public or testnet.', 400, 'invalid_network');
     }
     assertDeploymentNetwork(network);
-    const integrationCredential = integrationCredentialFor(request);
-    const agent = integrationCredential ? null : await agentCredentialFor(request);
+    const machineCaller = await machineCallerFromRequest(blobAgentCredentialStore, request);
+    const integrationCredential = machineCaller?.kind === 'service' ? machineCaller.credential : null;
+    const agent = machineCaller?.kind === 'agent' ? machineCaller.credential : null;
     if (body.preparedXdr !== undefined) {
       if (integrationCredential) {
         throw new BoxServiceError(
@@ -246,7 +201,7 @@ export async function POST(request: Request): Promise<Response> {
           'prepared_xdr_import_human_only',
         );
       }
-      const session = await humanSessionFor(request, network);
+      const session = await verifiedSignerSessionFromRequest(blobAuthStore, request, network);
       if (!session) {
         throw new SorobanIntentAuthorizationServiceError(
           'Confirm the selected Stellar wallet before importing this Soroban Intent.',
@@ -366,7 +321,7 @@ export async function POST(request: Request): Promise<Response> {
       }, result.replayed ? 200 : 201);
     }
 
-    const session = await humanSessionFor(request, network);
+    const session = await verifiedSignerSessionFromRequest(blobAuthStore, request, network);
     if (!session) {
       throw new SorobanIntentAuthorizationServiceError(
         'Confirm the selected Stellar wallet before creating this Soroban Intent.',
@@ -443,7 +398,7 @@ export async function PUT(request: Request): Promise<Response> {
   try {
     const access = await storedIntentAccess(request, 'write');
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
-    const externalIntegration = access.stored.integration?.executionMode === 'external';
+    const externalIntegration = access.stored.executionPolicy?.mode === 'external';
     if (externalIntegration && !access.integrationCredential) {
       throw new SorobanIntentExecutionServiceError(
         'This Soroban Intent is owned by an external Integration executor. Signers authorize it in MultiSigTools but cannot prepare or execute it here.',

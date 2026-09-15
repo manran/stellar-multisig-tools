@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { StrKey } from '@stellar/stellar-sdk/base';
-import type { ServiceActorProvenance } from '../src/stellar/integrationTypes.js';
+import type { ServiceCallerProvenance } from '../src/stellar/coordinationActorTypes.js';
 import type { StellarNetwork } from '../src/stellar/types.js';
 
 const INTEGRATION_KEY_PREFIX = 'msi';
@@ -20,8 +20,8 @@ export interface ConfiguredIntegrationCredential {
   label: string;
   secretHash: string;
   networks: StellarNetwork[];
-  classicAccounts: string[];
-  classicExternalExecutionAccounts: string[];
+  classicSourceAccounts: string[];
+  classicExternalExecutionSourceAccounts: string[];
   sorobanContracts: ConfiguredIntegrationContractScope[];
   sorobanExecutionAccounts: string[];
 }
@@ -75,19 +75,19 @@ function normalizeConfiguredCredential(value: unknown): ConfiguredIntegrationCre
   const label = typeof record.label === 'string' ? record.label.trim().replace(/\s+/g, ' ') : '';
   const secretHash = typeof record.secretHash === 'string' ? record.secretHash.trim().toLowerCase() : '';
   const networks = stringArray(record.networks, (network) => network === 'public' || network === 'testnet') as StellarNetwork[];
-  const classicAccounts = stringArray(record.classicAccounts, StrKey.isValidEd25519PublicKey);
-  const classicExternalExecutionAccounts = stringArray(record.classicExternalExecutionAccounts, StrKey.isValidEd25519PublicKey);
+  const classicSourceAccounts = stringArray(record.classicSourceAccounts, StrKey.isValidEd25519PublicKey);
+  const classicExternalExecutionSourceAccounts = stringArray(record.classicExternalExecutionSourceAccounts, StrKey.isValidEd25519PublicKey);
   const sorobanContracts = normalizeContracts(record.sorobanContracts);
   const sorobanExecutionAccounts = stringArray(record.sorobanExecutionAccounts, StrKey.isValidEd25519PublicKey);
   if (!SERVICE_ID_PATTERN.test(serviceId) || !label || [...label].length > MAX_LABEL_CHARS || !SHA256_PATTERN.test(secretHash)) configError();
-  if (networks.length === 0 || (classicAccounts.length === 0 && sorobanContracts.length === 0)) {
+  if (networks.length === 0 || (classicSourceAccounts.length === 0 && sorobanContracts.length === 0)) {
     configError('Integration credential must allow at least one network and one Classic account or Soroban contract.');
   }
-  if (classicExternalExecutionAccounts.some((accountId) => !classicAccounts.includes(accountId))) {
-    configError('Classic external execution accounts must also be present in classicAccounts.');
+  if (classicExternalExecutionSourceAccounts.some((accountId) => !classicSourceAccounts.includes(accountId))) {
+    configError('Classic external execution accounts must also be present in classicSourceAccounts.');
   }
   if (sorobanExecutionAccounts.length > 0 && sorobanContracts.length === 0) configError();
-  return { serviceId, label, secretHash, networks, classicAccounts, classicExternalExecutionAccounts, sorobanContracts, sorobanExecutionAccounts };
+  return { serviceId, label, secretHash, networks, classicSourceAccounts, classicExternalExecutionSourceAccounts, sorobanContracts, sorobanExecutionAccounts };
 }
 
 export function configuredIntegrationCredentials(
@@ -150,8 +150,8 @@ export function authenticateIntegrationCredential(
   return credential;
 }
 
-export function integrationActorForCredential(
+export function integrationCallerForCredential(
   credential: ConfiguredIntegrationCredential,
-): ServiceActorProvenance {
+): ServiceCallerProvenance {
   return { type: 'service', id: credential.serviceId, label: credential.label };
 }

@@ -1,20 +1,16 @@
-import type { AgentActorProvenance } from './agentAccessTypes.js';
+import type { ServiceCallerProvenance } from './coordinationActorTypes.js';
 
-export interface ServiceActorProvenance {
-  type: 'service';
-  id: string;
-  label?: string;
-}
-
-export type CoordinationActorProvenance = AgentActorProvenance | ServiceActorProvenance;
-export type RequestActorProvenance = CoordinationActorProvenance;
-
+/** Identifies the owning external integration. This is workload identity, not Stellar authority. */
 export interface ServiceIntegrationContext {
   version: 1;
   serviceId: string;
   serviceLabel?: string;
-  executionMode: 'multisigtools' | 'external';
   correlationId?: string;
+}
+
+/** Execution ownership is independent from Integration identity. */
+export interface IntegrationExecutionPolicy {
+  mode: 'multisigtools' | 'external';
 }
 
 export type RequestIntegrationContext = ServiceIntegrationContext;
@@ -22,7 +18,7 @@ export type SorobanIntentIntegrationContext = ServiceIntegrationContext;
 
 export interface ExternalServiceExecution {
   mode: 'external';
-  executor: ServiceActorProvenance;
+  executor: ServiceCallerProvenance;
 }
 
 export type ExternalRequestExecution = ExternalServiceExecution;

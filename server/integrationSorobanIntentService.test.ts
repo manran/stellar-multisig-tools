@@ -114,8 +114,8 @@ async function fixture() {
     label: 'FedNetwork',
     secretHash: 'ab'.repeat(32),
     networks: ['testnet'],
-    classicAccounts: [],
-    classicExternalExecutionAccounts: [],
+    classicSourceAccounts: [],
+    classicExternalExecutionSourceAccounts: [],
     sorobanContracts: [{ contractId: CONTRACT_ID, methods: ['transfer'] }],
     sorobanExecutionAccounts: [executor.publicKey()],
   };
@@ -160,7 +160,10 @@ test('Integration creates one external Soroban Intent and simulation discovers t
   assert.equal(result.replayed, false);
   assert.equal(result.intent.creatorAddress, undefined);
   assert.deepEqual(result.intent.creatorActor, { type: 'service', id: 'fednetwork', label: 'FedNetwork' });
-  assert.equal(result.intent.integration?.executionMode, 'external');
+  assert.equal(result.intent.executionPolicy?.mode, 'external');
+  assert.deepEqual(result.intent.integration, {
+    version: 1, serviceId: 'fednetwork', serviceLabel: 'FedNetwork', correlationId: 'fed-transfer-42',
+  });
   assert.deepEqual(result.intent.discoverySignerKeys.sort(), [f.from.publicKey(), f.to.publicKey()].sort());
   assert.doesNotThrow(() => assertIntegrationSorobanExecutionAccount(f.credential, 'testnet', f.executor.publicKey()));
   assert.throws(

@@ -742,7 +742,7 @@ async function buildSnapshot(
     expiresAt: request.expiresAt,
     contributionCount: merged.contributionCount,
     signatureCount: merged.signatureCount,
-    ...(request.integration?.executionMode === 'external'
+    ...(request.executionPolicy?.mode === 'external'
       ? { execution: {
           mode: 'external' as const,
           executor: {

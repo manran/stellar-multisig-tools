@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { StellarNetwork } from '../src/stellar/types.js';
 import { buildContractIntent } from './contractIntentService.js';
 import type { ConfiguredIntegrationCredential } from './integrationCredentialService.js';
-import { integrationActorForCredential } from './integrationCredentialService.js';
+import { integrationCallerForCredential } from './integrationCredentialService.js';
 import { BoxServiceError, normalizeExternalReference, normalizeIdempotencyKey } from './boxService.js';
 import { encodeSigningRequestId } from './requestLocator.js';
 import { planSorobanIntentForStorage } from './sorobanIntentPlanningService.js';
@@ -85,7 +85,7 @@ function assertReplayMatches(
     stored.network !== input.network
     || stored.intent.intentDigest !== input.intentDigest
     || stored.integration?.serviceId !== credential.serviceId
-    || stored.integration.executionMode !== 'external'
+    || stored.executionPolicy?.mode !== 'external'
     || stored.integration.correlationId !== input.externalReference
   ) {
     throw new BoxServiceError(
@@ -150,15 +150,15 @@ export async function createIntegrationSorobanIntent(
     const intent = await createStoredSorobanIntent(guardedStore, {
       intent: built.intent,
       authorizationPlan: planned.authorizationPlan,
-      creatorActor: integrationActorForCredential(credential),
+      creatorActor: integrationCallerForCredential(credential),
       discoverySignerKeys: planned.discoverySignerKeys,
       integration: {
         version: 1,
         serviceId: credential.serviceId,
         serviceLabel: credential.label,
-        executionMode: 'external',
         ...(externalReference ? { correlationId: externalReference } : {}),
       },
+      executionPolicy: { mode: 'external' },
       externalReference,
     }, {
       now: options.now,

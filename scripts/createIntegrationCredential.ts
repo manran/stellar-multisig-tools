@@ -7,8 +7,8 @@ type Parsed = {
   serviceId: string;
   label: string;
   networks: string[];
-  classicAccounts: string[];
-  externalClassicAccounts: string[];
+  classicSourceAccounts: string[];
+  externalClassicSourceAccounts: string[];
   contracts: Array<{ contractId: string; methods: string[] }>;
   executors: string[];
 };
@@ -19,12 +19,12 @@ function usage(): never {
     --service-id fednetwork \\
     --label FedNetwork \\
     --network testnet \\
-    [--classic-account G...] \\
-    [--external-classic-account G...] \\
+    [--classic-source-account G...] \\
+    [--classic-external-source-account G...] \\
     [--contract C...:transfer,other_method] \\
     [--executor G...]
 
-Repeat --network, --classic-account, --external-classic-account, --contract, or --executor as needed.`);
+Repeat --network, --classic-source-account, --classic-external-source-account, --contract, or --executor as needed.`);
   process.exit(2);
 }
 
@@ -36,7 +36,7 @@ function nextValue(args: string[], index: number): string {
 
 function parseArgs(args: string[]): Parsed {
   const parsed: Parsed = {
-    serviceId: '', label: '', networks: [], classicAccounts: [], externalClassicAccounts: [], contracts: [], executors: [],
+    serviceId: '', label: '', networks: [], classicSourceAccounts: [], externalClassicSourceAccounts: [], contracts: [], executors: [],
   };
   for (let index = 0; index < args.length; index += 2) {
     const flag = args[index];
@@ -44,10 +44,10 @@ function parseArgs(args: string[]): Parsed {
     if (flag === '--service-id') parsed.serviceId = value;
     else if (flag === '--label') parsed.label = value;
     else if (flag === '--network') parsed.networks.push(value);
-    else if (flag === '--classic-account') parsed.classicAccounts.push(value);
-    else if (flag === '--external-classic-account') {
-      parsed.classicAccounts.push(value);
-      parsed.externalClassicAccounts.push(value);
+    else if (flag === '--classic-source-account') parsed.classicSourceAccounts.push(value);
+    else if (flag === '--classic-external-source-account') {
+      parsed.classicSourceAccounts.push(value);
+      parsed.externalClassicSourceAccounts.push(value);
     }
     else if (flag === '--executor') parsed.executors.push(value);
     else if (flag === '--contract') {
@@ -70,8 +70,8 @@ const entry = {
   label: input.label,
   secretHash: generated.secretHash,
   networks: input.networks,
-  classicAccounts: input.classicAccounts,
-  classicExternalExecutionAccounts: input.externalClassicAccounts,
+  classicSourceAccounts: input.classicSourceAccounts,
+  classicExternalExecutionSourceAccounts: input.externalClassicSourceAccounts,
   sorobanContracts: input.contracts,
   sorobanExecutionAccounts: input.executors,
 };

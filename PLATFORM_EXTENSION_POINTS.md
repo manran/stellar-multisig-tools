@@ -244,7 +244,7 @@ Ready
     +-> external service receives readiness and executes
 ```
 
-The external service is an **Actor/Integration**, not automatically a Stellar signer and not automatically a Workspace.
+The external service is an independent **workload caller / Integration**. Unlike a Signer Agent, it is not bound to one signer Principal. It is also not a Workspace.
 
 ## 5. Current Integration API contract
 
@@ -269,9 +269,10 @@ network if applicable
 context mode
 required authority domains
 expiry
-execution mode
 external correlation id / idempotency key
 optional Workspace scope
+
+Execution policy belongs to the created work item; it is not part of Service identity.
 ```
 
 Creation returns at least:
@@ -295,8 +296,7 @@ Possible future service identities:
 
 ```text
 OAuth client / service account
-Workspace API credential
-Agent credential
+Workspace-owned service credential
 mutual-TLS / enterprise workload identity
 ```
 
@@ -304,17 +304,19 @@ The first deployment-owned Integration credential uses an `msi_...` namespace an
 
 ```text
 networks[]
-classicAccounts[]
-classicExternalExecutionAccounts[]   # optional subset
+classicSourceAccounts[]
+classicExternalExecutionSourceAccounts[]   # optional subset
 sorobanContracts[{ contractId, methods[] }]
 sorobanExecutionAccounts[]
 ```
 
-For Classic Requests, every account that actually supplies transaction authorization must be in `classicAccounts`; live signer weights and thresholds remain authoritative. Classic scope defaults to the ordinary MultiSigTools execution path; `classicExternalExecutionAccounts` is an optional subset for treasuries whose Service must retain final execution. A single transaction cannot mix the two policies. For Soroban Intents, the exact contract + method must be scoped, but the Service does not configure the user authorizers: recording simulation discovers the actual `require_auth()` requirements. Any external execution source must be in `sorobanExecutionAccounts`.
+For Classic Requests, every account that actually supplies transaction authorization must be in `classicSourceAccounts`; live signer weights and thresholds remain authoritative. Classic scope defaults to the ordinary MultiSigTools execution path; `classicExternalExecutionSourceAccounts` is an optional subset for treasuries whose Service must retain final execution. A single transaction cannot mix the two policies. For Soroban Intents, the exact contract + method must be scoped, but the Service does not configure the user authorizers: recording simulation discovers the actual `require_auth()` requirements. Any external execution source must be in `sorobanExecutionAccounts`.
 
 It must **not** allow the service to fabricate user signatures, satisfy Stellar thresholds, or satisfy Soroban AUTH merely because it created the resource.
 
 Later identity mechanisms may add OAuth, Workspace ownership, mTLS/workload identity, or webhook scopes only after a real consumer requires them.
+
+`Team`, `Workspace`, and `Enterprise` must remain outside the caller/authority taxonomy. They may later own credentials and shared policy, but they do not sign and do not replace the live Classic source-account or Soroban authorizer checks.
 
 ## 7. Webhook/event delivery
 
@@ -380,7 +382,7 @@ execution.mode = external
 executor = FedNetwork
 ```
 
-A separate Classic treasury owned by the same Service defaults to ordinary MultiSigTools submission unless that G account is explicitly included in `classicExternalExecutionAccounts`. MultiSigTools coordinates authorization without conflating Service identity, signer authority, and execution ownership. Human deep-links identify the Request/Intent only; Integration secrets and private identity-transfer plaintext do not enter the URL.
+A separate Classic treasury owned by the same Service defaults to ordinary MultiSigTools submission unless that G account is explicitly included in `classicExternalExecutionSourceAccounts`. MultiSigTools coordinates authorization without conflating Service identity, signer authority, and execution ownership. Human deep-links identify the Request/Intent only; Integration secrets and private identity-transfer plaintext do not enter the URL.
 
 ## 9. Personal API use vs Workspace API use
 

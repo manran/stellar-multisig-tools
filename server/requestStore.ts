@@ -1,6 +1,7 @@
 import type { ActivityEvent, ActivityFactEvent } from '../src/stellar/activityTypes.js';
 import type { AgentActorProvenance } from '../src/stellar/agentAccessTypes.js';
-import type { RequestActorProvenance, RequestIntegrationContext } from '../src/stellar/integrationTypes.js';
+import type { MachineCallerProvenance } from '../src/stellar/coordinationActorTypes.js';
+import type { RequestIntegrationContext, IntegrationExecutionPolicy } from '../src/stellar/integrationTypes.js';
 import type { PrivateCommitmentRecord } from '../src/stellar/privateCommitment.js';
 import type { PrivateNoteRevision } from '../src/stellar/privateNote.js';
 import type { SorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
@@ -16,10 +17,12 @@ export interface StoredSigningRequest {
   expiresAt: string;
   /** Verified signer Principal that created the Request, when one was available. */
   creatorAddress?: string;
-  /** Delegated Agent actor that created the Request, when creation came through Agent access. */
-  creatorActor?: RequestActorProvenance;
+  /** Machine caller provenance when creation came through Agent or Service access. */
+  creatorActor?: MachineCallerProvenance;
   /** External Integration ownership/execution context. Absent for ordinary signer-owned Requests. */
   integration?: RequestIntegrationContext;
+  /** Final execution ownership. Kept separate from caller identity. */
+  executionPolicy?: IntegrationExecutionPolicy;
   /** Candidate signer addresses captured from fresh policy at Request creation. Discovery only, never authorization evidence. */
   discoverySignerKeys?: string[];
   /** SHA-256 of the private bearer token for a shared request link. */

@@ -6,7 +6,7 @@ import {
   configuredIntegrationCredentials,
   createIntegrationApiKey,
   IntegrationCredentialServiceError,
-  integrationActorForCredential,
+  integrationCallerForCredential,
   looksLikeIntegrationCredential,
 } from './integrationCredentialService.js';
 
@@ -20,16 +20,16 @@ const configured = [{
   label: 'FedNetwork',
   secretHash: sha256(apiKey),
   networks: ['testnet' as const],
-  classicAccounts: ['GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF'],
-  classicExternalExecutionAccounts: [],
+  classicSourceAccounts: ['GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF'],
+  classicExternalExecutionSourceAccounts: [],
   sorobanContracts: [{ contractId: 'CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE', methods: ['transfer'] }],
   sorobanExecutionAccounts: ['GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF'],
 }];
 
-test('configured Integration credential authenticates as a non-signer service Actor', () => {
+test('configured Integration credential authenticates as an independent Service workload caller', () => {
   const credential = authenticateIntegrationCredential(apiKey, configured);
   assert.equal(credential.serviceId, 'fednetwork');
-  assert.deepEqual(integrationActorForCredential(credential), {
+  assert.deepEqual(integrationCallerForCredential(credential), {
     type: 'service', id: 'fednetwork', label: 'FedNetwork',
   });
   assert.equal(looksLikeIntegrationCredential(apiKey), true);
@@ -72,12 +72,12 @@ test('Classic external execution scope must be a subset of Classic coordination 
   assert.throws(
     () => configuredIntegrationCredentials(JSON.stringify([{
       ...configured[0],
-      classicAccounts: [],
-      classicExternalExecutionAccounts: configured[0].classicAccounts,
+      classicSourceAccounts: [],
+      classicExternalExecutionSourceAccounts: configured[0].classicSourceAccounts,
     }])),
     (cause: unknown) => cause instanceof IntegrationCredentialServiceError
       && cause.code === 'integration_credential_config_invalid'
-      && /must also be present in classicAccounts/.test(cause.message),
+      && /must also be present in classicSourceAccounts/.test(cause.message),
   );
 });
 

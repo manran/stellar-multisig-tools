@@ -2,7 +2,8 @@ import type { SorobanGAccountAuthorizerStatus } from './sorobanAuthorization.js'
 import type { SorobanAuthorizationPlan } from './sorobanAuthorizationPlan.js';
 import type { SorobanIntent } from './sorobanIntent.js';
 import type { SorobanEffectsDiff, SorobanEffectsSnapshot } from './sorobanEffects.js';
-import type { CoordinationActorProvenance, SorobanIntentIntegrationContext } from './integrationTypes.js';
+import type { MachineCallerProvenance } from './coordinationActorTypes.js';
+import type { SorobanIntentIntegrationContext, IntegrationExecutionPolicy } from './integrationTypes.js';
 import type { PrivateNoteRevision } from './privateNote.js';
 import type { StellarNetwork } from './types.js';
 
@@ -20,8 +21,9 @@ export interface StoredSorobanIntentSnapshot {
   }>;
   createdAt: string;
   creatorAddress?: string;
-  creatorActor?: CoordinationActorProvenance;
+  creatorActor?: MachineCallerProvenance;
   integration?: SorobanIntentIntegrationContext;
+  executionPolicy?: IntegrationExecutionPolicy;
   privateContext?: {
     externalReference?: string;
     initialPrivateNote?: PrivateNoteRevision;
@@ -49,7 +51,7 @@ export interface InboxSorobanIntentSnapshot {
   network: StellarNetwork;
   createdAt: string;
   creatorAddress?: string;
-  creatorActor?: CoordinationActorProvenance;
+  creatorActor?: MachineCallerProvenance;
   status: SorobanIntentAuthorizationSnapshot['status'];
   statusDetail?: string;
   contributionCount: number;

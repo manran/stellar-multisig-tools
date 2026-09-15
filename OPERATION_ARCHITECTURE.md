@@ -25,6 +25,30 @@ Transport adapters may authenticate, decode HTTP, and present results. They must
 
 A consumer is not required to become a thin HTTP client. Web UI may call an operation through HTTP or execute the same operation core in-browser when the trust and runtime boundary permits it; native Swift/Kotlin, Fresnica CLI, bots, and plugins may implement their own presentation and transport. Product neutrality requires contract and conformance parity, not one shared rendering stack or mandatory network hop.
 
+## Authority model: shared lifecycle, different callers
+
+Headless unifies the **work lifecycle**, not every identity into one role.
+
+```text
+Caller / workload identity          Chain authority
+--------------------------          ---------------
+Human signer session  ----------->  Signer Principal (verified G-address)
+Signer Agent credential ----------> Signer Principal (delegated, exactly one)
+Integration Service  -------------> no signer Principal implied
+Request capability   -------------> request-scoped access only
+```
+
+An Integration Service is an independent workload identity. Its credential is restricted by deployment-owned business scope (for example allowed Classic source accounts or exact Soroban contract methods), but that scope never satisfies Stellar signatures or Soroban `require_auth()`.
+
+Classic and Soroban therefore discover authority differently:
+
+- **Classic**: exact XDR determines transaction source, operation source, and fee-bump source authorization domains. A Service-created Request may proceed only when every resulting `sourceRequirement` is within the Service's configured Classic source-account scope. Current signer weights/thresholds are then loaded from Stellar.
+- **Soroban**: semantic Intent + recording simulation determines detached `require_auth()` authorizers. A Service is scoped to contract/method; it does not declare those authorizers.
+
+Execution ownership is a third concern and is stored separately from caller identity. The same Service may create a Classic Request that MultiSigTools submits after Human review, while another scoped work item remains externally executed by the Service.
+
+A future **Team / Workspace / enterprise account is not another Actor or Principal**. It is an optional ownership/policy container that may own Humans, Service credentials, shared metadata, webhooks, or resource policy. Workspace membership must never become Stellar/Soroban authorization evidence.
+
 ## Operation contract
 
 Every promoted operation defines:

@@ -54,7 +54,7 @@ function snapshot(
     viewerAction: projectSorobanIntentViewerAction(
       authorization,
       address,
-      stored.integration?.executionMode === 'external',
+      stored.executionPolicy?.mode === 'external',
     ),
   };
 }
