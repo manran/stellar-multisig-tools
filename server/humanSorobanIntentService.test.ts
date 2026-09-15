@@ -11,6 +11,7 @@ import {
 import { Spec } from '@stellar/stellar-sdk/contract';
 import { describeContractSpec } from '../src/stellar/contractSpec.js';
 import { materializeSorobanIntent } from '../src/stellar/sorobanIntent.js';
+import { emptySorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
 import { buildContractIntent } from './contractIntentService.js';
 import { createHumanSorobanIntent } from './humanSorobanIntentService.js';
 import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';
@@ -94,7 +95,7 @@ async function options(sourceBound = false) {
           } as never)
         : ({ accountId: planningSource.publicKey(), sequence: '7' } as never),
       networkParametersLoader: async () => ({ baseFeeInStroops: 100 } as never),
-      simulator: async () => ({ assembledXdr: assembled.toXDR(), latestLedger: 100 } as never),
+      simulator: async () => ({ assembledXdr: assembled.toXDR(), latestLedger: 100, effects: emptySorobanEffectsSnapshot() } as never),
     },
   };
 }

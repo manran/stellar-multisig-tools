@@ -12,6 +12,7 @@ import {
   xdr,
 } from '@stellar/stellar-sdk/base';
 import { createSorobanAuthorizationPlan } from '../src/stellar/sorobanAuthorizationPlan.js';
+import { emptySorobanEffectsSnapshot, sorobanEffectsSnapshot, type SorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
 import { createSorobanIntent, materializeSorobanIntent } from '../src/stellar/sorobanIntent.js';
 import {
   prepareSorobanIntentExecution,
@@ -28,7 +29,7 @@ class MemoryIntentStore implements SorobanIntentStore {
   async listContributions() { return []; }
   async putContribution() { throw new Error('not used'); }
 }
-function fixture() {
+function fixture(effects: SorobanEffectsSnapshot = emptySorobanEffectsSnapshot()) {
   const contract = new Contract('CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE');
   const authorizer = Keypair.random();
   const planningSource = Keypair.random();
@@ -60,7 +61,7 @@ function fixture() {
     authorizationEntries: [authEntry],
     sorobanData: new SorobanDataBuilder().build(),
   });
-  const plan = createSorobanAuthorizationPlan(intent, planningTx.toXDR());
+  const plan = createSorobanAuthorizationPlan(intent, planningTx.toXDR(), effects);
   const stored: StoredSorobanIntent = {
     version: 1,
     id: 'E'.repeat(16),
@@ -96,7 +97,7 @@ test('execution late-binds a fresh source and preserves finalized detached AUTH'
     networkParametersLoader: async () => ({ baseFeeInStroops: 100 } as never),
     enforcer: async ({ envelopeXdr }) => {
       enforcedInput = envelopeXdr;
-      return { endpointUrl: 'test', latestLedger: 123, assembledXdr: envelopeXdr };
+      return { endpointUrl: 'test', latestLedger: 123, assembledXdr: envelopeXdr, effects: f.stored.authorizationPlan.effects };
     },
   });
   const parsed = TransactionBuilder.fromXdr(enforcedInput, Networks.TESTNET);
@@ -136,7 +137,7 @@ test('execution can be rematerialized with a fresh source sequence without chang
     authorization: f.authorization,
     accountLoader: async () => ({ accountId: source.publicKey(), sequence } as never),
     networkParametersLoader: async () => ({ baseFeeInStroops: 100 } as never),
-    enforcer: async ({ envelopeXdr }: { envelopeXdr: string }) => ({ endpointUrl: 'test', latestLedger: 123, assembledXdr: envelopeXdr }),
+    enforcer: async ({ envelopeXdr }: { envelopeXdr: string }) => ({ endpointUrl: 'test', latestLedger: 123, assembledXdr: envelopeXdr, effects: f.stored.authorizationPlan.effects }),
   };
   const first = await prepareSorobanIntentExecution(store, f.stored.id, source.publicKey(), options);
   sequence = '8';
@@ -152,4 +153,93 @@ test('execution can be rematerialized with a fresh source sequence without chang
     if (operation?.type !== 'invokeHostFunction') throw new Error('missing invokeHostFunction');
     assert.equal(operation.auth?.[0]?.toXdr('base64'), f.authEntry.toXdr('base64'));
   }
+});
+
+function effectSnapshot(amount: number, topic = 'transfer') {
+  const event = new xdr.ContractEvent({
+    ext: xdr.ExtensionPoint.v0(),
+    contractId: null,
+    type: xdr.ContractEventType.contract,
+    body: xdr.ContractEventBody.v0(new xdr.ContractEventV0({
+      topics: [nativeToScVal(topic)],
+      data: nativeToScVal(amount, { type: 'u32' }),
+    })),
+  });
+  return sorobanEffectsSnapshot([], [new xdr.DiagnosticEvent({ inSuccessfulContractCall: true, event }).toXdr('base64')]);
+}
+
+function executionOptions(f: ReturnType<typeof fixture>, source: Keypair, effects: SorobanEffectsSnapshot) {
+  return {
+    authorization: f.authorization,
+    accountLoader: async () => ({ accountId: source.publicKey(), sequence: '7' } as never),
+    networkParametersLoader: async () => ({ baseFeeInStroops: 100 } as never),
+    enforcer: async ({ envelopeXdr }: { envelopeXdr: string }) => ({ endpointUrl: 'test', latestLedger: 123, assembledXdr: envelopeXdr, effects }),
+  };
+}
+
+test('small numeric effects drift stays executable and returns the measured diff', async () => {
+  const expected = effectSnapshot(100);
+  const current = effectSnapshot(99);
+  const f = fixture(expected);
+  const source = Keypair.random();
+  const result = await prepareSorobanIntentExecution(new MemoryIntentStore(f.stored), f.stored.id, source.publicKey(), executionOptions(f, source, current));
+  assert.equal(result.effectsDiff.kind, 'numeric');
+  assert.equal(result.effectsDiff.maxChangeBasisPoints, 100);
+  assert.equal(result.effectsDiff.requiresExplicitReview, false);
+  assert.equal(result.effectsAccepted, false);
+});
+
+test('large numeric effects drift blocks until the current digest is explicitly accepted', async () => {
+  const expected = effectSnapshot(100);
+  const current = effectSnapshot(90);
+  const f = fixture(expected);
+  const source = Keypair.random();
+  const store = new MemoryIntentStore(f.stored);
+  await assert.rejects(
+    () => prepareSorobanIntentExecution(store, f.stored.id, source.publicKey(), executionOptions(f, source, current)),
+    (cause: unknown) => cause instanceof SorobanIntentExecutionServiceError
+      && cause.status === 409
+      && cause.code === 'intent_execution_effects_review_required'
+      && (cause.details as { effectsDiff?: { currentDigest?: string } } | undefined)?.effectsDiff?.currentDigest === current.digest,
+  );
+  const accepted = await prepareSorobanIntentExecution(store, f.stored.id, source.publicKey(), {
+    ...executionOptions(f, source, current),
+    acceptedEffectsDigest: current.digest,
+  });
+  assert.equal(accepted.effectsDiff.severity, 'critical');
+  assert.equal(accepted.effectsAccepted, true);
+});
+
+test('effects acceptance is bound to the exact enforcing digest', async () => {
+  const expected = effectSnapshot(100);
+  const reviewed = effectSnapshot(90);
+  const changedAgain = effectSnapshot(80);
+  const f = fixture(expected);
+  const source = Keypair.random();
+  await assert.rejects(
+    () => prepareSorobanIntentExecution(new MemoryIntentStore(f.stored), f.stored.id, source.publicKey(), {
+      ...executionOptions(f, source, changedAgain),
+      acceptedEffectsDigest: reviewed.digest,
+    }),
+    (cause: unknown) => cause instanceof SorobanIntentExecutionServiceError
+      && cause.code === 'intent_execution_effects_review_required'
+      && (cause.details as { effectsDiff?: { currentDigest?: string } } | undefined)?.effectsDiff?.currentDigest === changedAgain.digest,
+  );
+});
+
+test('structural effects changes require a new authorization revision and cannot be digest-accepted', async () => {
+  const expected = effectSnapshot(100, 'transfer');
+  const current = effectSnapshot(99, 'mint');
+  const f = fixture(expected);
+  const source = Keypair.random();
+  await assert.rejects(
+    () => prepareSorobanIntentExecution(new MemoryIntentStore(f.stored), f.stored.id, source.publicKey(), {
+      ...executionOptions(f, source, current),
+      acceptedEffectsDigest: current.digest,
+    }),
+    (cause: unknown) => cause instanceof SorobanIntentExecutionServiceError
+      && cause.code === 'intent_execution_effects_reauthorization_required'
+      && (cause.details as { effectsDiff?: { kind?: string; requiresReauthorization?: boolean } } | undefined)?.effectsDiff?.kind === 'structural'
+      && (cause.details as { effectsDiff?: { requiresReauthorization?: boolean } } | undefined)?.effectsDiff?.requiresReauthorization === true,
+  );
 });

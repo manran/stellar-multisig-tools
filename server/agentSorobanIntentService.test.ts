@@ -12,6 +12,7 @@ import { Spec } from '@stellar/stellar-sdk/contract';
 import type { SignerPrincipalRef } from '../src/stellar/agentAccessTypes.js';
 import { describeContractSpec } from '../src/stellar/contractSpec.js';
 import { materializeSorobanIntent } from '../src/stellar/sorobanIntent.js';
+import { emptySorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
 import type {
   AgentCredentialStore,
   StoredAgentIdempotencyClaim,
@@ -141,7 +142,7 @@ async function serviceOptions(sourceBound = false) {
           } as never)
         : ({ accountId: planningSource.publicKey(), sequence: '7' } as never),
       networkParametersLoader: async () => ({ baseFeeInStroops: 100 } as never),
-      simulator: async () => ({ assembledXdr: assembled.toXDR(), latestLedger: 100 } as never),
+      simulator: async () => ({ assembledXdr: assembled.toXDR(), latestLedger: 100, effects: emptySorobanEffectsSnapshot() } as never),
     },
   };
 }

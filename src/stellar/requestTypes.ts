@@ -2,6 +2,7 @@ import type { ActivityRequestItem } from './activityTypes.js';
 import type { PrivateCommitmentRecord } from './privateCommitment.js';
 import type { PrivateNoteRevision } from './privateNote.js';
 import type { SourceAnalysis } from './transactionReviewAnalysis.js';
+import type { SorobanEffectsDiff } from './sorobanEffects.js';
 import type { StellarNetwork } from './types.js';
 
 export type SigningRequestStatus =
@@ -98,4 +99,5 @@ export interface SigningRequestApiError {
   code: string;
   network?: StellarNetwork;
   requestStatus?: SigningRequestStatus;
+  details?: { effectsDiff?: SorobanEffectsDiff };
 }

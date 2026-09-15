@@ -12,6 +12,7 @@ import {
   previewSorobanValue,
 } from './sorobanInspection.js';
 import type { SorobanAuthorizationEntryInspection } from './sorobanInspection.js';
+import { sorobanEffectsSnapshot, type SorobanEffectsSnapshot } from './sorobanEffects.js';
 import type { TransactionXdrInspection } from './transactionXdr.js';
 import { assembleTransaction } from '@stellar/stellar-sdk/rpc';
 import type { StellarNetwork } from './types.js';
@@ -54,6 +55,7 @@ export interface SorobanSimulationSummary {
   transactionDataXdr: string | null;
   returnValuePreview: string | null;
   authorizationEntries: SorobanAuthorizationEntryInspection[];
+  effects: SorobanEffectsSnapshot;
   eventCount: number;
   stateChangeCount: number;
   restoreRequired: boolean;
@@ -251,6 +253,17 @@ function decodeAuthorizationEntries(result: SimulateTransactionResultShape) {
   }
 }
 
+function simulationEffects(result: SimulateTransactionResultShape): SorobanEffectsSnapshot {
+  try {
+    return sorobanEffectsSnapshot(result.stateChanges, result.events);
+  } catch {
+    throw new SorobanSimulationError(
+      'unavailable',
+      'The Stellar RPC provider returned simulation effects that could not be decoded. The transaction has not been marked invalid.',
+    );
+  }
+}
+
 function returnValuePreview(result: SimulateTransactionResultShape): string | null {
   const encoded = result.results?.[0]?.xdr;
   if (typeof encoded !== 'string' || !encoded) return null;
@@ -417,8 +430,12 @@ export async function simulateSorobanTransaction({
     );
   }
 
+  // Recording mode must discover the complete current authorization topology.
+  // Existing imported AUTH entries are evidence to preserve later, not an input
+  // footprint for RPC recording; Stellar RPC rejects record mode with auth set.
+  const recordingXdr = cleanAssemblyBase(parsed, network).toXDR();
   const simulation = await requestSorobanSimulation({
-    normalized,
+    normalized: recordingXdr,
     endpointUrl,
     fetchImpl,
     timeoutMs,
@@ -430,6 +447,7 @@ export async function simulateSorobanTransaction({
 
   const authorizationEntries = decodeAuthorizationEntries(result)
     .map(inspectSorobanAuthorizationEntry);
+  const effects = simulationEffects(result);
   let assembledXdr: string | null = null;
   if (parsed.signatures.length === 0 && !result.restorePreamble) {
     try {
@@ -469,6 +487,7 @@ export async function simulateSorobanTransaction({
     transactionDataXdr: stringOrNull(result.transactionData),
     returnValuePreview: returnValuePreview(result),
     authorizationEntries,
+    effects,
     eventCount: countArray(result.events),
     stateChangeCount: countArray(result.stateChanges),
     restoreRequired: Boolean(result.restorePreamble),
@@ -490,7 +509,7 @@ export async function prepareEnforcedSorobanTransaction({
   endpointUrl?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
-}): Promise<{ endpointUrl: string; latestLedger: number; assembledXdr: string }> {
+}): Promise<{ endpointUrl: string; latestLedger: number; assembledXdr: string; effects: SorobanEffectsSnapshot }> {
   const normalized = envelopeXdr.trim();
   if (!normalized) {
     throw new SorobanSimulationError('unsupported', 'No transaction XDR is available to enforce and prepare.');
@@ -536,6 +555,7 @@ export async function prepareEnforcedSorobanTransaction({
       'Enforced Soroban preparation requires a restore transaction before this authorization can be frozen.',
     );
   }
+  const effects = simulationEffects(simulation.result);
   const assemblyResult = {
     latestLedger: simulation.result.latestLedger,
     minResourceFee: simulation.result.minResourceFee,
@@ -575,6 +595,7 @@ export async function prepareEnforcedSorobanTransaction({
     endpointUrl: simulation.endpointUrl,
     latestLedger: simulation.result.latestLedger,
     assembledXdr,
+    effects,
   };
 }
 
@@ -590,7 +611,7 @@ export async function enforcePreparedSorobanTransaction({
   endpointUrl?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
-}): Promise<{ endpointUrl: string; latestLedger: number }> {
+}): Promise<{ endpointUrl: string; latestLedger: number; effects: SorobanEffectsSnapshot }> {
   const normalized = envelopeXdr.trim();
   if (!normalized) {
     throw new SorobanSimulationError('unsupported', 'No transaction XDR is available to verify.');
@@ -618,8 +639,10 @@ export async function enforcePreparedSorobanTransaction({
     requestId: 'multisigtools-soroban-freeze-verify',
   });
   assertPreparedResourcesCoverSimulation(parsed, simulation.result);
+  const effects = sorobanEffectsSnapshot(simulation.result.stateChanges, simulation.result.events);
   return {
     endpointUrl: simulation.endpointUrl,
     latestLedger: simulation.result.latestLedger,
+    effects,
   };
 }

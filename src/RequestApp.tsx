@@ -16,6 +16,7 @@ import PrivateNoteCard from './PrivateNoteCard';
 import PrivateWorkspaceUnlock from './PrivateWorkspaceUnlock';
 import { ActionButton, NetworkFact, PageHeader, RequestStatusBadge, WorkflowProgress } from './MultiSigUi';
 import ReviewTransactionSummary from './ReviewTransactionSummary';
+import SorobanEffectsDiffView from './SorobanEffectsDiffView';
 import SigningGuidance from './SigningGuidance';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
@@ -43,6 +44,7 @@ import type {
   SubmitSigningRequestResponse,
 } from './stellar/requestTypes';
 import type { StellarNetwork } from './stellar/types';
+import type { SorobanEffectsDiff } from './stellar/sorobanEffects';
 import { analyzeTransactionAuthorization } from './stellar/transactionAuthorization';
 import { inspectTransactionXdr } from './stellar/transactionXdr';
 import { proposalWorkflowStage } from './stellar/humanWorkflow';
@@ -83,12 +85,15 @@ class RequestApiError extends Error {
   readonly network?: StellarNetwork;
   readonly requestStatus?: SigningRequestStatus;
 
-  constructor(message: string, code: string, network?: StellarNetwork, requestStatus?: SigningRequestStatus) {
+  readonly details?: SigningRequestApiError['details'];
+
+  constructor(message: string, code: string, network?: StellarNetwork, requestStatus?: SigningRequestStatus, details?: SigningRequestApiError['details']) {
     super(message);
     this.name = 'RequestApiError';
     this.code = code;
     this.network = network;
     this.requestStatus = requestStatus;
+    this.details = details;
   }
 }
 
@@ -139,6 +144,7 @@ async function apiJson<T>(response: Response): Promise<T> {
       error.code || 'request_failed',
       error.network,
       error.requestStatus,
+      error.details,
     );
   }
   return body as T;
@@ -223,6 +229,7 @@ export default function RequestApp() {
   const [submitting, setSubmitting] = useState(false);
   const [submitArmed, setSubmitArmed] = useState(false);
   const [mainnetConfirmed, setMainnetConfirmed] = useState(false);
+  const [submissionEffectsDiff, setSubmissionEffectsDiff] = useState<SorobanEffectsDiff | null>(null);
   const [requestAccessDenied, setRequestAccessDenied] = useState(false);
   const [closedCapability, setClosedCapability] = useState<ClosedCapability | null>(null);
   const [error, setError] = useState('');
@@ -418,6 +425,7 @@ export default function RequestApp() {
   useEffect(() => {
     setSubmitArmed(false);
     setMainnetConfirmed(false);
+    setSubmissionEffectsDiff(null);
     setShowXdrQr(false);
   }, [snapshot?.transactionHash, snapshot?.network]);
 
@@ -547,7 +555,7 @@ export default function RequestApp() {
     }
   }
 
-async function submitRequest() {
+async function submitRequest(acceptedEffectsDigest?: string) {
     if (!snapshot || snapshot.status !== 'ready' || !submitArmed) return;
     if (snapshot.network === 'public' && !mainnetConfirmed) return;
     setSubmitting(true);
@@ -555,7 +563,8 @@ async function submitRequest() {
     try {
       const body = await apiJson<SubmitSigningRequestResponse>(await fetch('/api/request', {
         method: 'PUT',
-        headers: requestHeaders(snapshot.id, capability, walletAddress),
+        headers: requestHeaders(snapshot.id, capability, walletAddress, Boolean(acceptedEffectsDigest)),
+        ...(acceptedEffectsDigest ? { body: JSON.stringify({ acceptedEffectsDigest }) } : {}),
       }));
       await applySnapshot(body.request);
       if (
@@ -567,7 +576,15 @@ async function submitRequest() {
       setShareable(false);
       setSubmitArmed(false);
       setMainnetConfirmed(false);
+      setSubmissionEffectsDiff(null);
     } catch (cause) {
+      if (cause instanceof RequestApiError
+        && (cause.code === 'soroban_effects_review_required' || cause.code === 'soroban_effects_reauthorization_required')
+        && cause.details?.effectsDiff) {
+        setSubmissionEffectsDiff(cause.details.effectsDiff);
+        if (cause.code === 'soroban_effects_reauthorization_required') setSubmitArmed(false);
+        return;
+      }
       setError(cause instanceof Error ? cause.message : 'Unable to submit this transaction.');
     } finally {
       setSubmitting(false);
@@ -769,12 +786,19 @@ async function submitRequest() {
                     <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.08] p-5 sm:p-6">
                       <div className="font-semibold text-emerald-800 dark:text-emerald-200">Ready for submission</div>
                       <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">All required signatures are present.</p>
-                      {!submitArmed ? (
+                      {submissionEffectsDiff && <div className="mt-4"><SorobanEffectsDiffView diff={submissionEffectsDiff} /></div>}
+                      {submissionEffectsDiff?.requiresReauthorization ? (
+                        <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/[0.07] p-4 text-sm">
+                          <div className="font-semibold text-red-700 dark:text-red-300">Submission stopped: contract effects changed structurally.</div>
+                          <p className="mt-1 leading-6 text-neutral-600 dark:text-neutral-300">The existing signatures cannot approve a different effect shape. Return to the original Soroban Intent, refresh authorization, and create a fresh Proposal.</p>
+                        </div>
+                      ) : !submitArmed ? (
                         <button type="button" onClick={() => setSubmitArmed(true)} className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white"><Send className="h-4 w-4" />Submit transaction</button>
                       ) : (
                         <div className={`mt-4 rounded-xl border p-4 ${snapshot.network === 'public' ? 'border-red-500/30 bg-red-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}>
                           <div className="text-sm font-semibold">Submit this transaction to Stellar {snapshot.network === 'public' ? 'Mainnet' : 'Testnet'}?</div>
                           <p className="mt-1 text-sm opacity-70">Once Stellar confirms it, this transaction cannot be withdrawn.</p>
+                          {submissionEffectsDiff?.requiresExplicitReview && <p className="mt-3 text-sm font-semibold text-red-700 dark:text-red-300">The final simulation found a material numeric change. Continuing accepts this exact effects digest; the server will simulate again before broadcast and stop if it changes again.</p>}
                           {snapshot.network === 'public' && (
                             <label className="mt-3 flex cursor-pointer items-start gap-3">
                               <input type="checkbox" checked={mainnetConfirmed} onChange={(event) => setMainnetConfirmed(event.target.checked)} className="mt-1" />
@@ -782,7 +806,7 @@ async function submitRequest() {
                             </label>
                           )}
                           <div className="mt-4 flex flex-wrap gap-2">
-                            <button type="button" onClick={() => void submitRequest()} disabled={submitting || (snapshot.network === 'public' && !mainnetConfirmed)} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Submit transaction</button>
+                            <button type="button" onClick={() => void submitRequest(submissionEffectsDiff?.requiresExplicitReview ? submissionEffectsDiff.currentDigest : undefined)} disabled={submitting || (snapshot.network === 'public' && !mainnetConfirmed)} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{submitting ? 'Checking and submitting…' : submissionEffectsDiff?.requiresExplicitReview ? 'Accept current effects and submit' : 'Submit transaction'}</button>
                             <button type="button" disabled={submitting} onClick={() => { setSubmitArmed(false); setMainnetConfirmed(false); }} className="rounded-xl border border-black/10 px-4 py-3 text-sm font-semibold dark:border-white/10">Not now</button>
                           </div>
                         </div>

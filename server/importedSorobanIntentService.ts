@@ -3,11 +3,12 @@ import {
   Networks,
   TransactionBuilder,
 } from '@stellar/stellar-sdk/base';
-import { assertSorobanTransactionPreparedForFreeze } from '../src/stellar/sorobanAuthorization.js';
+import { assertSorobanTransactionPreparedForFreeze, initializeSorobanGAccountAuthorizationWindow } from '../src/stellar/sorobanAuthorization.js';
 import { createSorobanAuthorizationPlan } from '../src/stellar/sorobanAuthorizationPlan.js';
 import { createSorobanIntent } from '../src/stellar/sorobanIntent.js';
 import { initializeSorobanContractAccountAuthorizationWindow } from '../src/stellar/sorobanCustomAuthorization.js';
 import type { StellarNetwork } from '../src/stellar/types.js';
+import { simulateSorobanTransaction, SorobanSimulationError } from '../src/stellar/sorobanRpc.js';
 import { loadAccount, loadNetworkParameters } from '../src/stellar/horizon.js';
 import { discoverSorobanIntentSignerKeys } from './sorobanIntentPlanningService.js';
 import {
@@ -18,6 +19,7 @@ import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentSto
 
 type AccountLoader = typeof loadAccount;
 type NetworkParametersLoader = typeof loadNetworkParameters;
+type Simulator = typeof simulateSorobanTransaction;
 
 interface ImportedSorobanIntentOptions {
   now?: Date;
@@ -25,6 +27,7 @@ interface ImportedSorobanIntentOptions {
   beforeCreate?: () => Promise<void>;
   accountLoader?: AccountLoader;
   networkParametersLoader?: NetworkParametersLoader;
+  simulator?: Simulator;
 }
 
 function passphrase(network: StellarNetwork): string {
@@ -94,9 +97,11 @@ export async function createImportedSorobanIntent(
 
   const intent = createSorobanIntent(input.network, operation.func);
   const parameters = await (options.networkParametersLoader ?? loadNetworkParameters)(input.network);
-  let initializedXdr = envelopeXdr;
+  let validatedImportXdr = envelopeXdr;
   try {
-    initializedXdr = await initializeSorobanContractAccountAuthorizationWindow({
+    // Validate configured contract-account evidence before record mode clears the
+    // imported AUTH footprint. Pre-staged custom evidence remains fail-closed.
+    validatedImportXdr = await initializeSorobanContractAccountAuthorizationWindow({
       envelopeXdr,
       network: input.network,
       currentLedger: parameters.ledgerSequence,
@@ -108,7 +113,37 @@ export async function createImportedSorobanIntent(
       'contract_account_auth_import_unsupported',
     );
   }
-  const authorizationPlan = createSorobanAuthorizationPlan(intent, initializedXdr);
+  let simulation;
+  try {
+    simulation = await (options.simulator ?? simulateSorobanTransaction)({ envelopeXdr: validatedImportXdr, network: input.network });
+  } catch (cause) {
+    if (cause instanceof SorobanSimulationError) {
+      throw new SorobanIntentServiceError(
+        `Unable to establish a simulation-effects baseline for this imported Intent. ${cause.message}`,
+        cause.kind === 'invalid' || cause.kind === 'unsupported' ? 400 : 503,
+        'prepared_xdr_effects_unavailable',
+      );
+    }
+    throw cause;
+  }
+  if (!simulation.assembledXdr) {
+    throw new SorobanIntentServiceError(
+      'Recording simulation did not produce an assembled Soroban transaction for this import.',
+      503,
+      'prepared_xdr_effects_unavailable',
+    );
+  }
+  const initializedGAccountXdr = await initializeSorobanGAccountAuthorizationWindow({
+    envelopeXdr: simulation.assembledXdr,
+    network: input.network,
+    currentLedger: simulation.latestLedger,
+  });
+  const initializedXdr = await initializeSorobanContractAccountAuthorizationWindow({
+    envelopeXdr: initializedGAccountXdr,
+    network: input.network,
+    currentLedger: simulation.latestLedger,
+  });
+  const authorizationPlan = createSorobanAuthorizationPlan(intent, initializedXdr, simulation.effects);
   if (authorizationPlan.executionBinding !== 'detached') {
     throw new SorobanIntentServiceError(
       'This contract call uses SOURCE_ACCOUNT Soroban authorization, which binds authorization to the final transaction source. MultiSigTools Intent workflows intentionally collect authorization before choosing an executor, so this source-bound authorization cannot be used here. Use detached address authorization instead, or change the contract/integration so authorization is not supplied by the transaction source.',
@@ -119,7 +154,7 @@ export async function createImportedSorobanIntent(
 
   const discoverySignerKeys = await discoverSorobanIntentSignerKeys(
     authorizationPlan,
-    parameters.ledgerSequence,
+    simulation.latestLedger,
     { accountLoader: options.accountLoader ?? loadAccount },
   );
   await options.beforeCreate?.();

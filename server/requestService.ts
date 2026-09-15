@@ -22,6 +22,7 @@ import {
   assertSorobanTransactionPreparedForFreeze,
 } from '../src/stellar/sorobanAuthorization.js';
 import { analyzeKnownSorobanContractAuthorization } from '../src/stellar/sorobanContractAdapter.js';
+import { compareSorobanEffects, type SorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
 import type { TransactionXdrInspection } from '../src/stellar/transactionXdr.js';
 import type {
   SigningRequestSnapshot,
@@ -46,12 +47,14 @@ const MAX_XDR_CHARS = 256 * 1024;
 export class SigningRequestServiceError extends Error {
   readonly status: number;
   readonly code: string;
+  readonly details?: unknown;
 
-  constructor(message: string, status: number, code: string) {
+  constructor(message: string, status: number, code: string, details?: unknown) {
     super(message);
     this.name = 'SigningRequestServiceError';
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -75,7 +78,7 @@ export type TransactionSubmitter = (
 ) => Promise<TransactionSubmissionResult>;
 
 export type SorobanExecutionVerificationResult =
-  | { status: 'verified' }
+  | { status: 'verified'; effects?: SorobanEffectsSnapshot }
   | { status: 'invalid'; detail: string }
   | { status: 'unavailable'; detail: string };
 
@@ -89,6 +92,7 @@ interface EnvelopeAnalysis {
   accountLookups: AccountLookupResult[];
   authorization: TransactionAuthorizationStatus;
   unrecognizedSignatureIndexes: number[];
+  sorobanEffects?: SorobanEffectsSnapshot;
 }
 
 interface RequestServiceOptions {
@@ -102,6 +106,7 @@ interface RequestServiceOptions {
 
 interface SubmitRequestOptions extends RequestServiceOptions {
   transactionSubmitter?: TransactionSubmitter;
+  acceptedEffectsDigest?: string;
 }
 
 function normalizeXdr(xdr: string): string {
@@ -235,8 +240,8 @@ async function validateSorobanAuthorizationForFreeze(
   inspection: TransactionXdrInspection,
   accountLoader: AccountLoader,
   networkParametersLoader: NetworkParametersLoader | undefined,
-): Promise<void> {
-  if (!inspection.operations.some((operation) => operation.type === 'invokeHostFunction')) return;
+): Promise<SorobanEffectsSnapshot | null> {
+  if (!inspection.operations.some((operation) => operation.type === 'invokeHostFunction')) return null;
   try {
     assertSorobanTransactionPreparedForFreeze(envelopeXdr, network);
   } catch (cause) {
@@ -337,8 +342,8 @@ async function verifySorobanExecutionForBoundary(
   network: StellarNetwork,
   inspection: TransactionXdrInspection,
   verifier: SorobanExecutionVerifier | undefined,
-): Promise<void> {
-  if (!inspection.operations.some((operation) => operation.type === 'invokeHostFunction')) return;
+): Promise<SorobanEffectsSnapshot | null> {
+  if (!inspection.operations.some((operation) => operation.type === 'invokeHostFunction')) return null;
   if (!verifier) {
     throw new SigningRequestServiceError(
       'Soroban execution verification is temporarily unavailable. The Proposal was not frozen.',
@@ -370,6 +375,7 @@ async function verifySorobanExecutionForBoundary(
       'soroban_execution_failed',
     );
   }
+  return result.effects ?? null;
 }
 
 async function validateStoredEnvelope(
@@ -388,8 +394,9 @@ async function validateStoredEnvelope(
     accountLoader,
     networkParametersLoader,
   );
+  let sorobanEffects: SorobanEffectsSnapshot | null = null;
   if (requireSorobanExecutionVerification) {
-    await verifySorobanExecutionForBoundary(
+    sorobanEffects = await verifySorobanExecutionForBoundary(
       envelopeXdr,
       network,
       inspection,
@@ -412,7 +419,7 @@ async function validateStoredEnvelope(
       'bad_auth_extra',
     );
   }
-  return analysis;
+  return sorobanEffects ? { ...analysis, sorobanEffects } : analysis;
 }
 
 
@@ -867,6 +874,7 @@ export async function createSigningRequest(
     expiresAt: expiryForInspection(inspection, now).toISOString(),
     discoverySignerKeys,
     capabilityHash: options.capabilityHash,
+    ...(analysis.sorobanEffects ? { sorobanEffectsBaseline: analysis.sorobanEffects } : {}),
   };
 
   await store.createRequest(request);
@@ -1136,12 +1144,39 @@ export async function submitSigningRequest(
     );
   }
 
-  await verifySorobanExecutionForBoundary(
+  const currentSorobanEffects = await verifySorobanExecutionForBoundary(
     current.mergedXdr,
     request.network,
     inspectStoredEnvelope(current.mergedXdr, request.network),
     options.sorobanExecutionVerifier,
   );
+  if (request.sorobanEffectsBaseline) {
+    if (!currentSorobanEffects) {
+      throw new SigningRequestServiceError(
+        'Soroban effects verification did not return the baseline needed for safe submission.',
+        503,
+        'soroban_effects_verification_unavailable',
+      );
+    }
+    const effectsDiff = compareSorobanEffects(request.sorobanEffectsBaseline, currentSorobanEffects);
+    if (effectsDiff.requiresReauthorization) {
+      throw new SigningRequestServiceError(
+        'Soroban execution effects changed structurally after this Proposal was created. Return to the original Intent, refresh authorization, and create a fresh Proposal.',
+        409,
+        'soroban_effects_reauthorization_required',
+        { effectsDiff },
+      );
+    }
+    if (effectsDiff.requiresExplicitReview
+      && options.acceptedEffectsDigest?.trim() !== currentSorobanEffects.digest) {
+      throw new SigningRequestServiceError(
+        'Soroban numeric execution effects changed materially after this Proposal was created. Review the percentage differences and explicitly accept the current effects before submission.',
+        409,
+        'soroban_effects_review_required',
+        { effectsDiff },
+      );
+    }
+  }
 
   try {
     const result = await transactionSubmitter(current.mergedXdr, request.network);

@@ -1,6 +1,7 @@
 import type { PrivateCommitmentDraft } from './privateCommitment.js';
 import type { AccountSigningIntent } from './accountSigningFlow.js';
 import type { StellarNetwork } from './types.js';
+import type { SorobanEffectsSnapshot } from './sorobanEffects.js';
 
 const REVIEW_HANDOFF_XDR_KEY = 'multisig-tools.stellar.review-handoff.xdr';
 const REVIEW_HANDOFF_NETWORK_KEY = 'multisig-tools.stellar.review-handoff.network';
@@ -8,6 +9,8 @@ const PRIVATE_NOTE_HANDOFF_KEY = 'multisig-tools.stellar.private-note-handoff';
 const PRIVATE_COMMITMENT_HANDOFF_KEY = 'multisig-tools.stellar.private-commitment-handoff';
 const CREATE_TREASURY_HANDOFF_KEY = 'multisig-tools.stellar.create-treasury-handoff';
 const ACCOUNT_SIGNING_INTENT_HANDOFF_KEY = 'multisig-tools.stellar.account-signing-intent-handoff';
+const SOROBAN_EFFECTS_HANDOFF_KEY = 'multisig-tools.stellar.soroban-effects-handoff';
+const SOROBAN_TRANSACTION_HASH_HANDOFF_KEY = 'multisig-tools.stellar.soroban-transaction-hash-handoff';
 const REVIEW_HISTORY_STATE_KEY = '__multisigToolsReviewHandoff';
 
 export interface ReviewHandoff {
@@ -17,6 +20,8 @@ export interface ReviewHandoff {
   privateCommitment: PrivateCommitmentDraft | null;
   createTreasuryAccountId: string | null;
   accountSigningIntent: AccountSigningIntent | null;
+  sorobanEffectsBaseline: SorobanEffectsSnapshot | null;
+  sorobanTransactionHash: string | null;
 }
 
 export interface ReviewHandoffWrite {
@@ -26,6 +31,8 @@ export interface ReviewHandoffWrite {
   privateCommitment?: PrivateCommitmentDraft | null;
   createTreasuryAccountId?: string | null;
   accountSigningIntent?: AccountSigningIntent | null;
+  sorobanEffectsBaseline?: SorobanEffectsSnapshot | null;
+  sorobanTransactionHash?: string | null;
 }
 
 export interface ReviewHistory {
@@ -44,6 +51,8 @@ function emptyHandoff(): ReviewHandoff {
     privateCommitment: null,
     createTreasuryAccountId: null,
     accountSigningIntent: null,
+    sorobanEffectsBaseline: null,
+    sorobanTransactionHash: null,
   };
 }
 
@@ -53,6 +62,25 @@ function parsePrivateCommitment(raw: string | null): PrivateCommitmentDraft | nu
     const value = JSON.parse(raw) as Partial<PrivateCommitmentDraft>;
     if (typeof value.text !== 'string' || typeof value.saltHex !== 'string' || typeof value.hashHex !== 'string') return null;
     return { text: value.text, saltHex: value.saltHex, hashHex: value.hashHex };
+  } catch {
+    return null;
+  }
+}
+
+
+function parseSorobanEffectsValue(value: unknown): SorobanEffectsSnapshot | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Partial<SorobanEffectsSnapshot>;
+  if (record.version !== 1 || typeof record.digest !== 'string' || typeof record.structureDigest !== 'string') return null;
+  if (!Array.isArray(record.stateChanges) || !Array.isArray(record.events) || !Array.isArray(record.numericEffects)) return null;
+  if (typeof record.stateChangeCount !== 'number' || typeof record.eventCount !== 'number' || typeof record.truncated !== 'boolean') return null;
+  return record as SorobanEffectsSnapshot;
+}
+
+function parseSorobanEffects(raw: string | null): SorobanEffectsSnapshot | null {
+  if (!raw) return null;
+  try {
+    return parseSorobanEffectsValue(JSON.parse(raw));
   } catch {
     return null;
   }
@@ -80,6 +108,8 @@ function parseHistoryHandoff(value: unknown): ReviewHandoff | null {
     privateCommitment: commitment ?? null,
     createTreasuryAccountId: record.createTreasuryAccountId?.trim() || null,
     accountSigningIntent: record.accountSigningIntent === 'standalone' || record.accountSigningIntent === 'offline' || record.accountSigningIntent === 'treasury' ? record.accountSigningIntent : null,
+    sorobanEffectsBaseline: parseSorobanEffectsValue(record.sorobanEffectsBaseline),
+    sorobanTransactionHash: typeof record.sorobanTransactionHash === 'string' && /^[0-9a-f]{64}$/i.test(record.sorobanTransactionHash) ? record.sorobanTransactionHash.toLowerCase() : null,
   };
 }
 
@@ -118,6 +148,8 @@ export function clearReviewHandoff(storage: Pick<Storage, 'removeItem'>): void {
   storage.removeItem(PRIVATE_COMMITMENT_HANDOFF_KEY);
   storage.removeItem(CREATE_TREASURY_HANDOFF_KEY);
   storage.removeItem(ACCOUNT_SIGNING_INTENT_HANDOFF_KEY);
+  storage.removeItem(SOROBAN_EFFECTS_HANDOFF_KEY);
+  storage.removeItem(SOROBAN_TRANSACTION_HASH_HANDOFF_KEY);
 }
 
 export function writeReviewHandoff(storage: ReviewHandoffStorage, handoff: ReviewHandoffWrite): void {
@@ -134,6 +166,8 @@ export function writeReviewHandoff(storage: ReviewHandoffStorage, handoff: Revie
   );
   writeOptional(storage, CREATE_TREASURY_HANDOFF_KEY, handoff.createTreasuryAccountId?.trim() || null);
   writeOptional(storage, ACCOUNT_SIGNING_INTENT_HANDOFF_KEY, handoff.accountSigningIntent ?? null);
+  writeOptional(storage, SOROBAN_EFFECTS_HANDOFF_KEY, handoff.sorobanEffectsBaseline ? JSON.stringify(handoff.sorobanEffectsBaseline) : null);
+  writeOptional(storage, SOROBAN_TRANSACTION_HASH_HANDOFF_KEY, handoff.sorobanTransactionHash?.trim().toLowerCase() || null);
 }
 
 export function takeReviewHandoff(storage: ReviewHandoffStorage, history: ReviewHistory | null = browserReviewHistory()): ReviewHandoff {
@@ -150,6 +184,11 @@ export function takeReviewHandoff(storage: ReviewHandoffStorage, history: Review
     accountSigningIntent: (() => {
       const intent = storage.getItem(ACCOUNT_SIGNING_INTENT_HANDOFF_KEY);
       return intent === 'standalone' || intent === 'offline' || intent === 'treasury' ? intent : null;
+    })(),
+    sorobanEffectsBaseline: parseSorobanEffects(storage.getItem(SOROBAN_EFFECTS_HANDOFF_KEY)),
+    sorobanTransactionHash: (() => {
+      const value = storage.getItem(SOROBAN_TRANSACTION_HASH_HANDOFF_KEY)?.trim().toLowerCase() ?? '';
+      return /^[0-9a-f]{64}$/.test(value) ? value : null;
     })(),
   };
   clearReviewHandoff(storage);

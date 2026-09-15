@@ -14,6 +14,7 @@ import {
 } from '@stellar/stellar-sdk/base';
 import { initializeSorobanGAccountAuthorizationWindow } from '../src/stellar/sorobanAuthorization.js';
 import { createSorobanIntent, materializeSorobanIntent } from '../src/stellar/sorobanIntent.js';
+import { emptySorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
 import { createImportedSorobanIntent } from './importedSorobanIntentService.js';
 import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';
 
@@ -81,6 +82,7 @@ async function fixture(sourceBound = false) {
         ? [{ key: signer.publicKey(), type: 'ed25519_public_key' as const, weight: 1 }]
         : [{ key: address, type: 'ed25519_public_key' as const, weight: 1 }],
     }),
+    simulator: async ({ envelopeXdr }: { envelopeXdr: string }) => ({ assembledXdr: envelopeXdr, latestLedger: 100, effects: emptySorobanEffectsSnapshot() } as never),
     networkParametersLoader: async () => ({
       ledgerSequence: 100,
       ledgerClosedAt: '2026-09-14T10:00:00Z',
@@ -211,6 +213,7 @@ test('prepared XDR import initializes configured C-account AUTH and discovers it
         baseReserveInStroops: 5_000_000,
       }),
       accountLoader: async () => { throw new Error('C-account import should not load the contract through Horizon.'); },
+      simulator: async ({ envelopeXdr }: { envelopeXdr: string }) => ({ assembledXdr: envelopeXdr, latestLedger: 100, effects: emptySorobanEffectsSnapshot() } as never),
       idFactory: () => 'Q'.repeat(16),
     });
     const entry = xdr.SorobanAuthorizationEntry.fromXdr(stored.authorizationPlan.authorizationEntriesXdr[0], 'base64');

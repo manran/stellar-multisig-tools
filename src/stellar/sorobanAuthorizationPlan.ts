@@ -7,6 +7,7 @@ import {
   xdr,
 } from '@stellar/stellar-sdk/base';
 import type { SorobanIntent } from './sorobanIntent.js';
+import type { SorobanEffectsSnapshot } from './sorobanEffects.js';
 import type { StellarNetwork } from './types.js';
 
 export type SorobanAuthorizationExecutionBinding = 'detached' | 'source_bound';
@@ -17,6 +18,7 @@ export interface SorobanAuthorizationPlan {
   intentDigest: string;
   authorizationPlanDigest: string;
   authorizationEntriesXdr: string[];
+  effects: SorobanEffectsSnapshot;
   executionBinding: SorobanAuthorizationExecutionBinding;
   boundSourceAccount?: string;
 }
@@ -31,6 +33,7 @@ function hex(bytes: Uint8Array): string {
 function digestPlan(
   intent: SorobanIntent,
   authorizationEntriesXdr: readonly string[],
+  effects: SorobanEffectsSnapshot,
   executionBinding: SorobanAuthorizationExecutionBinding,
   boundSourceAccount?: string,
 ): string {
@@ -39,6 +42,7 @@ function digestPlan(
     network: intent.network,
     intentDigest: intent.intentDigest,
     authorizationEntriesXdr,
+    effectsDigest: effects.digest,
     executionBinding,
     boundSourceAccount: boundSourceAccount ?? null,
   });
@@ -55,6 +59,7 @@ export function authorizationEntriesFromPlan(
 export function createSorobanAuthorizationPlan(
   intent: SorobanIntent,
   preparedXdr: string,
+  effects: SorobanEffectsSnapshot,
 ): SorobanAuthorizationPlan {
   const parsed = TransactionBuilder.fromXDR(preparedXdr.trim(), passphrase(intent.network));
   if (parsed instanceof FeeBumpTransaction
@@ -84,10 +89,12 @@ export function createSorobanAuthorizationPlan(
     authorizationPlanDigest: digestPlan(
       intent,
       authorizationEntriesXdr,
+      effects,
       executionBinding,
       boundSourceAccount,
     ),
     authorizationEntriesXdr,
+    effects,
     executionBinding,
     ...(boundSourceAccount ? { boundSourceAccount } : {}),
   };

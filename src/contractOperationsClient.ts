@@ -1,6 +1,7 @@
 import type { ContractMethodDescriptor } from './stellar/contractSpec';
 import { SorobanSimulationError } from './stellar/sorobanRpc';
 import type { SorobanSimulationSummary } from './stellar/sorobanRpc';
+import type { SorobanEffectsSnapshot } from './stellar/sorobanEffects';
 import type { StellarNetwork } from './stellar/types';
 
 export interface ContractWorkspaceRef {
@@ -77,6 +78,31 @@ export async function prepareContractCallOperation(input: {
   }
   if (!body.simulation) throw new Error('Contract call preparation response is invalid.');
   return body.simulation;
+}
+
+export async function verifyPreparedContractCallOperation(input: {
+  network: StellarNetwork;
+  xdr: string;
+}): Promise<{ endpointUrl: string; latestLedger: number; effects: SorobanEffectsSnapshot }> {
+  const response = await fetch('/api/contract-prepare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ ...input, mode: 'enforce' }),
+  });
+  const body = await response.json().catch(() => ({})) as {
+    verification?: { endpointUrl: string; latestLedger: number; effects: SorobanEffectsSnapshot };
+    error?: string;
+    code?: string;
+  };
+  if (!response.ok) {
+    const kind = body.code?.replace('soroban_simulation_', '');
+    if (kind === 'unsupported' || kind === 'configuration' || kind === 'unavailable' || kind === 'invalid') {
+      throw new SorobanSimulationError(kind, body.error || 'Contract call verification failed.');
+    }
+    throw new Error(body.error || `Contract call verification failed (${response.status}).`);
+  }
+  if (!body.verification?.effects) throw new Error('Contract call verification response is invalid.');
+  return body.verification;
 }
 
 export async function listContractWorkspaceOperation(): Promise<ContractWorkspaceRef[]> {

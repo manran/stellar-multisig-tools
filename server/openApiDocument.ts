@@ -78,7 +78,7 @@ function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/api/intent' && method === 'patch') return schema('ContractIntentContributionResult');
   if (path === '/api/intent' && method === 'put') return { oneOf: [schema('ContractIntentExecutionResult'), schema('ContractIntentReplanResult')] };
   if (path === '/api/contract-call') return schema('ContractCallBuildResult');
-  if (path === '/api/contract-prepare') return schema('ContractPrepareResult');
+  if (path === '/api/contract-prepare') return { oneOf: [schema('ContractPrepareResult'), schema('ContractEnforceResult')] };
   if (path === '/api/contracts' && method === 'get') return schema('ContractWorkspaceListResult');
   if (path === '/api/contracts' && method === 'put') return schema('ContractWorkspaceKeepResult');
   if (path === '/api/contracts' && method === 'delete') return schema('ContractWorkspaceForgetResult');
@@ -170,6 +170,7 @@ const components: OpenApiObject = {
         code: { type: 'string' },
         network: stellarNetwork,
         requestStatus: { type: 'string' },
+        details: { type: 'object', additionalProperties: true },
       },
       additionalProperties: false,
     },
@@ -250,15 +251,49 @@ const components: OpenApiObject = {
       },
       additionalProperties: false,
     },
+    SorobanEffectsSnapshot: {
+      type: 'object',
+      required: ['version', 'digest', 'structureDigest', 'stateChangeCount', 'eventCount', 'stateChanges', 'events', 'numericEffects', 'truncated'],
+      properties: {
+        version: operationVersion,
+        digest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        structureDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        stateChangeCount: { type: 'integer', minimum: 0 },
+        eventCount: { type: 'integer', minimum: 0 },
+        stateChanges: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        events: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        numericEffects: { type: 'array', items: { type: 'object', required: ['key', 'label', 'value'], properties: { key: { type: 'string' }, label: { type: 'string' }, value: { type: 'string' } }, additionalProperties: false } },
+        truncated: { type: 'boolean' },
+      },
+      additionalProperties: false,
+    },
+    SorobanEffectsDiff: {
+      type: 'object',
+      required: ['version', 'kind', 'severity', 'requiresExplicitReview', 'requiresReauthorization', 'expectedDigest', 'currentDigest', 'structureChanged', 'maxChangeBasisPoints', 'numericChanges'],
+      properties: {
+        version: operationVersion,
+        kind: { type: 'string', enum: ['unchanged', 'numeric', 'structural'] },
+        severity: { type: 'string', enum: ['none', 'low', 'medium', 'high', 'critical'] },
+        requiresExplicitReview: { type: 'boolean' },
+        requiresReauthorization: { type: 'boolean', description: 'True when the effect structure changed and the existing AUTH must be superseded by a fresh authorization-plan revision.' },
+        expectedDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        currentDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        structureChanged: { type: 'boolean' },
+        maxChangeBasisPoints: { oneOf: [{ type: 'integer', minimum: 0 }, { type: 'null' }] },
+        numericChanges: { type: 'array', items: { type: 'object', required: ['key', 'label', 'expected', 'actual', 'difference', 'basisPoints'], properties: { key: { type: 'string' }, label: { type: 'string' }, expected: { type: 'string' }, actual: { type: 'string' }, difference: { type: 'string' }, basisPoints: { oneOf: [{ type: 'integer', minimum: 0 }, { type: 'null' }] } }, additionalProperties: false } },
+      },
+      additionalProperties: false,
+    },
     SorobanAuthorizationPlan: {
       type: 'object',
-      required: ['version', 'network', 'intentDigest', 'authorizationPlanDigest', 'authorizationEntriesXdr', 'executionBinding'],
+      required: ['version', 'network', 'intentDigest', 'authorizationPlanDigest', 'authorizationEntriesXdr', 'effects', 'executionBinding'],
       properties: {
         version: operationVersion,
         network: stellarNetwork,
         intentDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
         authorizationPlanDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
         authorizationEntriesXdr: { type: 'array', items: { type: 'string' } },
+        effects: schema('SorobanEffectsSnapshot'),
         executionBinding: { type: 'string', const: 'detached' },
         boundSourceAccount: accountId,
       },
@@ -358,7 +393,7 @@ const components: OpenApiObject = {
     ContractIntentExecutionInput: {
       type: 'object',
       required: ['executionSource'],
-      properties: { executionSource: accountId },
+      properties: { executionSource: accountId, acceptedEffectsDigest: { type: 'string', pattern: '^[0-9a-f]{64}$', description: 'Explicit acceptance of the exact current effects digest after reviewing a critical numeric-only diff. Structural changes cannot be accepted here and require a fresh authorization-plan revision.' } },
       additionalProperties: false,
     },
     ContractIntentReplanInput: {
@@ -369,7 +404,7 @@ const components: OpenApiObject = {
     },
     SorobanIntentExecutionPreparation: {
       type: 'object',
-      required: ['version', 'intentId', 'network', 'intentDigest', 'authorizationPlanDigest', 'executionSource', 'transactionSequence', 'transactionHash', 'validUntil', 'latestLedger', 'xdr'],
+      required: ['version', 'intentId', 'network', 'intentDigest', 'authorizationPlanDigest', 'executionSource', 'transactionSequence', 'transactionHash', 'validUntil', 'latestLedger', 'effectsDiff', 'effectsAccepted', 'xdr'],
       properties: {
         version: operationVersion,
         intentId: { type: 'string' },
@@ -381,6 +416,8 @@ const components: OpenApiObject = {
         transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
         validUntil: { oneOf: [timestamp, { type: 'null' }] },
         latestLedger: { type: 'integer', minimum: 1 },
+        effectsDiff: schema('SorobanEffectsDiff'),
+        effectsAccepted: { type: 'boolean' },
         xdr,
       },
       additionalProperties: false,
@@ -440,7 +477,7 @@ const components: OpenApiObject = {
     ContractPrepareInput: {
       type: 'object',
       required: ['network', 'xdr'],
-      properties: { network: stellarNetwork, xdr },
+      properties: { network: stellarNetwork, xdr, mode: { type: 'string', enum: ['record', 'enforce'], default: 'record' } },
       additionalProperties: false,
     },
     AuthorizationEntry: {
@@ -464,7 +501,7 @@ const components: OpenApiObject = {
     },
     SorobanSimulation: {
       type: 'object',
-      required: ['endpointUrl', 'network', 'transactionHash', 'latestLedger', 'minResourceFee', 'transactionDataXdr', 'returnValuePreview', 'authorizationEntries', 'eventCount', 'stateChangeCount', 'restoreRequired', 'cpuInstructions', 'memoryBytes', 'assembledXdr'],
+      required: ['endpointUrl', 'network', 'transactionHash', 'latestLedger', 'minResourceFee', 'transactionDataXdr', 'returnValuePreview', 'authorizationEntries', 'effects', 'eventCount', 'stateChangeCount', 'restoreRequired', 'cpuInstructions', 'memoryBytes', 'assembledXdr'],
       properties: {
         endpointUrl: { type: 'string', format: 'uri' },
         network: stellarNetwork,
@@ -474,6 +511,7 @@ const components: OpenApiObject = {
         transactionDataXdr: { type: ['string', 'null'] },
         returnValuePreview: { type: ['string', 'null'] },
         authorizationEntries: { type: 'array', items: schema('AuthorizationEntry') },
+        effects: schema('SorobanEffectsSnapshot'),
         eventCount: { type: 'integer', minimum: 0 },
         stateChangeCount: { type: 'integer', minimum: 0 },
         restoreRequired: { type: 'boolean' },
@@ -485,11 +523,33 @@ const components: OpenApiObject = {
     },
     ContractPrepareResult: {
       type: 'object',
-      required: ['operation', 'version', 'simulation'],
+      required: ['operation', 'version', 'mode', 'simulation'],
       properties: {
         operation: { type: 'string', const: 'contract.call.prepare' },
         version: operationVersion,
+        mode: { type: 'string', const: 'record' },
         simulation: schema('SorobanSimulation'),
+      },
+      additionalProperties: false,
+    },
+    ContractEnforceVerification: {
+      type: 'object',
+      required: ['endpointUrl', 'latestLedger', 'effects'],
+      properties: {
+        endpointUrl: { type: 'string', format: 'uri' },
+        latestLedger: { type: 'integer' },
+        effects: schema('SorobanEffectsSnapshot'),
+      },
+      additionalProperties: false,
+    },
+    ContractEnforceResult: {
+      type: 'object',
+      required: ['operation', 'version', 'mode', 'verification'],
+      properties: {
+        operation: { type: 'string', const: 'contract.call.prepare' },
+        version: operationVersion,
+        mode: { type: 'string', const: 'enforce' },
+        verification: schema('ContractEnforceVerification'),
       },
       additionalProperties: false,
     },

@@ -30,6 +30,7 @@ import type {
   StoredSubmissionResult,
 } from './requestStore.js';
 import type { StellarAccountSnapshot } from '../src/stellar/types.js';
+import type { SorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
 import {
   mergeSorobanGAccountSignature,
   sorobanAuthorizationPreimageXdr,
@@ -180,6 +181,20 @@ const networkParametersLoader = async () => ({
 });
 
 const verifiedSorobanExecution = async () => ({ status: 'verified' as const });
+
+function testEffectsSnapshot(value: bigint, digest: string, structureDigest = 'stable-structure'): SorobanEffectsSnapshot {
+  return {
+    version: 1,
+    digest,
+    structureDigest,
+    stateChangeCount: 0,
+    eventCount: 0,
+    stateChanges: [],
+    events: [],
+    numericEffects: [{ key: 'effect:quote', label: 'Quote amount', value: value.toString() }],
+    truncated: false,
+  };
+}
 
 async function withContractAdapterConfig<T>(
   contractAddress: string,
@@ -509,6 +524,92 @@ test('source-account Soroban authorization enters the ordinary envelope-signatur
   });
   assert.equal(submitted.status, 'submitted');
   assert.equal(executionVerifications, 2);
+});
+
+test('Soroban Proposal requires exact digest acceptance for critical numeric effects drift', async () => {
+  const store = new MemoryStore();
+  const { source, second, transaction } = sorobanTransaction({ prepared: true });
+  const accountLoader = async () => accountSnapshot(source, second, 2);
+  const baseline = testEffectsSnapshot(100n, 'effects-100');
+  const current = testEffectsSnapshot(90n, 'effects-90');
+  let verificationCount = 0;
+  const verifier = async () => ({
+    status: 'verified' as const,
+    effects: verificationCount++ === 0 ? baseline : current,
+  });
+  const id = 'E'.repeat(16);
+  await createSigningRequest(store, { network: 'testnet', xdr: transaction.toXdr() }, {
+    accountLoader, networkParametersLoader, sorobanExecutionVerifier: verifier, idFactory: () => id,
+  });
+  const first = TransactionBuilder.fromXdr(transaction.toXdr(), Networks.TESTNET);
+  first.sign(source);
+  await contributeSigningRequest(store, id, first.toXdr(), { accountLoader, networkParametersLoader });
+  const secondSigned = TransactionBuilder.fromXdr(transaction.toXdr(), Networks.TESTNET);
+  secondSigned.sign(second);
+  const ready = await contributeSigningRequest(store, id, secondSigned.toXdr(), { accountLoader, networkParametersLoader });
+  let submits = 0;
+  const submitOptions = {
+    accountLoader,
+    networkParametersLoader,
+    sorobanExecutionVerifier: verifier,
+    transactionLoader: async () => null,
+    transactionSubmitter: async () => {
+      submits += 1;
+      return { hash: ready.request.transactionHash, ledger: 12345, successful: true, createdAt: '2026-09-15T00:00:00Z' };
+    },
+  };
+  await assert.rejects(
+    submitSigningRequest(store, id, submitOptions),
+    (cause: unknown) => cause instanceof SigningRequestServiceError
+      && cause.code === 'soroban_effects_review_required'
+      && (cause.details as { effectsDiff?: { maxChangeBasisPoints?: number } } | undefined)?.effectsDiff?.maxChangeBasisPoints === 1000,
+  );
+  assert.equal(submits, 0);
+  const submitted = await submitSigningRequest(store, id, { ...submitOptions, acceptedEffectsDigest: current.digest });
+  assert.equal(submitted.status, 'submitted');
+  assert.equal(submits, 1);
+});
+
+
+test('Soroban Proposal structural effects change cannot be accepted by digest', async () => {
+  const store = new MemoryStore();
+  const { source, second, transaction } = sorobanTransaction({ prepared: true });
+  const accountLoader = async () => accountSnapshot(source, second, 2);
+  const baseline = testEffectsSnapshot(100n, 'effects-before', 'structure-before');
+  const current = testEffectsSnapshot(100n, 'effects-after', 'structure-after');
+  let verificationCount = 0;
+  const verifier = async () => ({
+    status: 'verified' as const,
+    effects: verificationCount++ === 0 ? baseline : current,
+  });
+  const id = 'F'.repeat(16);
+  await createSigningRequest(store, { network: 'testnet', xdr: transaction.toXdr() }, {
+    accountLoader, networkParametersLoader, sorobanExecutionVerifier: verifier, idFactory: () => id,
+  });
+  const first = TransactionBuilder.fromXdr(transaction.toXdr(), Networks.TESTNET);
+  first.sign(source);
+  await contributeSigningRequest(store, id, first.toXdr(), { accountLoader, networkParametersLoader });
+  const secondSigned = TransactionBuilder.fromXdr(transaction.toXdr(), Networks.TESTNET);
+  secondSigned.sign(second);
+  await contributeSigningRequest(store, id, secondSigned.toXdr(), { accountLoader, networkParametersLoader });
+  let submits = 0;
+  await assert.rejects(
+    submitSigningRequest(store, id, {
+      accountLoader,
+      networkParametersLoader,
+      sorobanExecutionVerifier: verifier,
+      acceptedEffectsDigest: current.digest,
+      transactionLoader: async () => null,
+      transactionSubmitter: async () => {
+        submits += 1;
+        throw new Error('must not broadcast');
+      },
+    }),
+    (cause: unknown) => cause instanceof SigningRequestServiceError
+      && cause.code === 'soroban_effects_reauthorization_required'
+      && (cause.details as { effectsDiff?: { requiresReauthorization?: boolean } } | undefined)?.effectsDiff?.requiresReauthorization === true,
+  );
+  assert.equal(submits, 0);
 });
 
 test('detached G-account Soroban authorization must satisfy live medium threshold before Request freeze', async () => {

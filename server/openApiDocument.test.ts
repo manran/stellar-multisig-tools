@@ -93,6 +93,8 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   ]);
   assert.deepEqual(schemas.ContractIntentContributionInput.required, ['entryIndex', 'signatureBase64']);
   assert.deepEqual(schemas.ContractIntentExecutionInput.required, ['executionSource']);
+  assert.ok((schemas.ContractIntentExecutionInput.properties as JsonObject).acceptedEffectsDigest);
+  assert.deepEqual(schemas.SorobanEffectsDiff.required, ['version', 'kind', 'severity', 'requiresExplicitReview', 'requiresReauthorization', 'expectedDigest', 'currentDigest', 'structureChanged', 'maxChangeBasisPoints', 'numericChanges']);
   assert.deepEqual(schemas.ContractIntentReplanInput.required, ['action']);
   assert.deepEqual(schemas.ContractCallBuildInput.required, [
     'network',
@@ -103,6 +105,9 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
     'lifetimeSeconds',
   ]);
   assert.deepEqual(schemas.ContractPrepareInput.required, ['network', 'xdr']);
+  assert.deepEqual((schemas.ContractPrepareInput.properties as JsonObject).mode, { type: 'string', enum: ['record', 'enforce'], default: 'record' });
+  assert.deepEqual(schemas.ContractPrepareResult.required, ['operation', 'version', 'mode', 'simulation']);
+  assert.deepEqual(schemas.ContractEnforceResult.required, ['operation', 'version', 'mode', 'verification']);
 });
 
 test('discovery endpoints expose the deployment-bound description and schema pointers', async () => {

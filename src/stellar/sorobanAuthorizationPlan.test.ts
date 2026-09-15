@@ -12,6 +12,7 @@ import {
   authorizationEntriesFromPlan,
   createSorobanAuthorizationPlan,
 } from './sorobanAuthorizationPlan.js';
+import { emptySorobanEffectsSnapshot } from './sorobanEffects.js';
 import {
   createSorobanIntent,
   materializeSorobanIntent,
@@ -66,10 +67,12 @@ test('AuthorizationPlan discards transaction shell and is stable across planning
   const first = createSorobanAuthorizationPlan(
     intent,
     materialize(Keypair.random(), '1', intent, [detached]).toXDR(),
+    emptySorobanEffectsSnapshot(),
   );
   const second = createSorobanAuthorizationPlan(
     intent,
     materialize(Keypair.random(), '9', intent, [detached]).toXDR(),
+    emptySorobanEffectsSnapshot(),
   );
 
   assert.equal(first.authorizationPlanDigest, second.authorizationPlanDigest);
@@ -102,10 +105,12 @@ test('AuthorizationPlan binds SOURCE_ACCOUNT authorization to the planning sourc
   const first = createSorobanAuthorizationPlan(
     intent,
     materialize(sourceA, '1', intent, [sourceBound, detached]).toXDR(),
+    emptySorobanEffectsSnapshot(),
   );
   const second = createSorobanAuthorizationPlan(
     intent,
     materialize(sourceB, '9', intent, [sourceBound, detached]).toXDR(),
+    emptySorobanEffectsSnapshot(),
   );
   assert.equal(first.executionBinding, 'source_bound');
   assert.equal(first.boundSourceAccount, sourceA.publicKey());
@@ -117,7 +122,19 @@ test('AuthorizationPlan rejects a transaction for a different Intent', () => {
   const second = fixture();
   const prepared = materialize(Keypair.random(), '1', first.intent, [first.detached]).toXDR();
   assert.throws(
-    () => createSorobanAuthorizationPlan(second.intent, prepared),
+    () => createSorobanAuthorizationPlan(second.intent, prepared, emptySorobanEffectsSnapshot()),
     /does not match this Intent/,
   );
+});
+
+test('AuthorizationPlan identity binds the reviewed simulation effects digest', () => {
+  const { intent, detached } = fixture();
+  const prepared = materialize(Keypair.random(), '1', intent, [detached]).toXDR();
+  const firstEffects = emptySorobanEffectsSnapshot();
+  const secondEffects = { ...firstEffects, digest: 'f'.repeat(64) };
+  const first = createSorobanAuthorizationPlan(intent, prepared, firstEffects);
+  const second = createSorobanAuthorizationPlan(intent, prepared, secondEffects);
+  assert.notEqual(first.authorizationPlanDigest, second.authorizationPlanDigest);
+  assert.equal(first.effects.digest, firstEffects.digest);
+  assert.equal(second.effects.digest, secondEffects.digest);
 });

@@ -9,6 +9,7 @@ import {
 } from '@stellar/stellar-sdk/base';
 import { initializeSorobanGAccountAuthorizationWindow } from '../src/stellar/sorobanAuthorization.js';
 import { createSorobanAuthorizationPlan } from '../src/stellar/sorobanAuthorizationPlan.js';
+import { emptySorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
 import { createSorobanIntent, materializeSorobanIntent } from '../src/stellar/sorobanIntent.js';
 import { createStoredSorobanIntent } from './sorobanIntentService.js';
 import {
@@ -84,7 +85,7 @@ async function fixture() {
     network: 'testnet',
     currentLedger: 100,
   });
-  const plan = createSorobanAuthorizationPlan(intent, initialized);
+  const plan = createSorobanAuthorizationPlan(intent, initialized, emptySorobanEffectsSnapshot());
   const store = new MemoryIntentStore();
   const stored = await createStoredSorobanIntent(store, {
     intent,

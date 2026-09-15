@@ -1,6 +1,7 @@
 import type { SorobanGAccountAuthorizerStatus } from './sorobanAuthorization.js';
 import type { SorobanAuthorizationPlan } from './sorobanAuthorizationPlan.js';
 import type { SorobanIntent } from './sorobanIntent.js';
+import type { SorobanEffectsDiff, SorobanEffectsSnapshot } from './sorobanEffects.js';
 import type { PrivateNoteRevision } from './privateNote.js';
 import type { StellarNetwork } from './types.js';
 
@@ -81,6 +82,9 @@ export interface SorobanIntentExecutionResponse {
     transactionHash: string;
     validUntil: string | null;
     latestLedger: number;
+    effectsDiff: SorobanEffectsDiff;
+    effects: SorobanEffectsSnapshot;
+    effectsAccepted: boolean;
     xdr: string;
   };
 }

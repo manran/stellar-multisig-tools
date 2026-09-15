@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Contract, Keypair, nativeToScVal, xdr } from '@stellar/stellar-sdk/base';
 import { createSorobanAuthorizationPlan } from '../src/stellar/sorobanAuthorizationPlan.js';
+import { emptySorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
 import { createSorobanIntent, materializeSorobanIntent } from '../src/stellar/sorobanIntent.js';
 import { createStoredSorobanIntent, SorobanIntentServiceError } from './sorobanIntentService.js';
 import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';
@@ -36,7 +37,7 @@ test('stores Intent, AuthorizationPlan and off-chain context without a transacti
     fee: '100',
     lifetimeSeconds: 3600,
   });
-  const plan = createSorobanAuthorizationPlan(intent, prepared.toXDR());
+  const plan = createSorobanAuthorizationPlan(intent, prepared.toXDR(), emptySorobanEffectsSnapshot());
   const stored = await createStoredSorobanIntent(store, {
     intent,
     authorizationPlan: plan,
@@ -70,7 +71,7 @@ test('rejects source-account authorization instead of binding Intent to a transi
     fee: '100',
     lifetimeSeconds: 3600,
     authorizationEntries: [sourceAuth],
-  }).toXDR());
+  }).toXDR(), emptySorobanEffectsSnapshot());
 
   await assert.rejects(
     () => createStoredSorobanIntent(store, { intent, authorizationPlan: plan, creatorAddress: creator.publicKey() }),
@@ -89,7 +90,7 @@ test('rejects mismatched or incomplete authorization planning state', async () =
     sourceSequence: '1',
     fee: '100',
     lifetimeSeconds: 3600,
-  }).toXDR());
+  }).toXDR(), emptySorobanEffectsSnapshot());
 
   await assert.rejects(
     () => createStoredSorobanIntent(store, { intent: first, authorizationPlan: plan, creatorAddress: source.publicKey() }),

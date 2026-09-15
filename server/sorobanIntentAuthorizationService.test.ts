@@ -14,6 +14,7 @@ import {
   sorobanAuthorizationEntryPreimageXdr,
 } from '../src/stellar/sorobanAuthorization.js';
 import { createSorobanAuthorizationPlan, authorizationEntriesFromPlan } from '../src/stellar/sorobanAuthorizationPlan.js';
+import { emptySorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
 import { initializeSorobanContractAccountAuthorizationWindow } from '../src/stellar/sorobanCustomAuthorization.js';
 import { createSorobanIntent, materializeSorobanIntent } from '../src/stellar/sorobanIntent.js';
 import { createStoredSorobanIntent } from './sorobanIntentService.js';
@@ -92,7 +93,7 @@ async function fixture() {
     network: 'testnet',
     currentLedger: 100,
   });
-  const plan = createSorobanAuthorizationPlan(intent, initialized);
+  const plan = createSorobanAuthorizationPlan(intent, initialized, emptySorobanEffectsSnapshot());
   const store = new MemoryIntentStore();
   const stored = await createStoredSorobanIntent(store, {
     intent,
@@ -126,7 +127,7 @@ function revisedPlan(f: Awaited<ReturnType<typeof fixture>>, expirationLedger = 
     lifetimeSeconds: 300,
     authorizationEntries: [nextEntry],
   });
-  return createSorobanAuthorizationPlan(f.stored.intent, tx.toXDR());
+  return createSorobanAuthorizationPlan(f.stored.intent, tx.toXDR(), f.stored.authorizationPlan.effects);
 }
 
 function signatureFor(
@@ -321,7 +322,7 @@ async function contractFixture(owner: Keypair) {
     network: 'testnet',
     currentLedger: 100,
   });
-  const plan = createSorobanAuthorizationPlan(intent, initialized);
+  const plan = createSorobanAuthorizationPlan(intent, initialized, emptySorobanEffectsSnapshot());
   const store = new MemoryIntentStore();
   const stored = await createStoredSorobanIntent(store, {
     intent,

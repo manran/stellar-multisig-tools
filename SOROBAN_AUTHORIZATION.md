@@ -17,6 +17,7 @@ semantic Soroban Intent
   -> authorization_ready
   -> late-bound execution source + fresh sequence
   -> enforcing simulation
+  -> effects diff / explicit review when materially changed
   -> final unsigned transaction
   -> ordinary Signing Room / Proposal when envelope signing is needed
 ```
@@ -86,7 +87,9 @@ Execution begins only after `authorization_ready`.
 
 The caller supplies a final executor/source G-address. MultiSigTools then loads a fresh sequence and network parameters, materializes the same semantic invocation with the finalized AUTH entries, and runs RPC `authMode=enforce`.
 
-Enforcing simulation must preserve finalized authorization entries byte-for-byte. Its assembled resource output becomes the final unsigned transaction. A single-signature executor may sign directly; a multisig executor uses the ordinary Proposal/Signing Room path. `Sign` authority for an Intent never implies permission to execute or submit.
+Enforcing simulation must preserve finalized authorization entries byte-for-byte. Its effects are compared with the recording-simulation evidence fixed into the AuthorizationPlan before any final XDR is handed off. A single-signature executor may sign directly; a multisig executor uses the ordinary Proposal/Signing Room path. `Sign` authority for an Intent never implies permission to execute or submit.
+
+Effect comparison is protocol-neutral. Plugins may translate raw ledger changes and events into better labels, but they never weaken comparison or automatically trust a known protocol. Unchanged effects continue normally. Numeric-only result drift is measured as a percentage and returned to Human/Agent reviewers; small drift may proceed with a visible warning whose severity follows the measured percentage. Large numeric drift is blocked by default with `intent_execution_effects_review_required`; a reviewer may explicitly accept that exact current numeric-effects digest, after which MultiSigTools simulates again and produces XDR only if the accepted digest is still current. Structural changes are stronger: they return `intent_execution_effects_reauthorization_required`, cannot be bypassed with `acceptedEffectsDigest`, and require a fresh AuthorizationPlan revision plus fresh AUTH. This keeps protocol recognition out of the trust model: simulation is evidence, diff is fact, and approval belongs to the signer.
 
 ## 8. Human and machine surfaces
 
@@ -95,7 +98,7 @@ The shared resource is `/api/intent`:
 - `POST` — create semantic Intent or convert supported prepared XDR;
 - `GET` — inspect Intent and live authorization state;
 - `PATCH` — contribute detached AUTH as the verified Human/Agent signer;
-- `PUT` — late-bind execution source and prepare the final unsigned transaction.
+- `PUT` — late-bind execution source, compare enforcing effects with reviewed evidence, and prepare the final unsigned transaction; large numeric drift requires explicit digest acceptance, while structural change requires re-plan and fresh AUTH.
 
 The Human `/a#IntentId` page carries only an Intent id. Opening it does not grant authority; the wallet session must prove that the viewer is the creator or a current authorization signer.
 

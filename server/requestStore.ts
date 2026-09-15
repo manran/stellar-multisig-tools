@@ -2,6 +2,7 @@ import type { ActivityEvent, ActivityFactEvent } from '../src/stellar/activityTy
 import type { AgentActorProvenance } from '../src/stellar/agentAccessTypes.js';
 import type { PrivateCommitmentRecord } from '../src/stellar/privateCommitment.js';
 import type { PrivateNoteRevision } from '../src/stellar/privateNote.js';
+import type { SorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
 import type { StellarNetwork } from '../src/stellar/types.js';
 
 export interface StoredSigningRequest {
@@ -24,6 +25,8 @@ export interface StoredSigningRequest {
   initialPrivateNote?: PrivateNoteRevision;
   /** Server-private opening data for an on-chain MEMO_HASH commitment. */
   privateCommitment?: PrivateCommitmentRecord;
+  /** Enforcing-simulation effects fixed when a Soroban Proposal is created. */
+  sorobanEffectsBaseline?: SorobanEffectsSnapshot;
 }
 
 export interface StoredAcceptedSignature {

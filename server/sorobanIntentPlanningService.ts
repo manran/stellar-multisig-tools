@@ -74,7 +74,7 @@ async function planInternal(
     network: intent.network,
     currentLedger: simulation.latestLedger,
   });
-  const authorizationPlan = createSorobanAuthorizationPlan(intent, initializedXdr);
+  const authorizationPlan = createSorobanAuthorizationPlan(intent, initializedXdr, simulation.effects);
   if (authorizationPlan.executionBinding === 'source_bound') {
     throw new SorobanIntentPlanningError(
       'This contract call uses SOURCE_ACCOUNT Soroban authorization, which binds authorization to the final transaction source. MultiSigTools Intent workflows intentionally collect authorization before choosing an executor, so this source-bound authorization cannot be used here. Use detached address authorization instead, or change the contract/integration so authorization is not supplied by the transaction source.',

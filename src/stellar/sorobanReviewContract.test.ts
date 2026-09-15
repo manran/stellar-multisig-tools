@@ -12,6 +12,9 @@ const authorization = source('../TransactionAuthorizationResults.tsx');
 const sorobanAuthorization = source('../SorobanAuthorizationResults.tsx');
 const sorobanPreparation = source('../SorobanAuthorizationPreparation.tsx');
 const sorobanIntentApp = source('../SorobanIntentApp.tsx');
+const requestApp = source('../RequestApp.tsx');
+const reviewHandoff = source('./reviewHandoff.ts');
+const effectsDiffView = source('../SorobanEffectsDiffView.tsx');
 const sorobanAuthCore = source('./sorobanAuthorization.ts');
 const sorobanCustomAuthCore = source('./sorobanCustomAuthorization.ts');
 const sorobanContractAdapter = source('./sorobanContractAdapter.ts');
@@ -68,6 +71,34 @@ test('Soroban Review routes detached authorization into Intent before envelope s
   assert.match(sorobanIntentApp, /executionSource/);
   assert.match(sorobanIntentApp, /action: 'replan'/);
   assert.match(sorobanIntentApp, /Refresh authorization/);
+  assert.match(sorobanIntentApp, /Simulation effects at authorization/);
+  assert.match(sorobanIntentApp, /Execution effects comparison/);
+  assert.match(sorobanIntentApp, /I reviewed this numeric change/);
+  assert.match(sorobanIntentApp, /Review changed effects and re-authorize/);
+  assert.match(sorobanIntentApp, /requiresReauthorization/);
+});
+
+test('final Soroban broadcast remains bound to reviewed effects in both direct and Proposal submission', () => {
+  assert.match(sorobanIntentApp, /sorobanEffectsBaseline: body\.execution\.effects/);
+  assert.match(sorobanIntentApp, /sorobanTransactionHash: body\.execution\.transactionHash/);
+  assert.match(reviewHandoff, /SOROBAN_EFFECTS_HANDOFF_KEY/);
+  assert.match(reviewHandoff, /SOROBAN_TRANSACTION_HASH_HANDOFF_KEY/);
+  assert.match(signingRoom, /directSorobanBaselineBound/);
+  assert.match(signingRoom, /transactionHashHex\(effectiveXdr, network\) === handoff\.sorobanTransactionHash/);
+  assert.match(signingRoom, /verifyPreparedContractCallOperation/);
+  assert.match(contractOperationsClient, /mode: 'enforce'/);
+  assert.match(contractPrepareApi, /enforcePreparedSorobanTransaction/);
+  assert.match(signingRoom, /compareSorobanEffects/);
+  assert.match(signingRoom, /diff\.currentDigest !== reviewedDigest/);
+  assert.match(signingRoom, /acceptedDirectEffectsDigest/);
+  assert.match(signingRoom, /effects change again, this confirmation stops/);
+  assert.match(requestApp, /soroban_effects_review_required/);
+  assert.match(requestApp, /soroban_effects_reauthorization_required/);
+  assert.match(requestApp, /acceptedEffectsDigest/);
+  assert.match(requestService, /soroban_effects_review_required/);
+  assert.match(requestService, /soroban_effects_reauthorization_required/);
+  assert.match(effectsDiffView, /Maximum difference/);
+  assert.match(effectsDiffView, /Structural change/);
 });
 
 test('imported prepared Soroban XDR crosses into the source-free Intent workflow', () => {
@@ -103,6 +134,7 @@ test('recording simulation and shared authorization are Headless Intent operatio
   assert.match(intentApi, /createImportedSorobanIntent/);
   assert.match(intentApi, /contributeSorobanIntentAuthorization/);
   assert.match(intentApi, /prepareSorobanIntentExecution/);
+  assert.match(intentApi, /acceptedEffectsDigest/);
   assert.match(intentApi, /replanExpiredSorobanIntent/);
   assert.match(intentApi, /source_account_auth_unsupported'[\s\S]*contract_account_auth_unsupported'[\s\S]*\? 409 : 503/);
   assert.doesNotMatch(intentApi, /SorobanPreparation/);
@@ -120,6 +152,7 @@ test('Soroban RPC supports recording and enforcing simulation around Intent plan
   assert.match(sorobanContract, /recording simulation/);
   assert.match(sorobanContract, /immutable detached AuthorizationPlan/);
   assert.match(sorobanContract, /enforcing simulation/);
+  assert.match(sorobanContract, /effects diff \/ explicit review/);
   assert.match(sorobanContract, /final unsigned transaction/);
 });
 

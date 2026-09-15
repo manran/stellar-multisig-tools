@@ -26,6 +26,8 @@ test('review handoff round-trips transaction and optional workflow context', () 
     privateCommitment: commitment,
     createTreasuryAccountId: ' GABC ',
     accountSigningIntent: 'offline',
+    sorobanEffectsBaseline: null,
+    sorobanTransactionHash: null,
   });
 
   assert.deepEqual(takeReviewHandoff(storage, null), {
@@ -35,7 +37,36 @@ test('review handoff round-trips transaction and optional workflow context', () 
     privateCommitment: commitment,
     createTreasuryAccountId: 'GABC',
     accountSigningIntent: 'offline',
+    sorobanEffectsBaseline: null,
+    sorobanTransactionHash: null,
   });
+});
+
+
+test('review handoff binds Soroban effects to the exact transaction hash', () => {
+  const storage = new MemoryStorage();
+  const effects = {
+    version: 1 as const,
+    digest: 'effects-digest',
+    structureDigest: 'structure-digest',
+    stateChangeCount: 0,
+    eventCount: 0,
+    stateChanges: [],
+    events: [],
+    numericEffects: [{ key: 'quote', label: 'Quote', value: '100' }],
+    truncated: false,
+  };
+  const transactionHash = 'ab'.repeat(32);
+  writeReviewHandoff(storage, {
+    xdr: 'SOROBAN',
+    network: 'testnet',
+    sorobanEffectsBaseline: effects,
+    sorobanTransactionHash: transactionHash.toUpperCase(),
+  });
+
+  const handoff = takeReviewHandoff(storage, null);
+  assert.deepEqual(handoff.sorobanEffectsBaseline, effects);
+  assert.equal(handoff.sorobanTransactionHash, transactionHash);
 });
 
 test('writing a new handoff clears optional context from the previous workflow', () => {
@@ -57,6 +88,8 @@ test('writing a new handoff clears optional context from the previous workflow',
     privateCommitment: null,
     createTreasuryAccountId: null,
     accountSigningIntent: null,
+    sorobanEffectsBaseline: null,
+    sorobanTransactionHash: null,
   });
 });
 
@@ -71,6 +104,8 @@ test('taking a handoff consumes every protocol field exactly once outside review
     privateCommitment: null,
     createTreasuryAccountId: null,
     accountSigningIntent: null,
+    sorobanEffectsBaseline: null,
+    sorobanTransactionHash: null,
   });
 });
 
@@ -103,6 +138,8 @@ test('malformed optional context fails closed and is still consumed', () => {
     privateCommitment: null,
     createTreasuryAccountId: null,
     accountSigningIntent: null,
+    sorobanEffectsBaseline: null,
+    sorobanTransactionHash: null,
   });
   assert.equal(storage.getItem('multisig-tools.stellar.private-commitment-handoff'), null);
 });

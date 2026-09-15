@@ -55,6 +55,9 @@ export function canSubmitReviewedTransactionDirectly(
   authorizationStatus: TransactionReviewAuthorizationStatus,
   readyForSubmit: boolean,
   hasSorobanInvocation: boolean,
+  sorobanExecutionReady = false,
 ): boolean {
-  return authorizationStatus === 'satisfied' && readyForSubmit && !hasSorobanInvocation;
+  return authorizationStatus === 'satisfied'
+    && readyForSubmit
+    && (!hasSorobanInvocation || sorobanExecutionReady);
 }

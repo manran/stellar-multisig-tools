@@ -3,6 +3,7 @@ import { publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import type { StellarNetwork } from '../src/stellar/types.js';
 import {
+  enforcePreparedSorobanTransaction,
   simulateSorobanTransaction,
   SorobanSimulationError,
 } from '../src/stellar/sorobanRpc.js';
@@ -40,10 +41,26 @@ export async function POST(request: Request): Promise<Response> {
       return json({ error: 'Network must be public or testnet.', code: 'invalid_network' }, 400);
     }
     assertDeploymentNetwork(network);
+    const mode = body.mode === undefined || body.mode === 'record'
+      ? 'record'
+      : body.mode === 'enforce'
+        ? 'enforce'
+        : null;
+    if (!mode) return json({ error: 'Mode must be record or enforce.', code: 'invalid_mode' }, 400);
+    if (mode === 'enforce') {
+      const verification = await enforcePreparedSorobanTransaction({ envelopeXdr: xdr, network });
+      return json({
+        operation: 'contract.call.prepare',
+        version: 1,
+        mode,
+        verification,
+      });
+    }
     const simulation = await simulateSorobanTransaction({ envelopeXdr: xdr, network });
     return json({
       operation: 'contract.call.prepare',
       version: 1,
+      mode,
       simulation,
     });
   } catch (cause) {

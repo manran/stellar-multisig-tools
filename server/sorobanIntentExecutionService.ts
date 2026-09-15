@@ -6,6 +6,7 @@ import {
   loadNetworkParameters,
 } from '../src/stellar/horizon.js';
 import { materializeSorobanIntent } from '../src/stellar/sorobanIntent.js';
+import { compareSorobanEffects, type SorobanEffectsDiff, type SorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
 import {
   prepareEnforcedSorobanTransaction,
   SorobanSimulationError,
@@ -17,7 +18,7 @@ import {
 import type { SorobanIntentStore } from './sorobanIntentStore.js';
 
 export class SorobanIntentExecutionServiceError extends Error {
-  constructor(message: string, readonly status: number, readonly code: string) {
+  constructor(message: string, readonly status: number, readonly code: string, readonly details?: unknown) {
     super(message);
     this.name = 'SorobanIntentExecutionServiceError';
   }
@@ -32,6 +33,7 @@ interface ExecutionOptions {
   networkParametersLoader?: NetworkParametersLoader;
   enforcer?: Enforcer;
   lifetimeSeconds?: number;
+  acceptedEffectsDigest?: string;
 }
 
 export interface SorobanIntentExecutionPreparation {
@@ -45,6 +47,9 @@ export interface SorobanIntentExecutionPreparation {
   transactionHash: string;
   validUntil: string | null;
   latestLedger: number;
+  effectsDiff: SorobanEffectsDiff;
+  effects: SorobanEffectsSnapshot;
+  effectsAccepted: boolean;
   xdr: string;
 }
 
@@ -109,6 +114,35 @@ export async function prepareSorobanIntentExecution(
     throw cause;
   }
 
+  const expectedEffects = stored.authorizationPlan.effects;
+  if (!expectedEffects?.digest) {
+    throw new SorobanIntentExecutionServiceError(
+      'This Soroban Intent has no reviewed simulation-effects baseline. Refresh authorization before preparing execution.',
+      409,
+      'intent_effects_unavailable',
+    );
+  }
+  const effectsDiff = compareSorobanEffects(expectedEffects, enforced.effects);
+  if (effectsDiff.requiresReauthorization) {
+    throw new SorobanIntentExecutionServiceError(
+      'Final simulation changed the structure of the reviewed effects. Refresh the authorization plan, review the new effects, and collect fresh AUTH before preparing the transaction.',
+      409,
+      'intent_execution_effects_reauthorization_required',
+      { effectsDiff },
+    );
+  }
+  const acceptedEffectsDigest = options.acceptedEffectsDigest?.trim() ?? '';
+  const effectsAccepted = effectsDiff.requiresExplicitReview
+    && acceptedEffectsDigest === enforced.effects.digest;
+  if (effectsDiff.requiresExplicitReview && !effectsAccepted) {
+    throw new SorobanIntentExecutionServiceError(
+      'Final simulation numeric effects changed materially. Review the percentage differences and explicitly accept the current effects before preparing the transaction.',
+      409,
+      'intent_execution_effects_review_required',
+      { effectsDiff },
+    );
+  }
+
   const prepared = TransactionBuilder.fromXdr(
     enforced.assembledXdr,
     stored.network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC,
@@ -127,6 +161,9 @@ export async function prepareSorobanIntentExecution(
     transactionHash: Buffer.from(prepared.hash()).toString('hex'),
     validUntil: prepared.timeBounds?.maxTime ? new Date(Number(prepared.timeBounds.maxTime) * 1000).toISOString() : null,
     latestLedger: enforced.latestLedger,
+    effectsDiff,
+    effects: enforced.effects,
+    effectsAccepted,
     xdr: enforced.assembledXdr,
   };
 }

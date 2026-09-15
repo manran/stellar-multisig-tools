@@ -73,8 +73,8 @@ const serviceOptions = {
   networkParametersLoader: loadNetworkParameters,
   sorobanExecutionVerifier: async (envelopeXdr: string, network: StellarNetwork) => {
     try {
-      await enforcePreparedSorobanTransaction({ envelopeXdr, network });
-      return { status: 'verified' as const };
+      const verified = await enforcePreparedSorobanTransaction({ envelopeXdr, network });
+      return { status: 'verified' as const, effects: verified.effects };
     } catch (cause) {
       if (cause instanceof SorobanSimulationError && cause.kind === 'invalid') {
         return { status: 'invalid' as const, detail: cause.message };
@@ -118,7 +118,11 @@ function errorResponse(cause: unknown): Response {
     return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
   }
   if (cause instanceof SigningRequestServiceError) {
-    return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
+    return noStoreJson({
+      error: cause.message,
+      code: cause.code,
+      ...(cause.details ? { details: cause.details } : {}),
+    } satisfies SigningRequestApiError, cause.status);
   }
   if (cause instanceof SemanticRateLimitError) {
     return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
@@ -949,7 +953,15 @@ export async function PUT(request: Request): Promise<Response> {
         return capabilityClosedResponse(current.network, current.status);
       }
     }
-    const snapshot = await submitSigningRequest(blobSigningRequestStore, access.id, serviceOptions);
+    const submitBody = request.headers.get('content-type')?.toLowerCase().includes('application/json')
+      ? await readJsonBody(request)
+      : {};
+    const snapshot = await submitSigningRequest(blobSigningRequestStore, access.id, {
+      ...serviceOptions,
+      acceptedEffectsDigest: typeof submitBody.acceptedEffectsDigest === 'string'
+        ? submitBody.acceptedEffectsDigest
+        : undefined,
+    });
     if (access.mode === 'session' && access.actorAddress && !access.activityBound) {
       await bindRequestParticipantBestEffort(snapshot.id, access.actorAddress);
     }

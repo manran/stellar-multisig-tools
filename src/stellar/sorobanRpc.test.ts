@@ -63,7 +63,7 @@ test('RPC endpoints have safe defaults and explicit project overrides', () => {
   );
 });
 
-test('explicit simulation sends exact XDR in recording mode and decodes review facts', async () => {
+test('recording simulation clears imported AUTH before RPC and decodes review facts', async () => {
   const { transaction, sourceAuthorization } = contractCallTransaction();
   const envelopeXdr = transaction.toXdr();
   const returnValue = nativeToScVal('invoice-42').toXdr('base64');
@@ -91,8 +91,8 @@ test('explicit simulation sends exact XDR in recording mode and decodes review f
         latestLedger: 123456,
         minResourceFee: '9876',
         transactionData: new SorobanDataBuilder().build().toXdr('base64'),
-        events: ['event-1', 'event-2'],
-        stateChanges: [{ type: 'updated' }],
+        events: [],
+        stateChanges: [],
         cost: { cpuInsns: '111', memBytes: '222' },
         results: [{
           auth: [sourceAuthorization.toXdr('base64'), detachedAuthorization.toXdr('base64')],
@@ -111,15 +111,21 @@ test('explicit simulation sends exact XDR in recording mode and decodes review f
 
   assert.equal(requestUrl, 'https://rpc.example.test/');
   assert.equal(requestBody.method, 'simulateTransaction');
-  assert.equal(requestBody.params.transaction, envelopeXdr);
+  assert.notEqual(requestBody.params.transaction, envelopeXdr);
+  const recorded = TransactionBuilder.fromXdr(requestBody.params.transaction, Networks.TESTNET);
+  assert.equal(recorded.operations.length, 1);
+  assert.equal(recorded.operations[0]?.type, 'invokeHostFunction');
+  if (recorded.operations[0]?.type === 'invokeHostFunction') assert.equal(recorded.operations[0].auth?.length, 0);
   assert.equal(requestBody.params.xdrFormat, 'base64');
   assert.equal(requestBody.params.authMode, 'record');
   assert.equal(result.latestLedger, 123456);
   assert.equal(result.minResourceFee, '9876');
   assert.equal(result.returnValuePreview, '"invoice-42"');
   assert.equal(result.authorizationEntries.length, 2);
-  assert.equal(result.eventCount, 2);
-  assert.equal(result.stateChangeCount, 1);
+  assert.equal(result.eventCount, 0);
+  assert.equal(result.stateChangeCount, 0);
+  assert.equal(result.effects.eventCount, 0);
+  assert.equal(result.effects.stateChangeCount, 0);
   assert.equal(result.cpuInstructions, '111');
   assert.equal(result.memoryBytes, '222');
   assert.match(result.transactionHash, /^[0-9a-f]{64}$/);
@@ -416,6 +422,26 @@ test('malformed provider result collections fail closed without crashing Review'
   assert.equal(result.assembledXdr, null);
 });
 
+
+
+test('malformed simulation effects fail closed as provider-unavailable evidence', async () => {
+  const { transaction } = contractCallTransaction();
+  const fetchImpl: typeof fetch = async () => new Response(JSON.stringify({
+    jsonrpc: '2.0',
+    result: { latestLedger: 789, events: ['not-valid-xdr'], stateChanges: [] },
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  await assert.rejects(
+    simulateSorobanTransaction({
+      envelopeXdr: transaction.toXdr(),
+      network: 'testnet',
+      endpointUrl: 'https://rpc.example.test/',
+      fetchImpl,
+    }),
+    (error: unknown) => error instanceof SorobanSimulationError
+      && error.kind === 'unavailable'
+      && /effects.*could not be decoded/i.test(error.message),
+  );
+});
 test('unsupported transaction shapes are rejected before any RPC request', async () => {
   const { transaction } = contractCallTransaction(2);
   let called = false;

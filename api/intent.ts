@@ -61,6 +61,9 @@ export async function OPTIONS(): Promise<Response> {
 }
 
 function errorResponse(cause: unknown): Response {
+  if (cause instanceof SorobanIntentExecutionServiceError) {
+    return json({ error: cause.message, code: cause.code, ...(cause.details ? { details: cause.details } : {}) }, cause.status);
+  }
   if (
     cause instanceof DeploymentNetworkPolicyError
     || cause instanceof RequestBodyError
@@ -69,7 +72,6 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof ContractIntentServiceError
     || cause instanceof SorobanIntentServiceError
     || cause instanceof SorobanIntentAuthorizationServiceError
-    || cause instanceof SorobanIntentExecutionServiceError
     || cause instanceof SorobanIntentReplanServiceError
   ) {
     return json({ error: cause.message, code: cause.code }, cause.status);
@@ -361,7 +363,10 @@ export async function PUT(request: Request): Promise<Response> {
       blobSorobanIntentStore,
       access.id,
       executionSource,
-      { authorization: access.authorization },
+      {
+        authorization: access.authorization,
+        acceptedEffectsDigest: typeof body.acceptedEffectsDigest === 'string' ? body.acceptedEffectsDigest : undefined,
+      },
     );
     return json({
       operation: 'contract.intent.execution.prepare',

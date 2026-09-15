@@ -86,7 +86,7 @@ export default function SorobanAuthorizationPreparation({ preparation, onPrepare
         return;
       }
       setState({ status: 'ready', xdr: preparation.xdr, analysis, currentLedger: preparation.currentLedger });
-      onPreparedXdrChange(null, false);
+      onPreparedXdrChange(analysis.ready ? preparation.xdr : null, analysis.ready);
     }).catch((cause) => {
       if (cancelled) return;
       const message = cause instanceof Error ? cause.message : 'Unable to load Soroban authorizer policies.';

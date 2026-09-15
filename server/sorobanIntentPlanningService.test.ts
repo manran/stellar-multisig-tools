@@ -11,6 +11,7 @@ import {
 import { inspectAuthEntry } from '@stellar/stellar-sdk/base';
 import { authorizationEntriesFromPlan } from '../src/stellar/sorobanAuthorizationPlan.js';
 import { createSorobanIntent, materializeSorobanIntent } from '../src/stellar/sorobanIntent.js';
+import { emptySorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
 import { planSorobanIntent, planSorobanIntentForStorage } from './sorobanIntentPlanningService.js';
 
 function fixture() {
@@ -54,7 +55,7 @@ test('planning converts a transient recording transaction into an AuthorizationP
   const plan = await planSorobanIntent(f.intent, f.source.publicKey(), {
     accountLoader: async () => ({ accountId: f.source.publicKey(), sequence: '7' } as never),
     networkParametersLoader: async () => ({ baseFeeInStroops: 100 } as never),
-    simulator: async () => ({ assembledXdr: f.assembled.toXDR(), latestLedger: 100 } as never),
+    simulator: async () => ({ assembledXdr: f.assembled.toXDR(), latestLedger: 100, effects: emptySorobanEffectsSnapshot() } as never),
   });
   assert.equal(plan.intentDigest, f.intent.intentDigest);
   assert.equal(plan.executionBinding, 'detached');
@@ -91,7 +92,7 @@ test('planning rejects SOURCE_ACCOUNT authorization instead of binding Intent to
     () => planSorobanIntent(f.intent, f.source.publicKey(), {
       accountLoader: async () => ({ accountId: f.source.publicKey(), sequence: '7' } as never),
       networkParametersLoader: async () => ({ baseFeeInStroops: 100 } as never),
-      simulator: async () => ({ assembledXdr: sourceBound.toXDR(), latestLedger: 100 } as never),
+      simulator: async () => ({ assembledXdr: sourceBound.toXDR(), latestLedger: 100, effects: emptySorobanEffectsSnapshot() } as never),
     }),
     (cause: unknown) => cause instanceof Error && 'code' in cause && cause.code === 'source_account_auth_unsupported',
   );
@@ -159,7 +160,7 @@ test('planning initializes configured C-account AUTH and discovers its owner', a
     const result = await planSorobanIntentForStorage(intent, source.publicKey(), {
       accountLoader: async () => ({ accountId: source.publicKey(), sequence: '7' } as never),
       networkParametersLoader: async () => ({ baseFeeInStroops: 100 } as never),
-      simulator: async () => ({ assembledXdr: assembled.toXDR(), latestLedger: 100 } as never),
+      simulator: async () => ({ assembledXdr: assembled.toXDR(), latestLedger: 100, effects: emptySorobanEffectsSnapshot() } as never),
     });    assert.deepEqual(result.discoverySignerKeys, [owner.publicKey()]);
     const entries = authorizationEntriesFromPlan(result.authorizationPlan);
     assert.equal(entries.length, 1);

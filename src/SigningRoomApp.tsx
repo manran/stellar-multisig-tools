@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
+import { Networks, TransactionBuilder } from '@stellar/stellar-sdk/base';
 import {
   CheckCircle2,
   CircleAlert,
@@ -10,6 +11,7 @@ import {
   Send,
 } from 'lucide-react';
 import ReviewTransactionSummary from './ReviewTransactionSummary';
+import SorobanEffectsDiffView from './SorobanEffectsDiffView';
 import SorobanAuthorizationResults from './SorobanAuthorizationResults';
 import { ActionButton, NetworkFact, WorkflowProgress } from './MultiSigUi';
 import { useStellarWallet } from './StellarWalletContext';
@@ -40,6 +42,9 @@ import { saveRequestLocalEffects } from './stellar/requestLocalEffects';
 import { mergeSignedTransactionXdr } from './stellar/signatureMerge';
 import type { CreateSigningRequestResponse, SigningRequestSnapshot } from './stellar/requestTypes';
 import type { StellarNetwork } from './stellar/types';
+import { compareSorobanEffects } from './stellar/sorobanEffects';
+import type { SorobanEffectsDiff } from './stellar/sorobanEffects';
+import { verifyPreparedContractCallOperation } from './contractOperationsClient';
 import { isCurrentWorkspaceNavigationState, navigateWorkspace, stellarHref } from './workspaceNavigation';
 
 function friendlyPreconditionState(
@@ -74,6 +79,18 @@ interface CreatedRequest {
   capability: string;
   snapshot: SigningRequestSnapshot;
   activityBound: boolean;
+}
+
+function transactionHashHex(xdrValue: string, network: StellarNetwork): string | null {
+  try {
+    const parsed = TransactionBuilder.fromXdr(
+      xdrValue,
+      network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC,
+    );
+    return Array.from(parsed.hash(), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return null;
+  }
 }
 
 function transactionExplorerUrl(network: StellarNetwork, hash: string) {
@@ -158,8 +175,11 @@ export default function SigningRoomApp() {
   const [startingRequest, setStartingRequest] = useState(false);
   const [directSubmitArmed, setDirectSubmitArmed] = useState(false);
   const [directSubmitting, setDirectSubmitting] = useState(false);
+  const [directCheckingEffects, setDirectCheckingEffects] = useState(false);
   const [directMainnetConfirmed, setDirectMainnetConfirmed] = useState(false);
   const [directSubmission, setDirectSubmission] = useState<TransactionSubmissionResult | null>(null);
+  const [directEffectsDiff, setDirectEffectsDiff] = useState<SorobanEffectsDiff | null>(null);
+  const [acceptedDirectEffectsDigest, setAcceptedDirectEffectsDigest] = useState('');
   const [sorobanPreparedXdr, setSorobanPreparedXdr] = useState<string | null>(null);
   const [sorobanAuthorizationReady, setSorobanAuthorizationReady] = useState(false);
 
@@ -173,6 +193,10 @@ export default function SigningRoomApp() {
       return inspection;
     }
   }, [inspection, effectiveXdr, roomXdr, network]);
+  const directSorobanBaselineBound = useMemo(() => {
+    if (!hasSorobanInvocation || !handoff.sorobanEffectsBaseline || !handoff.sorobanTransactionHash || !effectiveXdr) return false;
+    return transactionHashHex(effectiveXdr, network) === handoff.sorobanTransactionHash;
+  }, [hasSorobanInvocation, handoff.sorobanEffectsBaseline, handoff.sorobanTransactionHash, effectiveXdr, network]);
   const authorization = useMemo(() => {
     if (!effectiveInspection || !effectiveXdr) return null;
     return analyzeTransactionAuthorization(effectiveXdr, network, effectiveInspection, sourceAnalyses);
@@ -205,6 +229,7 @@ export default function SigningRoomApp() {
     status,
     preconditions?.readyForSubmit === true,
     hasSorobanInvocation,
+    directSorobanBaselineBound && sorobanAuthorizationReady,
   );
   const transactionSignerHandoffNeeded = Boolean(
     hasSorobanInvocation
@@ -231,8 +256,11 @@ export default function SigningRoomApp() {
     setStartingRequest(false);
     setDirectSubmitArmed(false);
     setDirectSubmitting(false);
+    setDirectCheckingEffects(false);
     setDirectMainnetConfirmed(false);
     setDirectSubmission(null);
+    setDirectEffectsDiff(null);
+    setAcceptedDirectEffectsDigest('');
     setSorobanPreparedXdr(null);
     setSorobanAuthorizationReady(false);
     setLoading(true);
@@ -353,16 +381,66 @@ export default function SigningRoomApp() {
     }
   }
 
+  async function checkDirectSorobanEffects(): Promise<SorobanEffectsDiff | null> {
+    if (!hasSorobanInvocation) return null;
+    if (!directSorobanBaselineBound || !handoff.sorobanEffectsBaseline) {
+      throw new Error('This Soroban transaction is not bound to the final effects approved by Contract Authorization. Return to the original Intent before submitting.');
+    }
+    const verified = await verifyPreparedContractCallOperation({ xdr: effectiveXdr, network });
+    return compareSorobanEffects(handoff.sorobanEffectsBaseline, verified.effects);
+  }
+
+  async function armDirectSubmission() {
+    if (!directSubmitReady || directSubmitting || directCheckingEffects || directSubmission) return;
+    setError('');
+    setAcceptedDirectEffectsDigest('');
+    if (!hasSorobanInvocation) {
+      setDirectSubmitArmed(true);
+      return;
+    }
+    setDirectCheckingEffects(true);
+    try {
+      const diff = await checkDirectSorobanEffects();
+      setDirectEffectsDiff(diff);
+      if (diff?.requiresReauthorization) {
+        setDirectSubmitArmed(false);
+        return;
+      }
+      setDirectSubmitArmed(true);
+    } catch (cause) {
+      setDirectSubmitArmed(false);
+      setError(cause instanceof Error ? cause.message : 'Unable to verify current Soroban effects before submission.');
+    } finally {
+      setDirectCheckingEffects(false);
+    }
+  }
+
   async function submitReviewedXdr() {
     if (!effectiveXdr || !directSubmitReady || !directSubmitArmed || directSubmitting || directSubmission) return;
     if (network === 'public' && !directMainnetConfirmed) return;
     setDirectSubmitting(true);
     setError('');
     try {
+      if (hasSorobanInvocation) {
+        const diff = await checkDirectSorobanEffects();
+        const reviewedDigest = directEffectsDiff?.currentDigest ?? '';
+        setDirectEffectsDiff(diff);
+        if (!diff || diff.requiresReauthorization) {
+          setDirectSubmitArmed(false);
+          setAcceptedDirectEffectsDigest('');
+          return;
+        }
+        if (diff.currentDigest !== reviewedDigest) {
+          setAcceptedDirectEffectsDigest('');
+          return;
+        }
+        if (diff.requiresExplicitReview && acceptedDirectEffectsDigest !== diff.currentDigest) return;
+      }
       const result = await submitTransactionXdr(effectiveXdr, network);
       setDirectSubmission(result);
       setDirectSubmitArmed(false);
       setDirectMainnetConfirmed(false);
+      setAcceptedDirectEffectsDigest('');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to submit this signed transaction.');
     } finally {
@@ -512,12 +590,31 @@ export default function SigningRoomApp() {
                     <h2 className="mt-2 text-xl font-bold">Ready to submit</h2>
                     <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-600 dark:text-neutral-300">This XDR already satisfies the current on-chain signing policy. No additional wallet signature or Proposal is required to submit it.</p>
                     {!directSubmitArmed ? (
-                      <div className="mt-4 flex flex-wrap gap-2"><ActionButton onClick={() => setDirectSubmitArmed(true)}><Send className="h-4 w-4" />Submit transaction</ActionButton><ActionButton variant="secondary" onClick={() => void copyMergedXdr()}><ClipboardCopy className="h-4 w-4" />{copied ? 'XDR copied' : 'Copy XDR'}</ActionButton></div>
+                      directEffectsDiff?.requiresReauthorization ? (
+                        <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/[0.07] p-4">
+                          <SorobanEffectsDiffView diff={directEffectsDiff} />
+                          <p className="mt-3 text-sm font-semibold text-red-700 dark:text-red-300">The effect structure changed. This transaction cannot be submitted from the old authorization; return to Contract Authorization and create a fresh execution.</p>
+                          <a href={returnTarget.href} className="mt-3 inline-flex text-sm font-semibold text-red-700 underline underline-offset-4 dark:text-red-300">← {returnTarget.label}</a>
+                        </div>
+                      ) : (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <ActionButton disabled={directCheckingEffects} onClick={() => void armDirectSubmission()}>{directCheckingEffects ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{directCheckingEffects ? 'Checking final effects…' : 'Submit transaction'}</ActionButton>
+                          <ActionButton variant="secondary" onClick={() => void copyMergedXdr()}><ClipboardCopy className="h-4 w-4" />{copied ? 'XDR copied' : 'Copy XDR'}</ActionButton>
+                        </div>
+                      )
                     ) : (
                       <div className="mt-4 rounded-xl border border-black/10 bg-white/60 p-4 dark:border-white/10 dark:bg-black/10">
                         <div className="text-sm font-semibold">Submit this signed XDR to Stellar {network === 'public' ? 'Mainnet' : 'Testnet'}?</div>
+                        {directEffectsDiff && directEffectsDiff.kind !== 'unchanged' && <div className="mt-4"><SorobanEffectsDiffView diff={directEffectsDiff} /></div>}
+                        {directEffectsDiff?.requiresExplicitReview && (
+                          <label className="mt-4 flex items-start gap-2 text-sm text-neutral-600 dark:text-neutral-300">
+                            <input type="checkbox" checked={acceptedDirectEffectsDigest === directEffectsDiff.currentDigest} onChange={(event) => setAcceptedDirectEffectsDigest(event.target.checked ? directEffectsDiff.currentDigest : '')} className="mt-0.5" />
+                            I reviewed and accept this exact numeric effects result.
+                          </label>
+                        )}
                         {network === 'public' && <label className="mt-3 flex items-start gap-2 text-sm text-neutral-600 dark:text-neutral-300"><input type="checkbox" checked={directMainnetConfirmed} onChange={(event) => setDirectMainnetConfirmed(event.target.checked)} className="mt-0.5" />I have reviewed this transaction and intend to submit it to Mainnet.</label>}
-                        <div className="mt-4 flex flex-wrap gap-2"><ActionButton disabled={directSubmitting || (network === 'public' && !directMainnetConfirmed)} onClick={() => void submitReviewedXdr()}>{directSubmitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{directSubmitting ? 'Submitting…' : 'Submit transaction'}</ActionButton><ActionButton variant="secondary" disabled={directSubmitting} onClick={() => { setDirectSubmitArmed(false); setDirectMainnetConfirmed(false); }}>Not now</ActionButton></div>
+                        <p className="mt-3 text-xs leading-5 text-neutral-500 dark:text-neutral-400">MultiSig Tools will run enforcing simulation again immediately before broadcast. If the effects change again, this confirmation stops and the new diff is shown instead.</p>
+                        <div className="mt-4 flex flex-wrap gap-2"><ActionButton disabled={directSubmitting || (directEffectsDiff?.requiresExplicitReview === true && acceptedDirectEffectsDigest !== directEffectsDiff.currentDigest) || (network === 'public' && !directMainnetConfirmed)} onClick={() => void submitReviewedXdr()}>{directSubmitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{directSubmitting ? 'Checking and submitting…' : 'Submit transaction'}</ActionButton><ActionButton variant="secondary" disabled={directSubmitting} onClick={() => { setDirectSubmitArmed(false); setDirectMainnetConfirmed(false); setAcceptedDirectEffectsDigest(''); }}>Not now</ActionButton></div>
                       </div>
                     )}
                   </section>

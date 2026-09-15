@@ -98,4 +98,5 @@ test('direct submit is only offered when Classic authorization and preconditions
   assert.equal(canSubmitReviewedTransactionDirectly('bad_auth_extra', true, false), false);
   assert.equal(canSubmitReviewedTransactionDirectly('unknown', true, false), false);
   assert.equal(canSubmitReviewedTransactionDirectly('satisfied', true, true), false);
+  assert.equal(canSubmitReviewedTransactionDirectly('satisfied', true, true, true), true);
 });

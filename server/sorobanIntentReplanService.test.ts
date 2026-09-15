@@ -12,6 +12,7 @@ import {
 } from '@stellar/stellar-sdk/base';
 import { sorobanAuthorizationEntryPreimageXdr } from '../src/stellar/sorobanAuthorization.js';
 import { authorizationEntriesFromPlan, createSorobanAuthorizationPlan } from '../src/stellar/sorobanAuthorizationPlan.js';
+import { emptySorobanEffectsSnapshot, sorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
 import { createSorobanIntent, materializeSorobanIntent } from '../src/stellar/sorobanIntent.js';
 import { contributeSorobanIntentAuthorization } from './sorobanIntentAuthorizationService.js';
 import { replanExpiredSorobanIntent, SorobanIntentReplanServiceError } from './sorobanIntentReplanService.js';
@@ -87,7 +88,7 @@ async function fixture() {
     authorizationEntries: [oldEntry],
     sorobanData: new SorobanDataBuilder().build(),
   });
-  const oldPlan = createSorobanAuthorizationPlan(intent, oldTx.toXDR());
+  const oldPlan = createSorobanAuthorizationPlan(intent, oldTx.toXDR(), emptySorobanEffectsSnapshot());
   const store = new MemoryIntentStore();
   const stored = await createStoredSorobanIntent(store, {
     intent,
@@ -134,7 +135,7 @@ async function fixture() {
       baseFeeInStroops: 100,
       baseReserveInStroops: 5_000_000,
     }),
-    simulator: async () => ({ assembledXdr: freshTx.toXDR(), latestLedger: 500 } as never),
+    simulator: async () => ({ assembledXdr: freshTx.toXDR(), latestLedger: 500, effects: emptySorobanEffectsSnapshot() } as never),
   };
   return {
     store,
@@ -162,6 +163,24 @@ function signatureForPlan(
   const preimage = xdr.HashIdPreimage.fromXdr(preimageXdr, 'base64');
   return Buffer.from(signer.sign(hash(preimage.toXdr()))).toString('base64');
 }
+
+
+function structuralEffectsSnapshot() {
+  const event = new xdr.ContractEvent({
+    ext: xdr.ExtensionPoint.v0(),
+    contractId: null,
+    type: xdr.ContractEventType.contract,
+    body: xdr.ContractEventBody.v0(new xdr.ContractEventV0({
+      topics: [nativeToScVal('unexpected_route')],
+      data: nativeToScVal(1, { type: 'u32' }),
+    })),
+  });
+  return sorobanEffectsSnapshot([], [new xdr.DiagnosticEvent({
+    inSuccessfulContractCall: true,
+    event,
+  }).toXdr('base64')]);
+}
+
 
 test('expired plan is replaced by a fresh revision without reusing old AUTH', async () => {
   const f = await fixture();
@@ -241,7 +260,54 @@ test('re-plan is rejected while the current authorization plan is still active',
       },
     ),
     (cause: unknown) => cause instanceof SorobanIntentReplanServiceError
-      && cause.code === 'intent_replan_not_expired',
+      && cause.code === 'intent_replan_not_allowed',
   );
   assert.equal(planningCalled, false);
+});
+
+
+test('ready authorization is not re-planned when fresh effects keep the same structure', async () => {
+  const f = await fixture();
+  const signed = await contributeSorobanIntentAuthorization(f.store, f.stored.id, {
+    entryIndex: 0,
+    signerAddress: f.authorizer.publicKey(),
+    signatureBase64: signatureForPlan(f.oldPlan, f.authorizer),
+  }, f.activeAuthorizationDependencies);
+  assert.equal(signed.authorization.status, 'authorization_ready');
+  await assert.rejects(
+    () => replanExpiredSorobanIntent(f.store, f.stored.id, f.planningSource.publicKey(), {
+      authorization: signed.authorization,
+      authorizationDependencies: f.activeAuthorizationDependencies,
+      planningDependencies: f.planningDependencies,
+    }),
+    (cause: unknown) => cause instanceof SorobanIntentReplanServiceError
+      && cause.code === 'intent_replan_not_needed',
+  );
+});
+
+test('ready authorization is superseded when fresh planning changes effect structure', async () => {
+  const f = await fixture();
+  const signed = await contributeSorobanIntentAuthorization(f.store, f.stored.id, {
+    entryIndex: 0,
+    signerAddress: f.authorizer.publicKey(),
+    signatureBase64: signatureForPlan(f.oldPlan, f.authorizer),
+  }, f.activeAuthorizationDependencies);
+  const baselineSimulation = await f.planningDependencies.simulator() as unknown as { assembledXdr: string };
+  const changedPlanning = {
+    ...f.planningDependencies,
+    simulator: async () => ({
+      assembledXdr: baselineSimulation.assembledXdr,
+      latestLedger: 500,
+      effects: structuralEffectsSnapshot(),
+    } as never),
+  };
+  const result = await replanExpiredSorobanIntent(f.store, f.stored.id, f.planningSource.publicKey(), {
+    authorization: signed.authorization,
+    authorizationDependencies: f.activeAuthorizationDependencies,
+    planningDependencies: changedPlanning,
+  });
+  assert.equal(result.authorizationPlanRevision, 2);
+  assert.equal(result.authorization.status, 'awaiting_authorization');
+  assert.equal(result.authorization.contributionCount, 0);
+  assert.equal(result.intent.authorizationPlanHistory?.[0]?.authorizationPlan.authorizationPlanDigest, f.oldPlan.authorizationPlanDigest);
 });
