@@ -5,9 +5,20 @@ import {
   AgentCredentialServiceError,
   agentActorForCredential,
   authenticateAgentCredential,
+  looksLikeAgentCredential,
   requireAgentAccess,
 } from '../server/agentCredentialService.js';
 import { createAgentSorobanIntent } from '../server/agentSorobanIntentService.js';
+import {
+  authenticateIntegrationCredential,
+  IntegrationCredentialServiceError,
+  looksLikeIntegrationCredential,
+} from '../server/integrationCredentialService.js';
+import type { ConfiguredIntegrationCredential } from '../server/integrationCredentialService.js';
+import {
+  assertIntegrationSorobanExecutionAccount,
+  createIntegrationSorobanIntent,
+} from '../server/integrationSorobanIntentService.js';
 import { authConfigForRequest } from '../server/authConfig.js';
 import { AuthServiceError, privateWorkspaceSessionFromRequest } from '../server/authService.js';
 import { BoxServiceError } from '../server/boxService.js';
@@ -68,6 +79,7 @@ function errorResponse(cause: unknown): Response {
     cause instanceof DeploymentNetworkPolicyError
     || cause instanceof RequestBodyError
     || cause instanceof AgentCredentialServiceError
+    || cause instanceof IntegrationCredentialServiceError
     || cause instanceof BoxServiceError
     || cause instanceof ContractIntentServiceError
     || cause instanceof SorobanIntentServiceError
@@ -90,14 +102,29 @@ function errorResponse(cause: unknown): Response {
   return json({ error: 'Soroban Intent service is temporarily unavailable.', code: 'internal_error' }, 500);
 }
 
-async function agentCredentialFor(request: Request) {
+function bearerCredentialFromRequest(request: Request): string | null {
   const authorization = request.headers.get('authorization')?.trim() ?? '';
   if (!authorization) return null;
   const match = /^Bearer\s+(.+)$/i.exec(authorization);
   if (!match) {
-    throw new AgentCredentialServiceError('Invalid Agent authorization header.', 401, 'invalid_agent_credential');
+    throw new SorobanIntentAuthorizationServiceError('Invalid authorization header.', 401, 'invalid_credential');
   }
-  return authenticateAgentCredential(blobAgentCredentialStore, match[1].trim());
+  return match[1].trim();
+}
+
+async function agentCredentialFor(request: Request) {
+  const value = bearerCredentialFromRequest(request);
+  if (!value || looksLikeIntegrationCredential(value)) return null;
+  if (!looksLikeAgentCredential(value)) {
+    throw new AgentCredentialServiceError('Invalid Agent credential.', 401, 'invalid_agent_credential');
+  }
+  return authenticateAgentCredential(blobAgentCredentialStore, value);
+}
+
+function integrationCredentialFor(request: Request): ConfiguredIntegrationCredential | null {
+  const value = bearerCredentialFromRequest(request);
+  if (!value || !looksLikeIntegrationCredential(value)) return null;
+  return authenticateIntegrationCredential(value);
 }
 
 async function humanSessionFor(request: Request, network: 'public' | 'testnet') {
@@ -129,9 +156,28 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
   const stored = await blobSorobanIntentStore.getIntent(id);
   if (!stored) throw new SorobanIntentAuthorizationServiceError('Soroban Intent not found.', 404, 'intent_not_found');
   assertDeploymentNetwork(stored.network);
-  const agent = await agentCredentialFor(request);
-  const session = agent ? null : await humanSessionFor(request, stored.network);
+  const integrationCredential = integrationCredentialFor(request);
+  const agent = integrationCredential ? null : await agentCredentialFor(request);
+  const session = integrationCredential || agent ? null : await humanSessionFor(request, stored.network);
   const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, id);
+
+  if (integrationCredential) {
+    if (stored.integration?.serviceId !== integrationCredential.serviceId) {
+      throw new SorobanIntentAuthorizationServiceError(
+        'This Integration credential does not own this Soroban Intent.',
+        403,
+        'integration_intent_access_denied',
+      );
+    }
+    if (required === 'sign') {
+      throw new SorobanIntentAuthorizationServiceError(
+        'Integration credentials cannot contribute Soroban signer authorization.',
+        403,
+        'integration_intent_sign_denied',
+      );
+    }
+    return { id, integrationCredential, agent: null, session: null, stored, authorization, address: undefined };
+  }
 
   if (agent) {
     requireAgentAccess(agent, required);
@@ -158,7 +204,7 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
     );
   }
   if (agent) await blobAgentCredentialStore.touchCredential(agent.credentialId, new Date().toISOString());
-  return { id, agent, session, stored, authorization, address };
+  return { id, integrationCredential: null, agent, session, stored, authorization, address };
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -183,8 +229,16 @@ export async function POST(request: Request): Promise<Response> {
       throw new ContractIntentServiceError('Network must be public or testnet.', 400, 'invalid_network');
     }
     assertDeploymentNetwork(network);
-    const agent = await agentCredentialFor(request);
+    const integrationCredential = integrationCredentialFor(request);
+    const agent = integrationCredential ? null : await agentCredentialFor(request);
     if (body.preparedXdr !== undefined) {
+      if (integrationCredential) {
+        throw new BoxServiceError(
+          'Integration services create semantic Soroban Intents and cannot import prepared XDR.',
+          403,
+          'integration_prepared_xdr_unsupported',
+        );
+      }
       if (agent) {
         throw new AgentCredentialServiceError(
           'Prepared XDR import is a Human review transition. Agents should create semantic Soroban Intents directly.',
@@ -217,6 +271,56 @@ export async function POST(request: Request): Promise<Response> {
       const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, intent.id);
       return json({ operation: 'contract.intent.create', version: 1, replayed: false, intent, authorization }, 201);
     }
+    if (integrationCredential) {
+      if (body.privateNote !== undefined && body.privateNote !== null && body.privateNote !== '') {
+        throw new BoxServiceError(
+          'Integration Intent creation does not accept private plaintext context in this version.',
+          400,
+          'integration_private_note_unsupported',
+        );
+      }
+      const idempotencyKey = request.headers.get('idempotency-key')?.trim() ?? '';
+      if (!idempotencyKey) {
+        throw new BoxServiceError('Idempotency-Key header is required for Integration Intent creation.', 400, 'idempotency_key_required');
+      }
+      const beforeCreate = beforeFirstDurableWrite(async () => {
+        await enforceSemanticRateLimit(request, {
+          rateLimitId: SEMANTIC_RATE_LIMIT_IDS.requestCreate,
+          rateLimitKey: semanticRateLimitKey(network, `service:${integrationCredential.serviceId}`),
+          errorCode: 'request_create_rate_limited',
+          errorMessage: 'This Integration has created too many Intents recently. Try again later.',
+        });
+      });
+      const quotaStore = {
+        ...blobSorobanIntentStore,
+        createIntent: async (...args: Parameters<typeof blobSorobanIntentStore.createIntent>) => {
+          await beforeCreate();
+          return blobSorobanIntentStore.createIntent(...args);
+        },
+      };
+      const result = await createIntegrationSorobanIntent(
+        quotaStore,
+        integrationCredential,
+        {
+          network,
+          contractId: body.contractId,
+          method: body.method,
+          arguments: body.arguments,
+          idempotencyKey,
+          externalReference: body.externalReference,
+        },
+        { planningSource: configuredSorobanPlanningSource(network) },
+      );
+      const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, result.intent.id);
+      return json({
+        operation: 'contract.intent.create',
+        version: 1,
+        replayed: result.replayed,
+        intent: result.intent,
+        authorization,
+      }, result.replayed ? 200 : 201);
+    }
+
     if (agent) {
       const idempotencyKey = request.headers.get('idempotency-key')?.trim() ?? '';
       if (!idempotencyKey) {
@@ -311,6 +415,9 @@ export async function PATCH(request: Request): Promise<Response> {
   try {
     const access = await storedIntentAccess(request, 'sign');
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    if (!access.address) {
+      throw new SorobanIntentAuthorizationServiceError('A current signer is required.', 403, 'intent_signer_required');
+    }
     const result = await contributeSorobanIntentAuthorization(
       blobSorobanIntentStore,
       access.id,
@@ -336,12 +443,26 @@ export async function PUT(request: Request): Promise<Response> {
   try {
     const access = await storedIntentAccess(request, 'write');
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    const externalIntegration = access.stored.integration?.executionMode === 'external';
+    if (externalIntegration && !access.integrationCredential) {
+      throw new SorobanIntentExecutionServiceError(
+        'This Soroban Intent is owned by an external Integration executor. Signers authorize it in MultiSigTools but cannot prepare or execute it here.',
+        409,
+        'external_executor_required',
+      );
+    }
     if (body.action === 'replan') {
+      const rateLimitIdentity = access.integrationCredential
+        ? `service:${access.integrationCredential.serviceId}`
+        : access.address;
+      if (!rateLimitIdentity) {
+        throw new SorobanIntentAuthorizationServiceError('A current Intent actor is required.', 403, 'intent_access_denied');
+      }
       await enforceSemanticRateLimit(request, {
         rateLimitId: SEMANTIC_RATE_LIMIT_IDS.requestCreate,
-        rateLimitKey: semanticRateLimitKey(access.stored.network, access.address),
+        rateLimitKey: semanticRateLimitKey(access.stored.network, rateLimitIdentity),
         errorCode: 'intent_replan_rate_limited',
-        errorMessage: 'This signer has refreshed Soroban authorization too many times recently. Try again later.',
+        errorMessage: 'This actor has refreshed Soroban authorization too many times recently. Try again later.',
       });
       const result = await replanExpiredSorobanIntent(
         blobSorobanIntentStore,
@@ -359,15 +480,54 @@ export async function PUT(request: Request): Promise<Response> {
       });
     }
     const executionSource = typeof body.executionSource === 'string' ? body.executionSource : '';
-    const execution = await prepareSorobanIntentExecution(
-      blobSorobanIntentStore,
-      access.id,
-      executionSource,
-      {
-        authorization: access.authorization,
-        acceptedEffectsDigest: typeof body.acceptedEffectsDigest === 'string' ? body.acceptedEffectsDigest : undefined,
-      },
-    );
+    if (access.integrationCredential) {
+      assertIntegrationSorobanExecutionAccount(
+        access.integrationCredential,
+        access.stored.network,
+        executionSource,
+      );
+      if (body.acceptedEffectsDigest !== undefined) {
+        throw new SorobanIntentExecutionServiceError(
+          'External Integration execution cannot accept changed effects on behalf of signers. Refresh the AuthorizationPlan and collect fresh AUTH.',
+          409,
+          'intent_execution_effects_reauthorization_required',
+        );
+      }
+    }
+    let execution;
+    try {
+      execution = await prepareSorobanIntentExecution(
+        blobSorobanIntentStore,
+        access.id,
+        executionSource,
+        { authorization: access.authorization },
+      );
+    } catch (cause) {
+      if (
+        access.integrationCredential
+        && cause instanceof SorobanIntentExecutionServiceError
+        && cause.code === 'intent_execution_effects_review_required'
+      ) {
+        throw new SorobanIntentExecutionServiceError(
+          'Final effects changed after external-service authorization. Refresh the AuthorizationPlan and collect fresh AUTH instead of accepting drift on behalf of signers.',
+          409,
+          'intent_execution_effects_reauthorization_required',
+          cause.details,
+        );
+      }
+      throw cause;
+    }
+    if (
+      access.integrationCredential
+      && execution.effectsDiff.currentDigest !== execution.effectsDiff.expectedDigest
+    ) {
+      throw new SorobanIntentExecutionServiceError(
+        'Final effects changed after external-service authorization. Refresh the AuthorizationPlan and collect fresh AUTH before execution.',
+        409,
+        'intent_execution_effects_reauthorization_required',
+        { effectsDiff: execution.effectsDiff },
+      );
+    }
     return json({
       operation: 'contract.intent.execution.prepare',
       version: 1,

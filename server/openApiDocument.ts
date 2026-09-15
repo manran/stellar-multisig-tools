@@ -50,10 +50,10 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
     values.push(parameter('X-MultiSig-Intent-Id', 'header', true, { type: 'string' }, 'Soroban Intent id.'));
   }
   if (path === '/api/intent' && method === 'post') {
-    values.push(parameter('Idempotency-Key', 'header', false, { type: 'string' }, 'Required for Agent Intent creation; Human sessions do not need it.'));
+    values.push(parameter('Idempotency-Key', 'header', false, { type: 'string' }, 'Required for Agent or Integration Intent creation; Human sessions do not need it.'));
   }
   if (path === '/api/request' && method === 'post') {
-    values.push(parameter('Idempotency-Key', 'header', false, { type: 'string' }, 'Required for Agent credential creation; ignored for Human sessions.'));
+    values.push(parameter('Idempotency-Key', 'header', false, { type: 'string' }, 'Required for Agent or Integration Request creation; ignored for Human sessions.'));
   }
   return values;
 }
@@ -88,9 +88,15 @@ function successSchema(path: string, method: string): OpenApiObject {
 
 function security(path: string, method: string, access: HeadlessOperationAccess): OpenApiObject[] {
   if (access === 'public') return [];
-  if (path === '/api/intent') return [{ agentBearer: [] }, { humanSession: [] }];
+  if (path === '/api/intent') {
+    if (method === 'patch') return [{ agentBearer: [] }, { humanSession: [] }];
+    return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
+  }
   if (path === '/api/contracts') return [{ agentBearer: [] }, { humanSession: [] }];
   if (path === '/api/request' && method === 'put') return [{ humanSession: [] }, { requestCapability: [] }];
+  if (path === '/api/request' && (method === 'post' || method === 'get')) {
+    return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
+  }
   return [{ agentBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
 }
 
@@ -157,6 +163,7 @@ const timestamp = { type: 'string', format: 'date-time' };
 const components: OpenApiObject = {
   securitySchemes: {
     agentBearer: { type: 'http', scheme: 'bearer', description: 'Signer Agent credential (msa_...). Human SEP-10 bearer sessions are also accepted where documented.' },
+    integrationBearer: { type: 'http', scheme: 'bearer', description: 'Non-signer external service credential (msi_...). Deployment scope restricts networks, Classic authorization accounts, Soroban contracts/methods, and Soroban execution accounts.' },
     humanSession: { type: 'apiKey', in: 'cookie', name: 'mst_auth', description: 'Human SEP-10 session cookie.' },
     requestCapability: { type: 'apiKey', in: 'header', name: 'x-multisig-capability', description: 'Private share capability paired with x-multisig-request-id.' },
   },
@@ -301,7 +308,7 @@ const components: OpenApiObject = {
     },
     StoredSorobanIntent: {
       type: 'object',
-      required: ['version', 'id', 'network', 'intent', 'authorizationPlan', 'createdAt', 'creatorAddress', 'discoverySignerKeys'],
+      required: ['version', 'id', 'network', 'intent', 'authorizationPlan', 'createdAt', 'discoverySignerKeys'],
       properties: {
         version: operationVersion,
         id: { type: 'string' },
@@ -326,6 +333,7 @@ const components: OpenApiObject = {
         creatorAddress: accountId,
         discoverySignerKeys: { type: 'array', items: accountId },
         creatorActor: { type: 'object', additionalProperties: true },
+        integration: schema('ServiceIntegrationContext'),
         privateContext: { type: 'object', additionalProperties: true },
       },
       additionalProperties: false,
@@ -553,6 +561,37 @@ const components: OpenApiObject = {
       },
       additionalProperties: false,
     },
+    ServiceActor: {
+      type: 'object',
+      required: ['type', 'id'],
+      properties: {
+        type: { type: 'string', const: 'service' },
+        id: { type: 'string' },
+        label: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+    ServiceIntegrationContext: {
+      type: 'object',
+      required: ['version', 'serviceId', 'executionMode'],
+      properties: {
+        version: operationVersion,
+        serviceId: { type: 'string' },
+        serviceLabel: { type: 'string' },
+        executionMode: { type: 'string', enum: ['multisigtools', 'external'] },
+        correlationId: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+    ExternalServiceExecution: {
+      type: 'object',
+      required: ['mode', 'executor'],
+      properties: {
+        mode: { type: 'string', const: 'external' },
+        executor: schema('ServiceActor'),
+      },
+      additionalProperties: false,
+    },
     Principal: {
       type: 'object',
       required: ['type', 'network', 'address'],
@@ -641,6 +680,7 @@ const components: OpenApiObject = {
         statusReason: { type: 'string' },
         statusDetail: { type: 'string' },
         submission: { type: 'object', additionalProperties: true },
+        execution: schema('ExternalServiceExecution'),
       },
       additionalProperties: false,
     },
@@ -675,7 +715,7 @@ export function createOpenApiDocument(
     info: {
       title: 'MultiSigTools Headless Operations',
       version: '1.0.0',
-      description: 'Composable Stellar transaction construction and shared-authorization operations for Human, Agent, bot, script, wallet, plugin, MCP, and CLI consumers. Building or preparing XDR never signs or submits it. Final network submission remains Human-only.',
+      description: 'Composable Stellar coordination operations for Human, signer Agent, bot, script, wallet, plugin, MCP, CLI, and scoped external-service consumers. Building or preparing XDR never grants signer authority. MultiSigTools submission remains Human-only; Integration-owned work may designate an external executor.',
     },
     servers: [{ url: origin }],
     paths: openApiPaths(),

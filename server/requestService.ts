@@ -742,6 +742,16 @@ async function buildSnapshot(
     expiresAt: request.expiresAt,
     contributionCount: merged.contributionCount,
     signatureCount: merged.signatureCount,
+    ...(request.integration?.executionMode === 'external'
+      ? { execution: {
+          mode: 'external' as const,
+          executor: {
+            type: 'service' as const,
+            id: request.integration.serviceId,
+            ...(request.integration.serviceLabel ? { label: request.integration.serviceLabel } : {}),
+          },
+        } }
+      : {}),
   };
 
   if (submission) {

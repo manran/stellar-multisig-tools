@@ -131,6 +131,23 @@ test('Activity retention explains that the share link ends without implying the 
   assert.doesNotMatch(request, /This private link has finished/);
 });
 
+test('external-service work keeps final execution out of signer UI', () => {
+  const request = source('../RequestApp.tsx');
+  const intent = source('../SorobanIntentApp.tsx');
+  const requestApi = source('../../api/request.ts');
+  const intentApi = source('../../api/intent.ts');
+
+  assert.match(request, /snapshot\.execution\?\.mode === 'external'/);
+  assert.match(request, /Waiting for external execution/);
+  assert.match(request, /MultiSigTools will not broadcast this transaction/);
+  assert.match(requestApi, /external_executor_required/);
+  assert.match(requestApi, /integration_submit_denied/);
+  assert.match(intent, /intent\.integration\?\.executionMode === 'external'/);
+  assert.match(intent, /is the external executor for this Intent/);
+  assert.match(intentApi, /external_executor_required/);
+  assert.match(intentApi, /assertIntegrationSorobanExecutionAccount/);
+});
+
 test('active Human surfaces do not let legacy workspace mode choose navigation or Activity scope', () => {
   const activity = source('../ActivityApp.tsx');
   const landing = source('../StellarLandingApp.tsx');

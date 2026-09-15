@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/stellar/*.test.ts server/*.test.ts"
+    "test": "tsx --test src/stellar/*.test.ts server/*.test.ts",
+    "integration:credential": "tsx scripts/createIntegrationCredential.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

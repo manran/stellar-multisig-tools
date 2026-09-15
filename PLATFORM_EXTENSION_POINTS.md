@@ -246,16 +246,20 @@ Ready
 
 The external service is an **Actor/Integration**, not automatically a Stellar signer and not automatically a Workspace.
 
-## 5. Candidate API contract
+## 5. Current Integration API contract
 
-Exact route names are deferred. The semantics should support a future flow such as:
+The first real Integration reuses the existing Headless resources rather than introducing `/v1/service-*` lifecycle routes:
 
 ```http
-POST /v1/requests
-GET  /v1/requests/{id}
-GET  /v1/requests/{id}/activity
-POST /v1/requests/{id}/cancel
+POST /api/request   # scoped Classic multisig coordination
+GET  /api/request   # read own Request
+
+POST /api/intent    # scoped semantic Soroban Intent
+GET  /api/intent    # read own Intent
+PUT  /api/intent    # re-plan or prepare scoped external execution
 ```
+
+A future versioned public facade may alias these semantics, but the domain lifecycle remains the same Request / Intent core.
 
 Creation conceptually supplies:
 
@@ -296,25 +300,21 @@ Agent credential
 mutual-TLS / enterprise workload identity
 ```
 
-A service credential may permit:
+The first deployment-owned Integration credential uses an `msi_...` namespace and explicit scope:
 
 ```text
-requests:create
-requests:read-own
-requests:cancel-own
-activity:read-own
+networks[]
+classicAccounts[]
+classicExternalExecutionAccounts[]   # optional subset
+sorobanContracts[{ contractId, methods[] }]
+sorobanExecutionAccounts[]
 ```
 
-It must **not** allow the service to fabricate user signatures or satisfy Stellar thresholds merely because it created the request.
+For Classic Requests, every account that actually supplies transaction authorization must be in `classicAccounts`; live signer weights and thresholds remain authoritative. Classic scope defaults to the ordinary MultiSigTools execution path; `classicExternalExecutionAccounts` is an optional subset for treasuries whose Service must retain final execution. A single transaction cannot mix the two policies. For Soroban Intents, the exact contract + method must be scoped, but the Service does not configure the user authorizers: recording simulation discovers the actual `require_auth()` requirements. Any external execution source must be in `sorobanExecutionAccounts`.
 
-Later scopes may restrict:
+It must **not** allow the service to fabricate user signatures, satisfy Stellar thresholds, or satisfy Soroban AUTH merely because it created the resource.
 
-- allowed networks;
-- allowed subject types;
-- allowed source/controlled accounts;
-- allowed Workspace;
-- execution rights;
-- webhook endpoints.
+Later identity mechanisms may add OAuth, Workspace ownership, mTLS/workload identity, or webhook scopes only after a real consumer requires them.
 
 ## 7. Webhook/event delivery
 
@@ -347,41 +347,40 @@ Requirements before implementation:
 
 ## 8. FedNetwork as first external test
 
-FedNetwork identity transfer is a useful first integration because it exercises several real boundaries at once.
-
-Example:
+FedNetwork identity transfer is the first Soroban proof of the Integration model. A typical contract action is semantic and source-free:
 
 ```text
-FedNetwork
-  -> creates exact Stellar transaction + private committed transfer intent
-  -> POSTs/creates MultiSigTools request
-  -> sends or redirects A/B to MultiSigTools review
+FedNetwork Service
+  -> creates transfer(record, A, B) Intent
 
-MultiSigTools
-  -> discovers/evaluates Account A authority
-  -> discovers/evaluates Account B authority
-  -> collects signatures independently
-  -> marks request Ready
+MultiSigTools recording simulation
+  -> discovers A require_auth()
+  -> discovers B require_auth()
+  -> indexes the actual current signers for A and B
+  -> A/B review and contribute detached AUTH independently
+  -> marks Intent authorization_ready
 
 FedNetwork
-  -> receives `request.ready`
-  -> re-checks claim_version / nonce / expiry / business policy
-  -> adds its retained channel/source signature
-  -> submits transaction
-  -> waits for confirmation
+  -> prepares execution only with a configured executor G account
+  -> requires final effects to remain exactly what A/B authorized
+  -> re-checks claim version / owner / nonce / expiry / business policy
+  -> adds any retained service-side transaction signature outside MultiSigTools
+  -> submits and confirms
   -> applies identity ownership transition idempotently
 ```
 
-For this case:
+A and B need no prior relationship and are not copied into Integration credential scope. Their authority comes from the simulated contract requirements and live chain policy.
+
+The same FedNetwork `msi_...` identity may also use `/api/request` for a configured Classic multisig treasury. This is intentionally the same Integration Actor and the same existing Request lifecycle, not a separate product surface.
+
+For the FedNetwork Soroban transfer:
 
 ```text
 execution.mode = external
 executor = FedNetwork
 ```
 
-MultiSigTools coordinates authorization but does not need to own FedNetwork's business-state transition.
-
-The deep-link should identify the request, not carry the private identity-transfer plaintext. Authorized users fetch that context from MultiSigTools after access is established.
+A separate Classic treasury owned by the same Service defaults to ordinary MultiSigTools submission unless that G account is explicitly included in `classicExternalExecutionAccounts`. MultiSigTools coordinates authorization without conflating Service identity, signer authority, and execution ownership. Human deep-links identify the Request/Intent only; Integration secrets and private identity-transfer plaintext do not enter the URL.
 
 ## 9. Personal API use vs Workspace API use
 

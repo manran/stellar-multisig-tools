@@ -72,21 +72,35 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
 
   assert.deepEqual(inspect.security, []);
   assert.equal(inspect.operationId, 'contract.interface.inspect');
-  assert.equal(intent.operationId, 'contract.intent.create');
-  assert.deepEqual(intent.security, [{ agentBearer: [] }, { humanSession: [] }]);
-  assert.equal(intentInspect.operationId, 'contract.intent.inspect');
+  assert.equal(intent.operationId, 'contract.intent.create.integration.intent.create');
+  assert.deepEqual(intent['x-multisig-operation-ids'], ['contract.intent.create', 'integration.intent.create']);
+  assert.deepEqual(intent.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }]);
+  assert.equal(intentInspect.operationId, 'contract.intent.inspect.integration.intent.inspect');
+  assert.deepEqual(intentInspect.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }]);
   assert.equal(intentContribute.operationId, 'contract.intent.contribute');
   assert.deepEqual(intentContribute.security, [{ agentBearer: [] }, { humanSession: [] }]);
-  assert.equal(intentExecution.operationId, 'contract.intent.execution.prepare.contract.intent.replan');
-  assert.deepEqual(intentExecution['x-multisig-operation-ids'], ['contract.intent.execution.prepare', 'contract.intent.replan']);
-  assert.deepEqual(intentExecution.security, [{ agentBearer: [] }, { humanSession: [] }]);
+  assert.equal(intentExecution.operationId, 'contract.intent.execution.prepare.integration.intent.execution.prepare.contract.intent.replan.integration.intent.replan');
+  assert.deepEqual(intentExecution['x-multisig-operation-ids'], [
+    'contract.intent.execution.prepare',
+    'integration.intent.execution.prepare',
+    'contract.intent.replan',
+    'integration.intent.replan',
+  ]);
+  assert.deepEqual(intentExecution.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }]);
   assert.equal(build.operationId, 'contract.call.build');
   assert.equal(prepare.operationId, 'contract.call.prepare');
   assert.equal(paths['/api/preparation'], undefined);
 
   const components = document.components as JsonObject;
   const schemas = (components.schemas as Record<string, JsonObject>);
+  const securitySchemes = components.securitySchemes as Record<string, JsonObject>;
+  assert.ok(securitySchemes.integrationBearer);
+  assert.match(String(securitySchemes.integrationBearer.description), /non-signer external service credential/i);
   assert.deepEqual(schemas.ContractIntentCreateInput.required, ['network']);
+  assert.ok(!(schemas.StoredSorobanIntent.required as string[]).includes('creatorAddress'));
+  assert.ok((schemas.StoredSorobanIntent.properties as JsonObject).integration);
+  assert.ok((schemas.SigningRequest.properties as JsonObject).execution);
+  assert.deepEqual(((schemas.ServiceIntegrationContext.properties as JsonObject).executionMode), { type: 'string', enum: ['multisigtools', 'external'] });
   assert.deepEqual(schemas.ContractIntentCreateInput.oneOf, [
     { required: ['contractId', 'method', 'arguments'] },
     { required: ['preparedXdr'] },

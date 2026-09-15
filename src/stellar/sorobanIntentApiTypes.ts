@@ -2,6 +2,7 @@ import type { SorobanGAccountAuthorizerStatus } from './sorobanAuthorization.js'
 import type { SorobanAuthorizationPlan } from './sorobanAuthorizationPlan.js';
 import type { SorobanIntent } from './sorobanIntent.js';
 import type { SorobanEffectsDiff, SorobanEffectsSnapshot } from './sorobanEffects.js';
+import type { CoordinationActorProvenance, SorobanIntentIntegrationContext } from './integrationTypes.js';
 import type { PrivateNoteRevision } from './privateNote.js';
 import type { StellarNetwork } from './types.js';
 
@@ -18,7 +19,9 @@ export interface StoredSorobanIntentSnapshot {
     supersededAt: string;
   }>;
   createdAt: string;
-  creatorAddress: string;
+  creatorAddress?: string;
+  creatorActor?: CoordinationActorProvenance;
+  integration?: SorobanIntentIntegrationContext;
   privateContext?: {
     externalReference?: string;
     initialPrivateNote?: PrivateNoteRevision;
@@ -45,7 +48,8 @@ export interface InboxSorobanIntentSnapshot {
   id: string;
   network: StellarNetwork;
   createdAt: string;
-  creatorAddress: string;
+  creatorAddress?: string;
+  creatorActor?: CoordinationActorProvenance;
   status: SorobanIntentAuthorizationSnapshot['status'];
   statusDetail?: string;
   contributionCount: number;

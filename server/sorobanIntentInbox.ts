@@ -25,9 +25,10 @@ function isLiveParticipant(
 export function projectSorobanIntentViewerAction(
   authorization: Awaited<ReturnType<typeof getSorobanIntentAuthorization>>,
   address: string,
+  externalExecution = false,
 ): InboxSorobanIntentSnapshot['viewerAction'] {
   if (authorization.status === 'blocked' || authorization.status === 'expired') return 'attention';
-  if (authorization.status === 'authorization_ready') return 'execute';
+  if (authorization.status === 'authorization_ready') return externalExecution ? 'waiting' : 'execute';
   return authorization.authorizers.some((authorizer) =>
     !authorizer.ready
     && authorizer.activeSigners.some((signer) => signer.publicKey === address)
@@ -44,12 +45,17 @@ function snapshot(
     id: stored.id,
     network: stored.network,
     createdAt: stored.createdAt,
-    creatorAddress: stored.creatorAddress,
+    ...(stored.creatorAddress ? { creatorAddress: stored.creatorAddress } : {}),
+    ...(stored.creatorActor ? { creatorActor: stored.creatorActor } : {}),
     status: authorization.status,
     ...(authorization.statusDetail ? { statusDetail: authorization.statusDetail } : {}),
     contributionCount: authorization.contributionCount,
     authorizers: authorization.authorizers,
-    viewerAction: projectSorobanIntentViewerAction(authorization, address),
+    viewerAction: projectSorobanIntentViewerAction(
+      authorization,
+      address,
+      stored.integration?.executionMode === 'external',
+    ),
   };
 }
 

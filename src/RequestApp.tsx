@@ -784,8 +784,17 @@ async function submitRequest(acceptedEffectsDigest?: string) {
 
                   {snapshot.status === 'ready' && (
                     <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.08] p-5 sm:p-6">
-                      <div className="font-semibold text-emerald-800 dark:text-emerald-200">Ready for submission</div>
-                      <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">All required signatures are present.</p>
+                      <div className="font-semibold text-emerald-800 dark:text-emerald-200">{snapshot.execution?.mode === 'external' ? 'Authorization complete' : 'Ready for submission'}</div>
+                      <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{snapshot.execution?.mode === 'external'
+                        ? `All required signatures are present. ${snapshot.execution.executor.label ?? snapshot.execution.executor.id} owns final execution; MultiSigTools will not broadcast this transaction.`
+                        : 'All required signatures are present.'}</p>
+                      {snapshot.execution?.mode === 'external' ? (
+                        <div className="mt-4 rounded-xl border border-violet-500/25 bg-violet-500/[0.07] p-4 text-sm">
+                          <div className="font-semibold text-violet-800 dark:text-violet-200">Waiting for external execution</div>
+                          <p className="mt-1 leading-6 text-neutral-600 dark:text-neutral-300">The originating service will re-check its business state and submit after its own execution conditions are satisfied.</p>
+                        </div>
+                      ) : (
+                        <>
                       {submissionEffectsDiff && <div className="mt-4"><SorobanEffectsDiffView diff={submissionEffectsDiff} /></div>}
                       {submissionEffectsDiff?.requiresReauthorization ? (
                         <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/[0.07] p-4 text-sm">
@@ -810,6 +819,8 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                             <button type="button" disabled={submitting} onClick={() => { setSubmitArmed(false); setMainnetConfirmed(false); }} className="rounded-xl border border-black/10 px-4 py-3 text-sm font-semibold dark:border-white/10">Not now</button>
                           </div>
                         </div>
+                      )}
+                        </>
                       )}
                     </section>
                   )}

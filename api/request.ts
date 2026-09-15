@@ -7,10 +7,18 @@ import {
   AgentCredentialServiceError,
   agentActorForCredential,
   authenticateAgentCredential,
+  looksLikeAgentCredential,
   requireAgentAccess,
 } from '../server/agentCredentialService.js';
 import type { StoredSignerAgentCredential } from '../server/agentCredentialStore.js';
 import { createAgentSigningRequest } from '../server/agentRequestService.js';
+import {
+  authenticateIntegrationCredential,
+  IntegrationCredentialServiceError,
+  looksLikeIntegrationCredential,
+} from '../server/integrationCredentialService.js';
+import type { ConfiguredIntegrationCredential } from '../server/integrationCredentialService.js';
+import { createIntegrationSigningRequest } from '../server/integrationRequestService.js';
 import { BoxServiceError } from '../server/boxService.js';
 import {
   contributionGrantCookie,
@@ -89,7 +97,7 @@ const serviceOptions = {
   },
 };
 
-type RequestAccessMode = 'capability' | 'session' | 'contribution' | 'agent';
+type RequestAccessMode = 'capability' | 'session' | 'contribution' | 'agent' | 'service';
 type RequestAuthorizationPurpose = 'active' | 'history';
 type ClosedCapabilityStatus = Extract<SigningRequestStatus, 'submitted' | 'expired'>;
 
@@ -104,6 +112,7 @@ interface AuthorizedRequest {
   capabilityClosed?: ClosedCapabilityStatus;
   contributionGrantExpiresAt?: number;
   agentCredential?: StoredSignerAgentCredential;
+  integrationCredential?: ConfiguredIntegrationCredential;
   privateCommitment?: NonNullable<Awaited<ReturnType<typeof blobSigningRequestStore.getRequest>>>['privateCommitment'];
 }
 
@@ -114,7 +123,7 @@ function errorResponse(cause: unknown): Response {
   if (cause instanceof RequestBodyError) {
     return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
   }
-  if (cause instanceof AgentCredentialServiceError || cause instanceof BoxServiceError) {
+  if (cause instanceof AgentCredentialServiceError || cause instanceof IntegrationCredentialServiceError || cause instanceof BoxServiceError) {
     return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
   }
   if (cause instanceof SigningRequestServiceError) {
@@ -134,13 +143,22 @@ function errorResponse(cause: unknown): Response {
   return noStoreJson({ error: 'Signing request service is temporarily unavailable.', code: 'internal_error' } satisfies SigningRequestApiError, 500);
 }
 
-async function agentCredentialFromRequest(request: Request): Promise<StoredSignerAgentCredential | null> {
+function bearerCredentialFromRequest(request: Request): string | null {
   const authorization = request.headers.get('authorization') ?? '';
   if (!authorization) return null;
   const match = /^Bearer\s+(.+)$/i.exec(authorization);
-  if (!match) throw new SigningRequestServiceError('Invalid Agent authorization header.', 401, 'invalid_agent_credential');
+  if (!match) throw new SigningRequestServiceError('Invalid authorization header.', 401, 'invalid_credential');
+  return match[1].trim();
+}
+
+async function agentCredentialFromRequest(request: Request): Promise<StoredSignerAgentCredential | null> {
+  const value = bearerCredentialFromRequest(request);
+  if (!value || looksLikeIntegrationCredential(value)) return null;
+  if (!looksLikeAgentCredential(value)) {
+    throw new SigningRequestServiceError('Invalid Agent credential.', 401, 'invalid_agent_credential');
+  }
   try {
-    return await authenticateAgentCredential(blobAgentCredentialStore, match[1].trim());
+    return await authenticateAgentCredential(blobAgentCredentialStore, value);
   } catch (cause) {
     if (cause instanceof AgentCredentialServiceError) {
       throw new SigningRequestServiceError(cause.message, cause.status, cause.code);
@@ -149,17 +167,23 @@ async function agentCredentialFromRequest(request: Request): Promise<StoredSigne
   }
 }
 
+function integrationCredentialFromRequest(request: Request): ConfiguredIntegrationCredential | null {
+  const value = bearerCredentialFromRequest(request);
+  if (!value || !looksLikeIntegrationCredential(value)) return null;
+  return authenticateIntegrationCredential(value);
+}
+
 function requestCreationQuota(
   request: Request,
   network: StellarNetwork,
-  principalAddress: string,
+  rateLimitIdentity: string,
 ): () => Promise<void> {
   return beforeFirstDurableWrite(async () => {
     await enforceSemanticRateLimit(request, {
       rateLimitId: SEMANTIC_RATE_LIMIT_IDS.requestCreate,
-      rateLimitKey: semanticRateLimitKey(network, principalAddress),
+      rateLimitKey: semanticRateLimitKey(network, rateLimitIdentity),
       errorCode: 'request_create_rate_limited',
-      errorMessage: 'This signer has created too many proposals recently. Try again later.',
+      errorMessage: 'This identity has created too many proposals recently. Try again later.',
     });
   });
 }
@@ -258,9 +282,36 @@ async function authorizeRequest(
 
   const capabilityMatched = Boolean(capability && requestCapabilityMatches(stored, capability));
   const config = authConfigForRequest(request);
-  const agentCredential = await agentCredentialFromRequest(request);
+  const integrationCredential = integrationCredentialFromRequest(request);
+  const agentCredential = integrationCredential ? null : await agentCredentialFromRequest(request);
   const session = await verifiedSession(request, stored.network);
   const contributionGrant = await contributionGrantFromRequest(blobAuthStore, request, config);
+  if (integrationCredential) {
+    if (stored.integration?.serviceId !== integrationCredential.serviceId) {
+      throw new SigningRequestServiceError(
+        'This Integration credential does not own this Request.',
+        403,
+        'integration_request_access_denied',
+      );
+    }
+    if (purpose === 'history') {
+      throw new SigningRequestServiceError(
+        'Integration credentials read the active Request resource, not signer-retained Activity history.',
+        403,
+        'integration_history_access_denied',
+      );
+    }
+    return {
+      id,
+      stored,
+      mode: 'service',
+      network: stored.network,
+      activityBound: false,
+      capabilityMatched: false,
+      integrationCredential,
+      privateCommitment: stored.privateCommitment,
+    };
+  }
   if (agentCredential) {
     if (agentCredential.principal.network !== stored.network) {
       throw new SigningRequestServiceError('This Agent credential is for another Stellar network.', 403, 'principal_network_mismatch');
@@ -633,7 +684,7 @@ export async function GET(request: Request): Promise<Response> {
       declined = await viewerDeclined(access.id, access.actorAddress);
     }
     let privateNote = await privateNotePromise;
-    if (access.mode === 'agent' && !activityBound) privateNote = undefined;
+    if ((access.mode === 'agent' && !activityBound) || access.mode === 'service') privateNote = undefined;
     return noStoreJson({
       request: snapshot,
       access: {
@@ -657,7 +708,58 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const body = await readJsonBody(request);
     const xdr = typeof body.xdr === 'string' ? body.xdr : '';
-    const agentCredential = await agentCredentialFromRequest(request);
+    const integrationCredential = integrationCredentialFromRequest(request);
+    const agentCredential = integrationCredential ? null : await agentCredentialFromRequest(request);
+    if (integrationCredential) {
+      if (body.network !== 'public' && body.network !== 'testnet') {
+        throw new SigningRequestServiceError('Network must be public or testnet.', 400, 'invalid_network');
+      }
+      assertDeploymentNetwork(body.network);
+      if (!xdr.trim()) {
+        throw new SigningRequestServiceError('Transaction envelope XDR is required.', 400, 'invalid_xdr');
+      }
+      if (body.privateNote !== undefined && body.privateNote !== null && body.privateNote !== '') {
+        throw new SigningRequestServiceError(
+          'Integration Request creation uses Private Commitment for private context in this version.',
+          400,
+          'integration_private_note_unsupported',
+        );
+      }
+      const idempotencyKey = request.headers.get('idempotency-key')?.trim() ?? '';
+      if (!idempotencyKey) {
+        throw new SigningRequestServiceError('Idempotency-Key header is required for Integration Request creation.', 400, 'idempotency_key_required');
+      }
+      const privateCommitment = privateCommitmentForCreate(body, xdr);
+      const beforeCreate = requestCreationQuota(request, body.network, `service:${integrationCredential.serviceId}`);
+      const quotaRequestStore = {
+        ...blobSigningRequestStore,
+        createRequest: async (stored: Parameters<typeof blobSigningRequestStore.createRequest>[0]) => {
+          await beforeCreate();
+          return blobSigningRequestStore.createRequest(stored);
+        },
+      };
+      const result = await createIntegrationSigningRequest(
+        quotaRequestStore,
+        integrationCredential,
+        {
+          network: body.network,
+          xdr,
+          idempotencyKey,
+          externalReference: body.externalReference,
+          privateCommitment,
+        },
+        { ...serviceOptions, accountLoader: loadAccount },
+      );
+      return noStoreJson({
+        request: result.request,
+        replayed: result.replayed,
+        ...(result.externalReference ? { externalReference: result.externalReference } : {}),
+        access: { shareable: false, activityBound: false },
+        context: {
+          ...(privateCommitment ? { privateCommitment: { ...privateCommitment, createdAt: result.request.createdAt } } : {}),
+        },
+      }, result.replayed ? 200 : 201);
+    }
     if (agentCredential) {
       if (body.network !== 'public' && body.network !== 'testnet') {
         throw new SigningRequestServiceError('Network must be public or testnet.', 400, 'invalid_network');
@@ -797,6 +899,13 @@ export async function PATCH(request: Request): Promise<Response> {
   try {
     const access = await authorizeRequest(request);
     const body = await readJsonBody(request);
+    if (access.mode === 'service') {
+      throw new SigningRequestServiceError(
+        'Integration credentials can inspect their own Request but cannot contribute signer decisions or Stellar authorization.',
+        403,
+        'integration_request_write_denied',
+      );
+    }
     const isSignatureContribution = typeof body.signedXdr === 'string'
       && body.signedXdr.trim().length > 0
       && body.retainActivity !== true
@@ -934,6 +1043,20 @@ export async function PATCH(request: Request): Promise<Response> {
 export async function PUT(request: Request): Promise<Response> {
   try {
     const access = await authorizeRequest(request);
+    if (access.stored.integration?.executionMode === 'external') {
+      throw new SigningRequestServiceError(
+        'This Request is externally executed. MultiSigTools coordinates signer authorization but does not broadcast the final transaction.',
+        409,
+        'external_executor_required',
+      );
+    }
+    if (access.mode === 'service') {
+      throw new SigningRequestServiceError(
+        'Integration credentials can coordinate and inspect Classic Requests but cannot trigger MultiSigTools network submission.',
+        403,
+        'integration_submit_denied',
+      );
+    }
     if (access.mode === 'agent') {
       throw new SigningRequestServiceError(
         'Agent credentials cannot submit transactions to Stellar. Sign access contributes authorization; final network submission remains a separate action.',

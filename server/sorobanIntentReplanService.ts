@@ -98,7 +98,7 @@ export async function replanExpiredSorobanIntent(
       { revision, authorizationPlan: stored.authorizationPlan, supersededAt },
     ],
     discoverySignerKeys: [...new Set([
-      stored.creatorAddress,
+      ...(stored.creatorAddress ? [stored.creatorAddress] : []),
       ...planned.discoverySignerKeys,
     ])].sort(),
   };

@@ -1,4 +1,5 @@
 import type { ActivityRequestItem } from './activityTypes.js';
+import type { ExternalRequestExecution } from './integrationTypes.js';
 import type { PrivateCommitmentRecord } from './privateCommitment.js';
 import type { PrivateNoteRevision } from './privateNote.js';
 import type { SourceAnalysis } from './transactionReviewAnalysis.js';
@@ -52,6 +53,7 @@ export interface SigningRequestSnapshot {
   statusReason: SigningRequestStatusReason;
   statusDetail?: string;
   submission?: SigningRequestSubmission;
+  execution?: ExternalRequestExecution;
 }
 
 export interface SigningRequestAccess {

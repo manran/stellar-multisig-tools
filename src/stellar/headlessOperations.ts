@@ -3,6 +3,8 @@ export type HeadlessOperationAccess =
   | 'principal:read'
   | 'principal:write'
   | 'principal:sign'
+  | 'integration:read'
+  | 'integration:write'
   | 'human';
 
 export type HeadlessOperationEffect =
@@ -35,8 +37,16 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'principal:write', effect: 'coordination-state', summary: 'Create a source-free Soroban Intent and discover its authorization plan.',
   },
   {
+    id: 'integration.intent.create', version: 1, method: 'POST', path: '/api/intent',
+    access: 'integration:write', effect: 'coordination-state', summary: 'Create a scoped external-service Soroban Intent without granting the service signer authority.',
+  },
+  {
     id: 'contract.intent.inspect', version: 1, method: 'GET', path: '/api/intent',
     access: 'principal:read', effect: 'none', summary: 'Inspect one Soroban Intent and its live authorization state.',
+  },
+  {
+    id: 'integration.intent.inspect', version: 1, method: 'GET', path: '/api/intent',
+    access: 'integration:read', effect: 'none', summary: "Inspect an external service's own Soroban Intent and live authorization state.",
   },
   {
     id: 'contract.intent.contribute', version: 1, method: 'PATCH', path: '/api/intent',
@@ -47,8 +57,16 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'principal:write', effect: 'none', summary: 'Late-bind an execution source, compare enforcing effects with reviewed evidence, and prepare the final unsigned Soroban transaction.',
   },
   {
+    id: 'integration.intent.execution.prepare', version: 1, method: 'PUT', path: '/api/intent',
+    access: 'integration:write', effect: 'none', summary: 'Prepare an externally executed Soroban transaction only from an Integration-scoped execution account and unchanged reviewed effects.',
+  },
+  {
     id: 'contract.intent.replan', version: 1, method: 'PUT', path: '/api/intent',
     access: 'principal:write', effect: 'coordination-state', summary: 'Replace an expired or structurally changed authorization plan with a fresh revision for the same Soroban Intent.',
+  },
+  {
+    id: 'integration.intent.replan', version: 1, method: 'PUT', path: '/api/intent',
+    access: 'integration:write', effect: 'coordination-state', summary: "Refresh an external service's own AuthorizationPlan when fresh signer AUTH is required.",
   },
   {
     id: 'contract.call.build', version: 1, method: 'POST', path: '/api/contract-call',
@@ -75,8 +93,16 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'principal:write', effect: 'coordination-state', summary: 'Create a Signing Request from exact transaction XDR.',
   },
   {
+    id: 'integration.request.create', version: 1, method: 'POST', path: '/api/request',
+    access: 'integration:write', effect: 'coordination-state', summary: 'Create a scoped external-service Classic multisig Request for configured authorization accounts.',
+  },
+  {
     id: 'proposal.inspect', version: 1, method: 'GET', path: '/api/request',
     access: 'principal:read', effect: 'none', summary: 'Read current Signing Request state and evidence.',
+  },
+  {
+    id: 'integration.request.inspect', version: 1, method: 'GET', path: '/api/request',
+    access: 'integration:read', effect: 'none', summary: "Read an external service's own Classic multisig Request and merged authorization evidence.",
   },
   {
     id: 'proposal.contribute', version: 1, method: 'PATCH', path: '/api/request',
