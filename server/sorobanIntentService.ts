@@ -75,6 +75,7 @@ export async function createStoredSorobanIntent(
     network: input.intent.network,
     intent: input.intent,
     authorizationPlan: input.authorizationPlan,
+    authorizationPlanRevision: 1,
     createdAt,
     creatorAddress: input.creatorAddress,
     ...(input.creatorActor ? { creatorActor: input.creatorActor } : {}),

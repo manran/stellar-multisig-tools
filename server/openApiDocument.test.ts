@@ -77,7 +77,8 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.equal(intentInspect.operationId, 'contract.intent.inspect');
   assert.equal(intentContribute.operationId, 'contract.intent.contribute');
   assert.deepEqual(intentContribute.security, [{ agentBearer: [] }, { humanSession: [] }]);
-  assert.equal(intentExecution.operationId, 'contract.intent.execution.prepare');
+  assert.equal(intentExecution.operationId, 'contract.intent.execution.prepare.contract.intent.replan');
+  assert.deepEqual(intentExecution['x-multisig-operation-ids'], ['contract.intent.execution.prepare', 'contract.intent.replan']);
   assert.deepEqual(intentExecution.security, [{ agentBearer: [] }, { humanSession: [] }]);
   assert.equal(build.operationId, 'contract.call.build');
   assert.equal(prepare.operationId, 'contract.call.prepare');
@@ -92,6 +93,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   ]);
   assert.deepEqual(schemas.ContractIntentContributionInput.required, ['entryIndex', 'signatureBase64']);
   assert.deepEqual(schemas.ContractIntentExecutionInput.required, ['executionSource']);
+  assert.deepEqual(schemas.ContractIntentReplanInput.required, ['action']);
   assert.deepEqual(schemas.ContractCallBuildInput.required, [
     'network',
     'transactionSource',

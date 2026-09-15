@@ -61,7 +61,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
 function requestBody(path: string, method: string): OpenApiObject | undefined {
   if (path === '/api/intent' && method === 'post') return body(schema('ContractIntentCreateInput'));
   if (path === '/api/intent' && method === 'patch') return body(schema('ContractIntentContributionInput'));
-  if (path === '/api/intent' && method === 'put') return body(schema('ContractIntentExecutionInput'));
+  if (path === '/api/intent' && method === 'put') return body({ oneOf: [schema('ContractIntentExecutionInput'), schema('ContractIntentReplanInput')] });
   if (path === '/api/contract-call' && method === 'post') return body(schema('ContractCallBuildInput'));
   if (path === '/api/contract-prepare' && method === 'post') return body(schema('ContractPrepareInput'));
   if (path === '/api/contracts' && (method === 'put' || method === 'delete')) return body(schema('ContractWorkspaceInput'));
@@ -76,7 +76,7 @@ function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/api/intent' && method === 'post') return schema('ContractIntentCreateResult');
   if (path === '/api/intent' && method === 'get') return schema('ContractIntentInspectResult');
   if (path === '/api/intent' && method === 'patch') return schema('ContractIntentContributionResult');
-  if (path === '/api/intent' && method === 'put') return schema('ContractIntentExecutionResult');
+  if (path === '/api/intent' && method === 'put') return { oneOf: [schema('ContractIntentExecutionResult'), schema('ContractIntentReplanResult')] };
   if (path === '/api/contract-call') return schema('ContractCallBuildResult');
   if (path === '/api/contract-prepare') return schema('ContractPrepareResult');
   if (path === '/api/contracts' && method === 'get') return schema('ContractWorkspaceListResult');
@@ -273,6 +273,20 @@ const components: OpenApiObject = {
         network: stellarNetwork,
         intent: schema('SorobanIntent'),
         authorizationPlan: schema('SorobanAuthorizationPlan'),
+        authorizationPlanRevision: { type: 'integer', minimum: 1 },
+        authorizationPlanHistory: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['revision', 'authorizationPlan', 'supersededAt'],
+            properties: {
+              revision: { type: 'integer', minimum: 1 },
+              authorizationPlan: schema('SorobanAuthorizationPlan'),
+              supersededAt: timestamp,
+            },
+            additionalProperties: false,
+          },
+        },
         createdAt: timestamp,
         creatorAddress: accountId,
         discoverySignerKeys: { type: 'array', items: accountId },
@@ -347,6 +361,12 @@ const components: OpenApiObject = {
       properties: { executionSource: accountId },
       additionalProperties: false,
     },
+    ContractIntentReplanInput: {
+      type: 'object',
+      required: ['action'],
+      properties: { action: { type: 'string', const: 'replan' } },
+      additionalProperties: false,
+    },
     SorobanIntentExecutionPreparation: {
       type: 'object',
       required: ['version', 'intentId', 'network', 'intentDigest', 'authorizationPlanDigest', 'executionSource', 'transactionSequence', 'transactionHash', 'validUntil', 'latestLedger', 'xdr'],
@@ -372,6 +392,19 @@ const components: OpenApiObject = {
         operation: { type: 'string', const: 'contract.intent.execution.prepare' },
         version: operationVersion,
         execution: schema('SorobanIntentExecutionPreparation'),
+      },
+      additionalProperties: false,
+    },
+    ContractIntentReplanResult: {
+      type: 'object',
+      required: ['operation', 'version', 'intent', 'authorization', 'previousAuthorizationPlanDigest', 'authorizationPlanRevision'],
+      properties: {
+        operation: { type: 'string', const: 'contract.intent.replan' },
+        version: operationVersion,
+        intent: schema('StoredSorobanIntent'),
+        authorization: schema('SorobanIntentAuthorizationSnapshot'),
+        previousAuthorizationPlanDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        authorizationPlanRevision: { type: 'integer', minimum: 2 },
       },
       additionalProperties: false,
     },

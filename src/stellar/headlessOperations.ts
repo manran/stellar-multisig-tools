@@ -47,6 +47,10 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'principal:write', effect: 'none', summary: 'Late-bind an execution source and prepare the final unsigned Soroban transaction.',
   },
   {
+    id: 'contract.intent.replan', version: 1, method: 'PUT', path: '/api/intent',
+    access: 'principal:write', effect: 'coordination-state', summary: 'Replace an expired authorization plan with a fresh revision for the same Soroban Intent.',
+  },
+  {
     id: 'contract.call.build', version: 1, method: 'POST', path: '/api/contract-call',
     access: 'public', effect: 'none', summary: 'Build an unsigned contract-call transaction from typed string inputs.',
   },

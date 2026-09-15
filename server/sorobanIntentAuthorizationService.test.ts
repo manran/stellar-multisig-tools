@@ -104,8 +104,31 @@ async function fixture() {
     accountLoader: async () => snapshot,
     networkParametersLoader: async () => ({ ledgerSequence: 100, ledgerClosedAt: '2026-09-14T10:00:00Z', baseFeeInStroops: 100, baseReserveInStroops: 5_000_000 }),
   };
-  return { store, stored, plan, signerA, signerB, options };
+  return { store, stored, plan, authorizer, signerA, signerB, options };
 }
+function revisedPlan(f: Awaited<ReturnType<typeof fixture>>, expirationLedger = 820) {
+  const previousEntry = authorizationEntriesFromPlan(f.plan)[0];
+  const nextEntry = new xdr.SorobanAuthorizationEntry({
+    credentials: xdr.SorobanCredentials.sorobanCredentialsAddressV2(new xdr.SorobanAddressCredentials({
+      address: new Address(f.authorizer.publicKey()).toScAddress(),
+      nonce: xdr.Int64(84n),
+      signatureExpirationLedger: expirationLedger,
+      signature: xdr.ScVal.scvVoid(),
+    })),
+    rootInvocation: previousEntry.rootInvocation,
+  });
+  const source = Keypair.random();
+  const tx = materializeSorobanIntent({
+    intent: f.stored.intent,
+    sourceAccount: source.publicKey(),
+    sourceSequence: '11',
+    fee: '100',
+    lifetimeSeconds: 300,
+    authorizationEntries: [nextEntry],
+  });
+  return createSorobanAuthorizationPlan(f.stored.intent, tx.toXDR());
+}
+
 function signatureFor(
   plan: Awaited<ReturnType<typeof fixture>>['plan'],
   signer: Keypair,
@@ -165,6 +188,70 @@ test('Intent AUTH contributions are append-only and become ready at live thresho
   const persisted = await f.store.getIntent(f.stored.id);
   assert.equal(persisted?.authorizationPlan?.authorizationPlanDigest, f.plan.authorizationPlanDigest);
   assert.deepEqual(persisted?.authorizationPlan?.authorizationEntriesXdr, f.plan.authorizationEntriesXdr);
+});
+
+test('authorization contributions are bound to the current AuthorizationPlan', async () => {
+  const f = await fixture();
+  await contributeSorobanIntentAuthorization(f.store, f.stored.id, {
+    entryIndex: 0,
+    signerAddress: f.signerA.publicKey(),
+    signatureBase64: signatureFor(f.plan, f.signerA),
+  }, f.options);
+  const [storedContribution] = await f.store.listContributions(f.stored.id);
+  assert.equal(storedContribution.authorizationPlanDigest, f.plan.authorizationPlanDigest);
+  assert.equal(storedContribution.authorizationPlanRevision, 1);
+
+  const nextPlan = revisedPlan(f);
+  await f.store.updateIntent({
+    ...f.stored,
+    authorizationPlan: nextPlan,
+    authorizationPlanRevision: 2,
+  });
+  const after = await getSorobanIntentAuthorization(f.store, f.stored.id, f.options);
+  assert.equal(after.authorizationPlanDigest, nextPlan.authorizationPlanDigest);
+  assert.equal(after.contributionCount, 0);
+  assert.equal(after.authorizers[0]?.signedWeight, 0);
+  assert.equal((await f.store.listContributions(f.stored.id)).length, 1);
+});
+
+test('legacy unbound contributions apply only to revision one', async () => {
+  const f = await fixture();
+  await contributeSorobanIntentAuthorization(f.store, f.stored.id, {
+    entryIndex: 0,
+    signerAddress: f.signerA.publicKey(),
+    signatureBase64: signatureFor(f.plan, f.signerA),
+  }, f.options);
+  const [current] = await f.store.listContributions(f.stored.id);
+  const { authorizationPlanDigest: _digest, authorizationPlanRevision: _revision, ...legacy } = current;
+  f.store.contributions.set(f.stored.id, [legacy]);
+  const revisionOne = await getSorobanIntentAuthorization(f.store, f.stored.id, f.options);
+  assert.equal(revisionOne.contributionCount, 1);
+  assert.equal(revisionOne.authorizers[0]?.signedWeight, 1);
+
+  const nextPlan = revisedPlan(f);
+  await f.store.updateIntent({ ...f.stored, authorizationPlan: nextPlan, authorizationPlanRevision: 2 });
+  const revisionTwo = await getSorobanIntentAuthorization(f.store, f.stored.id, f.options);
+  assert.equal(revisionTwo.contributionCount, 0);
+  assert.equal(revisionTwo.authorizers[0]?.signedWeight, 0);
+});
+
+test('expired Intent AUTH is visible but refuses further contributions', async () => {
+  const f = await fixture();
+  const expiredOptions = {
+    ...f.options,
+    networkParametersLoader: async () => ({ ledgerSequence: 460, ledgerClosedAt: '2026-09-14T10:30:00Z', baseFeeInStroops: 100, baseReserveInStroops: 5_000_000 }),
+  };
+  const expired = await getSorobanIntentAuthorization(f.store, f.stored.id, expiredOptions);
+  assert.equal(expired.status, 'expired');
+  assert.equal(expired.authorizers[0]?.expirationLedger, 460);
+  await assert.rejects(
+    () => contributeSorobanIntentAuthorization(f.store, f.stored.id, {
+      entryIndex: 0,
+      signerAddress: f.signerA.publicKey(),
+      signatureBase64: signatureFor(f.plan, f.signerA),
+    }, expiredOptions),
+    (cause: unknown) => cause instanceof Error && 'code' in cause && cause.code === 'intent_authorization_not_open',
+  );
 });
 
 test('Intent AUTH rejects a signer outside the current authorizer policy', async () => {

@@ -11,6 +11,7 @@ import type {
   SorobanIntentAuthorizationSnapshot,
   SorobanIntentContributionResponse,
   SorobanIntentExecutionResponse,
+  SorobanIntentReplanResponse,
   SorobanIntentResponse,
   StoredSorobanIntentSnapshot,
 } from './stellar/sorobanIntentApiTypes';
@@ -195,6 +196,33 @@ export default function SorobanIntentApp() {
     setCopied(true);
   }
 
+  async function refreshAuthorization() {
+    if (!intent || !authorization || authorization.status !== 'expired' || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      let address = sessionAddress;
+      if (!address) address = await confirmSigner();
+      if (!address) return;
+      const response = await fetch('/api/intent', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-MultiSig-Intent-Id': intent.id,
+          ...privateSessionAddressHeaders(address),
+        },
+        body: JSON.stringify({ action: 'replan' }),
+      });
+      const body = await apiJson<SorobanIntentReplanResponse>(response);
+      setIntent(body.intent);
+      setAuthorization(body.authorization);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to refresh Soroban authorization.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function prepareExecution() {
     if (!intent || !authorization || authorization.status !== 'authorization_ready' || busy) return;
     if (!isValidStellarAccountId(executionSource)) {
@@ -292,7 +320,9 @@ export default function SorobanIntentApp() {
 
             {authorization.status === 'authorization_ready' && <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] p-5 sm:p-6"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div><h2 className="text-xl font-bold">Authorization ready</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">AUTH collection is complete. Choose the account that should now provide the fresh transaction sequence and fee. This choice does not change the already-authorized contract invocation.</p></div></div><div className="mt-5"><label htmlFor="intent-execution-source" className="text-sm font-semibold">Transaction source / executor</label><div className="mt-2 flex flex-col gap-2 sm:flex-row"><input id="intent-execution-source" value={executionSource} onChange={(event) => setExecutionSource(event.target.value.trim())} placeholder="G... executor account" spellCheck={false} className="min-w-0 flex-1 rounded-xl border border-black/10 bg-white px-4 py-3 font-mono text-sm outline-none dark:border-white/10 dark:bg-black/20" /><ActionButton disabled={busy || !isValidStellarAccountId(executionSource)} onClick={() => void prepareExecution()}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}{busy ? 'Preparing transaction…' : 'Prepare transaction'}</ActionButton></div>{sessionAddress && executionSource !== sessionAddress && <button type="button" className="mt-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300" onClick={() => setExecutionSource(sessionAddress)}>Use my verified wallet as executor</button>}<p className="mt-3 text-xs leading-5 text-neutral-500 dark:text-neutral-400">The prepared unsigned XDR goes to the ordinary Signing Room. A single-signature executor may sign it directly; a multisig executor continues through the existing Proposal flow; another operator can receive the XDR separately.</p></div></section>}
 
-            {(authorization.status === 'expired' || authorization.status === 'blocked') && <section className="rounded-2xl border border-red-500/25 bg-red-500/[0.07] p-4"><div className="flex gap-3"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-600" /><div><div className="font-semibold">This Intent cannot continue</div><div className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">{authorization.statusDetail || 'The current Soroban authorization is no longer usable.'}</div></div></div></section>}
+            {authorization.status === 'expired' && <section className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.08] p-4 sm:p-5"><div className="flex gap-3"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" /><div className="min-w-0 flex-1"><div className="font-semibold">Authorization expired</div><div className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Refresh the authorization plan for this same Intent. A fresh nonce and expiration window will be created; signatures from the expired plan remain history and will not carry over.</div><ActionButton className="mt-4" variant="secondary" disabled={busy} onClick={() => void refreshAuthorization()}><RefreshCw className={busy ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{busy ? 'Refreshing…' : 'Refresh authorization'}</ActionButton></div></div></section>}
+
+            {authorization.status === 'blocked' && <section className="rounded-2xl border border-red-500/25 bg-red-500/[0.07] p-4"><div className="flex gap-3"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-600" /><div><div className="font-semibold">This Intent cannot continue</div><div className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">{authorization.statusDetail || 'The current Soroban authorization is no longer usable.'}</div></div></div></section>}
           </div>
           {error && <div className="mt-5 flex gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />{error}</div>}
         </div>

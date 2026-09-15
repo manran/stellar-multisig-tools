@@ -15,8 +15,17 @@ export interface StoredSorobanIntentAuthorizationContribution {
   entryIndex: number;
   signerAddress: string;
   signatureBase64: string;
+  /** Plan identity is optional only for contributions written before plan revisions existed. */
+  authorizationPlanDigest?: string;
+  authorizationPlanRevision?: number;
   receivedAt: string;
   submittedBy?: AgentActorProvenance;
+}
+
+export interface StoredSorobanAuthorizationPlanRevision {
+  revision: number;
+  authorizationPlan: SorobanAuthorizationPlan;
+  supersededAt: string;
 }
 
 export interface StoredSorobanIntent {
@@ -25,6 +34,9 @@ export interface StoredSorobanIntent {
   network: StellarNetwork;
   intent: SorobanIntent;
   authorizationPlan: SorobanAuthorizationPlan;
+  /** Missing on legacy records means revision 1. */
+  authorizationPlanRevision?: number;
+  authorizationPlanHistory?: StoredSorobanAuthorizationPlanRevision[];
   createdAt: string;
   creatorAddress: string;
   creatorActor?: AgentActorProvenance;

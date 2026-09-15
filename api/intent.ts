@@ -24,6 +24,7 @@ import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
 import { configuredSorobanPlanningSource } from '../server/sorobanIntentConfig.js';
 import { SorobanIntentPlanningError } from '../server/sorobanIntentPlanningService.js';
 import { SorobanIntentServiceError } from '../server/sorobanIntentService.js';
+import { replanExpiredSorobanIntent, SorobanIntentReplanServiceError } from '../server/sorobanIntentReplanService.js';
 import {
   prepareSorobanIntentExecution,
   SorobanIntentExecutionServiceError,
@@ -69,6 +70,7 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof SorobanIntentServiceError
     || cause instanceof SorobanIntentAuthorizationServiceError
     || cause instanceof SorobanIntentExecutionServiceError
+    || cause instanceof SorobanIntentReplanServiceError
   ) {
     return json({ error: cause.message, code: cause.code }, cause.status);
   }
@@ -332,6 +334,28 @@ export async function PUT(request: Request): Promise<Response> {
   try {
     const access = await storedIntentAccess(request, 'write');
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    if (body.action === 'replan') {
+      await enforceSemanticRateLimit(request, {
+        rateLimitId: SEMANTIC_RATE_LIMIT_IDS.requestCreate,
+        rateLimitKey: semanticRateLimitKey(access.stored.network, access.address),
+        errorCode: 'intent_replan_rate_limited',
+        errorMessage: 'This signer has refreshed Soroban authorization too many times recently. Try again later.',
+      });
+      const result = await replanExpiredSorobanIntent(
+        blobSorobanIntentStore,
+        access.id,
+        configuredSorobanPlanningSource(access.stored.network),
+        { authorization: access.authorization },
+      );
+      return json({
+        operation: 'contract.intent.replan',
+        version: 1,
+        intent: result.intent,
+        authorization: result.authorization,
+        previousAuthorizationPlanDigest: result.previousAuthorizationPlanDigest,
+        authorizationPlanRevision: result.authorizationPlanRevision,
+      });
+    }
     const executionSource = typeof body.executionSource === 'string' ? body.executionSource : '';
     const execution = await prepareSorobanIntentExecution(
       blobSorobanIntentStore,

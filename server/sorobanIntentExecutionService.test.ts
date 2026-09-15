@@ -125,3 +125,31 @@ test('execution refuses to materialize before detached AUTH is ready', async () 
       && cause.code === 'intent_authorization_not_ready',
   );
 });
+
+
+test('execution can be rematerialized with a fresh source sequence without changing detached AUTH', async () => {
+  const f = fixture();
+  const source = Keypair.random();
+  const store = new MemoryIntentStore(f.stored);
+  let sequence = '7';
+  const options = {
+    authorization: f.authorization,
+    accountLoader: async () => ({ accountId: source.publicKey(), sequence } as never),
+    networkParametersLoader: async () => ({ baseFeeInStroops: 100 } as never),
+    enforcer: async ({ envelopeXdr }: { envelopeXdr: string }) => ({ endpointUrl: 'test', latestLedger: 123, assembledXdr: envelopeXdr }),
+  };
+  const first = await prepareSorobanIntentExecution(store, f.stored.id, source.publicKey(), options);
+  sequence = '8';
+  const second = await prepareSorobanIntentExecution(store, f.stored.id, source.publicKey(), options);
+  assert.equal(first.transactionSequence, '8');
+  assert.equal(second.transactionSequence, '9');
+  assert.notEqual(second.transactionHash, first.transactionHash);
+  for (const xdrValue of [first.xdr, second.xdr]) {
+    const parsed = TransactionBuilder.fromXdr(xdrValue, Networks.TESTNET);
+    if (parsed instanceof FeeBumpTransaction) throw new Error('unexpected fee bump');
+    const operation = parsed.operations[0];
+    assert.equal(operation?.type, 'invokeHostFunction');
+    if (operation?.type !== 'invokeHostFunction') throw new Error('missing invokeHostFunction');
+    assert.equal(operation.auth?.[0]?.toXdr('base64'), f.authEntry.toXdr('base64'));
+  }
+});

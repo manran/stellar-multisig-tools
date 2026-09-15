@@ -10,6 +10,12 @@ export interface StoredSorobanIntentSnapshot {
   network: StellarNetwork;
   intent: SorobanIntent;
   authorizationPlan: SorobanAuthorizationPlan;
+  authorizationPlanRevision?: number;
+  authorizationPlanHistory?: Array<{
+    revision: number;
+    authorizationPlan: SorobanAuthorizationPlan;
+    supersededAt: string;
+  }>;
   createdAt: string;
   creatorAddress: string;
   privateContext?: {
@@ -77,4 +83,13 @@ export interface SorobanIntentExecutionResponse {
     latestLedger: number;
     xdr: string;
   };
+}
+
+export interface SorobanIntentReplanResponse {
+  operation: 'contract.intent.replan';
+  version: 1;
+  intent: StoredSorobanIntentSnapshot;
+  authorization: SorobanIntentAuthorizationSnapshot;
+  previousAuthorizationPlanDigest: string;
+  authorizationPlanRevision: number;
 }

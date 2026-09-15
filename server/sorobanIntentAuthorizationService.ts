@@ -54,10 +54,36 @@ export interface SorobanIntentAuthorizationSnapshot {
   authorizers: SorobanGAccountAuthorizerStatus[];
 }
 
-function digestContribution(entryIndex: number, signerAddress: string, signatureBase64: string): string {
+function digestContribution(
+  authorizationPlanDigest: string,
+  entryIndex: number,
+  signerAddress: string,
+  signatureBase64: string,
+): string {
   return createHash('sha256')
-    .update(JSON.stringify({ entryIndex, signerAddress, signatureBase64 }))
+    .update(JSON.stringify({ authorizationPlanDigest, entryIndex, signerAddress, signatureBase64 }))
     .digest('hex');
+}
+
+function currentPlanRevision(stored: { authorizationPlanRevision?: number }): number {
+  return stored.authorizationPlanRevision ?? 1;
+}
+
+function contributionBelongsToCurrentPlan(
+  stored: { authorizationPlan: { authorizationPlanDigest: string }; authorizationPlanRevision?: number },
+  contribution: StoredSorobanIntentAuthorizationContribution,
+): boolean {
+  if (contribution.authorizationPlanDigest !== undefined && contribution.authorizationPlanRevision !== undefined) {
+    return contribution.authorizationPlanDigest === stored.authorizationPlan.authorizationPlanDigest
+      && contribution.authorizationPlanRevision === currentPlanRevision(stored);
+  }
+  if (contribution.authorizationPlanDigest !== undefined) {
+    return contribution.authorizationPlanDigest === stored.authorizationPlan.authorizationPlanDigest;
+  }
+  if (contribution.authorizationPlanRevision !== undefined) {
+    return contribution.authorizationPlanRevision === currentPlanRevision(stored);
+  }
+  return currentPlanRevision(stored) === 1;
 }
 async function applyContributionToEntry({
   entry,
@@ -200,7 +226,9 @@ export async function getSorobanIntentAuthorization(
 ): Promise<SorobanIntentAuthorizationSnapshot> {
   const stored = await store.getIntent(id);
   if (!stored) throw new SorobanIntentAuthorizationServiceError('Soroban Intent not found.', 404, 'intent_not_found');
-  const contributions = await store.listContributions(id);
+  const allContributions = await store.listContributions(id);
+  const contributions = allContributions.filter((contribution) =>
+    contributionBelongsToCurrentPlan(stored, contribution));
   const entries = await applyContributions(
     authorizationEntriesFromPlan(stored.authorizationPlan),
     stored.network,
@@ -292,12 +320,23 @@ export async function contributeSorobanIntentAuthorization(
     );
   }
 
+  const stored = await store.getIntent(id);
+  if (!stored || stored.authorizationPlan.authorizationPlanDigest !== before.authorizationPlanDigest) {
+    throw new SorobanIntentAuthorizationServiceError(
+      'The Soroban authorization plan changed while this signature was being verified. Reload the Intent before signing again.',
+      409,
+      'authorization_plan_changed',
+    );
+  }
+  const revision = currentPlanRevision(stored);
   const contribution: StoredSorobanIntentAuthorizationContribution = {
     version: 1,
-    digest: digestContribution(input.entryIndex, input.signerAddress, input.signatureBase64),
+    digest: digestContribution(before.authorizationPlanDigest, input.entryIndex, input.signerAddress, input.signatureBase64),
     entryIndex: input.entryIndex,
     signerAddress: input.signerAddress,
     signatureBase64: input.signatureBase64,
+    authorizationPlanDigest: before.authorizationPlanDigest,
+    authorizationPlanRevision: revision,
     receivedAt: (options.now ?? new Date()).toISOString(),
     ...(options.contributionActor ? { submittedBy: options.contributionActor } : {}),
   };

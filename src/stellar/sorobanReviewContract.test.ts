@@ -66,6 +66,8 @@ test('Soroban Review routes detached authorization into Intent before envelope s
   assert.match(requestApi, /status: 'verified'/);
   assert.match(sorobanIntentApp, /prepareExecution/);
   assert.match(sorobanIntentApp, /executionSource/);
+  assert.match(sorobanIntentApp, /action: 'replan'/);
+  assert.match(sorobanIntentApp, /Refresh authorization/);
 });
 
 test('imported prepared Soroban XDR crosses into the source-free Intent workflow', () => {
@@ -101,6 +103,7 @@ test('recording simulation and shared authorization are Headless Intent operatio
   assert.match(intentApi, /createImportedSorobanIntent/);
   assert.match(intentApi, /contributeSorobanIntentAuthorization/);
   assert.match(intentApi, /prepareSorobanIntentExecution/);
+  assert.match(intentApi, /replanExpiredSorobanIntent/);
   assert.match(intentApi, /source_account_auth_unsupported'[\s\S]*contract_account_auth_unsupported'[\s\S]*\? 409 : 503/);
   assert.doesNotMatch(intentApi, /SorobanPreparation/);
 });

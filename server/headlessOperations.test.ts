@@ -19,6 +19,9 @@ test('runtime policy and contract vertical slice are available to every transpor
   assert.equal(byId.get('contract.intent.contribute')?.access, 'principal:sign');
   assert.equal(byId.get('contract.intent.execution.prepare')?.method, 'PUT');
   assert.equal(byId.get('contract.intent.execution.prepare')?.effect, 'none');
+  assert.equal(byId.get('contract.intent.replan')?.method, 'PUT');
+  assert.equal(byId.get('contract.intent.replan')?.access, 'principal:write');
+  assert.equal(byId.get('contract.intent.replan')?.effect, 'coordination-state');
   assert.equal(byId.get('contract.call.build')?.effect, 'none');
   assert.equal(byId.get('contract.call.prepare')?.path, '/api/contract-prepare');
   assert.equal(byId.has('contract.authorization.create'), false);

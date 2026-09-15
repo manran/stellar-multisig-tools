@@ -78,6 +78,11 @@ export const blobSorobanIntentStore: SorobanIntentStore = {
 
   async updateIntent(value) {
     await withBlobStorage(async () => {
+      await Promise.all(value.discoverySignerKeys.map((address) => put(
+        signerPath(value.network, address, value.id),
+        JSON.stringify({ intentId: value.id }),
+        { access: 'private', addRandomSuffix: false, allowOverwrite: true, contentType: 'application/json', cacheControlMaxAge: 60 },
+      )));
       await put(intentPath(value.id), JSON.stringify(value), {
         access: 'private',
         addRandomSuffix: false,
