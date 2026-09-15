@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const walletContext = readFileSync(new URL('../StellarWalletContext.tsx', import.meta.url), 'utf8');
 const walletKit = readFileSync(new URL('./walletKit.ts', import.meta.url), 'utf8');
 const packageJson = readFileSync(new URL('../../package.json', import.meta.url), 'utf8');
+const indexCss = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
 const privateWorkspaceUnlock = readFileSync(new URL('../PrivateWorkspaceUnlock.tsx', import.meta.url), 'utf8');
 const activityRetention = readFileSync(new URL('../ActivityRetentionNotice.tsx', import.meta.url), 'utf8');
 const landing = readFileSync(new URL('../StellarLandingApp.tsx', import.meta.url), 'utf8');
@@ -94,6 +95,7 @@ test('Ledger and Trezor are explicit signer transports inside the existing walle
   assert.match(accountControl, /stays selected after unplugging until you choose another wallet or sign out/);
   assert.match(accountControl, /selectNetworkContext\(candidate\)/);
   assert.doesNotMatch(inbox, /<NetworkFallbackChoice/);
+  assert.doesNotMatch(indexCss, /fonts\.googleapis\.com/);
 });
 
 test('footer closes the trust story without duplicating workspace task navigation', () => {
