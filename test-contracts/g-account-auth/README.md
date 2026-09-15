@@ -1,13 +1,13 @@
-# G-account Soroban authorization fixture
+# Soroban authorization fixtures
 
-Minimal Testnet contract for MultiSigTools S2 end-to-end proof. It exists to test one protocol fact: a transaction source G-account can invoke a contract that requires authorization from a different G-account.
+Minimal Testnet fixtures for MultiSigTools Intent authorization proofs. They exist to test detached authorization independently from the eventual transaction source.
 
-The contract intentionally has no application-specific policy:
+`contracts/g-account-auth` provides:
 
-- `authorize(actor, marker)` calls `actor.require_auth()`, then stores `(actor, marker)`;
-- `last()` returns the stored pair so an E2E can prove the authorized transaction changed ledger state.
+- `authorize(actor, marker)`: calls `actor.require_auth()`, then stores `(actor, marker)`;
+- `last()`: returns the stored pair so an E2E can prove the authorized call reached ledger state.
 
-This is test infrastructure, not a production contract.
+`contracts/simple-account-auth` provides a minimal `__check_auth` account contract whose configured owner is one Ed25519 G-address. These are protocol fixtures, not production wallet contracts.
 
 ## Build
 
@@ -16,11 +16,11 @@ cargo test
 stellar contract build
 ```
 
-The optimized WASM is written to `target/wasm32v1-none/release/g_account_auth.wasm`.
+The optimized WASM files are written under `target/wasm32v1-none/release/`.
 
-## Deploy and run the live proof
+## Detached G-account Intent proof
 
-Use a disposable funded Testnet identity to deploy the fixture, then run the repository E2E script with the resulting contract id:
+Deploy `g_account_auth.wasm` with a disposable funded Testnet identity, then use the repository Intent proof:
 
 ```sh
 stellar keys generate mst-deployer --network testnet --fund
@@ -28,18 +28,15 @@ stellar contract deploy \
   --wasm target/wasm32v1-none/release/g_account_auth.wasm \
   --source mst-deployer \
   --network testnet
-
 MST_E2E_CONTRACT_ID=C... \
-  npx tsx ../../scripts/liveSorobanGAccountE2e.ts
+  npx tsx ../../scripts/liveSorobanIntentSourceLateE2e.ts
 ```
 
-The live script creates fresh disposable source/actor keypairs, funds them with Friendbot, performs record simulation, signs the detached CAP-71 G-account auth entry, enforces the prepared XDR, freezes an ordinary Proposal, signs the transaction envelope with the source only, submits to Testnet, and reads `last()` back from contract state.
+The proof uses a planning source only for recording simulation, collects detached AUTH, discards that transaction shell, chooses a different execution source, runs enforcing simulation, signs the final envelope, submits, and reads `last()` back. No test secret key is stored in the repository.
 
-No test secret key is stored in the repository.
+## Real wallet 2-of-2 fixture
 
-## Real Freighter 2-of-2 browser fixture
-
-For a real wallet-module proof, first create two funded Testnet Freighter addresses and pass only their public G addresses to the preparation script:
+For a wallet-module proof, create two funded Testnet signer addresses and prepare an unsigned Soroban XDR:
 
 ```sh
 MST_E2E_SIGNER_A=G... \
@@ -49,16 +46,23 @@ MST_E2E_XDR_OUT=/tmp/multisigtools-soroban-freighter.xdr \
   npx tsx ../../scripts/prepareSorobanFreighterE2e.ts
 ```
 
-The script creates fresh disposable source/authorizer accounts. The authorizer has signer A +1, signer B +1, master weight 0, and medium threshold 2. The transaction source has signer A +1 and master weight 0. It writes one unsigned contract-call XDR for Import.
+Import that XDR through Human Review and choose **Continue as Soroban Intent**. The imported transaction shell is discarded. Each current signer opens the resulting `/a#IntentId` and contributes detached AUTH. After `authorization_ready`, choose the executor/source and materialize a fresh final transaction. The preparation script never reads or stores wallet secrets or recovery phrases.
 
-Import that XDR in Testnet Review, run RPC simulation, sign the detached auth entry with each Freighter wallet, then switch back to signer A for transaction-envelope signing. The preparation script never reads or stores either Freighter secret or recovery phrase.
+## Configured C-account Intent fixture
 
-## S3A/S3B contract-account fixture
+Deploy `simple_account_auth.wasm` with a fresh owner public key, then use its C-address as the `actor` passed to `g-account-auth.authorize`.
 
-The same workspace includes `contracts/simple-account-auth`, a minimal `__check_auth` account contract. S3A uses it to prove that MultiSig Tools can inspect a real C-account authorization requirement without pretending to know or validate the account contract's custom credential policy.
+For a live Testnet proof, configure only the exact deployed fixture and its owner:
 
-Build the workspace, deploy `simple_account_auth.wasm`, then use the deployed C-address as the `actor` argument to `g-account-auth.authorize`. A build-only transaction imported into Testnet Review is classified as `contract-account / contract-check-auth`, shows the invocation tree, and keeps the production Human authorization action blocked/read-only.
+```text
+STELLAR_SOROBAN_SIMPLE_ACCOUNT_TESTNET_CONTRACT=C...
+STELLAR_SOROBAN_SIMPLE_ACCOUNT_TESTNET_OWNER=G...
+```
 
-S3B also uses this fixture to test the contract-neutral credential transport boundary. This particular account's `Signature` type is `BytesN<64>`, so its fixture adapter signs the exact Soroban authorization challenge hash with the stored Ed25519 owner and wraps the 64-byte result as one `ScVal`. The generic MultiSig Tools core does not assume that encoding for other C-accounts: it stages the adapter-provided `ScVal`, marks it as requiring RPC enforcement, then performs enforcing simulation and re-prepares the resource footprint before envelope signing.
+Create a semantic Soroban Intent for `g-account-auth.authorize(actor=C..., marker=...)`. Recording simulation initializes the detached C-account authorization window. The configured owner contributes a normal 64-byte Ed25519 signature through the same Intent PATCH path used by G-account signers; the adapter wraps that signature as the contract-defined `ScVal` evidence.
 
-This contract is a protocol fixture, not an audited wallet contract or a generic production C-account adapter.
+`authorization_ready` still does not build or submit a transaction. Choose a fresh executor/source afterward, materialize the final transaction, and require enforcing simulation to pass `__check_auth` before envelope signing and submission.
+
+Unknown C-accounts and delegated credential shapes remain fail-closed unless an explicit adapter exists. MultiSigTools does not infer arbitrary C-account credential formats.
+
+The 2026-09-15 live proof used different C-account owner and execution identities and completed Intent creation, detached custom AUTH, late-bound execution, enforcing simulation, Testnet submission, and `last()` readback successfully.
