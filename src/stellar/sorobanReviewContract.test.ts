@@ -101,6 +101,7 @@ test('recording simulation and shared authorization are Headless Intent operatio
   assert.match(intentApi, /createImportedSorobanIntent/);
   assert.match(intentApi, /contributeSorobanIntentAuthorization/);
   assert.match(intentApi, /prepareSorobanIntentExecution/);
+  assert.match(intentApi, /source_account_auth_unsupported'[\s\S]*contract_account_auth_unsupported'[\s\S]*\? 409 : 503/);
   assert.doesNotMatch(intentApi, /SorobanPreparation/);
 });
 

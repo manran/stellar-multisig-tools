@@ -73,7 +73,7 @@ function errorResponse(cause: unknown): Response {
     return json({ error: cause.message, code: cause.code }, cause.status);
   }
   if (cause instanceof SorobanIntentPlanningError) {
-    const status = cause.code === 'source_account_auth_unsupported' ? 409 : 503;
+    const status = cause.code === 'source_account_auth_unsupported' || cause.code === 'contract_account_auth_unsupported' ? 409 : 503;
     return json({ error: cause.message, code: cause.code }, status);
   }
   if (cause instanceof SemanticRateLimitError) {
