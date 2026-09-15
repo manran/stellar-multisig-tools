@@ -59,6 +59,10 @@ test('wallet switching and sign out preserve the current work surface', () => {
 test('Ledger and Trezor are explicit signer transports inside the existing wallet path', () => {
   assert.match(walletKit, /import\('@creit\.tech\/stellar-wallets-kit\/modules\/ledger'\)/);
   assert.match(walletKit, /import\('@creit\.tech\/stellar-wallets-kit\/modules\/trezor'\)/);
+  assert.match(walletKit, /async function loadKit\(includeHardwareWallets = false\)/);
+  assert.match(walletKit, /shouldLoadHardwareWallets = includeHardwareWallets \|\| selectedHardwareWallet/);
+  assert.match(walletKit, /shouldLoadHardwareWallets \? await loadHardwareWalletModules\(\) : \[\]/);
+  assert.match(walletKit, /connectWalletIdentity[\s\S]*loadKit\(true\)/);
   assert.match(walletKit, /modules: \[\.\.\.defaultModules\(\), \.\.\.hardwareModules\]/);
   assert.match(walletKit, /import\('buffer'\)/);
   assert.match(packageJson, /"buffer": "\^6\.0\.3"/);

@@ -2,9 +2,11 @@ import { Networks } from '@stellar/stellar-sdk/base';
 import type { StellarNetwork } from './types.js';
 
 let initialized = false;
+let hardwareModulesLoaded = false;
 
 const HARDWARE_WALLET_MODULE_TYPE = 'HW_WALLET';
 const LEDGER_WALLET_ID = 'LEDGER';
+const TREZOR_WALLET_ID = 'TREZOR';
 const HARDWARE_WALLET_SUPPORT_EMAIL = 'support@multisig.tools';
 
 export type WalletNetworkSource = 'wallet' | 'application';
@@ -61,16 +63,21 @@ async function loadHardwareWalletModules() {
   ];
 }
 
-async function loadKit() {
-  const [{ StellarWalletsKit }, { defaultModules }] = await Promise.all([
+async function loadKit(includeHardwareWallets = false) {
+  const [{ StellarWalletsKit }, { defaultModules }, { selectedModuleId }] = await Promise.all([
     import('@creit.tech/stellar-wallets-kit/sdk'),
     import('@creit.tech/stellar-wallets-kit/modules/utils'),
+    import('@creit.tech/stellar-wallets-kit/state'),
   ]);
+  const selectedHardwareWallet = selectedModuleId.value === LEDGER_WALLET_ID
+    || selectedModuleId.value === TREZOR_WALLET_ID;
+  const shouldLoadHardwareWallets = includeHardwareWallets || selectedHardwareWallet;
 
-  if (!initialized) {
-    const hardwareModules = await loadHardwareWalletModules();
+  if (!initialized || (shouldLoadHardwareWallets && !hardwareModulesLoaded)) {
+    const hardwareModules = shouldLoadHardwareWallets ? await loadHardwareWalletModules() : [];
     StellarWalletsKit.init({ modules: [...defaultModules(), ...hardwareModules] });
     initialized = true;
+    hardwareModulesLoaded = hardwareModulesLoaded || shouldLoadHardwareWallets;
   }
 
   return StellarWalletsKit;
@@ -171,7 +178,7 @@ export function isWalletAuthEntrySigningUnsupported(cause: unknown): boolean {
 }
 
 export async function connectWalletIdentity(preferredNetwork?: StellarNetwork): Promise<WalletIdentity> {
-  const kit = await loadKit();
+  const kit = await loadKit(true);
   if (preferredNetwork) setKitNetworkContext(kit, preferredNetwork);
   const { address } = await kit.authModal();
   if (!address) throw new Error('No Stellar account was selected.');
