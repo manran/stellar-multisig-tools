@@ -1,5 +1,6 @@
 import type { MachineCallerProvenance } from '../src/stellar/coordinationActorTypes.js';
-import type { SorobanIntentIntegrationContext, IntegrationExecutionPolicy } from '../src/stellar/integrationTypes.js';
+import type { SorobanIntentIntegrationContext } from '../src/stellar/integrationTypes.js';
+import type { ExecutionPolicy } from '../src/stellar/executionPolicy.js';
 import { normalizePrivateNote } from '../src/stellar/privateNote.js';
 import type { PrivateNoteRevision } from '../src/stellar/privateNote.js';
 import type { SorobanAuthorizationPlan } from '../src/stellar/sorobanAuthorizationPlan.js';
@@ -39,7 +40,7 @@ export async function createStoredSorobanIntent(
     creatorActor?: MachineCallerProvenance;
     discoverySignerKeys?: string[];
     integration?: SorobanIntentIntegrationContext;
-    executionPolicy?: IntegrationExecutionPolicy;
+    executionPolicy?: ExecutionPolicy;
     privateNote?: unknown;
     externalReference?: unknown;
   },

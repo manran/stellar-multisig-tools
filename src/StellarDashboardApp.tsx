@@ -36,7 +36,7 @@ function inboxAttentionCopy(summary: DashboardInboxSummary | null) {
   }
   const parts: string[] = [];
   if (actionCounts.contractAuthorizationNeeded > 0) parts.push(`${actionCounts.contractAuthorizationNeeded} contract authorization${actionCounts.contractAuthorizationNeeded === 1 ? '' : 's'} need${actionCounts.contractAuthorizationNeeded === 1 ? 's' : ''} you`);
-  if (actionCounts.readyForTransactionSigning > 0) parts.push(`${actionCounts.readyForTransactionSigning} ready for transaction signing`);
+  if (actionCounts.readyForExecutionRouting > 0) parts.push(`${actionCounts.readyForExecutionRouting} ready to choose execution`);
   if (actionCounts.signatureNeeded > 0) parts.push(`${actionCounts.signatureNeeded} need${actionCounts.signatureNeeded === 1 ? 's' : ''} your signature`);
   if (actionCounts.readyToSubmit > 0) parts.push(`${actionCounts.readyToSubmit} ready to submit`);
   if (actionCounts.needsAttention > 0) parts.push(`${actionCounts.needsAttention} need${actionCounts.needsAttention === 1 ? 's' : ''} review`);

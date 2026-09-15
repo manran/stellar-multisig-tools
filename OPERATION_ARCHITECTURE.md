@@ -76,20 +76,30 @@ Product neutrality does not flatten permissions:
 
 ## Canonical composition
 
-Soroban contract work is Intent-first. Transaction construction is deliberately later than contract authorization:
+The canonical Headless workflow is `business instruction -> Prepare -> Review -> Authorization -> Ready -> Execution routing -> Execute -> Done`. Protocols keep their real differences inside that lifecycle.
+
+Classic Service work should be business-first where MultiSigTools already has a stable composer. A Service supplies the business source account and semantic operation inputs; MultiSigTools loads current sequence/network parameters, constructs and inspects the exact transaction, derives all transaction/operation/fee-bump `sourceRequirements`, and then freezes that exact XDR into the existing Request lifecycle. Exact XDR input remains an advanced escape hatch, not the default integration requirement.
+
+Soroban contract work remains Intent-first and transaction construction stays later than contract authorization:
 
     contract.interface.inspect
     -> contract.intent.create
     -> contract.intent.contribute (until detached AUTH is satisfied)
+    -> Ready
+    -> choose allowed execution route
+       -> current client
+       -> external handoff
+       -> MultiSigTools coordination
+       -> fixed external Service (when policy requires it)
     -> contract.intent.execution.prepare (late-bind executor/source)
-    -> proposal.create / proposal.contribute
-    -> proposal.submit
+    -> final envelope authorization
+    -> submit outside MultiSigTools or through proposal.submit
 
-**contract.intent.create** stores semantic contract intent plus an immutable detached AuthorizationPlan; it does not persist a transaction source, sequence, fee, lifetime, or envelope. **contract.intent.contribute** stores verified Soroban AUTH contributions independently of the plan. Only after authorization is ready does **contract.intent.execution.prepare** choose an execution source, load a fresh sequence, materialize the final transaction, and run enforcing simulation. If envelope multisig is required, the resulting XDR enters the ordinary Proposal lifecycle.
+**contract.intent.create** stores semantic contract intent plus an immutable detached AuthorizationPlan; it does not persist a transaction source, sequence, fee, lifetime, or envelope. **contract.intent.contribute** stores verified Soroban AUTH contributions independently of the plan. `authorization_ready` means authorization is complete, not that execution has happened. Execution routing selects who will carry the final envelope, while **contract.intent.execution.prepare** still loads a fresh source sequence, materializes the final transaction, runs enforcing simulation, and compares effects. If the chosen execution source needs multisig, the resulting XDR enters the ordinary Proposal lifecycle regardless of which route selected that source.
 
 `SOURCE_ACCOUNT` authorization is intentionally rejected by the Intent workflow because it binds contract authorization to the final transaction source and defeats source-late execution. Integrations must expose detached address authorization instead.
 
-`contract.call.build` and `contract.call.prepare` remain low-level public construction/simulation primitives for inspection, diagnostics, and external tooling. They are not the canonical shared-authorization lifecycle.
+`contract.call.build` and `contract.call.prepare` remain low-level public construction/simulation primitives for inspection, diagnostics, and external tooling. They are not the canonical shared-authorization lifecycle. `WORKFLOW_ARCHITECTURE.md` records the protocol-neutral lifecycle and execution-routing contract.
 
 ## Shipped operation discovery
 

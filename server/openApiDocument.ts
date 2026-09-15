@@ -334,7 +334,7 @@ const components: OpenApiObject = {
         discoverySignerKeys: { type: 'array', items: accountId },
         creatorActor: { type: 'object', additionalProperties: true },
         integration: schema('ServiceIntegrationContext'),
-        executionPolicy: schema('IntegrationExecutionPolicy'),
+        executionPolicy: schema('ExecutionPolicy'),
         privateContext: { type: 'object', additionalProperties: true },
       },
       additionalProperties: false,
@@ -583,7 +583,7 @@ const components: OpenApiObject = {
       },
       additionalProperties: false,
     },
-    IntegrationExecutionPolicy: {
+    ExecutionPolicy: {
       type: 'object',
       required: ['mode'],
       properties: {

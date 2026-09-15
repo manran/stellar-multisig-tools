@@ -4,7 +4,7 @@ import type {
 } from './sorobanIntentApiTypes.js';
 
 export function intentViewerActionNeedsAction(action: SorobanIntentViewerAction): boolean {
-  return action === 'authorize' || action === 'execute' || action === 'attention';
+  return action === 'authorize' || action === 'route_execution' || action === 'attention';
 }
 
 export function intentViewerActionPresentation(action: SorobanIntentViewerAction): {
@@ -21,12 +21,20 @@ export function intentViewerActionPresentation(action: SorobanIntentViewerAction
       tone: 'warning',
     };
   }
-  if (action === 'execute') {
+  if (action === 'route_execution') {
     return {
       label: 'Authorization complete',
-      detail: 'Required Soroban authorization is complete. Build the final transaction when you are ready.',
-      cta: 'Prepare transaction',
+      detail: 'Required Soroban authorization is complete. Choose how the final transaction should be executed.',
+      cta: 'Choose execution',
       tone: 'success',
+    };
+  }
+  if (action === 'waiting_execution') {
+    return {
+      label: 'Authorization complete · waiting for execution',
+      detail: 'The owning external service controls final execution for this Intent.',
+      cta: 'View status',
+      tone: 'neutral',
     };
   }
   if (action === 'attention') {

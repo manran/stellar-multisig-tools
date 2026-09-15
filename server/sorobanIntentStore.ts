@@ -1,6 +1,7 @@
 import type { AgentActorProvenance } from '../src/stellar/agentAccessTypes.js';
 import type { MachineCallerProvenance } from '../src/stellar/coordinationActorTypes.js';
-import type { SorobanIntentIntegrationContext, IntegrationExecutionPolicy } from '../src/stellar/integrationTypes.js';
+import type { SorobanIntentIntegrationContext } from '../src/stellar/integrationTypes.js';
+import type { ExecutionPolicy } from '../src/stellar/executionPolicy.js';
 import type { SorobanAuthorizationPlan } from '../src/stellar/sorobanAuthorizationPlan.js';
 import type { SorobanIntent } from '../src/stellar/sorobanIntent.js';
 import type { PrivateNoteRevision } from '../src/stellar/privateNote.js';
@@ -44,7 +45,7 @@ export interface StoredSorobanIntent {
   creatorActor?: MachineCallerProvenance;
   discoverySignerKeys: string[];
   integration?: SorobanIntentIntegrationContext;
-  executionPolicy?: IntegrationExecutionPolicy;
+  executionPolicy?: ExecutionPolicy;
   privateContext?: SorobanIntentPrivateContext;
 }
 

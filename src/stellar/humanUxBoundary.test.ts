@@ -115,7 +115,9 @@ test('Inbox and Dashboard surface source-free Soroban Intents in the same work q
   assert.match(dashboard, /intentAttention/);
   assert.match(dashboard, /intentViewerActionPresentation/);
   assert.match(intent, /Contract authorization complete/);
-  assert.match(intent, /Prepare transaction/);
+  assert.match(intent, /Choose how the final transaction should be executed/);
+  assert.match(intent, /Handle outside MultiSigTools/);
+  assert.match(intent, /MultiSigTools coordinates/);
   assert.match(routes, /path: '\/a', kind: 'authorization'/);
 });
 

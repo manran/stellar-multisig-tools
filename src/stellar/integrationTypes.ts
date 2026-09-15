@@ -8,11 +8,6 @@ export interface ServiceIntegrationContext {
   correlationId?: string;
 }
 
-/** Execution ownership is independent from Integration identity. */
-export interface IntegrationExecutionPolicy {
-  mode: 'multisigtools' | 'external';
-}
-
 export type RequestIntegrationContext = ServiceIntegrationContext;
 export type SorobanIntentIntegrationContext = ServiceIntegrationContext;
 

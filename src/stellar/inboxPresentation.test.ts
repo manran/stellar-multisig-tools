@@ -13,6 +13,7 @@ test('Inbox viewer action stays separate from canonical Request status', () => {
   assert.equal(projectInboxViewerAction('awaiting_signatures', { hasSigned: true }), 'waiting_for_others');
   assert.equal(projectInboxViewerAction('awaiting_signatures', { hasSigned: false, declined: true }), 'declined');
   assert.equal(projectInboxViewerAction('ready', { hasSigned: false }), 'submit');
+  assert.equal(projectInboxViewerAction('ready', { hasSigned: false, externalExecution: true }), 'waiting_execution');
   assert.equal(projectInboxViewerAction('waiting_preconditions', { hasSigned: false }), 'waiting_preconditions');
   assert.equal(projectInboxViewerAction('stale', { hasSigned: false }), 'attention');
   assert.equal(projectInboxViewerAction('blocked', { hasSigned: false }), 'attention');
@@ -34,14 +35,14 @@ test('Inbox action counts describe what the current viewer can do now', () => {
     needsAttention: 1,
     waiting: 3,
     contractAuthorizationNeeded: 0,
-    readyForTransactionSigning: 0,
+    readyForExecutionRouting: 0,
   });
   assert.equal(inboxViewerActionNeedsAction('sign'), true);
   assert.equal(inboxViewerActionNeedsAction('waiting_for_others'), false);
 
   const withIntents = summarizeInboxActions([], [
     { viewerAction: 'authorize' },
-    { viewerAction: 'execute' },
+    { viewerAction: 'route_execution' },
     { viewerAction: 'attention' },
     { viewerAction: 'waiting' },
   ]);
@@ -52,7 +53,7 @@ test('Inbox action counts describe what the current viewer can do now', () => {
     needsAttention: 1,
     waiting: 1,
     contractAuthorizationNeeded: 1,
-    readyForTransactionSigning: 1,
+    readyForExecutionRouting: 1,
   });
 });
 
@@ -72,10 +73,10 @@ test('Dashboard action summary reuses the Human semantic tones', () => {
     needsAttention: 1,
     waiting: 3,
     contractAuthorizationNeeded: 1,
-    readyForTransactionSigning: 1,
+    readyForExecutionRouting: 1,
   }), [
     { key: 'contract-auth', label: '1 contract auth', tone: 'warning' },
-    { key: 'transaction-sign', label: '1 ready for transaction signing', tone: 'success' },
+    { key: 'execution-route', label: '1 to choose execution', tone: 'success' },
     { key: 'sign', label: '2 to sign', tone: 'warning' },
     { key: 'submit', label: '1 to submit', tone: 'success' },
     { key: 'attention', label: '1 need review', tone: 'danger' },

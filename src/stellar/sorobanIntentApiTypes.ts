@@ -3,7 +3,8 @@ import type { SorobanAuthorizationPlan } from './sorobanAuthorizationPlan.js';
 import type { SorobanIntent } from './sorobanIntent.js';
 import type { SorobanEffectsDiff, SorobanEffectsSnapshot } from './sorobanEffects.js';
 import type { MachineCallerProvenance } from './coordinationActorTypes.js';
-import type { SorobanIntentIntegrationContext, IntegrationExecutionPolicy } from './integrationTypes.js';
+import type { SorobanIntentIntegrationContext } from './integrationTypes.js';
+import type { ExecutionPolicy } from './executionPolicy.js';
 import type { PrivateNoteRevision } from './privateNote.js';
 import type { StellarNetwork } from './types.js';
 
@@ -23,7 +24,7 @@ export interface StoredSorobanIntentSnapshot {
   creatorAddress?: string;
   creatorActor?: MachineCallerProvenance;
   integration?: SorobanIntentIntegrationContext;
-  executionPolicy?: IntegrationExecutionPolicy;
+  executionPolicy?: ExecutionPolicy;
   privateContext?: {
     externalReference?: string;
     initialPrivateNote?: PrivateNoteRevision;
@@ -44,7 +45,7 @@ export interface SorobanIntentAuthorizationSnapshot {
 }
 
 
-export type SorobanIntentViewerAction = 'authorize' | 'execute' | 'waiting' | 'attention';
+export type SorobanIntentViewerAction = 'authorize' | 'route_execution' | 'waiting' | 'waiting_execution' | 'attention';
 
 export interface InboxSorobanIntentSnapshot {
   id: string;

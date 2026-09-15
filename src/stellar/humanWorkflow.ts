@@ -1,4 +1,5 @@
 import type { SigningRequestStatus } from './requestTypes';
+import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentApiTypes';
 
 export const HUMAN_WORKFLOW_STEPS = [
   { key: 'prepare', number: 1, label: 'Prepare' },
@@ -44,4 +45,10 @@ export function proposalWorkflowStage(
 ): HumanWorkflowStage {
   if (!options.reviewComplete) return 'review';
   return requestWorkflowStage(status, options.signaturesComplete ?? false);
+}
+
+export function sorobanIntentWorkflowStage(
+  status: SorobanIntentAuthorizationSnapshot['status'],
+): HumanWorkflowStage {
+  return status === 'authorization_ready' ? 'submit' : 'sign';
 }

@@ -28,7 +28,7 @@ export function projectSorobanIntentViewerAction(
   externalExecution = false,
 ): InboxSorobanIntentSnapshot['viewerAction'] {
   if (authorization.status === 'blocked' || authorization.status === 'expired') return 'attention';
-  if (authorization.status === 'authorization_ready') return externalExecution ? 'waiting' : 'execute';
+  if (authorization.status === 'authorization_ready') return externalExecution ? 'waiting_execution' : 'route_execution';
   return authorization.authorizers.some((authorizer) =>
     !authorizer.ready
     && authorizer.activeSigners.some((signer) => signer.publicKey === address)

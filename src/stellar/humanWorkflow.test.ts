@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { HUMAN_WORKFLOW_STEPS, proposalWorkflowStage, requestStatusPresentation, requestWorkflowStage } from './humanWorkflow';
+import { HUMAN_WORKFLOW_STEPS, proposalWorkflowStage, requestStatusPresentation, requestWorkflowStage, sorobanIntentWorkflowStage } from './humanWorkflow';
 
 test('Human workflow is the canonical five-step transaction journey', () => {
   assert.deepEqual(HUMAN_WORKFLOW_STEPS.map((step) => step.label), ['Prepare', 'Review', 'Sign', 'Submit', 'Done']);
@@ -20,6 +20,13 @@ test('Proposal stays in Review until the Human review boundary is completed', ()
   assert.equal(proposalWorkflowStage('awaiting_signatures', { reviewComplete: true }), 'sign');
   assert.equal(proposalWorkflowStage('ready', { reviewComplete: true, signaturesComplete: true }), 'submit');
   assert.equal(proposalWorkflowStage('submitted', { reviewComplete: true, signaturesComplete: true }), 'done');
+});
+
+test('Soroban AUTH stays in Sign and execution routing remains inside Submit', () => {
+  assert.equal(sorobanIntentWorkflowStage('awaiting_authorization'), 'sign');
+  assert.equal(sorobanIntentWorkflowStage('authorization_ready'), 'submit');
+  assert.equal(sorobanIntentWorkflowStage('expired'), 'sign');
+  assert.equal(sorobanIntentWorkflowStage('blocked'), 'sign');
 });
 
 test('Request status colors keep waiting, success, failure, and expiry semantically distinct', () => {

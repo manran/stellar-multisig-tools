@@ -116,6 +116,7 @@ export async function projectHumanInboxRequests(
       viewerAction: projectInboxViewerAction(snapshot.status, {
         hasSigned: signerHasSignedTransaction(address, snapshot.mergedXdr, snapshot.network),
         declined,
+        externalExecution: snapshot.execution?.mode === 'external',
       }),
     };
   }));

@@ -6,6 +6,7 @@ export type InboxViewerAction =
   | 'submit'
   | 'waiting_for_others'
   | 'waiting_preconditions'
+  | 'waiting_execution'
   | 'attention'
   | 'declined';
 
@@ -20,15 +21,15 @@ export interface InboxActionCounts {
   needsAttention: number;
   waiting: number;
   contractAuthorizationNeeded: number;
-  readyForTransactionSigning: number;
+  readyForExecutionRouting: number;
 }
 
 
 export function projectInboxViewerAction(
   status: SigningRequestStatus,
-  options: { hasSigned: boolean; declined?: boolean },
+  options: { hasSigned: boolean; declined?: boolean; externalExecution?: boolean },
 ): InboxViewerAction {
-  if (status === 'ready') return 'submit';
+  if (status === 'ready') return options.externalExecution ? 'waiting_execution' : 'submit';
   if (status === 'waiting_preconditions') return 'waiting_preconditions';
   if (status === 'stale' || status === 'blocked') return 'attention';
   if (status === 'awaiting_signatures') {
@@ -54,7 +55,7 @@ export function summarizeInboxActions(
     needsAttention: 0,
     waiting: 0,
     contractAuthorizationNeeded: 0,
-    readyForTransactionSigning: 0,
+    readyForExecutionRouting: 0,
   };
 
   for (const request of requests) {
@@ -68,9 +69,9 @@ export function summarizeInboxActions(
     if (intent.viewerAction === 'authorize') {
       counts.actionRequired += 1;
       counts.contractAuthorizationNeeded += 1;
-    } else if (intent.viewerAction === 'execute') {
+    } else if (intent.viewerAction === 'route_execution') {
       counts.actionRequired += 1;
-      counts.readyForTransactionSigning += 1;
+      counts.readyForExecutionRouting += 1;
     } else if (intent.viewerAction === 'attention') {
       counts.actionRequired += 1;
       counts.needsAttention += 1;
@@ -109,6 +110,13 @@ export function inboxViewerActionPresentation(action: InboxViewerAction): {
         cta: 'Review issue',
         tone: 'danger',
       };
+    case 'waiting_execution':
+      return {
+        label: 'Authorization complete · waiting for execution',
+        detail: 'Final execution is owned outside this signer workflow.',
+        cta: 'View status',
+        tone: 'neutral',
+      };
     case 'waiting_preconditions':
       return {
         label: 'Approvals complete · waiting for ledger',
@@ -134,17 +142,17 @@ export function inboxViewerActionPresentation(action: InboxViewerAction): {
 }
 
 export function inboxActionCountPresentations(counts: InboxActionCounts): Array<{
-  key: 'contract-auth' | 'transaction-sign' | 'sign' | 'submit' | 'attention' | 'waiting';
+  key: 'contract-auth' | 'execution-route' | 'sign' | 'submit' | 'attention' | 'waiting';
   label: string;
   tone: 'warning' | 'success' | 'danger' | 'neutral';
 }> {
   const items: Array<{
-    key: 'contract-auth' | 'transaction-sign' | 'sign' | 'submit' | 'attention' | 'waiting';
+    key: 'contract-auth' | 'execution-route' | 'sign' | 'submit' | 'attention' | 'waiting';
     label: string;
     tone: 'warning' | 'success' | 'danger' | 'neutral';
   }> = [];
   if (counts.contractAuthorizationNeeded > 0) items.push({ key: 'contract-auth', label: `${counts.contractAuthorizationNeeded} contract auth`, tone: 'warning' });
-  if (counts.readyForTransactionSigning > 0) items.push({ key: 'transaction-sign', label: `${counts.readyForTransactionSigning} ready for transaction signing`, tone: 'success' });
+  if (counts.readyForExecutionRouting > 0) items.push({ key: 'execution-route', label: `${counts.readyForExecutionRouting} to choose execution`, tone: 'success' });
   if (counts.signatureNeeded > 0) items.push({ key: 'sign', label: `${counts.signatureNeeded} to sign`, tone: 'warning' });
   if (counts.readyToSubmit > 0) items.push({ key: 'submit', label: `${counts.readyToSubmit} to submit`, tone: 'success' });
   if (counts.needsAttention > 0) items.push({ key: 'attention', label: `${counts.needsAttention} need review`, tone: 'danger' });

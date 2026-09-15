@@ -148,11 +148,11 @@ test('ready and blocked Intent states project to execution and attention actions
   assert.equal(projectSorobanIntentViewerAction({
     ...base,
     status: 'authorization_ready',
-  }, Keypair.random().publicKey()), 'execute');
+  }, Keypair.random().publicKey()), 'route_execution');
   assert.equal(projectSorobanIntentViewerAction({
     ...base,
     status: 'authorization_ready',
-  }, Keypair.random().publicKey(), true), 'waiting');
+  }, Keypair.random().publicKey(), true), 'waiting_execution');
   assert.equal(projectSorobanIntentViewerAction({
     ...base,
     status: 'blocked',

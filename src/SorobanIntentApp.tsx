@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, CircleAlert, KeyRound, LoaderCircle, RefreshCw, Share2 } from 'lucide-react';
+import { CheckCircle2, CircleAlert, ClipboardCopy, KeyRound, LoaderCircle, RefreshCw, Share2 } from 'lucide-react';
 import { xdr } from '@stellar/stellar-sdk/base';
 import { ActionButton, NetworkFact, StatusBadge, WorkflowProgress } from './MultiSigUi';
 import SorobanEffectsDiffView from './SorobanEffectsDiffView';
@@ -19,6 +19,8 @@ import type {
 import { inspectSorobanAuthorizationEntry, type SorobanInvocationInspection } from './stellar/sorobanInspection';
 import type { SorobanEffectsDiff, SorobanEffectsSnapshot } from './stellar/sorobanEffects';
 import { isValidStellarAccountId } from './stellar/horizon';
+import { sorobanExecutionRoutes, type SorobanExecutionRoute } from './stellar/executionPolicy';
+import { sorobanIntentWorkflowStage } from './stellar/humanWorkflow';
 import { privateSessionAddressHeaders } from './stellar/privateSessionTransport';
 import { writeReviewHandoff } from './stellar/reviewHandoff';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
@@ -96,6 +98,9 @@ export default function SorobanIntentApp() {
   const [executionSource, setExecutionSource] = useState('');
   const [executionDiff, setExecutionDiff] = useState<SorobanEffectsDiff | null>(null);
   const [pendingExecution, setPendingExecution] = useState<SorobanIntentExecutionResponse | null>(null);
+  const [pendingExecutionRoute, setPendingExecutionRoute] = useState<SorobanExecutionRoute | null>(null);
+  const [executionRoute, setExecutionRoute] = useState<SorobanExecutionRoute>('current_client');
+  const [executionCopied, setExecutionCopied] = useState(false);
   const initialLoadKey = useRef('');
 
   const sessionAddress = wallet.privateUnlocked ? wallet.unlockedAddress : '';
@@ -127,7 +132,7 @@ export default function SorobanIntentApp() {
       const body = await apiJson<SorobanIntentResponse>(response);
       setIntent(body.intent);
       setAuthorization(body.authorization);
-      if (!quiet) { setExecutionDiff(null); setPendingExecution(null); }
+      if (!quiet) { setExecutionDiff(null); setPendingExecution(null); setPendingExecutionRoute(null); setExecutionCopied(false); }
       if (!executionSource && isValidStellarAccountId(address)) setExecutionSource(address);
     } catch (cause) {
       if (!quiet) setError(cause instanceof Error ? cause.message : 'Unable to load this Soroban Intent.');
@@ -253,6 +258,8 @@ export default function SorobanIntentApp() {
       setAuthorization(body.authorization);
       setExecutionDiff(null);
       setPendingExecution(null);
+      setPendingExecutionRoute(null);
+      setExecutionCopied(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to refresh Soroban authorization.');
     } finally {
@@ -260,7 +267,7 @@ export default function SorobanIntentApp() {
     }
   }
 
-  function continueToSigningRoom(body: SorobanIntentExecutionResponse) {
+  function continueToSigningRoom(body: SorobanIntentExecutionResponse, route: SorobanExecutionRoute = 'multisigtools') {
     if (!intent) return;
     writeReviewHandoff(sessionStorage, {
       xdr: body.execution.xdr,
@@ -274,16 +281,24 @@ export default function SorobanIntentApp() {
         returnTo: `${stellarHref('/a')}#${intent.id}`,
         returnLabel: 'Back to contract authorization',
         autoSorobanSimulation: false,
+        executionRoute: route,
       },
     });
   }
 
-  async function prepareExecution(acceptedEffectsDigest?: string) {
+  async function prepareExecution(
+    route: SorobanExecutionRoute = executionRoute,
+    acceptedEffectsDigest?: string,
+    sourceOverride?: string,
+  ) {
     if (!intent || !authorization || authorization.status !== 'authorization_ready' || busy) return;
-    if (!isValidStellarAccountId(executionSource)) {
+    const source = sourceOverride ?? (route === 'current_client' && isValidStellarAccountId(sessionAddress) ? sessionAddress : executionSource);
+    if (!isValidStellarAccountId(source)) {
       setError('Enter a valid Stellar G... account to provide the final transaction sequence and fee.');
       return;
     }
+    setPendingExecutionRoute(route);
+    setExecutionCopied(false);
     setBusy(true);
     setError('');
     try {
@@ -297,12 +312,16 @@ export default function SorobanIntentApp() {
           'X-MultiSig-Intent-Id': intent.id,
           ...privateSessionAddressHeaders(address),
         },
-        body: JSON.stringify({ executionSource, ...(acceptedEffectsDigest ? { acceptedEffectsDigest } : {}) }),
+        body: JSON.stringify({ executionSource: source, ...(acceptedEffectsDigest ? { acceptedEffectsDigest } : {}) }),
       });
       const body = await apiJson<SorobanIntentExecutionResponse>(response);
       setExecutionDiff(body.execution.effectsDiff);
       if (acceptedEffectsDigest || body.execution.effectsDiff.kind === 'unchanged') {
-        continueToSigningRoom(body);
+        if (route === 'handoff') {
+          setPendingExecution(body);
+          return;
+        }
+        continueToSigningRoom(body, route);
         return;
       }
       setPendingExecution(body);
@@ -316,6 +335,12 @@ export default function SorobanIntentApp() {
       setError(cause instanceof Error ? cause.message : 'Unable to prepare the final transaction.');
       setBusy(false);
     }
+  }
+
+  async function copyPreparedExecution() {
+    if (!pendingExecution) return;
+    await navigator.clipboard.writeText(pendingExecution.execution.xdr);
+    setExecutionCopied(true);
   }
 
   if (!intentId) {
@@ -349,7 +374,7 @@ export default function SorobanIntentApp() {
     <StellarWorkspaceShell active="inbox" networkContext={intent.network}>
       <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto max-w-5xl">
-          <WorkflowProgress current="review" />
+          <WorkflowProgress current={sorobanIntentWorkflowStage(authorization.status)} />
           <div className="mt-6 flex flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-5 dark:border-white/10">
             <div><a href={stellarHref('/inbox')} className="text-sm font-semibold text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white">← Inbox</a><h1 className="mt-2 text-3xl font-bold tracking-tight">Contract authorization</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600 dark:text-neutral-300">Authorize the contract Intent first. The final transaction source, sequence, fee and envelope signatures are chosen only after authorization is complete.</p></div>
             <NetworkFact network={intent.network} />
@@ -369,7 +394,7 @@ export default function SorobanIntentApp() {
 
             <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:p-6"><h2 className="text-xl font-bold">Simulation effects at authorization</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">This is the recording-simulation evidence fixed into the AuthorizationPlan. Plugins may improve labels, but they do not change the comparison or safety thresholds.</p><div className="mt-4"><SimulationEffectsView effects={intent.authorizationPlan.effects} /></div></section>
 
-            {executionDiff && <section className={`rounded-2xl border p-5 sm:p-6 ${executionDiff.requiresExplicitReview ? 'border-red-500/30 bg-red-500/[0.07]' : 'border-amber-500/25 bg-amber-500/[0.06]'}`}><h2 className="text-xl font-bold">Execution effects comparison</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">The final enforcing simulation is compared with what signers reviewed. Numeric drift is measured generically; protocol plugins may improve labels but never weaken the comparison.</p><div className="mt-4"><SorobanEffectsDiffView diff={executionDiff} /></div>{pendingExecution && <div className="mt-5 flex flex-wrap gap-2"><ActionButton onClick={() => continueToSigningRoom(pendingExecution)}>Continue to Signing Room</ActionButton><ActionButton variant="secondary" disabled={busy} onClick={() => void prepareExecution()}><RefreshCw className={busy ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />Re-check effects</ActionButton></div>}{!pendingExecution && executionDiff.requiresReauthorization && <div className="mt-5"><p className="text-sm font-semibold text-red-700 dark:text-red-300">The effect structure changed. The old AUTH cannot approve a different effect shape. Refresh the plan, review the new effects, and collect fresh authorization.</p><ActionButton className="mt-3" disabled={busy} onClick={() => void refreshAuthorization()}><RefreshCw className={busy ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{busy ? 'Refreshing…' : 'Review changed effects and re-authorize'}</ActionButton></div>}{!pendingExecution && executionDiff.requiresExplicitReview && !executionDiff.requiresReauthorization && <div className="mt-5"><p className="text-sm font-semibold text-red-700 dark:text-red-300">The numeric result changed substantially. Next step is disabled until you explicitly accept this exact effects digest. MultiSigTools will simulate again before producing XDR.</p><ActionButton className="mt-3" disabled={busy} onClick={() => void prepareExecution(executionDiff.currentDigest)}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CircleAlert className="h-4 w-4" />}{busy ? 'Re-checking…' : 'I reviewed this numeric change — prepare transaction'}</ActionButton></div>}</section>}
+            {executionDiff && <section className={`rounded-2xl border p-5 sm:p-6 ${executionDiff.requiresExplicitReview ? 'border-red-500/30 bg-red-500/[0.07]' : 'border-amber-500/25 bg-amber-500/[0.06]'}`}><h2 className="text-xl font-bold">Execution effects comparison</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">The final enforcing simulation is compared with what signers reviewed. Numeric drift is measured generically; protocol plugins may improve labels but never weaken the comparison.</p><div className="mt-4"><SorobanEffectsDiffView diff={executionDiff} /></div>{pendingExecution && <div className="mt-5 flex flex-wrap gap-2">{pendingExecutionRoute === 'handoff' ? <ActionButton onClick={() => void copyPreparedExecution()}><ClipboardCopy className="h-4 w-4" />{executionCopied ? 'Prepared XDR copied' : 'Copy prepared XDR'}</ActionButton> : <ActionButton onClick={() => continueToSigningRoom(pendingExecution, pendingExecutionRoute ?? 'multisigtools')}>Continue to Signing Room</ActionButton>}<ActionButton variant="secondary" disabled={busy} onClick={() => void prepareExecution(pendingExecutionRoute ?? executionRoute)}><RefreshCw className={busy ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />Re-check effects</ActionButton></div>}{!pendingExecution && executionDiff.requiresReauthorization && <div className="mt-5"><p className="text-sm font-semibold text-red-700 dark:text-red-300">The effect structure changed. The old AUTH cannot approve a different effect shape. Refresh the plan, review the new effects, and collect fresh authorization.</p><ActionButton className="mt-3" disabled={busy} onClick={() => void refreshAuthorization()}><RefreshCw className={busy ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{busy ? 'Refreshing…' : 'Review changed effects and re-authorize'}</ActionButton></div>}{!pendingExecution && executionDiff.requiresExplicitReview && !executionDiff.requiresReauthorization && <div className="mt-5"><p className="text-sm font-semibold text-red-700 dark:text-red-300">The numeric result changed substantially. Next step is disabled until you explicitly accept this exact effects digest. MultiSigTools will simulate again before producing XDR.</p><ActionButton className="mt-3" disabled={busy} onClick={() => void prepareExecution(pendingExecutionRoute ?? executionRoute, executionDiff.currentDigest)}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CircleAlert className="h-4 w-4" />}{busy ? 'Re-checking…' : 'I reviewed this numeric change — prepare transaction'}</ActionButton></div>}</section>}
 
             <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:p-6">
               <h2 className="text-xl font-bold">Required authorization</h2>
@@ -379,7 +404,7 @@ export default function SorobanIntentApp() {
 
             {authorization.status === 'authorization_ready' && intent.executionPolicy?.mode === 'external' && <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] p-5 sm:p-6"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div><h2 className="text-xl font-bold">Authorization ready</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">AUTH collection is complete. {intent.integration.serviceLabel ?? intent.integration.serviceId} is the external executor for this Intent. MultiSigTools will not let a signer replace that execution boundary.</p></div></div></section>}
 
-            {authorization.status === 'authorization_ready' && intent.executionPolicy?.mode !== 'external' && <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] p-5 sm:p-6"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div><h2 className="text-xl font-bold">Authorization ready</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">AUTH collection is complete. Choose the account that should now provide the fresh transaction sequence and fee. This choice does not change the already-authorized contract invocation.</p></div></div><div className="mt-5"><label htmlFor="intent-execution-source" className="text-sm font-semibold">Transaction source / executor</label><div className="mt-2 flex flex-col gap-2 sm:flex-row"><input id="intent-execution-source" value={executionSource} onChange={(event) => { setExecutionSource(event.target.value.trim()); setExecutionDiff(null); setPendingExecution(null); }} placeholder="G... executor account" spellCheck={false} className="min-w-0 flex-1 rounded-xl border border-black/10 bg-white px-4 py-3 font-mono text-sm outline-none dark:border-white/10 dark:bg-black/20" /><ActionButton disabled={busy || !isValidStellarAccountId(executionSource)} onClick={() => void prepareExecution()}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}{busy ? 'Preparing transaction…' : 'Prepare transaction'}</ActionButton></div>{sessionAddress && executionSource !== sessionAddress && <button type="button" className="mt-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300" onClick={() => { setExecutionSource(sessionAddress); setExecutionDiff(null); setPendingExecution(null); }}>Use my verified wallet as executor</button>}<p className="mt-3 text-xs leading-5 text-neutral-500 dark:text-neutral-400">The prepared unsigned XDR goes to the ordinary Signing Room. A single-signature executor may sign it directly; a multisig executor continues through the existing Proposal flow; another operator can receive the XDR separately.</p></div></section>}
+            {authorization.status === 'authorization_ready' && intent.executionPolicy?.mode !== 'external' && <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] p-5 sm:p-6"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div><h2 className="text-xl font-bold">Authorization ready</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">AUTH collection is complete. Choose how the final transaction should be executed. This does not change the already-authorized contract invocation.</p></div></div><div className="mt-5 grid gap-2 sm:grid-cols-3">{sorobanExecutionRoutes(intent.executionPolicy).filter((route) => route !== 'external_service').map((route) => { const labels = route === 'current_client' ? ['Use this wallet', 'Continue with the current verified wallet as executor.'] : route === 'handoff' ? ['Handle outside MultiSigTools', 'Prepare exact XDR for another wallet, service, CLI, or operator.'] : ['MultiSigTools coordinates', 'Prepare the final transaction and continue through the Proposal signing flow.']; return <button key={route} type="button" onClick={() => { setExecutionRoute(route); setExecutionDiff(null); setPendingExecution(null); setPendingExecutionRoute(null); setExecutionCopied(false); }} className={`rounded-xl border p-4 text-left ${executionRoute === route ? 'border-emerald-500/50 bg-white dark:bg-black/20' : 'border-black/10 bg-white/50 dark:border-white/10 dark:bg-black/10'}`}><div className="text-sm font-semibold">{labels[0]}</div><div className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">{labels[1]}</div></button>; })}</div>{executionRoute === 'current_client' ? <div className="mt-5"><div className="text-sm font-semibold">Current executor</div><p className="mt-1 font-mono text-xs text-neutral-500">{sessionAddress ? compactAddress(sessionAddress) : 'No verified wallet selected'}</p><ActionButton className="mt-3" disabled={busy || !isValidStellarAccountId(sessionAddress)} onClick={() => void prepareExecution('current_client', undefined, sessionAddress)}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}{busy ? 'Preparing transaction…' : 'Continue with this wallet'}</ActionButton></div> : <div className="mt-5"><label htmlFor="intent-execution-source" className="text-sm font-semibold">Transaction source / executor</label><div className="mt-2 flex flex-col gap-2 sm:flex-row"><input id="intent-execution-source" value={executionSource} onChange={(event) => { setExecutionSource(event.target.value.trim()); setExecutionDiff(null); setPendingExecution(null); setPendingExecutionRoute(null); setExecutionCopied(false); }} placeholder="G... executor account" spellCheck={false} className="min-w-0 flex-1 rounded-xl border border-black/10 bg-white px-4 py-3 font-mono text-sm outline-none dark:border-white/10 dark:bg-black/20" /><ActionButton disabled={busy || !isValidStellarAccountId(executionSource)} onClick={() => void prepareExecution(executionRoute)}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : executionRoute === 'handoff' ? <ClipboardCopy className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}{busy ? 'Preparing transaction…' : executionRoute === 'handoff' ? 'Prepare handoff' : 'Continue to transaction signing'}</ActionButton></div>{sessionAddress && executionSource !== sessionAddress && <button type="button" className="mt-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300" onClick={() => { setExecutionSource(sessionAddress); setExecutionDiff(null); setPendingExecution(null); setPendingExecutionRoute(null); setExecutionCopied(false); }}>Use my verified wallet as executor</button>}</div>}</section>}
 
             {authorization.status === 'expired' && <section className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.08] p-4 sm:p-5"><div className="flex gap-3"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" /><div className="min-w-0 flex-1"><div className="font-semibold">Authorization expired</div><div className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Refresh the authorization plan for this same Intent. A fresh nonce and expiration window will be created; signatures from the expired plan remain history and will not carry over.</div><ActionButton className="mt-4" variant="secondary" disabled={busy} onClick={() => void refreshAuthorization()}><RefreshCw className={busy ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{busy ? 'Refreshing…' : 'Refresh authorization'}</ActionButton></div></div></section>}
 
