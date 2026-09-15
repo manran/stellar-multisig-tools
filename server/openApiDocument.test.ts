@@ -69,6 +69,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   const intentExecution = paths['/api/intent'].put as JsonObject;
   const build = paths['/api/contract-call'].post as JsonObject;
   const prepare = paths['/api/contract-prepare'].post as JsonObject;
+  const paymentPrepare = paths['/api/payment-prepare'].post as JsonObject;
 
   assert.deepEqual(inspect.security, []);
   assert.equal(inspect.operationId, 'contract.interface.inspect');
@@ -89,6 +90,8 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(intentExecution.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }]);
   assert.equal(build.operationId, 'contract.call.build');
   assert.equal(prepare.operationId, 'contract.call.prepare');
+  assert.equal(paymentPrepare.operationId, 'classic.payment.prepare.integration.classic.payment.prepare');
+  assert.deepEqual(paymentPrepare.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }]);
   assert.equal(paths['/api/preparation'], undefined);
 
   const components = document.components as JsonObject;
@@ -124,6 +127,13 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual((schemas.ContractPrepareInput.properties as JsonObject).mode, { type: 'string', enum: ['record', 'enforce'], default: 'record' });
   assert.deepEqual(schemas.ContractPrepareResult.required, ['operation', 'version', 'mode', 'simulation']);
   assert.deepEqual(schemas.ContractEnforceResult.required, ['operation', 'version', 'mode', 'verification']);
+  assert.deepEqual(schemas.ClassicPaymentPrepareInput.required, ['network', 'sourceAccount', 'payments']);
+  assert.deepEqual(schemas.ClassicPaymentInstructionInput.required, ['sourceAccount', 'payments']);
+  assert.deepEqual(schemas.ProposalCreateInput.required, ['network']);
+  assert.deepEqual(schemas.ProposalCreateInput.oneOf, [
+    { required: ['xdr'] },
+    { required: ['payment'], description: 'Semantic Classic payment creation is currently available to Integration Service callers.' },
+  ]);
 });
 
 test('discovery endpoints expose the deployment-bound description and schema pointers', async () => {

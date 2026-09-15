@@ -89,6 +89,14 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'principal:write', effect: 'private-state', summary: 'Remove a contract from one signer workspace.',
   },
   {
+    id: 'classic.payment.prepare', version: 1, method: 'POST', path: '/api/payment-prepare',
+    access: 'principal:write', effect: 'none', summary: 'Prepare one exact unsigned Classic payment transaction from business payment inputs and fresh Stellar state.',
+  },
+  {
+    id: 'integration.classic.payment.prepare', version: 1, method: 'POST', path: '/api/payment-prepare',
+    access: 'integration:write', effect: 'none', summary: 'Prepare a scoped external-service Classic payment transaction without requiring the service to construct XDR.',
+  },
+  {
     id: 'proposal.create', version: 1, method: 'POST', path: '/api/request',
     access: 'principal:write', effect: 'coordination-state', summary: 'Create a Signing Request from exact transaction XDR.',
   },

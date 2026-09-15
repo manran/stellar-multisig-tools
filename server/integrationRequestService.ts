@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { PrivateCommitmentRecord } from '../src/stellar/privateCommitment.js';
+import { normalizeClassicPaymentInstruction, prepareClassicPayment, type ClassicPaymentInstruction } from './classicPaymentPrepareService.js';
 import type { SigningRequestSnapshot } from '../src/stellar/requestTypes.js';
 import type { StellarNetwork } from '../src/stellar/types.js';
 import { inspectTransactionXdr } from '../src/stellar/transactionXdr.js';
@@ -112,12 +113,16 @@ function assertReservedRequestMatchesInput(
     xdr: string;
     externalReference?: string;
     privateCommitment?: PrivateCommitmentRecord;
+    instructionDigest?: string;
     executionMode: 'multisigtools' | 'external';
   },
 ): void {
+  const payloadMatches = input.instructionDigest
+    ? request.instructionDigest === input.instructionDigest
+    : request.baseXdr === input.xdr.trim();
   if (
     request.network !== input.network
-    || request.baseXdr !== input.xdr.trim()
+    || !payloadMatches
     || request.integration?.serviceId !== credential.serviceId
     || request.executionPolicy?.mode !== input.executionMode
     || request.integration.correlationId !== input.externalReference
@@ -140,6 +145,7 @@ export async function createIntegrationSigningRequest(
     idempotencyKey: string;
     externalReference?: unknown;
     privateCommitment?: PrivateCommitmentRecord;
+    instructionDigest?: string;
   },
   options: IntegrationRequestOptions = {},
 ): Promise<IntegrationRequestCreationResult> {
@@ -156,6 +162,7 @@ export async function createIntegrationSigningRequest(
     executionMode,
     ...(externalReference ? { externalReference } : {}),
     ...(input.privateCommitment ? { privateCommitment: input.privateCommitment } : {}),
+    ...(input.instructionDigest ? { instructionDigest: input.instructionDigest } : {}),
   };
 
   const existing = await requestStore.getRequest(requestId);
@@ -184,6 +191,7 @@ export async function createIntegrationSigningRequest(
           ...(externalReference ? { correlationId: externalReference } : {}),
         },
         executionPolicy: { mode: executionMode },
+        ...(input.instructionDigest ? { instructionDigest: input.instructionDigest } : {}),
         ...(input.privateCommitment
           ? { privateCommitment: { ...input.privateCommitment, createdAt: stored.createdAt } }
           : {}),
@@ -210,4 +218,80 @@ export async function createIntegrationSigningRequest(
       ...(externalReference ? { externalReference } : {}),
     };
   }
+}
+
+
+export interface IntegrationPaymentRequestCreationResult extends IntegrationRequestCreationResult {}
+
+function classicInstructionDigest(value: ReturnType<typeof normalizeClassicPaymentInstruction>): string {
+  return createHash('sha256')
+    .update('multisigtools/classic-payment-instruction/v1\0')
+    .update(JSON.stringify(value))
+    .digest('hex');
+}
+
+export async function createIntegrationPaymentSigningRequest(
+  requestStore: SigningRequestStore,
+  credential: ConfiguredIntegrationCredential,
+  input: {
+    network: StellarNetwork;
+    payment: Omit<ClassicPaymentInstruction, 'network'>;
+    idempotencyKey: string;
+    externalReference?: unknown;
+  },
+  options: IntegrationRequestOptions = {},
+): Promise<IntegrationPaymentRequestCreationResult> {
+  const normalized = normalizeClassicPaymentInstruction({ network: input.network, ...input.payment });
+  if (!credential.networks.includes(normalized.network)) {
+    throw new BoxServiceError(
+      'This Integration credential is not allowed on this Stellar network.',
+      403,
+      'integration_network_not_allowed',
+    );
+  }
+  if (!credential.classicSourceAccounts.includes(normalized.sourceAccount)) {
+    throw new BoxServiceError(
+      'This Integration credential is not allowed to coordinate Classic authorization for this source account.',
+      403,
+      'integration_classic_source_account_not_allowed',
+    );
+  }
+  const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
+  const externalReference = normalizeExternalReference(input.externalReference);
+  const instructionDigest = classicInstructionDigest(normalized);
+  const executionMode = credential.classicExternalExecutionSourceAccounts.includes(normalized.sourceAccount)
+    ? 'external' as const
+    : 'multisigtools' as const;
+  const requestId = options.requestIdFactory?.(credential.serviceId, idempotencyKey)
+    ?? deterministicRequestId(credential.serviceId, idempotencyKey);
+  const existing = await requestStore.getRequest(requestId);
+  if (existing) {
+    assertReservedRequestMatchesInput(existing, credential, {
+      network: normalized.network,
+      xdr: existing.baseXdr,
+      executionMode,
+      instructionDigest,
+      ...(externalReference ? { externalReference } : {}),
+    });
+    return {
+      replayed: true,
+      request: await getSigningRequest(requestStore, requestId, options),
+      ...(externalReference ? { externalReference } : {}),
+    };
+  }
+
+  const prepared = await prepareClassicPayment(normalized, {
+    accountLoader: options.accountLoader,
+    networkParametersLoader: options.networkParametersLoader,
+  });
+  return createIntegrationSigningRequest(requestStore, credential, {
+    network: normalized.network,
+    xdr: prepared.xdr,
+    idempotencyKey,
+    instructionDigest,
+    ...(externalReference ? { externalReference } : {}),
+  }, {
+    ...options,
+    requestIdFactory: () => requestId,
+  });
 }

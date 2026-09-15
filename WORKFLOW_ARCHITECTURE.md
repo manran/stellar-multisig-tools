@@ -38,7 +38,7 @@ Service describes the action
   -> signers review and authorize
 ```
 
-The target Classic Service contract is business-first: a Service names the business source account and operation semantics, while MultiSigTools owns sequence, fee, lifetime, XDR construction, inspection, and source-requirement derivation. Human Payment/Transfer composers already work this way. **The current Integration Service API still accepts unsigned exact XDR for Classic Requests; moving the stable Human composers into Headless Prepare operations is a refactor target, not a completed capability.** Exact XDR remains the advanced escape hatch for clients that already own transaction construction.
+Classic Service payment/batch is now business-first: a Service names the scoped source account plus one or more payment business rows, while MultiSigTools owns fresh sequence, fee, lifetime, XDR construction, inspection, source-requirement derivation, and Request freeze. `classic.payment.prepare` exposes the stateless Prepare boundary, and Integration `POST /api/request` may compose that preparation directly from a semantic `payment` input. Exact unsigned XDR remains the advanced escape hatch for clients that already own transaction construction. Other Classic capabilities become semantic only when an existing stable composer is deliberately promoted; there is no generic transaction DSL.
 
 For Soroban, the semantic path is already canonical: a Service names contract + method + arguments. Recording simulation discovers the actual detached `require_auth()` requirements. The Service never supplies a trusted signer list.
 

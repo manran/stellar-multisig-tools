@@ -22,6 +22,8 @@ export interface StoredSigningRequest {
   creatorActor?: MachineCallerProvenance;
   /** External Integration ownership/execution context. Absent for ordinary signer-owned Requests. */
   integration?: RequestIntegrationContext;
+  /** Canonical business-instruction digest when Request creation began from semantic input. */
+  instructionDigest?: string;
   /** Final execution ownership. Kept separate from caller identity. */
   executionPolicy?: ExecutionPolicy;
   /** Candidate signer addresses captured from fresh policy at Request creation. Discovery only, never authorization evidence. */

@@ -78,7 +78,7 @@ Product neutrality does not flatten permissions:
 
 The canonical Headless workflow is `business instruction -> Prepare -> Review -> Authorization -> Ready -> Execution routing -> Execute -> Done`. Protocols keep their real differences inside that lifecycle.
 
-Classic Service work should be business-first where MultiSigTools already has a stable composer. A Service supplies the business source account and semantic operation inputs; MultiSigTools loads current sequence/network parameters, constructs and inspects the exact transaction, derives all transaction/operation/fee-bump `sourceRequirements`, and then freezes that exact XDR into the existing Request lifecycle. Exact XDR input remains an advanced escape hatch, not the default integration requirement.
+Classic Service work is business-first where MultiSigTools has a stable promoted composer. Payment/batch is the first shipped slice: `classic.payment.prepare` takes a scoped source account plus payment rows, loads current account/network facts, constructs and inspects the exact transaction, and Integration `POST /api/request` can compose that result directly into the existing Request lifecycle. Exact XDR input remains an advanced escape hatch, not the default Integration payment path. Other Classic actions stay XDR-first until their existing Human composer is promoted; do not invent a generic transaction DSL for symmetry.
 
 Soroban contract work remains Intent-first and transaction construction stays later than contract authorization:
 
@@ -127,6 +127,14 @@ The first complete Contract vertical slice is:
 | **contract.workspace.list** | GET /api/contracts | Principal Read | None |
 | **contract.workspace.keep** | PUT /api/contracts | Principal Write | Private state |
 | **contract.workspace.forget** | DELETE /api/contracts | Principal Write | Private state |
+
+The first promoted Classic Prepare operation is:
+
+| Operation | HTTP | Access | Effect |
+| --- | --- | --- | --- |
+| **classic.payment.prepare** | POST /api/payment-prepare | Principal Write / Integration Write | None; fresh business input -> exact unsigned Classic TX |
+
+Integration Services may also pass the same semantic payment instruction directly to `POST /api/request`; the server composes Prepare + Request creation while preserving business-level idempotency. The exact-XDR Request form remains available.
 
 The existing **/api/request** resource remains the canonical proposal create/read/contribute interface. There is no second automation Request type.
 

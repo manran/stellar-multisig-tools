@@ -373,7 +373,7 @@ FedNetwork
 
 A and B need no prior relationship and are not copied into Integration credential scope. Their authority comes from the simulated contract requirements and live chain policy.
 
-The same FedNetwork `msi_...` identity may also use `/api/request` for a configured Classic multisig treasury. This is intentionally the same Integration Actor and the same existing Request lifecycle, not a separate product surface.
+The same FedNetwork `msi_...` identity may also use `/api/request` for a configured Classic multisig treasury. Payment/batch work can be supplied as semantic business input and is prepared into exact unsigned XDR by MultiSigTools before entering that Request; exact XDR remains the advanced escape hatch. This is intentionally the same Integration Actor and the same existing Request lifecycle, not a separate product surface.
 
 For the FedNetwork Soroban transfer:
 

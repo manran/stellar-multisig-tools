@@ -65,6 +65,7 @@ function requestBody(path: string, method: string): OpenApiObject | undefined {
   if (path === '/api/contract-call' && method === 'post') return body(schema('ContractCallBuildInput'));
   if (path === '/api/contract-prepare' && method === 'post') return body(schema('ContractPrepareInput'));
   if (path === '/api/contracts' && (method === 'put' || method === 'delete')) return body(schema('ContractWorkspaceInput'));
+  if (path === '/api/payment-prepare' && method === 'post') return body(schema('ClassicPaymentPrepareInput'));
   if (path === '/api/request' && method === 'post') return body(schema('ProposalCreateInput'));
   if (path === '/api/request' && method === 'patch') return body(schema('ProposalPatchInput'));
   return undefined;
@@ -82,6 +83,7 @@ function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/api/contracts' && method === 'get') return schema('ContractWorkspaceListResult');
   if (path === '/api/contracts' && method === 'put') return schema('ContractWorkspaceKeepResult');
   if (path === '/api/contracts' && method === 'delete') return schema('ContractWorkspaceForgetResult');
+  if (path === '/api/payment-prepare') return schema('ClassicPaymentPrepareResult');
   if (path === '/api/request') return schema('ProposalResult');
   return { type: 'object', additionalProperties: true };
 }
@@ -93,6 +95,7 @@ function security(path: string, method: string, access: HeadlessOperationAccess)
     return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
   }
   if (path === '/api/contracts') return [{ agentBearer: [] }, { humanSession: [] }];
+  if (path === '/api/payment-prepare') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
   if (path === '/api/request' && method === 'put') return [{ humanSession: [] }, { requestCapability: [] }];
   if (path === '/api/request' && (method === 'post' || method === 'get')) {
     return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
@@ -652,12 +655,73 @@ const components: OpenApiObject = {
       },
       additionalProperties: false,
     },
+    ClassicPaymentAssetInput: {
+      oneOf: [
+        { type: 'object', required: ['type'], properties: { type: { type: 'string', const: 'native' } }, additionalProperties: false },
+        { type: 'object', required: ['type', 'code', 'issuer'], properties: { type: { type: 'string', const: 'credit' }, code: { type: 'string', minLength: 1, maxLength: 12 }, issuer: accountId }, additionalProperties: false },
+      ],
+    },
+    ClassicPaymentInput: {
+      type: 'object',
+      required: ['destination', 'amount', 'asset'],
+      properties: {
+        destination: accountId,
+        amount: { type: 'string', pattern: '^(?:0|[1-9]\\d*)(?:\\.\\d{1,7})?$' },
+        asset: schema('ClassicPaymentAssetInput'),
+      },
+      additionalProperties: false,
+    },
+    ClassicPaymentInstructionInput: {
+      type: 'object',
+      required: ['sourceAccount', 'payments'],
+      properties: {
+        sourceAccount: accountId,
+        payments: { type: 'array', minItems: 1, maxItems: 100, items: schema('ClassicPaymentInput') },
+        memo: { type: 'string' },
+        lifetimeSeconds: { type: 'integer', enum: [3600, 86400, 604800], default: 86400 },
+      },
+      additionalProperties: false,
+    },
+    ClassicPaymentPrepareInput: {
+      type: 'object',
+      required: ['network', 'sourceAccount', 'payments'],
+      properties: {
+        network: stellarNetwork,
+        sourceAccount: accountId,
+        payments: { type: 'array', minItems: 1, maxItems: 100, items: schema('ClassicPaymentInput') },
+        memo: { type: 'string' },
+        lifetimeSeconds: { type: 'integer', enum: [3600, 86400, 604800], default: 86400 },
+      },
+      additionalProperties: false,
+    },
+    ClassicPaymentPrepareResult: {
+      type: 'object',
+      required: ['operation', 'version', 'network', 'sourceAccount', 'sourceSequence', 'paymentCount', 'feeStroops', 'validUntil', 'transactionHash', 'xdr'],
+      properties: {
+        operation: { type: 'string', const: 'classic.payment.prepare' },
+        version: operationVersion,
+        network: stellarNetwork,
+        sourceAccount: accountId,
+        sourceSequence: { type: 'string' },
+        paymentCount: { type: 'integer', minimum: 1, maximum: 100 },
+        feeStroops: { type: 'string', pattern: '^\\d+$' },
+        validUntil: timestamp,
+        transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        xdr,
+      },
+      additionalProperties: false,
+    },
     ProposalCreateInput: {
       type: 'object',
-      required: ['network', 'xdr'],
+      required: ['network'],
+      oneOf: [
+        { required: ['xdr'] },
+        { required: ['payment'], description: 'Semantic Classic payment creation is currently available to Integration Service callers.' },
+      ],
       properties: {
         network: stellarNetwork,
         xdr,
+        payment: schema('ClassicPaymentInstructionInput'),
         externalReference: {},
         privateNote: { type: 'string' },
         privateCommitment: {},

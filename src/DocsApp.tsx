@@ -35,6 +35,23 @@ const createRequestExample = `curl -X POST https://stellar.multisig.tools/api/re
     "privateNote": "Prepared by the payment service."
   }'`;
 
+const servicePaymentRequestExample = `curl -X POST https://stellar.multisig.tools/api/request \
+  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: payroll-20260915-42" \
+  -d '{
+    "network": "public",
+    "payment": {
+      "sourceAccount": "G...TREASURY",
+      "payments": [
+        {"destination":"G...ALICE","amount":"1000","asset":{"type":"credit","code":"USDC","issuer":"G...ISSUER"}},
+        {"destination":"G...BOB","amount":"1500","asset":{"type":"credit","code":"USDC","issuer":"G...ISSUER"}}
+      ],
+      "memo": "Payroll 2026-09"
+    },
+    "externalReference": "payroll-20260915-42"
+  }'`;
+
 const statusExample = `curl "https://stellar.multisig.tools/api/request" \\
   -H "Authorization: Bearer $MULTISIG_AGENT_KEY" \\
   -H "x-multisig-request-id: 0123456789ABCDEF"`;
@@ -476,10 +493,11 @@ function AutomationPage() {
       <section id="quick-start" className="space-y-5">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Create a Signing Request</h2>
-          <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300"><code>POST /api/request</code> is the same Request endpoint used by the Human product. Write can submit unsigned XDR; any pre-signed XDR requires Sign. Agent creation also requires <code>Idempotency-Key</code>.</p>
+          <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300"><code>POST /api/request</code> is the same Request endpoint used by the Human product. Signer Agents may create from exact unsigned XDR. Integration Services can instead send semantic <code>payment</code> business input for a configured Classic source account; MultiSig Tools loads fresh sequence/fee/state, builds the exact unsigned transaction, freezes it into the ordinary Request lifecycle, and keeps exact XDR as an advanced escape hatch. Agent and Integration creation require <code>Idempotency-Key</code>.</p>
         </div>
         <CodeBlock>{createRequestExample}</CodeBlock>
-        <p className="text-sm leading-6 text-neutral-600 dark:text-neutral-300">A credential is bound to one signer Principal and network. The server rechecks current Stellar signer access for the transaction instead of binding the Agent to one Treasury, so the same model works for ordinary and multi-party transactions.</p>
+        <CodeBlock>{servicePaymentRequestExample}</CodeBlock>
+        <p className="text-sm leading-6 text-neutral-600 dark:text-neutral-300">A signer Agent credential is bound to one signer Principal and network. An Integration Service is instead bounded by configured business scope such as Classic source accounts; that scope never supplies a Stellar signature.</p>
       </section>
 
       <section className="space-y-5">

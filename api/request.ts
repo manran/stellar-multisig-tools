@@ -14,7 +14,8 @@ import {
 } from '../server/integrationCredentialService.js';
 import type { ConfiguredIntegrationCredential } from '../server/integrationCredentialService.js';
 import { CallerAuthenticationError, machineCallerFromRequest, verifiedSignerSessionFromRequest } from '../server/callerAuthentication.js';
-import { createIntegrationSigningRequest } from '../server/integrationRequestService.js';
+import { createIntegrationPaymentSigningRequest, createIntegrationSigningRequest } from '../server/integrationRequestService.js';
+import { ClassicPaymentPrepareError, type ClassicPaymentInstruction } from '../server/classicPaymentPrepareService.js';
 import { BoxServiceError } from '../server/boxService.js';
 import {
   contributionGrantCookie,
@@ -118,7 +119,7 @@ function errorResponse(cause: unknown): Response {
   if (cause instanceof RequestBodyError) {
     return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
   }
-  if (cause instanceof CallerAuthenticationError || cause instanceof AgentCredentialServiceError || cause instanceof IntegrationCredentialServiceError || cause instanceof BoxServiceError) {
+  if (cause instanceof CallerAuthenticationError || cause instanceof AgentCredentialServiceError || cause instanceof IntegrationCredentialServiceError || cause instanceof BoxServiceError || cause instanceof ClassicPaymentPrepareError) {
     return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
   }
   if (cause instanceof SigningRequestServiceError) {
@@ -670,9 +671,6 @@ export async function POST(request: Request): Promise<Response> {
         throw new SigningRequestServiceError('Network must be public or testnet.', 400, 'invalid_network');
       }
       assertDeploymentNetwork(body.network);
-      if (!xdr.trim()) {
-        throw new SigningRequestServiceError('Transaction envelope XDR is required.', 400, 'invalid_xdr');
-      }
       if (body.privateNote !== undefined && body.privateNote !== null && body.privateNote !== '') {
         throw new SigningRequestServiceError(
           'Integration Request creation uses Private Commitment for private context in this version.',
@@ -683,6 +681,50 @@ export async function POST(request: Request): Promise<Response> {
       const idempotencyKey = request.headers.get('idempotency-key')?.trim() ?? '';
       if (!idempotencyKey) {
         throw new SigningRequestServiceError('Idempotency-Key header is required for Integration Request creation.', 400, 'idempotency_key_required');
+      }
+      if (body.payment !== undefined) {
+        if (xdr.trim()) {
+          throw new SigningRequestServiceError('Provide either semantic payment input or exact XDR, not both.', 400, 'conflicting_request_input');
+        }
+        if (!body.payment || typeof body.payment !== 'object' || Array.isArray(body.payment)) {
+          throw new ClassicPaymentPrepareError('Payment instruction must be an object.', 400, 'invalid_payments');
+        }
+        if (body.privateCommitment !== undefined && body.privateCommitment !== null) {
+          throw new SigningRequestServiceError(
+            'Semantic Integration payment creation does not support Private Commitment in this version.',
+            400,
+            'integration_semantic_payment_private_commitment_unsupported',
+          );
+        }
+        const beforeCreate = requestCreationQuota(request, body.network, `service:${integrationCredential.serviceId}`);
+        const quotaRequestStore = {
+          ...blobSigningRequestStore,
+          createRequest: async (stored: Parameters<typeof blobSigningRequestStore.createRequest>[0]) => {
+            await beforeCreate();
+            return blobSigningRequestStore.createRequest(stored);
+          },
+        };
+        const result = await createIntegrationPaymentSigningRequest(
+          quotaRequestStore,
+          integrationCredential,
+          {
+            network: body.network,
+            payment: body.payment as Omit<ClassicPaymentInstruction, 'network'>,
+            idempotencyKey,
+            externalReference: body.externalReference,
+          },
+          { ...serviceOptions, accountLoader: loadAccount },
+        );
+        return noStoreJson({
+          request: result.request,
+          replayed: result.replayed,
+          ...(result.externalReference ? { externalReference: result.externalReference } : {}),
+          access: { shareable: false, activityBound: false },
+          context: {},
+        }, result.replayed ? 200 : 201);
+      }
+      if (!xdr.trim()) {
+        throw new SigningRequestServiceError('Provide semantic payment input or transaction envelope XDR.', 400, 'invalid_request_input');
       }
       const privateCommitment = privateCommitmentForCreate(body, xdr);
       const beforeCreate = requestCreationQuota(request, body.network, `service:${integrationCredential.serviceId}`);

@@ -10,7 +10,7 @@ import {
   TransactionBuilder,
 } from '@stellar/stellar-sdk/base';
 import type { ConfiguredIntegrationCredential } from './integrationCredentialService.js';
-import { createIntegrationSigningRequest } from './integrationRequestService.js';
+import { createIntegrationPaymentSigningRequest, createIntegrationSigningRequest } from './integrationRequestService.js';
 import type {
   SigningRequestStore,
   StoredSignatureContribution,
@@ -224,5 +224,106 @@ test('Integration Classic Request rejects unbound source accounts', async () => 
     (cause: unknown) => cause instanceof Error
       && 'code' in cause
       && cause.code === 'integration_classic_source_account_not_allowed',
+  );
+});
+
+
+test('Integration can create a Classic Request from semantic payment input without constructing XDR', async () => {
+  const store = new MemoryRequestStore();
+  const source = Keypair.random();
+  const signer = Keypair.random();
+  const destination = Keypair.random().publicKey();
+  const sourceSnapshot: StellarAccountSnapshot = {
+    accountId: source.publicKey(), sequence: '7', subentryCount: 0, numSponsoring: 0, numSponsored: 0,
+    nativeBalance: '100', nativeSellingLiabilities: '0',
+    balances: [{ assetType: 'native', assetCode: 'XLM', balance: '100', sellingLiabilities: '0', buyingLiabilities: '0' }],
+    thresholds: { low: 1, medium: 2, high: 2 },
+    signers: [
+      { key: source.publicKey(), type: 'ed25519_public_key', weight: 1 },
+      { key: signer.publicKey(), type: 'ed25519_public_key', weight: 1 },
+    ],
+  };
+  const destinationSnapshot: StellarAccountSnapshot = {
+    ...sourceSnapshot,
+    accountId: destination,
+    sequence: '1',
+    thresholds: { low: 1, medium: 1, high: 1 },
+    signers: [{ key: destination, type: 'ed25519_public_key', weight: 1 }],
+  };
+  const accountLoader = async (accountId: string) => {
+    if (accountId === source.publicKey()) return sourceSnapshot;
+    if (accountId === destination) return destinationSnapshot;
+    throw new Error('unexpected account');
+  };
+  const networkParametersLoader = async () => ({
+    ledgerSequence: 1,
+    ledgerClosedAt: '2026-09-15T09:00:00Z',
+    baseFeeInStroops: 100,
+    baseReserveInStroops: 5_000_000,
+  });
+  const input = {
+    network: 'testnet' as const,
+    payment: {
+      sourceAccount: source.publicKey(),
+      payments: [{ destination, amount: '2.5', asset: { type: 'native' as const } }],
+      lifetimeSeconds: 3600,
+    },
+    idempotencyKey: 'semantic-payment-42',
+    externalReference: 'invoice-42',
+  };
+  const first = await createIntegrationPaymentSigningRequest(
+    store,
+    integrationFor(source.publicKey()),
+    input,
+    { accountLoader, networkParametersLoader },
+  );
+  assert.equal(first.replayed, false);
+  assert.equal(first.request.status, 'awaiting_signatures');
+  const stored = store.requests.get(first.request.id);
+  assert.match(stored?.instructionDigest ?? '', /^[0-9a-f]{64}$/);
+  const parsed = TransactionBuilder.fromXdr(first.request.baseXdr, Networks.TESTNET);
+  assert.equal(parsed.operations.length, 1);
+  assert.equal(parsed.operations[0].type, 'payment');
+  assert.equal(parsed.signatures.length, 0);
+
+  const replay = await createIntegrationPaymentSigningRequest(
+    store,
+    integrationFor(source.publicKey()),
+    input,
+    {
+      accountLoader: async (accountId) => {
+        if (accountId === source.publicKey()) return sourceSnapshot;
+        throw new Error('semantic replay must not rebuild destinations');
+      },
+    },
+  );
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.request.id, first.request.id);
+
+  await assert.rejects(
+    () => createIntegrationPaymentSigningRequest(
+      store,
+      integrationFor(source.publicKey()),
+      {
+        ...input,
+        payment: {
+          ...input.payment,
+          payments: [{ destination, amount: '3', asset: { type: 'native' as const } }],
+        },
+      },
+      { accountLoader, networkParametersLoader },
+    ),
+    (cause: unknown) => cause instanceof Error && 'code' in cause && cause.code === 'idempotency_conflict',
+  );
+
+
+  await assert.rejects(
+    () => createIntegrationPaymentSigningRequest(
+      store,
+      integrationFor(source.publicKey(), true),
+      input,
+      { accountLoader, networkParametersLoader },
+    ),
+    (cause: unknown) => cause instanceof Error && 'code' in cause && cause.code === 'idempotency_conflict',
   );
 });
