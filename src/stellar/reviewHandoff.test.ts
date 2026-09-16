@@ -62,11 +62,13 @@ test('review handoff binds Soroban effects to the exact transaction hash', () =>
     network: 'testnet',
     sorobanEffectsBaseline: effects,
     sorobanTransactionHash: transactionHash.toUpperCase(),
+    sorobanIntentId: 'R'.repeat(16).toLowerCase(),
   });
 
   const handoff = takeReviewHandoff(storage, null);
   assert.deepEqual(handoff.sorobanEffectsBaseline, effects);
   assert.equal(handoff.sorobanTransactionHash, transactionHash);
+  assert.equal(handoff.sorobanIntentId, 'R'.repeat(16));
 });
 
 test('writing a new handoff clears optional context from the previous workflow', () => {

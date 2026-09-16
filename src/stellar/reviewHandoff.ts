@@ -11,6 +11,7 @@ const CREATE_TREASURY_HANDOFF_KEY = 'multisig-tools.stellar.create-treasury-hand
 const ACCOUNT_SIGNING_INTENT_HANDOFF_KEY = 'multisig-tools.stellar.account-signing-intent-handoff';
 const SOROBAN_EFFECTS_HANDOFF_KEY = 'multisig-tools.stellar.soroban-effects-handoff';
 const SOROBAN_TRANSACTION_HASH_HANDOFF_KEY = 'multisig-tools.stellar.soroban-transaction-hash-handoff';
+const SOROBAN_INTENT_ID_HANDOFF_KEY = 'multisig-tools.stellar.soroban-intent-id-handoff';
 const REVIEW_HISTORY_STATE_KEY = '__multisigToolsReviewHandoff';
 
 export interface ReviewHandoff {
@@ -22,6 +23,7 @@ export interface ReviewHandoff {
   accountSigningIntent: AccountSigningIntent | null;
   sorobanEffectsBaseline: SorobanEffectsSnapshot | null;
   sorobanTransactionHash: string | null;
+  sorobanIntentId?: string | null;
 }
 
 export interface ReviewHandoffWrite {
@@ -33,6 +35,7 @@ export interface ReviewHandoffWrite {
   accountSigningIntent?: AccountSigningIntent | null;
   sorobanEffectsBaseline?: SorobanEffectsSnapshot | null;
   sorobanTransactionHash?: string | null;
+  sorobanIntentId?: string | null;
 }
 
 export interface ReviewHistory {
@@ -110,6 +113,9 @@ function parseHistoryHandoff(value: unknown): ReviewHandoff | null {
     accountSigningIntent: record.accountSigningIntent === 'standalone' || record.accountSigningIntent === 'offline' || record.accountSigningIntent === 'treasury' ? record.accountSigningIntent : null,
     sorobanEffectsBaseline: parseSorobanEffectsValue(record.sorobanEffectsBaseline),
     sorobanTransactionHash: typeof record.sorobanTransactionHash === 'string' && /^[0-9a-f]{64}$/i.test(record.sorobanTransactionHash) ? record.sorobanTransactionHash.toLowerCase() : null,
+    ...(typeof record.sorobanIntentId === 'string' && /^[0-9A-HJKMNP-TV-Z]{16}$/i.test(record.sorobanIntentId)
+      ? { sorobanIntentId: record.sorobanIntentId.toUpperCase() }
+      : {}),
   };
 }
 
@@ -150,6 +156,7 @@ export function clearReviewHandoff(storage: Pick<Storage, 'removeItem'>): void {
   storage.removeItem(ACCOUNT_SIGNING_INTENT_HANDOFF_KEY);
   storage.removeItem(SOROBAN_EFFECTS_HANDOFF_KEY);
   storage.removeItem(SOROBAN_TRANSACTION_HASH_HANDOFF_KEY);
+  storage.removeItem(SOROBAN_INTENT_ID_HANDOFF_KEY);
 }
 
 export function writeReviewHandoff(storage: ReviewHandoffStorage, handoff: ReviewHandoffWrite): void {
@@ -168,6 +175,7 @@ export function writeReviewHandoff(storage: ReviewHandoffStorage, handoff: Revie
   writeOptional(storage, ACCOUNT_SIGNING_INTENT_HANDOFF_KEY, handoff.accountSigningIntent ?? null);
   writeOptional(storage, SOROBAN_EFFECTS_HANDOFF_KEY, handoff.sorobanEffectsBaseline ? JSON.stringify(handoff.sorobanEffectsBaseline) : null);
   writeOptional(storage, SOROBAN_TRANSACTION_HASH_HANDOFF_KEY, handoff.sorobanTransactionHash?.trim().toLowerCase() || null);
+  writeOptional(storage, SOROBAN_INTENT_ID_HANDOFF_KEY, handoff.sorobanIntentId?.trim().toUpperCase() || null);
 }
 
 export function takeReviewHandoff(storage: ReviewHandoffStorage, history: ReviewHistory | null = browserReviewHistory()): ReviewHandoff {
@@ -189,6 +197,10 @@ export function takeReviewHandoff(storage: ReviewHandoffStorage, history: Review
     sorobanTransactionHash: (() => {
       const value = storage.getItem(SOROBAN_TRANSACTION_HASH_HANDOFF_KEY)?.trim().toLowerCase() ?? '';
       return /^[0-9a-f]{64}$/.test(value) ? value : null;
+    })(),
+    ...(() => {
+      const value = storage.getItem(SOROBAN_INTENT_ID_HANDOFF_KEY)?.trim().toUpperCase() ?? '';
+      return /^[0-9A-HJKMNP-TV-Z]{16}$/.test(value) ? { sorobanIntentId: value } : {};
     })(),
   };
   clearReviewHandoff(storage);

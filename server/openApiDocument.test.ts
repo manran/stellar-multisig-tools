@@ -118,6 +118,9 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
     type: 'string', enum: ['intent_created', 'authorization_added', 'authorization_plan_revised', 'execution_prepared'],
   });
   assert.deepEqual(schemas.ContractIntentContributionInput.required, ['entryIndex', 'signatureBase64']);
+  assert.ok((schemas.ProposalCreateInput.properties as JsonObject).sorobanIntentId);
+  assert.deepEqual(schemas.SorobanRequestOrigin.required, ['version', 'intentId', 'authorizationPlanDigest', 'authorizationPlanRevision', 'executionPreparedAt', 'effectsDigest']);
+  assert.ok((schemas.SigningRequest.properties as JsonObject).sorobanOrigin);
   assert.deepEqual(schemas.ContractIntentExecutionInput.required, ['executionSource']);
   assert.ok((schemas.ContractIntentExecutionInput.properties as JsonObject).acceptedEffectsDigest);
   assert.deepEqual(schemas.SorobanEffectsDiff.required, ['version', 'kind', 'severity', 'requiresExplicitReview', 'requiresReauthorization', 'expectedDigest', 'currentDigest', 'structureChanged', 'maxChangeBasisPoints', 'numericChanges']);

@@ -1,6 +1,7 @@
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
 import { blobAuthStore } from '../server/blobAuthStore.js';
 import { blobSigningRequestStore, RequestStorageUnavailableError } from '../server/blobRequestStore.js';
+import { blobSorobanIntentStore } from '../server/blobSorobanIntentStore.js';
 import { authConfigForRequest } from '../server/authConfig.js';
 import {
   AgentCredentialServiceError,
@@ -34,6 +35,7 @@ import {
   getTreasuryActivityItemForRequest,
 } from '../server/requestActivity.js';
 import { PrivateCommitmentValidationError, validatePrivateCommitmentForMemo } from '../server/requestPrivateCommitment.js';
+import { verifySorobanRequestOrigin, SorobanRequestOriginError } from '../server/sorobanRequestOrigin.js';
 import { latestPrivateNoteForRequest } from '../server/requestPrivateNote.js';
 import { createCapabilityToken, isValidSigningRequestId } from '../server/requestLocator.js';
 import type { StoredSigningRequest } from '../server/requestStore.js';
@@ -54,6 +56,7 @@ import type { SigningRequestApiError, SigningRequestStatus } from '../src/stella
 import type { StellarNetwork } from '../src/stellar/types.js';
 import { loadTransactionSourceAnalyses } from '../src/stellar/transactionReviewAnalysis.js';
 import { inspectTransactionXdr } from '../src/stellar/transactionXdr.js';
+import { transactionHashHex } from '../src/stellar/signatureMerge.js';
 import {
   enforcePreparedSorobanTransaction,
   SorobanSimulationError,
@@ -118,7 +121,7 @@ function errorResponse(cause: unknown): Response {
   if (cause instanceof RequestBodyError) {
     return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
   }
-  if (cause instanceof CallerAuthenticationError || cause instanceof AgentCredentialServiceError || cause instanceof IntegrationCredentialServiceError || cause instanceof BoxServiceError || cause instanceof ClassicPaymentPrepareError) {
+  if (cause instanceof CallerAuthenticationError || cause instanceof AgentCredentialServiceError || cause instanceof IntegrationCredentialServiceError || cause instanceof BoxServiceError || cause instanceof ClassicPaymentPrepareError || cause instanceof SorobanRequestOriginError) {
     return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
   }
   if (cause instanceof SigningRequestServiceError) {
@@ -666,6 +669,9 @@ export async function POST(request: Request): Promise<Response> {
     const integrationCredential = machineCaller?.kind === 'service' ? machineCaller.credential : null;
     const agentCredential = machineCaller?.kind === 'agent' ? machineCaller.credential : null;
     if (integrationCredential) {
+      if (body.sorobanIntentId !== undefined) {
+        throw new SigningRequestServiceError('Soroban Intent Proposal linkage is available only through verified Human workflow handoff in this version.', 400, 'soroban_origin_unsupported');
+      }
       if (body.network !== 'public' && body.network !== 'testnet') {
         throw new SigningRequestServiceError('Network must be public or testnet.', 400, 'invalid_network');
       }
@@ -757,6 +763,9 @@ export async function POST(request: Request): Promise<Response> {
       }, result.replayed ? 200 : 201);
     }
     if (agentCredential) {
+      if (body.sorobanIntentId !== undefined) {
+        throw new SigningRequestServiceError('Soroban Intent Proposal linkage is available only through verified Human workflow handoff in this version.', 400, 'soroban_origin_unsupported');
+      }
       if (body.network !== 'public' && body.network !== 'testnet') {
         throw new SigningRequestServiceError('Network must be public or testnet.', 400, 'invalid_network');
       }
@@ -851,6 +860,17 @@ export async function POST(request: Request): Promise<Response> {
         'request_creator_not_signer',
       );
     }
+    if (body.sorobanIntentId !== undefined && typeof body.sorobanIntentId !== 'string') {
+      throw new SorobanRequestOriginError('Invalid Soroban Intent id.', 400, 'invalid_soroban_intent_id');
+    }
+    const sorobanIntentId = typeof body.sorobanIntentId === 'string' ? body.sorobanIntentId.trim().toUpperCase() : '';
+    const sorobanOrigin = body.sorobanIntentId !== undefined
+      ? await verifySorobanRequestOrigin(blobSorobanIntentStore, {
+          intentId: sorobanIntentId,
+          network: requestNetwork,
+          transactionHash: transactionHashHex(xdr, requestNetwork),
+        })
+      : undefined;
     const capability = createCapabilityToken();
     const beforeCreate = requestCreationQuota(request, requestNetwork, creatorSession.address);
     const requestStore = {
@@ -872,6 +892,7 @@ export async function POST(request: Request): Promise<Response> {
         ...serviceOptions,
         accountLoader,
         capabilityHash: capabilityHashForToken(capability),
+        ...(sorobanOrigin ? { sorobanOrigin } : {}),
       },
     );
     const activityBound = creatorSession

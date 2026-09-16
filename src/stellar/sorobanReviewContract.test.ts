@@ -30,6 +30,7 @@ const intentPlanningService = source('../../server/sorobanIntentPlanningService.
 const viteConfig = source('../../vite.config.ts');
 const envExample = source('../../.env.example');
 const requestService = source('../../server/requestService.ts');
+const requestOriginService = source('../../server/sorobanRequestOrigin.ts');
 const requestApi = source('../../api/request.ts');
 const productSemantics = source('../../PRODUCT_SEMANTICS.md');
 const sorobanContract = source('../../SOROBAN_AUTHORIZATION.md');
@@ -84,6 +85,11 @@ test('Soroban Review routes detached authorization into Intent before envelope s
 test('final Soroban broadcast remains bound to reviewed effects in both direct and Proposal submission', () => {
   assert.match(sorobanIntentApp, /sorobanEffectsBaseline: body\.execution\.effects/);
   assert.match(sorobanIntentApp, /sorobanTransactionHash: body\.execution\.transactionHash/);
+  assert.match(sorobanIntentApp, /sorobanIntentId: intent\.id/);
+  assert.match(signingRoom, /sorobanIntentId: handoff\.sorobanIntentId/);
+  assert.match(requestApi, /verifySorobanRequestOrigin/);
+  assert.match(requestOriginService, /item\.transactionHash === input\.transactionHash/);
+  assert.match(requestService, /soroban_origin_effects_changed/);
   assert.match(reviewHandoff, /SOROBAN_EFFECTS_HANDOFF_KEY/);
   assert.match(reviewHandoff, /SOROBAN_TRANSACTION_HASH_HANDOFF_KEY/);
   assert.match(signingRoom, /directSorobanBaselineBound/);

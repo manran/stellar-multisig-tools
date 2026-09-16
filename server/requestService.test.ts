@@ -382,6 +382,48 @@ test('prepared Soroban Request freeze requires server-side enforce simulation pr
   assert.equal(store.requests.size, 0);
 });
 
+test('Soroban Request freeze retains verified Intent origin and rejects effects drift after preparation', async () => {
+  const effects = testEffectsSnapshot(100n, 'prepared-effects');
+  const { source, second, transaction } = sorobanTransaction({ prepared: true });
+  const origin = {
+    version: 1 as const,
+    intentId: 'R'.repeat(16),
+    authorizationPlanDigest: 'plan-2',
+    authorizationPlanRevision: 2,
+    executionPreparedAt: '2026-09-16T01:01:00.000Z',
+    effectsDigest: effects.digest,
+  };
+  const store = new MemoryStore();
+  const created = await createSigningRequest(
+    store,
+    { network: 'testnet', xdr: transaction.toXdr() },
+    {
+      accountLoader: async () => accountSnapshot(source, second, 2),
+      networkParametersLoader,
+      sorobanExecutionVerifier: async () => ({ status: 'verified' as const, effects }),
+      sorobanOrigin: origin,
+      idFactory: () => 'Y'.repeat(16),
+    },
+  );
+  assert.deepEqual(created.sorobanOrigin, origin);
+  assert.deepEqual(store.requests.get(created.id)?.sorobanOrigin, origin);
+
+  await assert.rejects(
+    createSigningRequest(
+      new MemoryStore(),
+      { network: 'testnet', xdr: transaction.toXDR() },
+      {
+        accountLoader: async () => accountSnapshot(source, second, 2),
+        networkParametersLoader,
+        sorobanExecutionVerifier: async () => ({ status: 'verified' as const, effects: testEffectsSnapshot(101n, 'changed-effects') }),
+        sorobanOrigin: origin,
+        idFactory: () => 'Z'.repeat(16),
+      },
+    ),
+    (cause: unknown) => cause instanceof SigningRequestServiceError && cause.code === 'soroban_origin_effects_changed',
+  );
+});
+
 test('contract-account Soroban authorization stays read-only at Request freeze', async () => {
   const store = new MemoryStore();
   const { transaction } = contractAccountSorobanTransaction();

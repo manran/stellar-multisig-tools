@@ -327,6 +327,7 @@ export default function SigningRoomApp() {
         network,
         xdr: xdr.trim(),
         ...(privateNote ? { privateNote } : {}),
+        ...(handoff.sorobanIntentId ? { sorobanIntentId: handoff.sorobanIntentId } : {}),
         ...(privateCommitment ? {
           privateCommitment: {
             text: privateCommitment.text,

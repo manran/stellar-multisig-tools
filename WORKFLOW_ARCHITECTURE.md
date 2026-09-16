@@ -121,6 +121,8 @@ Execution vocabulary is evidence-strength specific:
 
 A fixed external executor therefore remains `Authorization complete · waiting for execution` until MultiSigTools later observes or is given a separately verifiable execution fact. External ownership is not execution evidence.
 
+When an internally routed Soroban execution continues into the ordinary Proposal lifecycle, the Proposal stores a **server-verified Soroban origin**. The browser may carry the Intent id as navigation context, but the server accepts the link only when the exact Proposal transaction hash matches a durable `execution_prepared` record for the Intent's current AuthorizationPlan revision. Proposal freeze then re-runs enforcing simulation and requires the effects digest to remain identical to that preparation. The client cannot manufacture this relationship by naming an Intent id.
+
 Default portable transaction evidence remains a separate privacy-bounded projection. Machine caller provenance may be a retained audit fact without automatically becoming public/default PDF metadata.
 
 ## 7. Refactor gate

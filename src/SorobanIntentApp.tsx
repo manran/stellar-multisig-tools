@@ -269,6 +269,7 @@ export default function SorobanIntentApp() {
       privateNote: intent.privateContext?.initialPrivateNote?.text ?? null,
       sorobanEffectsBaseline: body.execution.effects,
       sorobanTransactionHash: body.execution.transactionHash,
+      sorobanIntentId: intent.id,
     });
     navigateWorkspace('/signing-room', {
       state: {

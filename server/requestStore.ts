@@ -6,6 +6,7 @@ import type { ExecutionPolicy } from '../src/stellar/executionPolicy.js';
 import type { PrivateCommitmentRecord } from '../src/stellar/privateCommitment.js';
 import type { PrivateNoteRevision } from '../src/stellar/privateNote.js';
 import type { SorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
+import type { SorobanRequestOrigin } from '../src/stellar/requestTypes.js';
 import type { StellarNetwork } from '../src/stellar/types.js';
 
 export interface StoredSigningRequest {
@@ -36,6 +37,8 @@ export interface StoredSigningRequest {
   privateCommitment?: PrivateCommitmentRecord;
   /** Enforcing-simulation effects fixed when a Soroban Proposal is created. */
   sorobanEffectsBaseline?: SorobanEffectsSnapshot;
+  /** Server-verified link to the exact Soroban Intent execution preparation that produced this transaction. */
+  sorobanOrigin?: SorobanRequestOrigin;
 }
 
 export interface StoredAcceptedSignature {

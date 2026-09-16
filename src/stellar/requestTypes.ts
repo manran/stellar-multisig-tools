@@ -39,6 +39,15 @@ export interface SigningRequestSubmission {
   submittedAt: string;
 }
 
+export interface SorobanRequestOrigin {
+  version: 1;
+  intentId: string;
+  authorizationPlanDigest: string;
+  authorizationPlanRevision: number;
+  executionPreparedAt: string;
+  effectsDigest: string;
+}
+
 export interface SigningRequestSnapshot {
   id: string;
   network: StellarNetwork;
@@ -54,6 +63,7 @@ export interface SigningRequestSnapshot {
   statusDetail?: string;
   submission?: SigningRequestSubmission;
   execution?: ExternalRequestExecution;
+  sorobanOrigin?: SorobanRequestOrigin;
 }
 
 export interface SigningRequestAccess {

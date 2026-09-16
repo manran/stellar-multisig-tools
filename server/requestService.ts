@@ -28,6 +28,7 @@ import type {
   SigningRequestSnapshot,
   SigningRequestStatusReason,
   SigningRequestSubmission,
+  SorobanRequestOrigin,
 } from '../src/stellar/requestTypes.js';
 import type { StellarAccountSnapshot, StellarNetwork, StellarSigner } from '../src/stellar/types.js';
 import { createSigningRequestId, isValidSigningRequestId } from './requestLocator.js';
@@ -103,6 +104,7 @@ interface RequestServiceOptions {
   transactionLoader?: TransactionLoader;
   sorobanExecutionVerifier?: SorobanExecutionVerifier;
   capabilityHash?: string;
+  sorobanOrigin?: SorobanRequestOrigin;
 }
 
 interface SubmitRequestOptions extends RequestServiceOptions {
@@ -744,6 +746,7 @@ async function buildSnapshot(
     expiresAt: request.expiresAt,
     contributionCount: merged.contributionCount,
     signatureCount: merged.signatureCount,
+    ...(request.sorobanOrigin ? { sorobanOrigin: request.sorobanOrigin } : {}),
     ...(request.executionPolicy?.mode === 'external'
       ? { execution: {
           mode: 'external' as const,
@@ -869,6 +872,15 @@ export async function createSigningRequest(
     true,
   );
   const inspection = analysis.inspection;
+  if (options.sorobanOrigin) {
+    if (!analysis.sorobanEffects || analysis.sorobanEffects.digest !== options.sorobanOrigin.effectsDigest) {
+      throw new SigningRequestServiceError(
+        'Soroban execution effects changed after the linked Intent preparation. Return to Contract Authorization and prepare the transaction again.',
+        409,
+        'soroban_origin_effects_changed',
+      );
+    }
+  }
   const discoverySignerKeys = requestDiscoverySignerKeys(
     analysis.accountLookups.map((lookup) => lookup.account),
     inspection.extraSigners,
@@ -887,6 +899,7 @@ export async function createSigningRequest(
     discoverySignerKeys,
     capabilityHash: options.capabilityHash,
     ...(analysis.sorobanEffects ? { sorobanEffectsBaseline: analysis.sorobanEffects } : {}),
+    ...(options.sorobanOrigin ? { sorobanOrigin: options.sorobanOrigin } : {}),
   };
 
   await store.createRequest(request);
