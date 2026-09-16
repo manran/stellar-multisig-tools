@@ -145,7 +145,7 @@ The authorized **Transaction Receipt** page is a Human projection. It may enrich
 
 The default PDF is **Portable Evidence**, not a screenshot of the Human Receipt. Its input model is a separate projection containing only canonical/provable transaction and audit facts.
 
-Portable evidence never contains Shared Name, Personal note, Address Book names, Private Note plaintext, or private memo opening data. Signer/account identity is the exact Stellar address plus factual role such as `Account key`. History uses the recorded exact `actorAddress`; only a genuinely missing actor may render `signer not recorded`.
+Portable evidence never contains Shared Name, Personal note, Address Book names, Private Note plaintext, or private memo opening data. Signer/account identity is the exact Stellar address plus factual role such as `Account key`. History uses the recorded exact `actorAddress`; only a genuinely missing actor may render `signer not recorded`. Machine-caller provenance (`actor`, such as an Agent credential or Service identity) remains a retained audit fact, but is not automatically copied into the default portable PDF because its label/identity may be workspace or organization metadata.
 
 A future export that deliberately includes private Human context must be a separately named explicit private-data artifact. It must not be implemented as a checkbox that feeds private metadata into the default evidence PDF.
 

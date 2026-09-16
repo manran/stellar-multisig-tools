@@ -10,6 +10,7 @@ const ui = source('../MultiSigUi.tsx');
 const dashboard = source('../StellarDashboardApp.tsx');
 const inbox = source('../InboxApp.tsx');
 const request = source('../RequestApp.tsx');
+const intent = source('../SorobanIntentApp.tsx');
 const treasury = source('../TreasuryApp.tsx');
 const review = source('../ReviewTransactionSummary.tsx');
 const accountSigningEntry = source('../AccountSigningEntryApp.tsx');
@@ -21,6 +22,7 @@ test('primary Human surfaces share one page-header grammar', () => {
   assert.match(dashboard, /<PageHeader/);
   assert.match(inbox, /<PageHeader/);
   assert.match(request, /<PageHeader/);
+  assert.match(intent, /<PageHeader/);
   assert.match(treasury, /<PageHeader/);
 });
 
@@ -36,6 +38,15 @@ test('page identity precedes Proposal workflow progress', () => {
   assert.ok(headerIndex >= 0);
   assert.ok(progressIndex > headerIndex);
   assert.match(request, /title="Proposal"/);
+});
+
+
+test('page identity precedes Soroban Intent workflow progress', () => {
+  const headerIndex = intent.indexOf('<PageHeader');
+  const progressIndex = intent.indexOf('<WorkflowProgress current={sorobanIntentWorkflowStage(authorization.status)}');
+  assert.ok(headerIndex >= 0);
+  assert.ok(progressIndex > headerIndex);
+  assert.match(intent, /title="Contract authorization"/);
 });
 
 test('Dashboard and Inbox use the same wide Human content frame', () => {

@@ -238,6 +238,8 @@ Example semantic creation:
 }
 ```
 
+GET inspection returns the current Intent/authorization state plus a persisted evidence timeline for creation provenance, accepted AUTH contributions, and AuthorizationPlan revisions. The timeline contains contribution digests and signer/Agent provenance where recorded, but not raw signature payloads; it does not claim external execution or ledger confirmation that MultiSigTools has not observed.
+
 Creation stores no transaction source, sequence, fee, lifetime, or envelope. Recording simulation discovers an immutable detached AuthorizationPlan. Each PATCH contribution is cryptographically verified against the Agent Principal and current live signer policy. When authorization becomes `authorization_ready`, PUT late-binds `executionSource`, loads a fresh sequence, materializes the transaction, and runs enforcing simulation before returning final unsigned XDR. Envelope multisig then uses the ordinary Request lifecycle.
 
 `SOURCE_ACCOUNT` authorization is rejected with `source_account_auth_unsupported`: it would bind Soroban authorization to the transaction source and defeat source-late execution. Contracts/integrations used with Intent coordination must expose detached address authorization.

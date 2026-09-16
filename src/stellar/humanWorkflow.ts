@@ -1,5 +1,6 @@
 import type { SigningRequestStatus } from './requestTypes';
 import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentApiTypes';
+import { requestCoordinationPhase, sorobanCoordinationPhase } from './coordinationWorkflow';
 
 export const HUMAN_WORKFLOW_STEPS = [
   { key: 'prepare', number: 1, label: 'Prepare' },
@@ -19,9 +20,9 @@ export interface HumanStatusPresentation {
 
 export function requestStatusPresentation(status: SigningRequestStatus): HumanStatusPresentation {
   switch (status) {
-    case 'awaiting_signatures': return { label: 'Signature needed', tone: 'warning' };
-    case 'waiting_preconditions': return { label: 'Waiting', tone: 'warning' };
-    case 'ready': return { label: 'Ready to submit', tone: 'success' };
+    case 'awaiting_signatures': return { label: 'Collecting signatures', tone: 'warning' };
+    case 'waiting_preconditions': return { label: 'Authorization complete · waiting', tone: 'warning' };
+    case 'ready': return { label: 'Authorization complete', tone: 'success' };
     case 'submitted': return { label: 'Done', tone: 'success' };
     case 'expired': return { label: 'Expired', tone: 'neutral' };
     case 'stale':
@@ -33,9 +34,10 @@ export function requestWorkflowStage(
   status: SigningRequestStatus,
   signaturesComplete = false,
 ): HumanWorkflowStage {
-  if (status === 'submitted') return 'done';
-  if (status === 'ready' || status === 'waiting_preconditions') return 'submit';
-  if ((status === 'stale' || status === 'blocked' || status === 'expired') && signaturesComplete) return 'submit';
+  const phase = requestCoordinationPhase(status);
+  if (phase === 'done') return 'done';
+  if (phase === 'ready') return 'submit';
+  if (phase === 'attention' && signaturesComplete) return 'submit';
   return 'sign';
 }
 
@@ -47,8 +49,19 @@ export function proposalWorkflowStage(
   return requestWorkflowStage(status, options.signaturesComplete ?? false);
 }
 
+export function sorobanAuthorizationStatusPresentation(
+  status: SorobanIntentAuthorizationSnapshot['status'],
+): HumanStatusPresentation {
+  switch (status) {
+    case 'awaiting_authorization': return { label: 'Collecting contract authorization', tone: 'warning' };
+    case 'authorization_ready': return { label: 'Contract authorization complete', tone: 'success' };
+    case 'expired': return { label: 'Authorization expired', tone: 'danger' };
+    case 'blocked': return { label: 'Authorization blocked', tone: 'danger' };
+  }
+}
+
 export function sorobanIntentWorkflowStage(
   status: SorobanIntentAuthorizationSnapshot['status'],
 ): HumanWorkflowStage {
-  return status === 'authorization_ready' ? 'submit' : 'sign';
+  return sorobanCoordinationPhase(status) === 'ready' ? 'submit' : 'sign';
 }

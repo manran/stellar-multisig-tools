@@ -106,6 +106,12 @@ Inbox/Dashboard show the current viewer's next action rather than exposing inter
 - Team/Workspace is a future ownership/policy container, not an Actor or Principal.
 - Creator provenance, authorization evidence, and execution ownership are independent facts.
 
+### Evidence projection boundary
+
+Evidence is projected from durable protocol facts rather than a second audit state machine. Classic Activity derives creation, signature, decision, and submission facts from the Request record/contributions/submission. Soroban Intent inspection derives creation provenance, accepted AUTH contributions, and AuthorizationPlan revisions from the Intent store. Projections must not expose raw signature payloads or manufacture execution/confirmation events that were never persisted.
+
+Default portable transaction evidence remains a separate privacy-bounded projection. Machine caller provenance may be a retained audit fact without automatically becoming public/default PDF metadata.
+
 ## 7. Refactor gate
 
 A UI or API change is aligned only when it preserves these distinctions and reuses the existing Request/Intent lifecycle rather than adding another state machine.

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { HUMAN_WORKFLOW_STEPS, proposalWorkflowStage, requestStatusPresentation, requestWorkflowStage, sorobanIntentWorkflowStage } from './humanWorkflow';
+import { HUMAN_WORKFLOW_STEPS, proposalWorkflowStage, requestStatusPresentation, requestWorkflowStage, sorobanAuthorizationStatusPresentation, sorobanIntentWorkflowStage } from './humanWorkflow';
 
 test('Human workflow is the canonical five-step transaction journey', () => {
   assert.deepEqual(HUMAN_WORKFLOW_STEPS.map((step) => step.label), ['Prepare', 'Review', 'Sign', 'Submit', 'Done']);
@@ -30,8 +30,10 @@ test('Soroban AUTH stays in Sign and execution routing remains inside Submit', (
 });
 
 test('Request status colors keep waiting, success, failure, and expiry semantically distinct', () => {
-  assert.deepEqual(requestStatusPresentation('awaiting_signatures'), { label: 'Signature needed', tone: 'warning' });
-  assert.deepEqual(requestStatusPresentation('ready'), { label: 'Ready to submit', tone: 'success' });
+  assert.deepEqual(requestStatusPresentation('awaiting_signatures'), { label: 'Collecting signatures', tone: 'warning' });
+  assert.deepEqual(requestStatusPresentation('ready'), { label: 'Authorization complete', tone: 'success' });
   assert.deepEqual(requestStatusPresentation('blocked'), { label: 'Needs attention', tone: 'danger' });
   assert.deepEqual(requestStatusPresentation('expired'), { label: 'Expired', tone: 'neutral' });
+  assert.deepEqual(sorobanAuthorizationStatusPresentation('awaiting_authorization'), { label: 'Collecting contract authorization', tone: 'warning' });
+  assert.deepEqual(sorobanAuthorizationStatusPresentation('authorization_ready'), { label: 'Contract authorization complete', tone: 'success' });
 });

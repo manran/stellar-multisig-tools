@@ -99,6 +99,8 @@ Soroban contract work remains Intent-first and transaction construction stays la
 
 `SOURCE_ACCOUNT` authorization is intentionally rejected by the Intent workflow because it binds contract authorization to the final transaction source and defeats source-late execution. Integrations must expose detached address authorization instead.
 
+`contract.intent.inspect` also projects a durable evidence timeline from facts already stored with the Intent: creation provenance, accepted detached-AUTH contributions, and AuthorizationPlan revisions. It never includes raw AUTH signature payloads and it does not invent execution or confirmation facts that were not persisted. External execution remains external until a later explicit confirmation contract exists.
+
 `contract.call.build` and `contract.call.prepare` remain low-level public construction/simulation primitives for inspection, diagnostics, and external tooling. They are not the canonical shared-authorization lifecycle. `WORKFLOW_ARCHITECTURE.md` records the protocol-neutral lifecycle and execution-routing contract.
 
 ## Shipped operation discovery
@@ -119,7 +121,7 @@ The first complete Contract vertical slice is:
 | **runtime.config.inspect** | GET /api/runtime-config | Public | None; returns deployment network policy |
 | **contract.interface.inspect** | GET /api/contract-interface | Public | None |
 | **contract.intent.create** | POST /api/intent | Principal Write | Coordination state; source-free Intent |
-| **contract.intent.inspect** | GET /api/intent | Principal Read | None |
+| **contract.intent.inspect** | GET /api/intent | Principal Read | None; current state + persisted evidence timeline |
 | **contract.intent.contribute** | PATCH /api/intent | Principal Sign | Append verified detached AUTH |
 | **contract.intent.execution.prepare** | PUT /api/intent | Principal Write | Late-bind source; build/enforce final unsigned TX |
 | **contract.call.build** | POST /api/contract-call | Public | Low-level unsigned XDR construction |

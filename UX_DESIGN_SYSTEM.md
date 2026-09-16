@@ -62,8 +62,8 @@ Color communicates one meaning at a time. Network, lifecycle, and outcome colors
 
 | Status | Color role |
 | --- | --- |
-| Signature needed / waiting preconditions | Warning amber |
-| Ready to submit / Done | Success green |
+| Collecting signatures / authorization complete but waiting | Warning amber |
+| Authorization complete / Done | Success green |
 | Stale / blocked / deterministic failure | Danger red |
 | Expired / historical neutral terminal | Neutral gray |
 
@@ -153,6 +153,7 @@ Do not abstract local layout merely because two cards share Tailwind classes. Do
 - **Required actions never live only under Advanced.** Advanced may expose XDR, RPC/provider facts, Core authorization details, and other evidence, but a Human action required to progress from Review to Sign must appear in the main Review flow.
 - Guided Contract Call treats a complete valid `C...` address as sufficient intent to load its on-chain interface automatically; the explicit Load / Reload / Retry control remains available as a manual escape hatch.
 - Guided Contract Call creates a source-free Soroban Intent directly from contract + method + arguments; transaction source/lifetime are not Prepare inputs. Recording simulation is planning evidence, not the durable workflow object. Raw/unprepared imported Soroban XDR keeps the recording RPC check explicit. A supported imported prepared XDR is converted into the same Intent model: preserve valid detached AUTH evidence, discard the transaction shell, and reject SOURCE_ACCOUNT rather than silently binding authorization to the imported source.
+- **Status badges describe canonical Work facts, never viewer permissions.** `awaiting_signatures` is `Collecting signatures`; `ready` is `Authorization complete`. Whether the current Human must sign, may submit, must choose execution, or is waiting belongs only to viewer-action presentation.
 - Inbox keeps **Request status** and **viewer action** separate. Request status describes the Proposal/transaction as a whole; viewer action describes what the current Human signer can do now. A signer who already signed is `Waiting for others`, not `Signature needed` as a personal task.
 - Human Inbox viewer actions are presentation facts derived server-side from current Request state + current signer evidence. They are not added to Agent Inbox responses and never expand Agent permissions.
 - Inbox and Dashboard project `authorization_ready` as **Choose execution** only when the current Human is allowed to select an execution route. Fixed external execution projects as **Waiting for execution** and is not counted as a submit task.
@@ -237,13 +238,13 @@ Regression check: ordinary Human surfaces must not drift back to raw Stellar typ
 
 ## 11. Primary workspace visual hierarchy
 
-Dashboard, Inbox, Proposal, and Treasury use the shared `PageHeader` as the primary page-identity primitive. It may carry an eyebrow/status context, icon, title, description, metadata, and page-level actions, but it owns presentation only and must never acquire wallet, Request, Horizon, or authorization behavior.
+Dashboard, Inbox, Proposal, Contract Authorization, and Treasury use the shared `PageHeader` as the primary page-identity primitive. It may carry an eyebrow/status context, icon, title, description, metadata, and page-level actions, but it owns presentation only and must never acquire wallet, Request, Horizon, or authorization behavior.
 
 Visual order for a primary task page is:
 
 `Page identity -> workflow/status context -> dominant working surface -> secondary evidence/history`
 
-For Proposal, the stable page title must appear before `WorkflowProgress`; the progress bar explains where this Proposal is in the canonical journey and does not substitute for page identity.
+For Proposal and Contract Authorization, the stable page title must appear before `WorkflowProgress`; the progress bar explains where the Work is in the canonical journey and does not substitute for page identity.
 
 Layout/elevation rules:
 
@@ -255,8 +256,8 @@ Layout/elevation rules:
 
 Regression checks:
 
-1. Do Dashboard, Inbox, Proposal, and Treasury still share the same page-identity grammar?
-2. Does Proposal show its identity before the 1–5 progress control?
+1. Do Dashboard, Inbox, Proposal, Contract Authorization, and Treasury still share the same page-identity grammar?
+2. Do Proposal and Contract Authorization show Work identity before the 1–5 progress control?
 3. Did visual polish accidentally add a second status color model or change an existing semantic tone?
 4. Did a generic layout abstraction gain domain/security behavior or erase a meaningful surface distinction?
 

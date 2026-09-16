@@ -31,6 +31,25 @@ export interface StoredSorobanIntentSnapshot {
   };
 }
 
+export type SorobanIntentEvidenceEventType =
+  | 'intent_created'
+  | 'authorization_added'
+  | 'authorization_plan_revised';
+
+export interface SorobanIntentEvidenceEvent {
+  version: 1;
+  eventId: string;
+  type: SorobanIntentEvidenceEventType;
+  occurredAt: string;
+  actorAddress?: string;
+  actor?: MachineCallerProvenance;
+  authorizationPlanDigest: string;
+  authorizationPlanRevision: number;
+  previousAuthorizationPlanDigest?: string;
+  entryIndex?: number;
+  contributionDigest?: string;
+}
+
 export interface SorobanIntentAuthorizationSnapshot {
   id: string;
   network: StellarNetwork;
@@ -66,6 +85,7 @@ export interface SorobanIntentResponse {
   replayed?: boolean;
   intent: StoredSorobanIntentSnapshot;
   authorization: SorobanIntentAuthorizationSnapshot;
+  evidence?: SorobanIntentEvidenceEvent[];
 }
 
 export interface SorobanIntentContributionResponse {

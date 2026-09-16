@@ -95,7 +95,8 @@ test('Demo and Production share one Human workflow and semantic status presentat
   assert.match(uxDesignSystem, /1 Prepare -> 2 Review -> 3 Sign -> 4 Submit -> 5 Done/);
   assert.match(uxDesignSystem, /Stellar Mainnet \| Brand emerald/);
   assert.match(uxDesignSystem, /Stellar Testnet \| Information sky/);
-  assert.match(uxDesignSystem, /Signature needed \/ waiting preconditions \| Warning amber/);
+  assert.match(uxDesignSystem, /Collecting signatures \/ authorization complete but waiting \| Warning amber/);
+  assert.match(uxDesignSystem, /Status badges describe canonical Work facts, never viewer permissions/);
 });
 test('durable Proposal creation requires a verified current signer and has no scheduled Request deletion', () => {
   assert.match(requestApi, /request_creator_identity_required/);

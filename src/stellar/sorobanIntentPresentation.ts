@@ -23,7 +23,7 @@ export function intentViewerActionPresentation(action: SorobanIntentViewerAction
   }
   if (action === 'route_execution') {
     return {
-      label: 'Authorization complete',
+      label: 'Choose execution',
       detail: 'Required Soroban authorization is complete. Choose how the final transaction should be executed.',
       cta: 'Choose execution',
       tone: 'success',

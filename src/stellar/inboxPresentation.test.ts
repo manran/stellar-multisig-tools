@@ -60,6 +60,7 @@ test('Inbox action counts describe what the current viewer can do now', () => {
 test('Inbox Human copy distinguishes viewer action from transaction-wide status', () => {
   assert.equal(inboxViewerActionPresentation('sign').label, 'Your signature is needed');
   assert.equal(inboxViewerActionPresentation('submit').cta, 'Review & submit');
+  assert.equal(inboxViewerActionPresentation('waiting_execution').cta, 'View status');
   assert.match(inboxViewerActionPresentation('waiting_for_others').label, /You signed/);
   assert.match(inboxViewerActionPresentation('waiting_preconditions').label, /waiting for ledger/);
   assert.match(inboxViewerActionPresentation('declined').label, /You declined/);

@@ -707,7 +707,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
               <PageHeader
                 eyebrow={<div className="flex flex-wrap items-center gap-2"><RequestStatusBadge status={snapshot.status} /><NetworkFact network={snapshot.network} /></div>}
                 title="Proposal"
-                description="Review the exact transaction, collect signatures, and submit only when authorization is complete."
+                description="Review the exact transaction, collect signatures, then follow its configured execution route once authorization is complete."
                 actions={<><button type="button" onClick={() => void load(requestLocatorString(snapshot.id, capability))} disabled={loading} className="flex items-center gap-2 rounded-xl border border-black/10 px-3 py-2.5 text-sm font-semibold disabled:opacity-50 dark:border-white/10"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Refresh</button>{shareable && <button type="button" onClick={() => void copyLink()} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white"><ClipboardCopy className="h-4 w-4" />{copied === 'link' ? 'Copied' : 'Copy private link'}</button>}</>}
               />
 

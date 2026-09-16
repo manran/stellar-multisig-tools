@@ -24,6 +24,7 @@ import {
 import { createHumanSorobanIntent } from '../server/humanSorobanIntentService.js';
 import { createImportedSorobanIntent } from '../server/importedSorobanIntentService.js';
 import { noStoreJson, publicCorsHeaders } from '../server/httpResponse.js';
+import { projectSorobanIntentEvidence } from '../server/sorobanIntentEvidence.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
 import { configuredSorobanPlanningSource } from '../server/sorobanIntentConfig.js';
@@ -164,11 +165,13 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
 export async function GET(request: Request): Promise<Response> {
   try {
     const access = await storedIntentAccess(request, 'read');
+    const contributions = await blobSorobanIntentStore.listContributions(access.id);
     return json({
       operation: 'contract.intent.inspect',
       version: 1,
       intent: access.stored,
       authorization: access.authorization,
+      evidence: projectSorobanIntentEvidence(access.stored, contributions),
     });
   } catch (cause) {
     return errorResponse(cause);

@@ -114,7 +114,7 @@ test('Inbox and Dashboard surface source-free Soroban Intents in the same work q
   assert.doesNotMatch(inbox, /transactionSourceAccount|openPreparationDetails/);
   assert.match(dashboard, /intentAttention/);
   assert.match(dashboard, /intentViewerActionPresentation/);
-  assert.match(intent, /Contract authorization complete/);
+  assert.match(intent, /sorobanAuthorizationStatusPresentation/);
   assert.match(intent, /Choose how the final transaction should be executed/);
   assert.match(intent, /Handle outside MultiSigTools/);
   assert.match(intent, /MultiSigTools coordinates/);
