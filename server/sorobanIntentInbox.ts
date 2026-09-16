@@ -2,7 +2,12 @@ import type { InboxSorobanIntentSnapshot } from '../src/stellar/sorobanIntentApi
 import type { StellarNetwork } from '../src/stellar/types.js';
 import { loadAccount, loadNetworkParameters } from '../src/stellar/horizon.js';
 import { getSorobanIntentAuthorization } from './sorobanIntentAuthorizationService.js';
-import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';
+import type {
+  SorobanIntentStore,
+  StoredSorobanIntent,
+  StoredSorobanIntentExecutionObservation,
+  StoredSorobanIntentExecutionPreparation,
+} from './sorobanIntentStore.js';
 
 type AccountLoader = typeof loadAccount;
 type NetworkParametersLoader = typeof loadNetworkParameters;
@@ -26,8 +31,10 @@ export function projectSorobanIntentViewerAction(
   authorization: Awaited<ReturnType<typeof getSorobanIntentAuthorization>>,
   address: string,
   externalExecution = false,
+  executionFailed = false,
 ): InboxSorobanIntentSnapshot['viewerAction'] {
   if (authorization.status === 'blocked' || authorization.status === 'expired') return 'attention';
+  if (authorization.status === 'authorization_ready' && executionFailed) return 'execution_failed';
   if (authorization.status === 'authorization_ready') return externalExecution ? 'waiting_execution' : 'route_execution';
   return authorization.authorizers.some((authorizer) =>
     !authorizer.ready
@@ -36,10 +43,32 @@ export function projectSorobanIntentViewerAction(
   ) ? 'authorize' : 'waiting';
 }
 
+function latestPreparation(
+  preparations: readonly StoredSorobanIntentExecutionPreparation[],
+): StoredSorobanIntentExecutionPreparation | undefined {
+  const ordered = [...preparations].sort((left, right) =>
+    left.preparedAt.localeCompare(right.preparedAt)
+    || left.transactionHash.localeCompare(right.transactionHash));
+  return ordered[ordered.length - 1];
+}
+
+function executionEvidenceState(
+  preparations: readonly StoredSorobanIntentExecutionPreparation[],
+  observations: readonly StoredSorobanIntentExecutionObservation[],
+): 'confirmed' | 'failed' | 'pending' {
+  if (observations.some((item) => item.successful)) return 'confirmed';
+  const latest = latestPreparation(preparations);
+  if (!latest) return 'pending';
+  return observations.some((item) => item.transactionHash === latest.transactionHash && !item.successful)
+    ? 'failed'
+    : 'pending';
+}
+
 function snapshot(
   stored: StoredSorobanIntent,
   authorization: Awaited<ReturnType<typeof getSorobanIntentAuthorization>>,
   address: string,
+  executionFailed = false,
 ): InboxSorobanIntentSnapshot {
   return {
     id: stored.id,
@@ -55,6 +84,7 @@ function snapshot(
       authorization,
       address,
       stored.executionPolicy?.mode === 'external',
+      executionFailed,
     ),
   };
 }
@@ -69,9 +99,15 @@ export async function listSorobanIntentInbox(
   const records = await store.listIntentsBySigner(network, address);
   const values = await Promise.all(records.map(async (stored) => {
     try {
-      const authorization = await getSorobanIntentAuthorization(store, stored.id, options);
+      const [authorization, preparations, observations] = await Promise.all([
+        getSorobanIntentAuthorization(store, stored.id, options),
+        store.listExecutionPreparations?.(stored.id) ?? Promise.resolve([]),
+        store.listExecutionObservations?.(stored.id) ?? Promise.resolve([]),
+      ]);
       if (!isLiveParticipant(stored, address, authorization)) return null;
-      return snapshot(stored, authorization, address);
+      const executionState = executionEvidenceState(preparations, observations);
+      if (executionState === 'confirmed') return null;
+      return snapshot(stored, authorization, address, executionState === 'failed');
     } catch {
       return null;
     }

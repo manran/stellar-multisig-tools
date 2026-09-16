@@ -4,7 +4,7 @@ import type {
 } from './sorobanIntentApiTypes.js';
 
 export function intentViewerActionNeedsAction(action: SorobanIntentViewerAction): boolean {
-  return action === 'authorize' || action === 'route_execution' || action === 'attention';
+  return action === 'authorize' || action === 'route_execution' || action === 'execution_failed' || action === 'attention';
 }
 
 export function intentViewerActionPresentation(action: SorobanIntentViewerAction): {
@@ -35,6 +35,14 @@ export function intentViewerActionPresentation(action: SorobanIntentViewerAction
       detail: 'The owning external service controls final execution for this Intent.',
       cta: 'View status',
       tone: 'neutral',
+    };
+  }
+  if (action === 'execution_failed') {
+    return {
+      label: 'Execution failed on Stellar',
+      detail: 'A prepared transaction for this Intent was observed in a ledger but did not succeed.',
+      cta: 'Review result',
+      tone: 'danger',
     };
   }
   if (action === 'attention') {

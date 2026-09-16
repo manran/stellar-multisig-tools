@@ -78,7 +78,7 @@ export interface SorobanIntentAuthorizationSnapshot {
 }
 
 
-export type SorobanIntentViewerAction = 'authorize' | 'route_execution' | 'waiting' | 'waiting_execution' | 'attention';
+export type SorobanIntentViewerAction = 'authorize' | 'route_execution' | 'waiting' | 'waiting_execution' | 'execution_failed' | 'attention';
 
 export interface InboxSorobanIntentSnapshot {
   id: string;

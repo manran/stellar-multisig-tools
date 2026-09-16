@@ -56,6 +56,10 @@ test('Inbox action counts describe what the current viewer can do now', () => {
     contractAuthorizationNeeded: 1,
     readyForExecutionRouting: 1,
   });
+  const failedExecution = summarizeInboxActions([], [{ viewerAction: 'execution_failed' }]);
+  assert.equal(failedExecution.actionRequired, 1);
+  assert.equal(failedExecution.needsAttention, 1);
+  assert.equal(failedExecution.waiting, 0);
 });
 
 test('Inbox Human copy distinguishes viewer action from transaction-wide status', () => {

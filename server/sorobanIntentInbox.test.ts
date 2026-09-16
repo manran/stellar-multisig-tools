@@ -20,11 +20,15 @@ import type {
   SorobanIntentStore,
   StoredSorobanIntent,
   StoredSorobanIntentAuthorizationContribution,
+  StoredSorobanIntentExecutionObservation,
+  StoredSorobanIntentExecutionPreparation,
 } from './sorobanIntentStore.js';
 
 class MemoryIntentStore implements SorobanIntentStore {
   values = new Map<string, StoredSorobanIntent>();
   contributions = new Map<string, StoredSorobanIntentAuthorizationContribution[]>();
+  preparations = new Map<string, StoredSorobanIntentExecutionPreparation[]>();
+  observations = new Map<string, StoredSorobanIntentExecutionObservation[]>();
   async createIntent(value: StoredSorobanIntent) { this.values.set(value.id, value); }
   async getIntent(id: string) { return this.values.get(id) ?? null; }
   async updateIntent(value: StoredSorobanIntent) { this.values.set(value.id, value); }
@@ -32,6 +36,17 @@ class MemoryIntentStore implements SorobanIntentStore {
   async listContributions(id: string) { return this.contributions.get(id) ?? []; }
   async putContribution(id: string, value: StoredSorobanIntentAuthorizationContribution) {
     this.contributions.set(id, [...(this.contributions.get(id) ?? []), value]);
+  }
+  async listExecutionPreparations(id: string) { return this.preparations.get(id) ?? []; }
+  async putExecutionPreparation(id: string, value: StoredSorobanIntentExecutionPreparation) {
+    this.preparations.set(id, [...(this.preparations.get(id) ?? []), value]);
+  }
+  async listExecutionObservations(id: string) { return this.observations.get(id) ?? []; }
+  async getExecutionObservation(id: string, hash: string) {
+    return (this.observations.get(id) ?? []).find((item) => item.transactionHash === hash) ?? null;
+  }
+  async putExecutionObservation(id: string, value: StoredSorobanIntentExecutionObservation) {
+    this.observations.set(id, [...(this.observations.get(id) ?? []), value]);
   }
 }
 
@@ -155,7 +170,31 @@ test('ready and blocked Intent states project to execution and attention actions
   }, Keypair.random().publicKey(), true), 'waiting_execution');
   assert.equal(projectSorobanIntentViewerAction({
     ...base,
+    status: 'authorization_ready',
+  }, Keypair.random().publicKey(), true, true), 'execution_failed');
+  assert.equal(projectSorobanIntentViewerAction({
+    ...base,
     status: 'blocked',
     statusDetail: 'unsupported',
   }, Keypair.random().publicKey()), 'attention');
+});
+
+test('confirmed external execution leaves the pending Inbox', async () => {
+  const f = await fixture();
+  const hash = 'ab'.repeat(32);
+  const preparation: StoredSorobanIntentExecutionPreparation = {
+    version: 1, transactionHash: hash, authorizationPlanDigest: f.stored.authorizationPlan.authorizationPlanDigest,
+    authorizationPlanRevision: 1, executionSource: f.creator.publicKey(), transactionSequence: '9',
+    validUntil: null, latestLedger: 101, effectsDigest: f.stored.authorizationPlan.effects.digest,
+    effectsAccepted: false, preparedAt: '2026-09-14T10:01:00.000Z',
+  };
+  f.store.preparations.set(f.stored.id, [preparation]);
+  f.store.observations.set(f.stored.id, [{
+    version: 1, transactionHash: hash, authorizationPlanDigest: preparation.authorizationPlanDigest,
+    authorizationPlanRevision: 1, executionSource: preparation.executionSource, ledger: 123, successful: true,
+    observedAt: '2026-09-14T10:02:00.000Z',
+  }]);
+
+  const confirmed = await listSorobanIntentInbox(f.store, f.creator.publicKey(), 'testnet', f.options);
+  assert.deepEqual(confirmed, []);
 });

@@ -43,7 +43,7 @@ test('page identity precedes Proposal workflow progress', () => {
 
 test('page identity precedes Soroban Intent workflow progress', () => {
   const headerIndex = intent.indexOf('<PageHeader');
-  const progressIndex = intent.indexOf('<WorkflowProgress current={sorobanIntentWorkflowStage(authorization.status)}');
+  const progressIndex = intent.indexOf('<WorkflowProgress current={workflowStage}');
   assert.ok(headerIndex >= 0);
   assert.ok(progressIndex > headerIndex);
   assert.match(intent, /title="Contract authorization"/);

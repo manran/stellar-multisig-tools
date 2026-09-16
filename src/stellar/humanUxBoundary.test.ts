@@ -118,6 +118,12 @@ test('Inbox and Dashboard surface source-free Soroban Intents in the same work q
   assert.match(intent, /Choose how the final transaction should be executed/);
   assert.match(intent, /Handle outside MultiSigTools/);
   assert.match(intent, /MultiSigTools coordinates/);
+  assert.match(intent, /setEvidence\(body\.evidence \?\? \[\]\)/);
+  assert.match(intent, /Check Stellar result/);
+  assert.match(intent, /action: 'reconcile_execution'/);
+  assert.match(intent, /Transaction confirmed/);
+  assert.match(intent, /Execution failed on Stellar/);
+  assert.match(intent, /confirmedExecution \? 'done'/);
   assert.match(routes, /path: '\/a', kind: 'authorization'/);
 });
 
@@ -151,6 +157,7 @@ test('external-service work keeps final execution out of signer UI', () => {
   assert.match(requestApi, /integration_submit_denied/);
   assert.match(intent, /intent\.executionPolicy\?\.mode === 'external'/);
   assert.match(intent, /is the external executor for this Intent/);
+  assert.match(intent, /Checking verifies the network directly; it does not submit anything/);
   assert.match(intentApi, /external_executor_required/);
   assert.match(intentApi, /assertIntegrationSorobanExecutionAccount/);
 });
