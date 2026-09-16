@@ -9,8 +9,11 @@ import {
   looksLikeAgentCredential,
 } from './agentCredentialService.js';
 import type { AgentCredentialStore, StoredSignerAgentCredential } from './agentCredentialStore.js';
+import { blobIntegrationCredentialStore } from './blobIntegrationCredentialStore.js';
+import { resolveRuntimeIntegrationCredential } from './integrationCredentialRegistry.js';
+import type { IntegrationCredentialStore } from './integrationCredentialStore.js';
 import {
-  authenticateIntegrationCredential,
+  authenticateIntegrationCredentialWithResolver,
   looksLikeIntegrationCredential,
   type ConfiguredIntegrationCredential,
 } from './integrationCredentialService.js';
@@ -41,11 +44,15 @@ function looksLikeHumanSessionToken(value: string): boolean {
 export async function machineCallerFromRequest(
   agentStore: AgentCredentialStore,
   request: Request,
+  integrationStore: IntegrationCredentialStore = blobIntegrationCredentialStore,
 ): Promise<MachineCaller | null> {
   const value = bearerTokenFromRequest(request);
   if (!value) return null;
   if (looksLikeIntegrationCredential(value)) {
-    return { kind: 'service', credential: authenticateIntegrationCredential(value) };
+    return { kind: 'service', credential: await authenticateIntegrationCredentialWithResolver(
+      value,
+      (serviceId) => resolveRuntimeIntegrationCredential(integrationStore, serviceId),
+    ) };
   }
   if (looksLikeAgentCredential(value)) {
     return { kind: 'agent', credential: await authenticateAgentCredential(agentStore, value) };

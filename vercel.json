@@ -22,6 +22,14 @@
       "source": "/(.*)",
       "has": [{ "type": "host", "value": "stellar-testnet.multisig.tools" }],
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+    },
+    {
+      "source": "/admin/integrations",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+    },
+    {
+      "source": "/stellar/admin/integrations",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
     }
   ],
   "redirects": [
@@ -62,6 +70,7 @@
     { "source": "/address-book/:path*", "destination": "/index.html" },
     { "source": "/agent-access", "destination": "/index.html" },
     { "source": "/agent-access/:path*", "destination": "/index.html" },
+    { "source": "/admin/integrations", "destination": "/index.html" },
     { "source": "/treasury", "destination": "/index.html" },
     { "source": "/treasury/:path*", "destination": "/index.html" },
     { "source": "/docs", "destination": "/index.html" },

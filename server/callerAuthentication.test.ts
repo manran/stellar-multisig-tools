@@ -5,6 +5,7 @@ import { createSignerAgentCredential } from './agentCredentialService.js';
 import type { AgentCredentialStore, StoredAgentIdempotencyClaim, StoredSignerAgentCredential } from './agentCredentialStore.js';
 import { CallerAuthenticationError, machineCallerFromRequest } from './callerAuthentication.js';
 import { createIntegrationApiKey } from './integrationCredentialService.js';
+import type { IntegrationCredentialStore, StoredIntegrationCredential } from './integrationCredentialStore.js';
 
 class MemoryAgentStore implements AgentCredentialStore {
   credentials = new Map<string, StoredSignerAgentCredential>();
@@ -14,6 +15,13 @@ class MemoryAgentStore implements AgentCredentialStore {
   async touchCredential() {}
   async claimIdempotency(claim: StoredAgentIdempotencyClaim) { return { claimed: true, claim }; }
   async releaseIdempotency() {}
+}
+
+class MemoryIntegrationStore implements IntegrationCredentialStore {
+  credentials = new Map<string, StoredIntegrationCredential>();
+  async getCredential(id: string) { return this.credentials.get(id) ?? null; }
+  async listCredentials() { return [...this.credentials.values()]; }
+  async putCredential(value: StoredIntegrationCredential) { this.credentials.set(value.credential.serviceId, value); }
 }
 
 function bearer(value: string) {
@@ -37,7 +45,8 @@ test('machine caller auth distinguishes signer Agent and independent Service cre
     classicExternalExecutionSourceAccounts: [], sorobanContracts: [], sorobanExecutionAccounts: [],
   }]);
   try {
-    const serviceCaller = await machineCallerFromRequest(store, bearer(service.apiKey));
+    const integrationStore = new MemoryIntegrationStore();
+    const serviceCaller = await machineCallerFromRequest(store, bearer(service.apiKey), integrationStore);
     assert.equal(serviceCaller?.kind, 'service');
     assert.equal(serviceCaller?.credential.serviceId, 'fednetwork');
   } finally {

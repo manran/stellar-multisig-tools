@@ -76,3 +76,13 @@ test('Testnet runtime is excluded from search indexing without changing Mainnet 
   assert.ok(header);
   assert.deepEqual(header.headers, [{ key: 'X-Robots-Tag', value: 'noindex' }]);
 });
+
+
+test('Integration administration stays a network runtime route and is never indexed', () => {
+  assert.ok(spaSources.some((source) => covers(source, '/admin/integrations')));
+  assert.equal((config.redirects ?? []).some((item) => item.source === '/admin/integrations'), false);
+  for (const source of ['/admin/integrations', '/stellar/admin/integrations']) {
+    const header = (config.headers ?? []).find((item) => item.source === source);
+    assert.deepEqual(header?.headers, [{ key: 'X-Robots-Tag', value: 'noindex' }], source);
+  }
+});

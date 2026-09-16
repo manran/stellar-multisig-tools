@@ -69,7 +69,7 @@ function normalizeContracts(value: unknown): ConfiguredIntegrationContractScope[
     .map(([contractId, methods]) => ({ contractId, methods: [...methods].sort() }));
 }
 
-function normalizeConfiguredCredential(value: unknown): ConfiguredIntegrationCredential {
+export function normalizeConfiguredIntegrationCredential(value: unknown): ConfiguredIntegrationCredential {
   if (!value || typeof value !== 'object') configError();
   const record = value as Record<string, unknown>;
   const serviceId = typeof record.serviceId === 'string' ? record.serviceId.trim().toLowerCase() : '';
@@ -113,7 +113,7 @@ export function configuredIntegrationCredentials(
   let parsed: unknown;
   try { parsed = JSON.parse(raw); } catch { configError(); }
   if (!Array.isArray(parsed)) configError();
-  const credentials = parsed.map(normalizeConfiguredCredential);
+  const credentials = parsed.map(normalizeConfiguredIntegrationCredential);
   if (new Set(credentials.map((item) => item.serviceId)).size !== credentials.length) {
     configError('Integration credential service ids must be unique.');
   }
@@ -157,6 +157,21 @@ export function authenticateIntegrationCredential(
 ): ConfiguredIntegrationCredential {
   const { serviceId, apiKey } = credentialParts(value);
   const credential = configured.find((item) => item.serviceId === serviceId);
+  if (!credential) throw new IntegrationCredentialServiceError('Invalid Integration credential.', 401, 'invalid_integration_credential');
+  const expected = Buffer.from(credential.secretHash, 'hex');
+  const actual = Buffer.from(sha256(apiKey), 'hex');
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+    throw new IntegrationCredentialServiceError('Invalid Integration credential.', 401, 'invalid_integration_credential');
+  }
+  return credential;
+}
+
+export async function authenticateIntegrationCredentialWithResolver(
+  value: string,
+  resolve: (serviceId: string) => Promise<ConfiguredIntegrationCredential | null>,
+): Promise<ConfiguredIntegrationCredential> {
+  const { serviceId, apiKey } = credentialParts(value);
+  const credential = await resolve(serviceId);
   if (!credential) throw new IntegrationCredentialServiceError('Invalid Integration credential.', 401, 'invalid_integration_credential');
   const expected = Buffer.from(credential.secretHash, 'hex');
   const actual = Buffer.from(sha256(apiKey), 'hex');

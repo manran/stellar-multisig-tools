@@ -41,6 +41,7 @@ const expectedCanonicalPaths = [
   '/developers',
   '/privacy',
   '/terms',
+  '/admin/integrations',
 ];
 
 test('Stellar workspace hosts include both Mainnet and Testnet deployments', () => {
@@ -121,7 +122,7 @@ test('content routes are separate from network-bound runtime routes', () => {
   for (const path of ['/demo', '/docs', '/docs/automation', '/developers', '/privacy', '/terms']) {
     assert.equal(isCanonicalStellarContentPath(path), true, path);
   }
-  for (const path of ['/', '/inbox', '/new', '/treasury', '/contracts', '/activity', '/s', '/a']) {
+  for (const path of ['/', '/inbox', '/new', '/treasury', '/contracts', '/activity', '/s', '/a', '/admin/integrations']) {
     assert.equal(isCanonicalStellarContentPath(path), false, path);
   }
 });

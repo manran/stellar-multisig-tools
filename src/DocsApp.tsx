@@ -529,6 +529,7 @@ function AutomationPage() {
         <CodeBlock>{createRequestExample}</CodeBlock>
         <CodeBlock>{servicePaymentRequestExample}</CodeBlock>
         <p className="text-sm leading-6 text-neutral-600 dark:text-neutral-300">A signer Agent credential is bound to one signer Principal and network. An Integration Service is instead bounded by configured business scope such as Classic source accounts; that scope never supplies a Stellar signature.</p>
+        <p className="text-sm leading-6 text-neutral-600 dark:text-neutral-300">Integration credentials are provisioned by a MultiSig Tools operator, not by the Service itself. The operator sets exact network/account/contract/executor scope and gives the Service its one-time <code>msi_...</code> credential; later scope changes, disable, and key rotation remain operator-controlled.</p>
       </section>
 
       <section className="space-y-5">

@@ -254,6 +254,14 @@ Creation stores no transaction sequence, fee, lifetime, or envelope. Recording s
 `SOURCE_ACCOUNT` authorization is rejected with `source_account_auth_unsupported`: it would bind Soroban authorization to the transaction source and defeat source-late execution. Contracts/integrations used with Intent coordination must expose detached address authorization.
 
 
+### Integration Service provisioning
+
+Integration Service credentials are operator-provisioned, not self-service. The controlled runtime surface is `/admin/integrations`; it is intentionally absent from ordinary product navigation and requires a separate deployment operator secret (`mia_...`). Generate that secret once with `npm run integration:admin-secret` and configure only its SHA-256 verifier as `MULTISIG_INTEGRATION_ADMIN_SECRET_HASH`. The plaintext operator secret is never stored by the application.
+
+The admin surface creates or rotates `msi_...` credentials, enables/disables a Service, and edits network, Classic-account, Soroban contract/method, executor allowlist, and default-executor scope. A new or rotated `msi_...` value is returned once; durable storage retains only its verifier hash. `MULTISIG_INTEGRATION_CREDENTIALS_JSON` remains a bootstrap source. A durable record with the same `serviceId` overrides bootstrap configuration, including an explicit disabled state. Configuring `MULTISIG_INTEGRATION_ADMIN_SECRET_HASH` enables the durable registry contract for that deployment; from that point, durable credential storage must be readable and Service authentication fails closed rather than reviving bootstrap credentials. Deployments that have not enabled Integration administration keep the legacy env-only bootstrap path.
+
+Deployment-owned planning sources and MultiSigTools managed executors remain outside Service administration. They are infrastructure configuration, not Service-grantable authority.
+
 ### Integration Service executor shortcut
 
 An Integration Service may tell MultiSig Tools its executor before AUTH collection, without constructing the final transaction early. Executor resolution is deterministic:

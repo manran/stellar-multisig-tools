@@ -12,6 +12,7 @@ import { ContractWorkspaceProvider } from './ContractWorkspaceContext';
 import DemoTreasuryApp from './DemoTreasuryApp';
 import DocsApp from './DocsApp';
 import InboxEntryApp from './InboxEntryApp';
+import IntegrationAdminApp from './IntegrationAdminApp';
 import LegalApp from './LegalApp';
 import MultisigDesignerApp from './MultisigDesignerApp';
 import NewTransactionApp from './NewTransactionApp';
@@ -71,6 +72,7 @@ function titleFor(kind: RouteKind) {
     case 'designer': return 'Change account signing | MultiSig Tools';
     case 'docs': return 'Docs | MultiSig Tools';
     case 'legal': return 'Legal | MultiSig Tools';
+    case 'integration-admin': return 'Integration administration | MultiSig Tools';
     default: return 'MultiSig Tools - The Ultimate Directory for Multi-Signature Solutions';
   }
 }
@@ -174,6 +176,7 @@ function RoutedApp() {
     case 'designer': Component = MultisigDesignerApp; break;
     case 'docs': Component = DocsApp; break;
     case 'legal': Component = LegalApp; break;
+    case 'integration-admin': Component = IntegrationAdminApp; break;
     default: Component = InboxEntryApp;
   }
 

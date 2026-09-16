@@ -11,6 +11,7 @@ type Parsed = {
   externalClassicSourceAccounts: string[];
   contracts: Array<{ contractId: string; methods: string[] }>;
   executors: string[];
+  defaultExecutor: string;
 };
 
 function usage(): never {
@@ -22,9 +23,10 @@ function usage(): never {
     [--classic-source-account G...] \\
     [--classic-external-source-account G...] \\
     [--contract C...:transfer,other_method] \\
-    [--executor G...]
+    [--executor G...] \
+    [--default-executor G...]
 
-Repeat --network, --classic-source-account, --classic-external-source-account, --contract, or --executor as needed.`);
+Repeat --network, --classic-source-account, --classic-external-source-account, --contract, or --executor as needed. --default-executor may be supplied once and is automatically included in the executor allowlist.`);
   process.exit(2);
 }
 
@@ -36,7 +38,7 @@ function nextValue(args: string[], index: number): string {
 
 function parseArgs(args: string[]): Parsed {
   const parsed: Parsed = {
-    serviceId: '', label: '', networks: [], classicSourceAccounts: [], externalClassicSourceAccounts: [], contracts: [], executors: [],
+    serviceId: '', label: '', networks: [], classicSourceAccounts: [], externalClassicSourceAccounts: [], contracts: [], executors: [], defaultExecutor: '',
   };
   for (let index = 0; index < args.length; index += 2) {
     const flag = args[index];
@@ -50,6 +52,7 @@ function parseArgs(args: string[]): Parsed {
       parsed.externalClassicSourceAccounts.push(value);
     }
     else if (flag === '--executor') parsed.executors.push(value);
+    else if (flag === '--default-executor') { parsed.defaultExecutor = value; parsed.executors.push(value); }
     else if (flag === '--contract') {
       const separator = value.indexOf(':');
       if (separator < 1) usage();
@@ -74,6 +77,7 @@ const entry = {
   classicExternalExecutionSourceAccounts: input.externalClassicSourceAccounts,
   sorobanContracts: input.contracts,
   sorobanExecutionAccounts: input.executors,
+  ...(input.defaultExecutor ? { sorobanDefaultExecutor: input.defaultExecutor } : {}),
 };
 const [normalized] = configuredIntegrationCredentials(JSON.stringify([entry]));
 
