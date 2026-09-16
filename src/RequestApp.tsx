@@ -864,6 +864,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                 <div className="mt-5 space-y-6 border-t border-black/10 pt-5 dark:border-white/10">
                   <div className="rounded-xl bg-black/[0.035] p-4 text-xs dark:bg-white/[0.04]">
                     <div><span className="font-semibold">Request id:</span> <span className="break-all font-mono">{displayRequestId(snapshot.id)}</span></div>
+                    {snapshot.sorobanOrigin && <div className="mt-2"><span className="font-semibold">Soroban origin:</span> Intent <span className="font-mono">{displayRequestId(snapshot.sorobanOrigin.intentId)}</span> · plan revision {snapshot.sorobanOrigin.authorizationPlanRevision} · prepared {new Date(snapshot.sorobanOrigin.executionPreparedAt).toLocaleString()}</div>}
                     <div className="mt-2">Created {new Date(snapshot.createdAt).toLocaleString()} · signing closes {new Date(snapshot.expiresAt).toLocaleString()}</div>
                     <div className="mt-2">{snapshot.contributionCount} contribution{snapshot.contributionCount === 1 ? '' : 's'} · {snapshot.signatureCount} signature{snapshot.signatureCount === 1 ? '' : 's'}</div>
                     <div className="mt-2 break-all font-mono opacity-60">{snapshot.transactionHash}</div>

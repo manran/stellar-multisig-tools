@@ -609,6 +609,14 @@ test('compact product semantics fixes Human vocabulary and identity hierarchy', 
   assert.match(productSemantics, /multiple source accounts controlled by independent entities/);
 });
 
+test('verified Soroban Proposal origin stays Human audit context rather than portable evidence identity', () => {
+  assert.match(requestUi, /snapshot\.sorobanOrigin/);
+  assert.match(requestUi, /Soroban origin:/);
+  assert.match(transactionReceipt, /snapshot\.sorobanOrigin/);
+  assert.match(transactionReceipt, /plan revision/);
+  assert.doesNotMatch(portableEvidenceProjection, /sorobanOrigin/);
+});
+
 test('portable evidence is a separate projection that cannot consume Human metadata', () => {
   assert.match(transactionReceipt, /buildPortableEvidenceRecord\(\{ snapshot, activity, inspection, sourceAnalyses \}\)/);
   assert.match(stellarCss, /transaction-evidence-human-document/);

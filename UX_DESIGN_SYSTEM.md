@@ -280,3 +280,7 @@ The visual direction is a precise digital-asset control surface, not a collectio
 - The printable **Portable Evidence** document is a separate renderer and projection, not print CSS applied to the Human Receipt.
 - The Human Receipt DOM is excluded wholesale from print. Portable Evidence receives only exact Stellar identities and canonical/audit facts; it has no Human-name or private-context fields.
 - `/receipt` is canonical pre-beta. The old `/transaction-details` route is retired rather than retained as an alias.
+
+### Soroban Proposal origin context
+
+A server-verified Soroban `sorobanOrigin` is Human audit context, not a new workflow step or authority source. Proposal and Transaction Receipt may show the Intent id / plan revision / preparation time in Advanced details. Do not make it a mandatory navigation link because an execution-account signer may not have Intent read authority. Do not copy it into default Portable Evidence.
