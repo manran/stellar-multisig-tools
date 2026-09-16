@@ -24,7 +24,7 @@ import { StellarWalletProvider } from './StellarWalletContext';
 import TreasuryApp from './TreasuryApp';
 import TreasuryBoxSettingsApp from './TreasuryBoxSettingsApp';
 import TransactionReceiptApp from './TransactionReceiptApp';
-import { canonicalStellarContentLocationForLocation, navigateWorkspace, WORKSPACE_NAVIGATION_EVENT } from './workspaceNavigation';
+import { canonicalStellarContentLocationForLocation, canonicalStellarRuntimeLocationForLocation, navigateWorkspace, WORKSPACE_NAVIGATION_EVENT } from './workspaceNavigation';
 import { fixedClientStellarDeploymentNetwork } from './stellar/deploymentNetwork';
 import { isCanonicalStellarContentPath, isStellarWorkspaceHost, stellarWorkspaceRouteForPath } from './workspaceRoutes';
 import type { StellarWorkspaceRouteKind } from './workspaceRoutes';
@@ -190,6 +190,9 @@ function RoutedApp() {
     </StellarWalletProvider>
   );
 }
+
+const canonicalRuntimeLocation = canonicalStellarRuntimeLocationForLocation(window.location.href);
+if (canonicalRuntimeLocation) window.history.replaceState(window.history.state, '', canonicalRuntimeLocation);
 
 const savedTheme = localStorage.getItem('theme');
 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;

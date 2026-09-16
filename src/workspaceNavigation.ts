@@ -1,5 +1,5 @@
 import { STELLAR_MAINNET_ORIGIN } from './stellar/deploymentOrigins.js';
-import { normalizedStellarWorkspacePath } from './workspaceRoutes.js';
+import { isStellarWorkspaceHost, normalizedStellarWorkspacePath } from './workspaceRoutes.js';
 
 export const WORKSPACE_NAVIGATION_EVENT = 'multisig-tools:workspace-navigate';
 
@@ -18,7 +18,7 @@ export function canonicalStellarPath(path: string) {
 
 export function stellarHrefForLocation(path: string, currentHref: string) {
   const url = new URL(currentHref);
-  const prefix = url.hostname.startsWith('stellar.') ? '' : '/stellar';
+  const prefix = isStellarWorkspaceHost(url.hostname) ? '' : '/stellar';
   const publicPath = canonicalStellarPath(path);
   url.pathname = `${prefix}${publicPath}` || '/';
   url.search = '';
@@ -28,6 +28,14 @@ export function stellarHrefForLocation(path: string, currentHref: string) {
 
 export function stellarHref(path: string) {
   return stellarHrefForLocation(path, window.location.href);
+}
+
+export function canonicalStellarRuntimeLocationForLocation(currentHref: string) {
+  const current = new URL(currentHref);
+  if (!isStellarWorkspaceHost(current.hostname)) return null;
+  if (current.pathname !== '/stellar' && !current.pathname.startsWith('/stellar/')) return null;
+  current.pathname = normalizedStellarWorkspacePath(current.pathname);
+  return current.toString();
 }
 
 export function canonicalStellarContentHref(path: string) {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canonicalStellarContentHref, canonicalStellarContentLocationForLocation, canonicalStellarPath, stellarHrefForLocation, stellarHrefWithSearchForLocation } from '../workspaceNavigation.js';
+import { canonicalStellarContentHref, canonicalStellarContentLocationForLocation, canonicalStellarPath, canonicalStellarRuntimeLocationForLocation, stellarHrefForLocation, stellarHrefWithSearchForLocation } from '../workspaceNavigation.js';
 
 test('internal route aliases canonicalize without becoming public route aliases', () => {
   assert.equal(canonicalStellarPath('/accounts'), '/treasury');
@@ -18,6 +18,25 @@ test('stellar subdomain hrefs use canonical paths without a /stellar prefix', ()
   assert.equal(
     stellarHrefForLocation('/designer', 'https://stellar.multisig.tools/inbox'),
     'https://stellar.multisig.tools/treasury/change-signing',
+  );
+  assert.equal(
+    stellarHrefForLocation('/contracts', 'https://stellar-testnet.multisig.tools/inbox'),
+    'https://stellar-testnet.multisig.tools/contracts',
+  );
+});
+
+test('stellar runtime hosts canonicalize legacy /stellar URLs at startup', () => {
+  assert.equal(
+    canonicalStellarRuntimeLocationForLocation('https://stellar-testnet.multisig.tools/stellar/contracts?from=old#saved'),
+    'https://stellar-testnet.multisig.tools/contracts?from=old#saved',
+  );
+  assert.equal(
+    canonicalStellarRuntimeLocationForLocation('https://stellar.multisig.tools/stellar/inbox'),
+    'https://stellar.multisig.tools/inbox',
+  );
+  assert.equal(
+    canonicalStellarRuntimeLocationForLocation('https://multisig.tools/stellar/contracts'),
+    null,
   );
 });
 
