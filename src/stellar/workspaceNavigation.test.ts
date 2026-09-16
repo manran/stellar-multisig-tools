@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canonicalStellarPath, stellarHrefForLocation, stellarHrefWithSearchForLocation } from '../workspaceNavigation.js';
+import { canonicalStellarContentHref, canonicalStellarContentLocationForLocation, canonicalStellarPath, stellarHrefForLocation, stellarHrefWithSearchForLocation } from '../workspaceNavigation.js';
 
 test('internal route aliases canonicalize without becoming public route aliases', () => {
   assert.equal(canonicalStellarPath('/accounts'), '/treasury');
@@ -41,4 +41,19 @@ test('query-safe Stellar href keeps search parameters out of the pathname', () =
   );
   assert.equal(href, 'https://stellar.multisig.tools/receipt?request=ABCD1234&account=GTEST&network=testnet');
   assert.equal(href.includes('%3F'), false);
+});
+
+test('canonical content always resolves to the Mainnet content origin', () => {
+  assert.equal(
+    canonicalStellarContentHref('/docs'),
+    'https://stellar.multisig.tools/docs',
+  );
+  assert.equal(
+    canonicalStellarContentLocationForLocation('https://stellar-testnet.multisig.tools/docs/automation?from=testnet#permissions'),
+    'https://stellar.multisig.tools/docs/automation?from=testnet#permissions',
+  );
+  assert.equal(
+    canonicalStellarContentLocationForLocation('https://multisig.tools/stellar/privacy'),
+    'https://stellar.multisig.tools/privacy',
+  );
 });

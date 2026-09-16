@@ -15,6 +15,7 @@ import StellarFooter from './StellarFooter';
 import StellarHeader from './StellarHeader';
 import { MAX_ACTIVE_SIGNER_AGENT_CREDENTIALS } from './stellar/agentAccessTypes';
 import { MAX_ACTIVE_TREASURY_AUDIT_KEYS } from './stellar/boxTypes';
+import { STELLAR_MAINNET_ORIGIN, STELLAR_TESTNET_ORIGIN } from './stellar/deploymentOrigins';
 import {
   DOCS_AUTOMATION_PATH,
   DOCS_HOME_PATH,
@@ -24,7 +25,7 @@ import {
 } from './stellar/docsModel';
 import { stellarHref } from './workspaceNavigation';
 
-const createRequestExample = `curl -X POST https://stellar.multisig.tools/api/request \\
+const createRequestExample = `curl -X POST ${STELLAR_MAINNET_ORIGIN}/api/request \\
   -H "Authorization: Bearer $MULTISIG_AGENT_KEY" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: payment-run-20260901-42" \\
@@ -35,7 +36,7 @@ const createRequestExample = `curl -X POST https://stellar.multisig.tools/api/re
     "privateNote": "Prepared by the payment service."
   }'`;
 
-const servicePaymentRequestExample = `curl -X POST https://stellar.multisig.tools/api/request \
+const servicePaymentRequestExample = `curl -X POST ${STELLAR_MAINNET_ORIGIN}/api/request \
   -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: payroll-20260915-42" \
@@ -52,13 +53,13 @@ const servicePaymentRequestExample = `curl -X POST https://stellar.multisig.tool
     "externalReference": "payroll-20260915-42"
   }'`;
 
-const statusExample = `curl "https://stellar.multisig.tools/api/request" \\
+const statusExample = `curl "${STELLAR_MAINNET_ORIGIN}/api/request" \\
   -H "Authorization: Bearer $MULTISIG_AGENT_KEY" \\
   -H "x-multisig-request-id: 0123456789ABCDEF"`;
 
-const contractInterfaceExample = `curl "https://stellar.multisig.tools/api/contract-interface?network=testnet&contract=C..."`;
+const contractInterfaceExample = `curl "${STELLAR_TESTNET_ORIGIN}/api/contract-interface?network=testnet&contract=C..."`;
 
-const contractCallExample = `curl -X POST https://stellar.multisig.tools/api/contract-call \\
+const contractCallExample = `curl -X POST ${STELLAR_TESTNET_ORIGIN}/api/contract-call \\
   -H "Content-Type: application/json" \\
   -d '{
     "network": "testnet",
@@ -69,11 +70,11 @@ const contractCallExample = `curl -X POST https://stellar.multisig.tools/api/con
     "lifetimeSeconds": 3600
   }'`;
 
-const contractPrepareExample = `curl -X POST https://stellar.multisig.tools/api/contract-prepare \\
+const contractPrepareExample = `curl -X POST ${STELLAR_TESTNET_ORIGIN}/api/contract-prepare \\
   -H "Content-Type: application/json" \\
   -d '{"network":"testnet","xdr":"AAAA..."}'`;
 
-const intentCreateExample = `curl -X POST https://stellar.multisig.tools/api/intent \\
+const intentCreateExample = `curl -X POST ${STELLAR_TESTNET_ORIGIN}/api/intent \\
   -H "Authorization: Bearer $MULTISIG_AGENT_KEY" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: fresnica-intent-42" \\
@@ -482,6 +483,7 @@ function AutomationPage() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Compose Headless operations</h2>
           <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Start from the deployment origin: its standard <code>service-desc</code> link resolves to <code>/openapi.json</code>, while <code>GET /api/operations</code> lists the stable business operations and their OpenAPI path/method pointers. The Web UI, CLI, Agent, bot, and script clients consume the same versioned contract operations; transport adapters do not own separate transaction semantics.</p>
+          <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">The runtime origin is network-bound: <code>{STELLAR_MAINNET_ORIGIN}</code> is Mainnet and <code>{STELLAR_TESTNET_ORIGIN}</code> is Testnet. Documentation is shared, but API calls must use the origin that owns the selected network.</p>
         </div>
         <CodeBlock>{contractInterfaceExample}</CodeBlock>
         <CodeBlock>{contractCallExample}</CodeBlock>

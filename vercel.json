@@ -17,7 +17,20 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "X-Frame-Options", "value": "DENY" }
       ]
+    },
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "stellar-testnet.multisig.tools" }],
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
     }
+  ],
+  "redirects": [
+    { "source": "/demo", "has": [{ "type": "host", "value": "stellar-testnet.multisig.tools" }], "destination": "https://stellar.multisig.tools/demo", "permanent": true },
+    { "source": "/docs", "has": [{ "type": "host", "value": "stellar-testnet.multisig.tools" }], "destination": "https://stellar.multisig.tools/docs", "permanent": true },
+    { "source": "/docs/:path*", "has": [{ "type": "host", "value": "stellar-testnet.multisig.tools" }], "destination": "https://stellar.multisig.tools/docs/:path*", "permanent": true },
+    { "source": "/developers", "has": [{ "type": "host", "value": "stellar-testnet.multisig.tools" }], "destination": "https://stellar.multisig.tools/developers", "permanent": true },
+    { "source": "/privacy", "has": [{ "type": "host", "value": "stellar-testnet.multisig.tools" }], "destination": "https://stellar.multisig.tools/privacy", "permanent": true },
+    { "source": "/terms", "has": [{ "type": "host", "value": "stellar-testnet.multisig.tools" }], "destination": "https://stellar.multisig.tools/terms", "permanent": true }
   ],
   "rewrites": [
     { "source": "/.well-known/stellar.toml", "destination": "/api/stellar-toml" },

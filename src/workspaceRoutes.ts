@@ -75,6 +75,16 @@ export function normalizedStellarWorkspacePath(pathname: string) {
   return path || '/';
 }
 
+export function isCanonicalStellarContentPath(pathname: string) {
+  const path = normalizedStellarWorkspacePath(pathname);
+  return path === '/demo'
+    || path === '/docs'
+    || path.startsWith('/docs/')
+    || path === '/developers'
+    || path === '/privacy'
+    || path === '/terms';
+}
+
 export function stellarWorkspaceRouteForPath(pathname: string): StellarWorkspaceRoute | null {
   const path = normalizedStellarWorkspacePath(pathname);
   const exact = CANONICAL_STELLAR_ROUTES.find((route) => route.path === path);

@@ -145,6 +145,8 @@ Shared state colors:
 
 Network ownership follows the work, not a page-local toggle. Mainnet is implicit in ordinary Human chrome; Testnet is exceptional and visible. A Proposal/transaction network is authoritative once known. Only unresolved import/offline boundaries may offer a Human fallback choice, with the connected wallet network as the default when available.
 
+Content ownership is deliberately different from runtime ownership. Mainnet and Testnet keep separate fixed-network App runtimes, but product content is canonical on the Mainnet site. Testnet does not duplicate Docs, Developers, Privacy, Terms, the interactive demo, or the full marketing landing; those content routes resolve to the canonical Mainnet origin while Testnet `/` remains a compact entry into the Testnet workspace. This separation must not be implemented as an in-app network switch.
+
 Color is supplemental; state text and icons remain required.
 
 ## 7. Mobile is approval-first

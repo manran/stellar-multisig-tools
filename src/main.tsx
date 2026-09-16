@@ -23,8 +23,9 @@ import { StellarWalletProvider } from './StellarWalletContext';
 import TreasuryApp from './TreasuryApp';
 import TreasuryBoxSettingsApp from './TreasuryBoxSettingsApp';
 import TransactionReceiptApp from './TransactionReceiptApp';
-import { navigateWorkspace, WORKSPACE_NAVIGATION_EVENT } from './workspaceNavigation';
-import { isStellarWorkspaceHost, stellarWorkspaceRouteForPath } from './workspaceRoutes';
+import { canonicalStellarContentLocationForLocation, navigateWorkspace, WORKSPACE_NAVIGATION_EVENT } from './workspaceNavigation';
+import { fixedClientStellarDeploymentNetwork } from './stellar/deploymentNetwork';
+import { isCanonicalStellarContentPath, isStellarWorkspaceHost, stellarWorkspaceRouteForPath } from './workspaceRoutes';
 import type { StellarWorkspaceRouteKind } from './workspaceRoutes';
 
 const App = lazy(() => import('./App.tsx'));
@@ -82,6 +83,10 @@ function RoutedApp() {
   const [locationKey, setLocationKey] = useState(currentLocationKey);
   const [, setNavigationRevision] = useState(0);
   const route = routeFor(window.location.pathname);
+  const canonicalContentRedirect = fixedClientStellarDeploymentNetwork() === 'testnet'
+    && isCanonicalStellarContentPath(window.location.pathname)
+    ? canonicalStellarContentLocationForLocation(window.location.href)
+    : null;
 
   useEffect(() => {
     const syncLocation = () => {
@@ -120,6 +125,11 @@ function RoutedApp() {
   }, []);
 
   useEffect(() => {
+    if (!canonicalContentRedirect) return;
+    window.location.replace(canonicalContentRedirect);
+  }, [canonicalContentRedirect, locationKey]);
+
+  useEffect(() => {
     document.documentElement.classList.toggle('stellar-ui', route.isStellar);
     document.title = titleFor(route.kind);
   }, [locationKey, route.isStellar, route.kind]);
@@ -128,6 +138,8 @@ function RoutedApp() {
     if (route.redirectTo === undefined) return;
     navigateWorkspace(route.redirectTo, { replace: true });
   }, [locationKey, route.redirectTo]);
+
+  if (canonicalContentRedirect) return null;
 
   if (!route.isStellar) {
     return (

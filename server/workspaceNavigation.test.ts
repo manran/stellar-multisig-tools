@@ -3,6 +3,7 @@ import test from 'node:test';
 import { canonicalStellarPath } from '../src/workspaceNavigation.js';
 import {
   CANONICAL_STELLAR_ROUTES,
+  isCanonicalStellarContentPath,
   isStellarWorkspaceHost,
   stellarActivityScopeForPath,
   stellarWorkspaceRouteForPath,
@@ -114,4 +115,13 @@ test('internal call-site aliases generate canonical URLs without becoming public
   assert.equal(canonicalStellarPath('/treasury'), '/treasury');
   assert.equal(canonicalStellarPath('/docs'), '/docs');
   assert.equal(canonicalStellarPath('/developers'), '/developers');
+});
+
+test('content routes are separate from network-bound runtime routes', () => {
+  for (const path of ['/demo', '/docs', '/docs/automation', '/developers', '/privacy', '/terms']) {
+    assert.equal(isCanonicalStellarContentPath(path), true, path);
+  }
+  for (const path of ['/', '/inbox', '/new', '/treasury', '/contracts', '/activity', '/s', '/a']) {
+    assert.equal(isCanonicalStellarContentPath(path), false, path);
+  }
 });

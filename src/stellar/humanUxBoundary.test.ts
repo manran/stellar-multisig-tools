@@ -87,7 +87,8 @@ test('connected home switches to an actionable Dashboard without a first-use cho
   const home = source('../StellarHomeApp.tsx');
   const main = source('../main.tsx');
   const dashboard = source('../StellarDashboardApp.tsx');
-  assert.match(home, /sessionAddress \? <StellarDashboardApp \/> : <StellarLandingApp \/>/);
+  assert.match(home, /if \(sessionAddress\) return <StellarDashboardApp \/>/);
+  assert.match(home, /fixedClientStellarDeploymentNetwork\(\) === 'testnet' \? <StellarTestnetLandingApp \/> : <StellarLandingApp \/>/);
   assert.match(main, /case 'home': Component = StellarHomeApp/);
   assert.match(dashboard, /requests\?: InboxRequestSnapshot\[\]/);
   assert.match(dashboard, /inboxViewerActionNeedsAction/);
@@ -185,4 +186,24 @@ test('active Human surfaces do not let legacy workspace mode choose navigation o
   assert.match(landing, /const workspaceHref = stellarHref\(''\)/);
   assert.match(landing, /Open workspace/);
   assert.match(review, /postFreezeReturnTarget = requestReturnTarget\(\) \?\? \{ href: stellarHref\(''\), label: 'Back to Home' \}/);
+});
+
+
+test('Testnet is a network-bound runtime rather than a duplicate content site', () => {
+  const main = source('../main.tsx');
+  const footer = source('../StellarFooter.tsx');
+  const testnetLanding = source('../StellarTestnetLandingApp.tsx');
+  const docs = source('../DocsApp.tsx');
+
+  assert.match(main, /fixedClientStellarDeploymentNetwork\(\) === 'testnet'/);
+  assert.match(main, /isCanonicalStellarContentPath\(window\.location\.pathname\)/);
+  assert.match(main, /window\.location\.replace\(canonicalContentRedirect\)/);
+  assert.match(testnetLanding, /Testnet runtime/);
+  assert.match(testnetLanding, /Network stays fixed/);
+  assert.match(testnetLanding, /Product content lives once/);
+  assert.match(testnetLanding, /canonicalStellarContentHref\('\/docs'\)/);
+  assert.match(footer, /isCanonicalStellarContentPath\(path\) \? canonicalStellarContentHref\(path\) : stellarHref\(path\)/);
+  assert.match(docs, /\$\{STELLAR_MAINNET_ORIGIN\}\/api\/request/);
+  assert.match(docs, /\$\{STELLAR_TESTNET_ORIGIN\}\/api\/contract-interface\?network=testnet/);
+  assert.doesNotMatch(docs, /https:\/\/stellar\.multisig\.tools\/api\/contract-interface\?network=testnet/);
 });

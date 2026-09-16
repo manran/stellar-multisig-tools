@@ -174,6 +174,10 @@ A future export that deliberately includes private Human context must be a separ
 
 ## 6. Navigation, session preference, and history access
 
+- **Product content has one canonical origin.** Documentation, Developers, Privacy, Terms, and the interactive demo live at `https://stellar.multisig.tools`; the Testnet deployment redirects those routes there instead of maintaining a second content site.
+- **App runtime remains network-bound.** `stellar.multisig.tools` owns Mainnet runtime state and `stellar-testnet.multisig.tools` owns Testnet runtime state. Testnet `/` is a compact runtime landing, not a copy of the Mainnet marketing site. There is no ordinary in-app Mainnet/Testnet toggle because Proposal/Intent/Treasury/Activity/session/credential state must not silently cross deployments.
+- Shared documentation may describe both runtime origins. API examples must send `network=public` to the Mainnet origin and `network=testnet` to the Testnet origin.
+
 - Creating a Proposal with a verified private session may bind the creator to retained Activity immediately. That known access fact should survive the Review -> Proposal transition without waiting for a redundant reload.
 - Active capability access and retained historical access are different. A private link alone must not silently become permanent historical authorization. `RequestParticipant` is retained relationship evidence, never a substitute for current Stellar signer authority or another active collaboration credential.
 - **Save to Activity** is an explicit retained-history action while a Proposal is active. It requires a verified current signer, records the retained participant relationship, and grants no additional signing/submission authority. Merely opening an active Proposal with a current signer session does not create this relationship.

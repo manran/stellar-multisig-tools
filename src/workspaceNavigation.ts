@@ -1,3 +1,6 @@
+import { STELLAR_MAINNET_ORIGIN } from './stellar/deploymentOrigins.js';
+import { normalizedStellarWorkspacePath } from './workspaceRoutes.js';
+
 export const WORKSPACE_NAVIGATION_EVENT = 'multisig-tools:workspace-navigate';
 
 const WORKSPACE_DOCUMENT_STATE_KEY = '__multisigToolsDocumentId';
@@ -25,6 +28,21 @@ export function stellarHrefForLocation(path: string, currentHref: string) {
 
 export function stellarHref(path: string) {
   return stellarHrefForLocation(path, window.location.href);
+}
+
+export function canonicalStellarContentHref(path: string) {
+  const url = new URL(STELLAR_MAINNET_ORIGIN);
+  url.pathname = canonicalStellarPath(path) || '/';
+  return url.toString();
+}
+
+export function canonicalStellarContentLocationForLocation(currentHref: string) {
+  const current = new URL(currentHref);
+  const canonical = new URL(STELLAR_MAINNET_ORIGIN);
+  canonical.pathname = normalizedStellarWorkspacePath(current.pathname);
+  canonical.search = current.search;
+  canonical.hash = current.hash;
+  return canonical.toString();
 }
 
 export function stellarHrefWithSearchForLocation(

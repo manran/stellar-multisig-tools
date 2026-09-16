@@ -1,6 +1,7 @@
 import { Mail } from 'lucide-react';
 import MultiSigBrandMark from './MultiSigBrandMark';
-import { stellarHref } from './workspaceNavigation';
+import { canonicalStellarContentHref, stellarHref } from './workspaceNavigation';
+import { isCanonicalStellarContentPath } from './workspaceRoutes';
 
 interface Props {
   workspace?: boolean;
@@ -34,6 +35,10 @@ const FOOTER_GROUPS = [
 
 const linkClass = 'transition hover:text-emerald-700 dark:hover:text-emerald-300';
 
+function footerHref(path: string) {
+  return isCanonicalStellarContentPath(path) ? canonicalStellarContentHref(path) : stellarHref(path);
+}
+
 function SupportLink({ compact = false }: { compact?: boolean }) {
   return (
     <a
@@ -58,9 +63,9 @@ export default function StellarFooter({ workspace = false }: Props) {
               <div className="text-sm"><span className="font-bold text-neutral-800 dark:text-neutral-100">MultiSig Tools</span><span className="ml-2 text-xs">Beta · non-custodial</span></div>
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-semibold">
-              <a href={stellarHref('/docs')} className={linkClass}>Docs</a>
-              <a href={stellarHref('/privacy')} className={linkClass}>Privacy</a>
-              <a href={stellarHref('/terms')} className={linkClass}>Terms</a>
+              <a href={canonicalStellarContentHref('/docs')} className={linkClass}>Docs</a>
+              <a href={canonicalStellarContentHref('/privacy')} className={linkClass}>Privacy</a>
+              <a href={canonicalStellarContentHref('/terms')} className={linkClass}>Terms</a>
               <SupportLink compact />
             </div>
           </div>
@@ -87,7 +92,7 @@ export default function StellarFooter({ workspace = false }: Props) {
             <div key={group.label}>
               <div className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-400">{group.label}</div>
               <div className="mt-4 flex flex-col items-start gap-3 text-sm font-semibold">
-                {group.links.map(([label, path]) => <a key={path} href={stellarHref(path)} className={linkClass}>{label}</a>)}
+                {group.links.map(([label, path]) => <a key={path} href={footerHref(path)} className={linkClass}>{label}</a>)}
               </div>
             </div>
           ))}
