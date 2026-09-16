@@ -100,6 +100,14 @@ function guidedInput(type: ScSpecTypeDef): Pick<ContractInputDescriptor, 'kind' 
       return { kind: 'bytes' };
     case 'scSpecTypeBytesN':
       return { kind: 'bytesN', bytesLength: type.value.n };
+    case 'scSpecTypeOption':
+      if (type.value.valueType.type === 'scSpecTypeAddress' || type.value.valueType.type === 'scSpecTypeMuxedAddress') {
+        return { kind: 'address' };
+      }
+      return {
+        kind: 'unsupported',
+        unsupportedReason: `${contractTypeLabel(type)} is visible from the contract spec but is not yet available in the guided composer. Import exact XDR for this method instead.`,
+      };
     default:
       return {
         kind: 'unsupported',
@@ -185,6 +193,12 @@ function parseGuidedValue(type: ScSpecTypeDef, rawValue: string): unknown {
       return parseHexBytes(rawValue);
     case 'scSpecTypeBytesN':
       return parseHexBytes(rawValue, type.value.n);
+    case 'scSpecTypeOption':
+      if (type.value.valueType.type !== 'scSpecTypeAddress' && type.value.valueType.type !== 'scSpecTypeMuxedAddress') {
+        throw new Error(`${contractTypeLabel(type)} is not supported by the guided composer yet.`);
+      }
+      if (!value) return null;
+      return parseGuidedValue(type.value.valueType, rawValue);
     default:
       throw new Error(`${contractTypeLabel(type)} is not supported by the guided composer yet.`);
   }

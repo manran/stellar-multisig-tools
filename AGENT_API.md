@@ -247,6 +247,8 @@ Example semantic creation:
 }
 ```
 
+For guided `Option<Address>` / `Option<MuxedAddress>` inputs, omit the argument (or send an empty string from a form client) to encode `None`; send a normal Stellar address string to encode `Some(address)`. Other complex optional types remain outside the guided composer until explicitly supported.
+
 GET inspection returns the current Intent/authorization state plus a persisted evidence timeline for creation provenance, accepted AUTH contributions, AuthorizationPlan revisions, execution preparations, and independently observed Stellar results. The timeline contains contribution digests and signer/Agent provenance where recorded, but not raw signature/XDR payloads. `execution_confirmed` or `execution_failed` appears only after MultiSigTools reconciles a persisted preparation hash against Horizon; it never attributes an external submitter that MultiSigTools did not observe.
 
 Creation stores no transaction sequence, fee, lifetime, or envelope. Recording simulation discovers an immutable detached AuthorizationPlan. Each PATCH contribution is cryptographically verified against the Agent Principal and current live signer policy. When authorization becomes `authorization_ready`, PUT loads a fresh sequence, materializes the transaction, and runs enforcing simulation before returning the final unsigned execution package. For an externally submitted prepared transaction, call PUT again with `{"action":"reconcile_execution","transactionHash":"..."}`. The hash must already exist in durable preparation evidence; a Horizon 404 returns `observed=false` and writes no result fact.

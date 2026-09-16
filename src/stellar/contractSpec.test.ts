@@ -33,7 +33,7 @@ function specWith(...functions: xdr.ScSpecEntry[]) {
   return new Spec(functions);
 }
 
-test('contract spec describes BytesN exactly and keeps unsupported complex inputs visible', () => {
+test('contract spec describes BytesN and optional Address inputs as guided types', () => {
   const bytes32 = xdr.ScSpecTypeDef.scSpecTypeBytesN(new xdr.ScSpecTypeBytesN({ n: 32 }));
   const optionalAddress = xdr.ScSpecTypeDef.scSpecTypeOption(new xdr.ScSpecTypeOption({
     valueType: xdr.ScSpecTypeDef.scSpecTypeAddress(),
@@ -53,7 +53,7 @@ test('contract spec describes BytesN exactly and keeps unsupported complex input
     types: method.inputs.map((item) => item.typeLabel),
   })), [
     { name: 'update', guided: true, types: ['BytesN<32>'] },
-    { name: 'maybe_admin', guided: false, types: ['Option<Address>'] },
+    { name: 'maybe_admin', guided: true, types: ['Option<Address>'] },
   ]);
 });
 
@@ -81,6 +81,25 @@ test('guided arguments encode against the exact contract spec instead of guessin
   assert.equal(args[1]?.type, 'scvAddress');
   assert.equal(scValToNative(args[2]!), 42n);
   assert.equal(scValToNative(args[3]!), true);
+});
+
+test('guided Option<Address> encodes omitted value as None and address as Some', () => {
+  const owner = Keypair.random().publicKey();
+  const optionalAddress = xdr.ScSpecTypeDef.scSpecTypeOption(new xdr.ScSpecTypeOption({
+    valueType: xdr.ScSpecTypeDef.scSpecTypeAddress(),
+  }));
+  const spec = specWith(fn('transfer', [
+    input('name', xdr.ScSpecTypeDef.scSpecTypeString()),
+    input('target', optionalAddress),
+  ]));
+
+  const noneArgs = contractArgumentsToScVals(spec, 'transfer', { name: 'eno' });
+  assert.equal(noneArgs[1]?.type, 'scvVoid');
+  assert.equal(scValToNative(noneArgs[1]!), null);
+
+  const someArgs = contractArgumentsToScVals(spec, 'transfer', { name: 'eno', target: owner });
+  assert.equal(someArgs[1]?.type, 'scvAddress');
+  assert.equal(scValToNative(someArgs[1]!), owner);
 });
 
 test('BytesN validation fails before a malformed contract transaction can reach Review', () => {
