@@ -115,8 +115,8 @@ test('final Soroban broadcast remains bound to reviewed effects in both direct a
 
 test('external Soroban execution result is independently reconciled from persisted preparation evidence', () => {
   const reconcileBranch = intentApi.indexOf("body.action === 'reconcile_execution'");
-  const externalExecutorGuard = intentApi.indexOf('externalIntegration && !access.integrationCredential');
-  assert.ok(reconcileBranch >= 0 && externalExecutorGuard > reconcileBranch);
+  const integrationExecutionGuard = intentApi.indexOf('integrationOwnedExecution && !access.integrationCredential');
+  assert.ok(reconcileBranch >= 0 && integrationExecutionGuard > reconcileBranch);
   assert.match(intentReconciliationService, /listExecutionPreparations/);
   assert.match(intentReconciliationService, /loadTransactionByHash/);
   assert.match(intentReconciliationService, /putExecutionObservation/);

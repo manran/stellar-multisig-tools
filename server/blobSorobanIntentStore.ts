@@ -1,5 +1,6 @@
 import { get, list, put } from '@vercel/blob';
 import { withBlobStorage } from './blobRequestStore.js';
+import type { SorobanExecutionPolicy } from '../src/stellar/executionPolicy.js';
 import type { StellarNetwork } from '../src/stellar/types.js';
 import { isValidSigningRequestId } from './requestLocator.js';
 import type {
@@ -20,6 +21,10 @@ function signerPrefix(network: StellarNetwork, address: string): string {
 
 function signerPath(network: StellarNetwork, address: string, id: string): string {
   return `${signerPrefix(network, address)}${id}.json`;
+}
+
+function executionBindingPath(id: string): string {
+  return `intents/${id}/execution-binding.json`;
 }
 
 function contributionPrefix(id: string): string {
@@ -47,6 +52,11 @@ function executionObservationPath(id: string, transactionHash: string): string {
   return `${executionObservationPrefix(id)}${transactionHash}.json`;
 }
 
+interface StoredExecutionPolicyBinding {
+  version: 1;
+  executionPolicy: SorobanExecutionPolicy;
+}
+
 async function readJson<T>(pathname: string): Promise<T | null> {
   return withBlobStorage(async () => {
     const result = await get(pathname, { access: 'private', useCache: false });
@@ -55,6 +65,13 @@ async function readJson<T>(pathname: string): Promise<T | null> {
   });
 }
 
+
+async function readIntent(id: string): Promise<StoredSorobanIntent | null> {
+  const stored = await readJson<StoredSorobanIntent>(intentPath(id));
+  if (!stored || stored.executionPolicy?.executor) return stored;
+  const binding = await readJson<StoredExecutionPolicyBinding>(executionBindingPath(id));
+  return binding ? { ...stored, executionPolicy: binding.executionPolicy } : stored;
+}
 
 async function intentIdsForSigner(network: StellarNetwork, address: string): Promise<string[]> {
   return withBlobStorage(async () => {
@@ -92,7 +109,7 @@ export const blobSorobanIntentStore: SorobanIntentStore = {
     });
   },
   getIntent(id) {
-    return readJson<StoredSorobanIntent>(intentPath(id));
+    return readIntent(id);
   },
 
   async updateIntent(value) {
@@ -112,9 +129,32 @@ export const blobSorobanIntentStore: SorobanIntentStore = {
     });
   },
 
+  async bindExecutionPolicy(id, executionPolicy) {
+    const pathname = executionBindingPath(id);
+    const binding: StoredExecutionPolicyBinding = { version: 1, executionPolicy };
+    try {
+      await withBlobStorage(async () => {
+        await put(pathname, JSON.stringify(binding), {
+          access: 'private',
+          addRandomSuffix: false,
+          allowOverwrite: false,
+          contentType: 'application/json',
+          cacheControlMaxAge: 60,
+        });
+      });
+    } catch (cause) {
+      const existing = await readJson<StoredExecutionPolicyBinding>(pathname);
+      if (!existing) throw cause;
+      return existing.executionPolicy;
+    }
+    const current = await readJson<StoredSorobanIntent>(intentPath(id));
+    if (current) await blobSorobanIntentStore.updateIntent({ ...current, executionPolicy });
+    return executionPolicy;
+  },
+
   async listIntentsBySigner(network, signerAddress) {
     const ids = await intentIdsForSigner(network, signerAddress);
-    const records = await Promise.all(ids.map((id) => readJson<StoredSorobanIntent>(intentPath(id))));
+    const records = await Promise.all(ids.map((id) => readIntent(id)));
     return records.filter((record): record is StoredSorobanIntent => Boolean(record));
   },
 

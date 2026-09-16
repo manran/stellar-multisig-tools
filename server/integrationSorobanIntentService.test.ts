@@ -14,7 +14,7 @@ import { materializeSorobanIntent } from '../src/stellar/sorobanIntent.js';
 import { emptySorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
 import type { StellarAccountSnapshot } from '../src/stellar/types.js';
 import type { ConfiguredIntegrationCredential } from './integrationCredentialService.js';
-import { assertIntegrationSorobanExecutionAccount, createIntegrationSorobanIntent } from './integrationSorobanIntentService.js';
+import { assertIntegrationSorobanExecutionAccount, createIntegrationSorobanIntent, resolveAndBindIntegrationSorobanExecutor } from './integrationSorobanIntentService.js';
 import { getSorobanIntentAuthorization } from './sorobanIntentAuthorizationService.js';
 import { listSorobanIntentInbox } from './sorobanIntentInbox.js';
 import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';
@@ -29,6 +29,14 @@ class MemoryIntentStore implements SorobanIntentStore {
   }
   async getIntent(id: string) { return this.values.get(id) ?? null; }
   async updateIntent(value: StoredSorobanIntent) { this.values.set(value.id, value); }
+  async bindExecutionPolicy(id: string, executionPolicy: StoredSorobanIntent['executionPolicy']) {
+    if (!executionPolicy) throw new Error('execution policy required');
+    const current = this.values.get(id);
+    if (!current) throw new Error('intent not found');
+    if (current.executionPolicy?.executor) return current.executionPolicy;
+    this.values.set(id, { ...current, executionPolicy });
+    return executionPolicy;
+  }
   async listIntentsBySigner(network: 'public' | 'testnet', signerAddress: string) {
     return [...this.values.values()].filter((value) => value.network === network && value.discoverySignerKeys.includes(signerAddress));
   }
@@ -197,4 +205,163 @@ test('Integration Intent is idempotent and exact contract/method scope fails clo
     () => createIntegrationSorobanIntent(new MemoryIntentStore(), denied, f.input, f.options),
     (cause: unknown) => cause instanceof Error && 'code' in cause && cause.code === 'integration_contract_call_not_allowed',
   );
+});
+
+test('Integration executor precedence is Intent override, then snapshotted Service default, then managed fallback', async () => {
+  const f = await fixture();
+  const defaultExecutor = f.executor.publicKey();
+  const overrideExecutor = Keypair.random().publicKey();
+  const scoped = {
+    ...f.credential,
+    sorobanExecutionAccounts: [defaultExecutor, overrideExecutor],
+    sorobanDefaultExecutor: defaultExecutor,
+  };
+
+  const withOverride = await createIntegrationSorobanIntent(
+    new MemoryIntentStore(),
+    scoped,
+    { ...f.input, idempotencyKey: 'executor-override', executor: overrideExecutor },
+    { ...f.options, intentIdFactory: () => 'A'.repeat(16) },
+  );
+  assert.deepEqual(withOverride.intent.executionPolicy, {
+    mode: 'external',
+    executor: { address: overrideExecutor, source: 'intent' },
+  });
+
+  const withDefault = await createIntegrationSorobanIntent(
+    new MemoryIntentStore(),
+    scoped,
+    { ...f.input, idempotencyKey: 'executor-default' },
+    { ...f.options, intentIdFactory: () => 'B'.repeat(16) },
+  );
+  assert.deepEqual(withDefault.intent.executionPolicy, {
+    mode: 'external',
+    executor: { address: defaultExecutor, source: 'service_default' },
+  });
+
+  const unresolved = await createIntegrationSorobanIntent(
+    new MemoryIntentStore(),
+    { ...f.credential, sorobanExecutionAccounts: [], sorobanDefaultExecutor: undefined },
+    { ...f.input, idempotencyKey: 'executor-unresolved' },
+    { ...f.options, intentIdFactory: () => 'C'.repeat(16) },
+  );
+  assert.deepEqual(unresolved.intent.executionPolicy, {
+    mode: 'external', fallback: 'multisigtools_managed',
+  });
+});
+
+test('Integration binds a late Service executor once and refresh cannot replace it', async () => {
+  const f = await fixture();
+  const store = new MemoryIntentStore();
+  const secondExecutor = Keypair.random().publicKey();
+  const credential = {
+    ...f.credential,
+    sorobanExecutionAccounts: [f.executor.publicKey(), secondExecutor],
+  };
+  const created = await createIntegrationSorobanIntent(
+    store,
+    credential,
+    { ...f.input, idempotencyKey: 'late-executor' },
+    { ...f.options, intentIdFactory: () => 'D'.repeat(16) },
+  );
+  const bound = await resolveAndBindIntegrationSorobanExecutor(
+    store,
+    created.intent,
+    credential,
+    f.executor.publicKey(),
+    null,
+  );
+  assert.deepEqual(bound.executor, { address: f.executor.publicKey(), source: 'service_prepare' });
+  assert.deepEqual((await store.getIntent(created.intent.id))?.executionPolicy, {
+    mode: 'external', executor: bound.executor,
+  });
+
+  await assert.rejects(
+    () => resolveAndBindIntegrationSorobanExecutor(store, bound.intent, credential, secondExecutor, null),
+    (cause: unknown) => cause instanceof Error && 'code' in cause && cause.code === 'intent_executor_locked',
+  );
+});
+
+test('Integration without a Service executor binds the configured MultiSigTools managed executor', async () => {
+  const f = await fixture();
+  const store = new MemoryIntentStore();
+  const managedExecutor = Keypair.random().publicKey();
+  const credential = { ...f.credential, sorobanExecutionAccounts: [] };
+  const created = await createIntegrationSorobanIntent(
+    store,
+    credential,
+    { ...f.input, idempotencyKey: 'managed-executor' },
+    { ...f.options, intentIdFactory: () => 'E'.repeat(16) },
+  );
+  const bound = await resolveAndBindIntegrationSorobanExecutor(
+    store,
+    created.intent,
+    credential,
+    undefined,
+    managedExecutor,
+  );
+  assert.deepEqual(bound.executor, { address: managedExecutor, source: 'multisigtools_managed' });
+  assert.deepEqual((await store.getIntent(created.intent.id))?.executionPolicy, {
+    mode: 'multisigtools', executor: bound.executor,
+  });
+});
+
+
+test('Integration idempotent replay keeps the executor snapshotted when the Service default later changes', async () => {
+  const f = await fixture();
+  const store = new MemoryIntentStore();
+  const originalDefault = f.executor.publicKey();
+  const laterDefault = Keypair.random().publicKey();
+  const originalCredential = {
+    ...f.credential,
+    sorobanExecutionAccounts: [originalDefault, laterDefault],
+    sorobanDefaultExecutor: originalDefault,
+  };
+  const first = await createIntegrationSorobanIntent(
+    store,
+    originalCredential,
+    { ...f.input, idempotencyKey: 'default-snapshot' },
+    { ...f.options, intentIdFactory: () => 'F'.repeat(16) },
+  );
+  assert.deepEqual(first.intent.executionPolicy?.executor, {
+    address: originalDefault,
+    source: 'service_default',
+  });
+
+  const replay = await createIntegrationSorobanIntent(
+    store,
+    { ...originalCredential, sorobanDefaultExecutor: laterDefault },
+    { ...f.input, idempotencyKey: 'default-snapshot' },
+    { ...f.options, intentIdFactory: () => 'F'.repeat(16) },
+  );
+  assert.equal(replay.replayed, true);
+  assert.deepEqual(replay.intent.executionPolicy?.executor, {
+    address: originalDefault,
+    source: 'service_default',
+  });
+});
+
+
+test('concurrent late executor binding has one durable winner', async () => {
+  const f = await fixture();
+  const store = new MemoryIntentStore();
+  const executorA = f.executor.publicKey();
+  const executorB = Keypair.random().publicKey();
+  const credential = { ...f.credential, sorobanExecutionAccounts: [executorA, executorB] };
+  const created = await createIntegrationSorobanIntent(
+    store,
+    credential,
+    { ...f.input, idempotencyKey: 'executor-race' },
+    { ...f.options, intentIdFactory: () => 'G'.repeat(16) },
+  );
+
+  const results = await Promise.allSettled([
+    resolveAndBindIntegrationSorobanExecutor(store, created.intent, credential, executorA, null),
+    resolveAndBindIntegrationSorobanExecutor(store, created.intent, credential, executorB, null),
+  ]);
+  assert.equal(results.filter((item) => item.status === 'fulfilled').length, 1);
+  const rejected = results.find((item): item is PromiseRejectedResult => item.status === 'rejected');
+  assert.ok(rejected?.reason instanceof Error && 'code' in rejected.reason && rejected.reason.code === 'intent_executor_locked');
+  const winner = (await store.getIntent(created.intent.id))?.executionPolicy?.executor?.address;
+  assert.ok(winner === executorA || winner === executorB);
 });

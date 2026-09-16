@@ -72,6 +72,9 @@ These are routing intentions, not authority. After materialization, MultiSigTool
 
 A fixed external-Service policy may narrow routing to `external_service`. Signers then authorize only; they cannot seize final execution from the owning business system.
 
+
+For Service-owned Intent work, the executor can be disclosed early without constructing the transaction early. The durable precedence is `Intent executor > snapshotted Service default > unresolved`. Unresolved recording simulation may use the deployment planning source, but planning and execution remain separate facts. At Ready, an unresolved Service may bind a scoped executor or fall back to configured MultiSigTools managed execution. Once bound, refresh keeps the same executor while rebuilding sequence/timebounds/resources and re-running enforcing simulation. Managed execution is a routing/ownership fact, not an implication that the planning source, Service credential, or AUTH contributors can sign the managed executor's envelope.
+
 Classic exact-transaction work reaches the same execution-routing boundary after envelope authorization, but its available routes are simpler because the transaction already exists:
 
 ```text

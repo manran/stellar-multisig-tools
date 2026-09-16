@@ -58,7 +58,7 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
   },
   {
     id: 'integration.intent.execution.prepare', version: 1, method: 'PUT', path: '/api/intent',
-    access: 'integration:write', effect: 'none', summary: 'Prepare an externally executed Soroban transaction only from an Integration-scoped execution account and unchanged reviewed effects.',
+    access: 'integration:write', effect: 'none', summary: 'Resolve the Integration executor, enforce reviewed effects, and prepare or refresh the final unsigned Soroban execution package.',
   },
   {
     id: 'contract.intent.execution.reconcile', version: 1, method: 'PUT', path: '/api/intent',

@@ -47,6 +47,7 @@ export interface SorobanIntentExecutionPreparation {
   network: 'public' | 'testnet';
   intentDigest: string;
   authorizationPlanDigest: string;
+  authorizationPlanRevision: number;
   executionSource: string;
   transactionSequence: string;
   transactionHash: string;
@@ -55,6 +56,7 @@ export interface SorobanIntentExecutionPreparation {
   effectsDiff: SorobanEffectsDiff;
   effects: SorobanEffectsSnapshot;
   effectsAccepted: boolean;
+  preparedAt: string;
   xdr: string;
 }
 
@@ -163,12 +165,14 @@ export async function prepareSorobanIntentExecution(
   if (prepared instanceof FeeBumpTransaction || prepared.source !== source.accountId) {
     throw new SorobanIntentExecutionServiceError('Prepared execution changed its transaction source.', 503, 'intent_execution_unavailable');
   }
+  const preparedAt = (options.now ?? new Date()).toISOString();
   const result: SorobanIntentExecutionPreparation = {
     version: 1,
     intentId: stored.id,
     network: stored.network,
     intentDigest: stored.intent.intentDigest,
     authorizationPlanDigest: stored.authorizationPlan.authorizationPlanDigest,
+    authorizationPlanRevision: stored.authorizationPlanRevision ?? 1,
     executionSource: source.accountId,
     transactionSequence: prepared.sequence,
     transactionHash: Buffer.from(prepared.hash()).toString('hex'),
@@ -177,6 +181,7 @@ export async function prepareSorobanIntentExecution(
     effectsDiff,
     effects: enforced.effects,
     effectsAccepted,
+    preparedAt,
     xdr: enforced.assembledXdr,
   };
   if (!store.putExecutionPreparation) {
@@ -190,14 +195,14 @@ export async function prepareSorobanIntentExecution(
     version: 1,
     transactionHash: result.transactionHash,
     authorizationPlanDigest: result.authorizationPlanDigest,
-    authorizationPlanRevision: stored.authorizationPlanRevision ?? 1,
+    authorizationPlanRevision: result.authorizationPlanRevision,
     executionSource: result.executionSource,
     transactionSequence: result.transactionSequence,
     validUntil: result.validUntil,
     latestLedger: result.latestLedger,
     effectsDigest: result.effects.digest,
     effectsAccepted: result.effectsAccepted,
-    preparedAt: (options.now ?? new Date()).toISOString(),
+    preparedAt: result.preparedAt,
     ...(options.preparedByAddress ? { preparedByAddress: options.preparedByAddress } : {}),
     ...(options.preparedBy ? { preparedBy: options.preparedBy } : {}),
   };

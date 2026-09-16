@@ -4,7 +4,7 @@ import type { SorobanIntent } from './sorobanIntent.js';
 import type { SorobanEffectsDiff, SorobanEffectsSnapshot } from './sorobanEffects.js';
 import type { MachineCallerProvenance } from './coordinationActorTypes.js';
 import type { SorobanIntentIntegrationContext } from './integrationTypes.js';
-import type { ExecutionPolicy } from './executionPolicy.js';
+import type { SorobanExecutionPolicy, SorobanExecutorBinding } from './executionPolicy.js';
 import type { PrivateNoteRevision } from './privateNote.js';
 import type { StellarNetwork } from './types.js';
 
@@ -24,7 +24,7 @@ export interface StoredSorobanIntentSnapshot {
   creatorAddress?: string;
   creatorActor?: MachineCallerProvenance;
   integration?: SorobanIntentIntegrationContext;
-  executionPolicy?: ExecutionPolicy;
+  executionPolicy?: SorobanExecutionPolicy;
   privateContext?: {
     externalReference?: string;
     initialPrivateNote?: PrivateNoteRevision;
@@ -139,6 +139,8 @@ export interface SorobanIntentExecutionResponse {
     network: StellarNetwork;
     intentDigest: string;
     authorizationPlanDigest: string;
+    authorizationPlanRevision: number;
+    executor?: SorobanExecutorBinding;
     executionSource: string;
     transactionSequence: string;
     transactionHash: string;
@@ -147,6 +149,7 @@ export interface SorobanIntentExecutionResponse {
     effectsDiff: SorobanEffectsDiff;
     effects: SorobanEffectsSnapshot;
     effectsAccepted: boolean;
+    preparedAt: string;
     xdr: string;
   };
 }

@@ -12,8 +12,8 @@ import {
   integrationCallerForCredential,
 } from '../server/integrationCredentialService.js';
 import {
-  assertIntegrationSorobanExecutionAccount,
   createIntegrationSorobanIntent,
+  resolveAndBindIntegrationSorobanExecutor,
 } from '../server/integrationSorobanIntentService.js';
 import { BoxServiceError } from '../server/boxService.js';
 import { CallerAuthenticationError, machineCallerFromRequest, verifiedSignerSessionFromRequest } from '../server/callerAuthentication.js';
@@ -28,7 +28,7 @@ import { noStoreJson, publicCorsHeaders } from '../server/httpResponse.js';
 import { projectSorobanIntentEvidence } from '../server/sorobanIntentEvidence.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
-import { configuredSorobanPlanningSource } from '../server/sorobanIntentConfig.js';
+import { configuredSorobanManagedExecutor, configuredSorobanPlanningSource } from '../server/sorobanIntentConfig.js';
 import { SorobanIntentPlanningError } from '../server/sorobanIntentPlanningService.js';
 import { SorobanIntentServiceError } from '../server/sorobanIntentService.js';
 import { replanExpiredSorobanIntent, SorobanIntentReplanServiceError } from '../server/sorobanIntentReplanService.js';
@@ -187,6 +187,19 @@ export async function GET(request: Request): Promise<Response> {
   }
 }
 
+function executorFromBody(body: Record<string, unknown>): unknown {
+  const executor = body.executor;
+  const legacy = body.executionSource;
+  if (executor !== undefined && legacy !== undefined && executor !== legacy) {
+    throw new BoxServiceError(
+      'Provide executor or legacy executionSource, not two different executor addresses.',
+      400,
+      'conflicting_execution_account',
+    );
+  }
+  return executor ?? legacy;
+}
+
 export async function POST(request: Request): Promise<Response> {
   try {
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
@@ -198,6 +211,13 @@ export async function POST(request: Request): Promise<Response> {
     const machineCaller = await machineCallerFromRequest(blobAgentCredentialStore, request);
     const integrationCredential = machineCaller?.kind === 'service' ? machineCaller.credential : null;
     const agent = machineCaller?.kind === 'agent' ? machineCaller.credential : null;
+    if (!integrationCredential && body.executor !== undefined) {
+      throw new ContractIntentServiceError(
+        'Executor selection at Intent creation is available only to Integration Services.',
+        400,
+        'executor_integration_only',
+      );
+    }
     if (body.preparedXdr !== undefined) {
       if (integrationCredential) {
         throw new BoxServiceError(
@@ -275,6 +295,7 @@ export async function POST(request: Request): Promise<Response> {
           arguments: body.arguments,
           idempotencyKey,
           externalReference: body.externalReference,
+          executor: body.executor,
         },
         { planningSource: configuredSorobanPlanningSource(network) },
       );
@@ -425,10 +446,10 @@ export async function PUT(request: Request): Promise<Response> {
         ...(result.observation ? { observation: result.observation } : {}),
       });
     }
-    const externalIntegration = access.stored.executionPolicy?.mode === 'external';
-    if (externalIntegration && !access.integrationCredential) {
+    const integrationOwnedExecution = Boolean(access.stored.integration);
+    if (integrationOwnedExecution && !access.integrationCredential) {
       throw new SorobanIntentExecutionServiceError(
-        'This Soroban Intent is owned by an external Integration executor. Signers authorize it in MultiSigTools but cannot prepare or execute it here.',
+        'This Soroban Intent has Integration-owned execution. Signers authorize it in MultiSigTools but cannot prepare, refresh, or replace its executor.',
         409,
         'external_executor_required',
       );
@@ -461,16 +482,38 @@ export async function PUT(request: Request): Promise<Response> {
         authorizationPlanRevision: result.authorizationPlanRevision,
       });
     }
-    const executionSource = typeof body.executionSource === 'string' ? body.executionSource : '';
-    if (access.integrationCredential) {
-      assertIntegrationSorobanExecutionAccount(
-        access.integrationCredential,
-        access.stored.network,
-        executionSource,
+    if (body.action !== undefined && body.action !== 'prepare_execution' && body.action !== 'refresh_execution') {
+      throw new SorobanIntentExecutionServiceError(
+        'Unsupported Soroban Intent execution action.',
+        400,
+        'invalid_intent_execution_action',
       );
+    }
+    const requestedExecutor = executorFromBody(body);
+    let executionSource = typeof requestedExecutor === 'string' ? requestedExecutor.trim() : '';
+    let executorBinding;
+    if (access.integrationCredential) {
+      if (access.authorization.status !== 'authorization_ready') {
+        throw new SorobanIntentExecutionServiceError(
+          'Soroban Intent authorization is not ready for execution.',
+          409,
+          'intent_authorization_not_ready',
+        );
+      }
+      const resolved = await resolveAndBindIntegrationSorobanExecutor(
+        blobSorobanIntentStore,
+        access.stored,
+        access.integrationCredential,
+        requestedExecutor,
+        access.stored.executionPolicy?.executor || requestedExecutor !== undefined
+          ? null
+          : configuredSorobanManagedExecutor(access.stored.network),
+      );
+      executionSource = resolved.executor.address;
+      executorBinding = resolved.executor;
       if (body.acceptedEffectsDigest !== undefined) {
         throw new SorobanIntentExecutionServiceError(
-          'External Integration execution cannot accept changed effects on behalf of signers. Refresh the AuthorizationPlan and collect fresh AUTH.',
+          'Integration execution cannot accept changed effects on behalf of signers. Refresh the AuthorizationPlan and collect fresh AUTH.',
           409,
           'intent_execution_effects_reauthorization_required',
         );
@@ -520,7 +563,7 @@ export async function PUT(request: Request): Promise<Response> {
     return json({
       operation: 'contract.intent.execution.prepare',
       version: 1,
-      execution,
+      execution: { ...execution, ...(executorBinding ? { executor: executorBinding } : {}) },
     });
   } catch (cause) {
     return errorResponse(cause);

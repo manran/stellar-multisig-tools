@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
+import { Keypair } from '@stellar/stellar-sdk/base';
 import {
   authenticateIntegrationCredential,
   configuredIntegrationCredentials,
@@ -87,4 +88,23 @@ test('deployment operator can generate a one-time msi credential and retain only
   const scoped = { ...configured[0], secretHash: generated.secretHash };
   assert.equal(authenticateIntegrationCredential(generated.apiKey, [scoped]).serviceId, 'fednetwork');
   assert.equal(generated.secretHash, sha256(generated.apiKey));
+});
+
+test('Soroban default executor must be inside the Service execution allowlist', () => {
+  const defaultExecutor = configured[0].sorobanExecutionAccounts[0];
+  const parsed = configuredIntegrationCredentials(JSON.stringify([{
+    ...configured[0],
+    sorobanDefaultExecutor: defaultExecutor,
+  }]));
+  assert.equal(parsed[0]?.sorobanDefaultExecutor, defaultExecutor);
+
+  assert.throws(
+    () => configuredIntegrationCredentials(JSON.stringify([{
+      ...configured[0],
+      sorobanDefaultExecutor: Keypair.random().publicKey(),
+    }])),
+    (cause: unknown) => cause instanceof IntegrationCredentialServiceError
+      && cause.code === 'integration_credential_config_invalid'
+      && /default executor/.test(cause.message),
+  );
 });

@@ -167,11 +167,15 @@ test('external-service work keeps final execution out of signer UI', () => {
   assert.match(request, /MultiSigTools will not broadcast this transaction/);
   assert.match(requestApi, /external_executor_required/);
   assert.match(requestApi, /integration_submit_denied/);
-  assert.match(intent, /intent\.executionPolicy\?\.mode === 'external'/);
-  assert.match(intent, /is the external executor for this Intent/);
+  assert.match(intent, /Boolean\(intent\.integration\)/);
+  assert.match(intent, /authorization\.status === 'authorization_ready' && !intent\.integration/);
+  assert.match(intent, /owns final execution for this Intent/);
+  assert.match(intent, /Executor account/);
+  assert.match(intent, /The executor account is not bound yet/);
   assert.match(intent, /Checking verifies the network directly; it does not submit anything/);
   assert.match(intentApi, /external_executor_required/);
-  assert.match(intentApi, /assertIntegrationSorobanExecutionAccount/);
+  assert.match(intentApi, /resolveAndBindIntegrationSorobanExecutor/);
+  assert.match(intentApi, /configuredSorobanManagedExecutor/);
 });
 
 test('active Human surfaces do not let legacy workspace mode choose navigation or Activity scope', () => {
@@ -206,4 +210,8 @@ test('Testnet is a network-bound runtime rather than a duplicate content site', 
   assert.match(docs, /\$\{STELLAR_MAINNET_ORIGIN\}\/api\/request/);
   assert.match(docs, /\$\{STELLAR_TESTNET_ORIGIN\}\/api\/contract-interface\?network=testnet/);
   assert.doesNotMatch(docs, /https:\/\/stellar\.multisig\.tools\/api\/contract-interface\?network=testnet/);
+  assert.match(docs, /Integration Service executor shortcut/);
+  assert.match(docs, /prepare_execution/);
+  assert.match(docs, /refresh_execution/);
+  assert.match(docs, /serviceIntentCreateExample/);
 });

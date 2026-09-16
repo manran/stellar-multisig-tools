@@ -179,6 +179,22 @@ test('ready and blocked Intent states project to execution and attention actions
   }, Keypair.random().publicKey()), 'attention');
 });
 
+test('Integration-owned managed execution stays waiting for the Service instead of routing execution to the signer', async () => {
+  const f = await fixture();
+  await f.store.updateIntent({
+    ...f.stored,
+    integration: { version: 1, serviceId: 'fednetwork', serviceLabel: 'FedNetwork' },
+    executionPolicy: {
+      mode: 'multisigtools',
+      executor: { address: f.creator.publicKey(), source: 'multisigtools_managed' },
+    },
+    authorizationPlan: { ...f.stored.authorizationPlan, authorizationEntriesXdr: [] },
+  });
+  const items = await listSorobanIntentInbox(f.store, f.creator.publicKey(), 'testnet', f.options);
+  assert.equal(items[0]?.status, 'authorization_ready');
+  assert.equal(items[0]?.viewerAction, 'waiting_execution');
+});
+
 test('confirmed external execution leaves the pending Inbox', async () => {
   const f = await fixture();
   const hash = 'ab'.repeat(32);

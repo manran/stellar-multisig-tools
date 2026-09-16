@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { isValidStellarAccountId } from '../src/stellar/horizon.js';
+import type { SorobanExecutorBinding, SorobanExecutionPolicy } from '../src/stellar/executionPolicy.js';
 import type { StellarNetwork } from '../src/stellar/types.js';
 import { buildContractIntent } from './contractIntentService.js';
 import type { ConfiguredIntegrationCredential } from './integrationCredentialService.js';
@@ -76,17 +78,46 @@ export function assertIntegrationSorobanExecutionAccount(
   }
 }
 
+function optionalExecutor(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const executor = typeof value === 'string' ? value.trim() : '';
+  if (!isValidStellarAccountId(executor)) {
+    throw new BoxServiceError('Executor must be a valid Stellar G... account.', 400, 'invalid_execution_account');
+  }
+  return executor;
+}
+
+export function integrationSorobanExecutionPolicyForCreation(
+  credential: ConfiguredIntegrationCredential,
+  network: StellarNetwork,
+  requestedExecutor: unknown,
+): SorobanExecutionPolicy {
+  const executor = optionalExecutor(requestedExecutor);
+  if (executor) {
+    assertIntegrationSorobanExecutionAccount(credential, network, executor);
+    return { mode: 'external', executor: { address: executor, source: 'intent' } };
+  }
+  if (credential.sorobanDefaultExecutor) {
+    assertIntegrationSorobanExecutionAccount(credential, network, credential.sorobanDefaultExecutor);
+    return { mode: 'external', executor: { address: credential.sorobanDefaultExecutor, source: 'service_default' } };
+  }
+  return { mode: 'external', fallback: 'multisigtools_managed' };
+}
+
 function assertReplayMatches(
   stored: StoredSorobanIntent,
   credential: ConfiguredIntegrationCredential,
-  input: { network: StellarNetwork; intentDigest: string; externalReference?: string },
+  input: { network: StellarNetwork; intentDigest: string; externalReference?: string; requestedExecutor?: string },
 ): void {
+  const storedRequestedExecutor = stored.executionPolicy?.executor?.source === 'intent'
+    ? stored.executionPolicy.executor.address
+    : undefined;
   if (
     stored.network !== input.network
     || stored.intent.intentDigest !== input.intentDigest
     || stored.integration?.serviceId !== credential.serviceId
-    || stored.executionPolicy?.mode !== 'external'
     || stored.integration.correlationId !== input.externalReference
+    || storedRequestedExecutor !== input.requestedExecutor
   ) {
     throw new BoxServiceError(
       'Idempotency key is already bound to a different Integration Intent.',
@@ -94,6 +125,72 @@ function assertReplayMatches(
       'idempotency_conflict',
     );
   }
+}
+
+export async function resolveAndBindIntegrationSorobanExecutor(
+  store: SorobanIntentStore,
+  stored: StoredSorobanIntent,
+  credential: ConfiguredIntegrationCredential,
+  requestedExecutor: unknown,
+  managedExecutor: string | null,
+): Promise<{ intent: StoredSorobanIntent; executor: SorobanExecutorBinding }> {
+  const requested = optionalExecutor(requestedExecutor);
+  const existing = stored.executionPolicy?.executor;
+  if (existing) {
+    if (requested && requested !== existing.address) {
+      throw new BoxServiceError(
+        'This Soroban Intent already has a bound executor. Refresh must reuse the same executor.',
+        409,
+        'intent_executor_locked',
+      );
+    }
+    if (existing.source !== 'multisigtools_managed') {
+      assertIntegrationSorobanExecutionAccount(credential, stored.network, existing.address);
+    }
+    return { intent: stored, executor: existing };
+  }
+
+  let executor: SorobanExecutorBinding;
+  let executionPolicy: SorobanExecutionPolicy;
+  if (requested) {
+    assertIntegrationSorobanExecutionAccount(credential, stored.network, requested);
+    executor = { address: requested, source: 'service_prepare' };
+    executionPolicy = { mode: 'external', executor };
+  } else {
+    if (!managedExecutor || !isValidStellarAccountId(managedExecutor)) {
+      throw new BoxServiceError(
+        'No Service executor is bound and MultiSigTools managed execution is not configured for this network.',
+        503,
+        'managed_executor_not_configured',
+      );
+    }
+    executor = { address: managedExecutor, source: 'multisigtools_managed' };
+    executionPolicy = { mode: 'multisigtools', executor };
+  }
+  if (!store.bindExecutionPolicy) {
+    throw new BoxServiceError(
+      'Soroban executor binding storage is unavailable.',
+      503,
+      'intent_executor_binding_unavailable',
+    );
+  }
+  const boundPolicy = await store.bindExecutionPolicy(stored.id, executionPolicy);
+  const boundExecutor = boundPolicy.executor;
+  if (!boundExecutor) {
+    throw new BoxServiceError('Soroban executor binding is invalid.', 503, 'intent_executor_binding_unavailable');
+  }
+  if (requested && requested !== boundExecutor.address) {
+    throw new BoxServiceError(
+      'This Soroban Intent already has a bound executor. Refresh must reuse the same executor.',
+      409,
+      'intent_executor_locked',
+    );
+  }
+  if (boundExecutor.source !== 'multisigtools_managed') {
+    assertIntegrationSorobanExecutionAccount(credential, stored.network, boundExecutor.address);
+  }
+  const updated = { ...stored, executionPolicy: boundPolicy };
+  return { intent: updated, executor: boundExecutor };
 }
 
 export async function createIntegrationSorobanIntent(
@@ -106,12 +203,14 @@ export async function createIntegrationSorobanIntent(
     arguments: unknown;
     idempotencyKey: string;
     externalReference?: unknown;
+    executor?: unknown;
   },
   options: IntegrationSorobanIntentOptions,
 ): Promise<IntegrationSorobanIntentCreationResult> {
   assertNetworkAllowed(credential, input.network);
   const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
   const externalReference = normalizeExternalReference(input.externalReference);
+  const requestedExecutor = optionalExecutor(input.executor);
   const built = await buildContractIntent({
     network: input.network,
     contractId: input.contractId,
@@ -126,6 +225,7 @@ export async function createIntegrationSorobanIntent(
     network: input.network,
     intentDigest: built.intent.intentDigest,
     ...(externalReference ? { externalReference } : {}),
+    ...(requestedExecutor ? { requestedExecutor } : {}),
   };
   const existing = await store.getIntent(id);
   if (existing) {
@@ -133,6 +233,7 @@ export async function createIntegrationSorobanIntent(
     return { replayed: true, intent: existing, ...(externalReference ? { externalReference } : {}) };
   }
 
+  const executionPolicy = integrationSorobanExecutionPolicyForCreation(credential, input.network, requestedExecutor);
   const planned = await planSorobanIntentForStorage(
     built.intent,
     options.planningSource,
@@ -158,7 +259,7 @@ export async function createIntegrationSorobanIntent(
         serviceLabel: credential.label,
         ...(externalReference ? { correlationId: externalReference } : {}),
       },
-      executionPolicy: { mode: 'external' },
+      executionPolicy,
       externalReference,
     }, {
       now: options.now,

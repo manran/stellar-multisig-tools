@@ -124,8 +124,20 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.ok((schemas.ProposalCreateInput.properties as JsonObject).sorobanIntentId);
   assert.deepEqual(schemas.SorobanRequestOrigin.required, ['version', 'intentId', 'authorizationPlanDigest', 'authorizationPlanRevision', 'executionPreparedAt', 'effectsDigest']);
   assert.ok((schemas.SigningRequest.properties as JsonObject).sorobanOrigin);
-  assert.deepEqual(schemas.ContractIntentExecutionInput.required, ['executionSource']);
-  assert.ok((schemas.ContractIntentExecutionInput.properties as JsonObject).acceptedEffectsDigest);
+  assert.deepEqual(schemas.ContractIntentExecutionInput.anyOf, [
+    { required: ['executor'] },
+    { required: ['executionSource'] },
+    { required: ['action'] },
+  ]);
+  const executionInput = schemas.ContractIntentExecutionInput.properties as JsonObject;
+  assert.ok(executionInput.executor);
+  assert.equal((executionInput.executionSource as JsonObject).deprecated, true);
+  assert.ok(executionInput.acceptedEffectsDigest);
+  assert.deepEqual((schemas.ExecutionPolicy.properties as JsonObject).fallback, { type: 'string', const: 'multisigtools_managed' });
+  assert.deepEqual(schemas.SorobanExecutorBinding.required, ['address', 'source']);
+  assert.ok((schemas.ContractIntentCreateInput.properties as JsonObject).executor);
+  assert.ok((schemas.SorobanIntentExecutionPreparation.properties as JsonObject).effects);
+  assert.ok((schemas.SorobanIntentExecutionPreparation.properties as JsonObject).preparedAt);
   assert.deepEqual(schemas.ContractIntentExecutionReconcileInput.required, ['action', 'transactionHash']);
   assert.deepEqual(schemas.ContractIntentExecutionReconcileResult.required, ['operation', 'version', 'transactionHash', 'observed', 'replayed']);
   assert.deepEqual(schemas.SorobanIntentExecutionObservation.required, ['version', 'transactionHash', 'authorizationPlanDigest', 'authorizationPlanRevision', 'executionSource', 'ledger', 'successful', 'observedAt']);

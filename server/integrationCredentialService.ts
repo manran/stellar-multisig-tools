@@ -24,6 +24,7 @@ export interface ConfiguredIntegrationCredential {
   classicExternalExecutionSourceAccounts: string[];
   sorobanContracts: ConfiguredIntegrationContractScope[];
   sorobanExecutionAccounts: string[];
+  sorobanDefaultExecutor?: string;
 }
 
 export class IntegrationCredentialServiceError extends Error {
@@ -79,6 +80,8 @@ function normalizeConfiguredCredential(value: unknown): ConfiguredIntegrationCre
   const classicExternalExecutionSourceAccounts = stringArray(record.classicExternalExecutionSourceAccounts, StrKey.isValidEd25519PublicKey);
   const sorobanContracts = normalizeContracts(record.sorobanContracts);
   const sorobanExecutionAccounts = stringArray(record.sorobanExecutionAccounts, StrKey.isValidEd25519PublicKey);
+  const sorobanDefaultExecutor = typeof record.sorobanDefaultExecutor === 'string' ? record.sorobanDefaultExecutor.trim() : '';
+  if (sorobanDefaultExecutor && !StrKey.isValidEd25519PublicKey(sorobanDefaultExecutor)) configError();
   if (!SERVICE_ID_PATTERN.test(serviceId) || !label || [...label].length > MAX_LABEL_CHARS || !SHA256_PATTERN.test(secretHash)) configError();
   if (networks.length === 0 || (classicSourceAccounts.length === 0 && sorobanContracts.length === 0)) {
     configError('Integration credential must allow at least one network and one Classic account or Soroban contract.');
@@ -87,7 +90,20 @@ function normalizeConfiguredCredential(value: unknown): ConfiguredIntegrationCre
     configError('Classic external execution accounts must also be present in classicSourceAccounts.');
   }
   if (sorobanExecutionAccounts.length > 0 && sorobanContracts.length === 0) configError();
-  return { serviceId, label, secretHash, networks, classicSourceAccounts, classicExternalExecutionSourceAccounts, sorobanContracts, sorobanExecutionAccounts };
+  if (sorobanDefaultExecutor && !sorobanExecutionAccounts.includes(sorobanDefaultExecutor)) {
+    configError('Soroban default executor must also be present in sorobanExecutionAccounts.');
+  }
+  return {
+    serviceId,
+    label,
+    secretHash,
+    networks,
+    classicSourceAccounts,
+    classicExternalExecutionSourceAccounts,
+    sorobanContracts,
+    sorobanExecutionAccounts,
+    ...(sorobanDefaultExecutor ? { sorobanDefaultExecutor } : {}),
+  };
 }
 
 export function configuredIntegrationCredentials(

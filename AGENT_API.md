@@ -249,9 +249,62 @@ Example semantic creation:
 
 GET inspection returns the current Intent/authorization state plus a persisted evidence timeline for creation provenance, accepted AUTH contributions, AuthorizationPlan revisions, execution preparations, and independently observed Stellar results. The timeline contains contribution digests and signer/Agent provenance where recorded, but not raw signature/XDR payloads. `execution_confirmed` or `execution_failed` appears only after MultiSigTools reconciles a persisted preparation hash against Horizon; it never attributes an external submitter that MultiSigTools did not observe.
 
-Creation stores no transaction source, sequence, fee, lifetime, or envelope. Recording simulation discovers an immutable detached AuthorizationPlan. Each PATCH contribution is cryptographically verified against the Agent Principal and current live signer policy. When authorization becomes `authorization_ready`, PUT late-binds `executionSource`, loads a fresh sequence, materializes the transaction, and runs enforcing simulation before returning final unsigned XDR. Envelope multisig then uses the ordinary Request lifecycle. For an externally submitted prepared transaction, call PUT again with `{"action":"reconcile_execution","transactionHash":"..."}`. The hash must already exist in durable preparation evidence; a Horizon 404 returns `observed=false` and writes no result fact.
+Creation stores no transaction sequence, fee, lifetime, or envelope. Recording simulation discovers an immutable detached AuthorizationPlan. Each PATCH contribution is cryptographically verified against the Agent Principal and current live signer policy. When authorization becomes `authorization_ready`, PUT loads a fresh sequence, materializes the transaction, and runs enforcing simulation before returning the final unsigned execution package. For an externally submitted prepared transaction, call PUT again with `{"action":"reconcile_execution","transactionHash":"..."}`. The hash must already exist in durable preparation evidence; a Horizon 404 returns `observed=false` and writes no result fact.
 
 `SOURCE_ACCOUNT` authorization is rejected with `source_account_auth_unsupported`: it would bind Soroban authorization to the transaction source and defeat source-late execution. Contracts/integrations used with Intent coordination must expose detached address authorization.
+
+
+### Integration Service executor shortcut
+
+An Integration Service may tell MultiSig Tools its executor before AUTH collection, without constructing the final transaction early. Executor resolution is deterministic:
+
+```text
+Intent executor override
+  > Service default executor snapshotted when the Intent is created
+  > unresolved until execution preparation
+```
+
+The Service credential may configure `sorobanDefaultExecutor`; it must also appear in that credential's `sorobanExecutionAccounts` allowlist. An Intent-level `executor` overrides the Service default and must be in the same allowlist. If neither exists, MultiSig Tools uses its deployment planning source only for recording simulation; that planning source is never promoted into durable execution policy.
+
+Example Integration creation with an Intent-specific executor:
+
+```json
+{
+  "network": "testnet",
+  "contractId": "C...",
+  "method": "reserve",
+  "arguments": {"wallet":"G..."},
+  "executor": "G...EXECUTOR"
+}
+```
+
+A Service default is snapshotted into the Intent. Changing the credential configuration later does not change an existing Intent or an idempotent replay.
+
+After detached AUTH becomes `authorization_ready`, request the exact execution package:
+
+```json
+{"action":"prepare_execution"}
+```
+
+If the Intent still has no executor, the Service may bind one at this point:
+
+```json
+{"action":"prepare_execution","executor":"G...EXECUTOR"}
+```
+
+If the Service supplies no executor and deployment-managed execution is configured, MultiSig Tools binds that managed executor and takes the managed execution route. The recording/planning account is never used as this fallback. Once an executor is bound, later preparation must reuse it; attempting to replace it returns `intent_executor_locked`. `multisigtools_managed` is an execution-routing commitment, not signer authority or submission evidence: the managed executor account identity is deployment-owned, while signing/submission for that account belongs to the deployment's managed execution layer. Neither the planning source nor the Integration credential is promoted into that signing authority.
+
+If a prepared transaction was lost, became stale, or failed to submit for an unknown reason, ask MultiSig Tools to materialize a fresh package from the same Intent and bound executor:
+
+```json
+{"action":"refresh_execution"}
+```
+
+`refresh_execution` does not change the Intent, AuthorizationPlan, AUTH, or executor. It reloads fresh source state, rebuilds the transaction shell, runs enforcing simulation again, compares effects again, and persists a new `execution_prepared` fact. If AUTH/effects are no longer reusable, the normal typed reauthorization/replan error is returned instead of silently weakening checks.
+
+The execution response is a complete JSON package, not a bare XDR. It includes at least `intentId`, `network`, `intentDigest`, `authorizationPlanDigest`, `authorizationPlanRevision`, executor/source information, sequence, transaction hash, validity, latest ledger, effects/effects diff, `preparedAt`, and unsigned `xdr`. MultiSig Tools durably retains the preparation evidence needed for audit/reconciliation; returning XDR is not itself evidence of handoff, submission, or confirmation.
+
+`executionSource` remains accepted as a deprecated alias for `executor` on PUT for compatibility. New Service integrations should use `executor`.
 
 For diagnostics and advanced tooling, `POST /api/contract-call` and `POST /api/contract-prepare` remain public low-level transaction construction / recording-simulation primitives. They do not replace the Intent coordination model. Human Import XDR may convert an unsigned, prepared single InvokeHostFunction transaction into an Intent; Agent clients should create semantic Intents directly.
 

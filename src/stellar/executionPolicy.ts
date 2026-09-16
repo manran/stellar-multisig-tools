@@ -2,6 +2,22 @@ export interface ExecutionPolicy {
   mode: 'multisigtools' | 'external';
 }
 
+export type SorobanExecutorBindingSource =
+  | 'intent'
+  | 'service_default'
+  | 'service_prepare'
+  | 'multisigtools_managed';
+
+export interface SorobanExecutorBinding {
+  address: string;
+  source: SorobanExecutorBindingSource;
+}
+
+export interface SorobanExecutionPolicy extends ExecutionPolicy {
+  executor?: SorobanExecutorBinding;
+  fallback?: 'multisigtools_managed';
+}
+
 export type SorobanExecutionRoute =
   | 'current_client'
   | 'handoff'

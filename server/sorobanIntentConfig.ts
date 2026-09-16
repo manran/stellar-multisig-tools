@@ -19,3 +19,22 @@ export function configuredSorobanPlanningSource(network: StellarNetwork): string
   }
   return value;
 }
+
+function managedExecutorEnvironmentName(network: StellarNetwork): string {
+  return network === 'testnet'
+    ? 'STELLAR_SOROBAN_MANAGED_EXECUTOR_TESTNET'
+    : 'STELLAR_SOROBAN_MANAGED_EXECUTOR_PUBLIC';
+}
+
+export function configuredSorobanManagedExecutor(network: StellarNetwork): string | null {
+  const name = managedExecutorEnvironmentName(network);
+  const value = process.env[name]?.trim() ?? '';
+  if (!value) return null;
+  if (!isValidStellarAccountId(value)) {
+    throw new SorobanIntentPlanningError(
+      `Deployment Soroban managed executor is invalid for ${network}.`,
+      'managed_executor_config_invalid',
+    );
+  }
+  return value;
+}

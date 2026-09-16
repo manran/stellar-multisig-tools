@@ -80,6 +80,25 @@ const intentCreateExample = `curl -X POST ${STELLAR_TESTNET_ORIGIN}/api/intent \
   -H "Idempotency-Key: fresnica-intent-42" \\
   -d '{"network":"testnet","contractId":"C...","method":"reserve","arguments":{"wallet":"G..."}}'`;
 
+
+const serviceIntentCreateExample = `curl -X POST ${STELLAR_TESTNET_ORIGIN}/api/intent \
+  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: fed-intent-42" \
+  -d '{"network":"testnet","contractId":"C...","method":"reserve","arguments":{"wallet":"G..."},"executor":"G...EXECUTOR"}'`;
+
+const serviceIntentPrepareExample = `curl -X PUT ${STELLAR_TESTNET_ORIGIN}/api/intent \
+  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
+  -H "Content-Type: application/json" \
+  -H "X-MultiSig-Intent-Id: 0123456789ABCDEF" \
+  -d '{"action":"prepare_execution"}'`;
+
+const serviceIntentRefreshExample = `curl -X PUT ${STELLAR_TESTNET_ORIGIN}/api/intent \
+  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
+  -H "Content-Type: application/json" \
+  -H "X-MultiSig-Intent-Id: 0123456789ABCDEF" \
+  -d '{"action":"refresh_execution"}'`;
+
 function CodeBlock({ children }: { children: string }) {
   return <pre className="overflow-x-auto rounded-2xl bg-[#111] p-4 text-xs leading-6 text-neutral-100"><code>{children}</code></pre>;
 }
@@ -489,7 +508,17 @@ function AutomationPage() {
         <CodeBlock>{contractCallExample}</CodeBlock>
         <CodeBlock>{contractPrepareExample}</CodeBlock>
         <CodeBlock>{intentCreateExample}</CodeBlock>
-        <p className="text-sm leading-6 text-neutral-600 dark:text-neutral-300"><code>contract.intent.create</code> starts from semantic contract intent without a transaction source. Detached AUTH is contributed with <code>PATCH /api/intent</code>; only after authorization is ready does <code>PUT /api/intent</code> choose an execution source and build the enforced final transaction. <code>SOURCE_ACCOUNT</code> authorization is rejected because it would bind AUTH back to the transaction source. The lower-level <code>contract.call.build</code> and <code>contract.call.prepare</code> operations remain available for diagnostics and external tooling.</p>
+        <p className="text-sm leading-6 text-neutral-600 dark:text-neutral-300"><code>contract.intent.create</code> starts from semantic contract intent without constructing a final transaction. Detached AUTH is contributed with <code>PATCH /api/intent</code>; only after authorization is ready does <code>PUT /api/intent</code> load fresh source state, enforce the reviewed effects, and return the final unsigned execution package. <code>SOURCE_ACCOUNT</code> authorization is rejected because it would bind AUTH back to the transaction source. The lower-level <code>contract.call.build</code> and <code>contract.call.prepare</code> operations remain available for diagnostics and external tooling.</p>
+        <TechnicalDetails>
+          <h3 className="font-bold text-neutral-900 dark:text-white">Integration Service executor shortcut</h3>
+          <p>A Service may include <code>executor</code> when creating the Intent. That Intent-level value wins over the Service default; otherwise the configured default is snapshotted into the Intent. If neither exists, recording simulation still works with the deployment planning source, but that planning account never becomes the executor.</p>
+          <CodeBlock>{serviceIntentCreateExample}</CodeBlock>
+          <p>After AUTH is ready, <code>prepare_execution</code> uses the already-bound executor. If the Intent is still unresolved, the Service may include <code>executor</code> on this PUT; if it omits one and managed execution is configured, MultiSig Tools takes the managed execution route.</p>
+          <CodeBlock>{serviceIntentPrepareExample}</CodeBlock>
+          <p>If the package was lost, expired, or failed to submit, <code>refresh_execution</code> rebuilds a fresh package with the same bound executor and all enforcing checks repeated. Refresh cannot replace the executor.</p>
+          <CodeBlock>{serviceIntentRefreshExample}</CodeBlock>
+          <p>The response includes the unsigned XDR plus transaction hash, sequence, validity, latest ledger, AuthorizationPlan digest/revision, executor provenance, effects, effects diff, and preparation time. Preparation evidence is durable; returning XDR does not by itself mean handoff, submission, or confirmation.</p>
+        </TechnicalDetails>
       </section>
 
       <section id="quick-start" className="space-y-5">
