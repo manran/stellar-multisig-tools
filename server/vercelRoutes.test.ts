@@ -49,6 +49,17 @@ test('Vercel does not preserve retired pre-launch route families', () => {
 });
 
 
+test('Testnet canonicalizes legacy /stellar runtime paths at the edge', () => {
+  const redirects = config.redirects ?? [];
+  for (const [source, destination] of [['/stellar', '/'], ['/stellar/:path*', '/:path*']] as const) {
+    const redirect = redirects.find((item) => item.source === source);
+    assert.ok(redirect, source);
+    assert.equal(redirect.destination, destination);
+    assert.equal(redirect.permanent, true);
+    assert.deepEqual(redirect.has, [{ type: 'host', value: 'stellar-testnet.multisig.tools' }]);
+  }
+});
+
 test('Testnet serves runtime routes but redirects shared content to the canonical Mainnet site', () => {
   const redirects = config.redirects ?? [];
   const expected = new Map([

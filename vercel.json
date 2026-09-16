@@ -33,6 +33,8 @@
     }
   ],
   "redirects": [
+    { "source": "/stellar", "has": [{ "type": "host", "value": "stellar-testnet.multisig.tools" }], "destination": "/", "permanent": true },
+    { "source": "/stellar/:path*", "has": [{ "type": "host", "value": "stellar-testnet.multisig.tools" }], "destination": "/:path*", "permanent": true },
     { "source": "/demo", "has": [{ "type": "host", "value": "stellar-testnet.multisig.tools" }], "destination": "https://stellar.multisig.tools/demo", "permanent": true },
     { "source": "/docs", "has": [{ "type": "host", "value": "stellar-testnet.multisig.tools" }], "destination": "https://stellar.multisig.tools/docs", "permanent": true },
     { "source": "/docs/:path*", "has": [{ "type": "host", "value": "stellar-testnet.multisig.tools" }], "destination": "https://stellar.multisig.tools/docs/:path*", "permanent": true },
