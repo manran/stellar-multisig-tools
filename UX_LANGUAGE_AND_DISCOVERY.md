@@ -57,7 +57,7 @@ Lead with task language:
 - transaction
 - signature
 - sign
-- Ready to submit
+- Choose execution / Review & submit — only when the current viewer actually owns that next action
 - wallet
 
 Identity proof may be explained as a signed message, but protocol/authentication terminology should not be the primary call to action.

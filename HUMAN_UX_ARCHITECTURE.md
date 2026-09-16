@@ -207,7 +207,7 @@ The next bounded slice closes the remaining Human behavior leak from the retired
 
 The next bounded slice makes mobile approval work action-first without changing the Request lifecycle:
 
-1. canonical Request status remains transaction-wide (`Signature needed`, `Waiting`, `Ready to submit`, `Needs attention`); Human Inbox separately projects what the **current signer** can do now;
+1. canonical Request status remains transaction-wide fact (`Collecting signatures`, `Authorization complete`, `Waiting`, `Needs attention`); Human Inbox separately projects what the **current signer** can do now, such as `Review & sign`, `Choose execution`, or `Review & submit`;
 2. Human viewer actions are `Sign`, `Submit`, `Waiting for others`, `Waiting for ledger`, `Needs attention`, or `Declined`; a signer who already signed must never be counted again as needing a signature;
 3. Dashboard counts only actionable Human work instead of treating every visible active Request as "waiting for your approval";
 4. Agent Inbox remains canonical Request data. Human-only viewer actions must not imply that Read/Write/Sign Agent credentials can perform Human network submission;

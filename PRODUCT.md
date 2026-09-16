@@ -46,18 +46,18 @@ Use Email as an organization model for **Sign mode**, not as protocol vocabulary
 - Presence in Inbox does not imply that the origin is trusted.
 - **Waiting** and **Ready** are action-state filters, not mailbox folders in the protocol model.
 
-Do not model Read/Unread. Transaction state should answer what a person can do next.
+Do not model Read/Unread. Keep **Work/transaction state** separate from **viewer action**. State describes the shared fact; viewer action answers what this person can do next.
 
-Good state language:
+Good shared state language:
 
-- `Approval needed`
-- `Waiting for others`
-- `Ready to submit`
+- `Collecting signatures`
+- `Authorization complete`
+- `Waiting`
 - `Done`
 - `Expired`
 - `Needs attention`
 
-When the system can prove the signed-in key has already contributed, prefer `You approved · waiting for others`.
+Good viewer-action language includes `Review & sign`, `Waiting for others`, `Choose execution`, `Review & submit`, and `Waiting for execution`. When the system can prove the signed-in key has already contributed, prefer `You signed · waiting for others`.
 
 Do not claim `Needs your approval` merely because an address is an eligible signer. In weighted M-of-N policies an eligible signer can be optional.
 
