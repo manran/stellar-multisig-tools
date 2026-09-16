@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Braces, Clock3, FileInput, KeyRound, Send, UsersRound } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Braces, Clock3, FileInput, KeyRound, Send, UserPlus, UsersRound } from 'lucide-react';
 import PaymentComposer from './PaymentComposer';
 import ClaimablePaymentComposer from './ClaimablePaymentComposer';
 import TransferComposer from './TransferComposer';
@@ -54,6 +54,7 @@ function NewTransactionChoices() {
   const proposalAccount = isValidStellarAccountId(route.accountId) ? route.accountId : '';
   const proposalNetwork = resolveStellarNetwork(route.network, sessionNetwork);
   const paymentHref = stellarHrefWithSearch('/new/payment', { fresh: '1', account: proposalAccount, network: proposalNetwork });
+  const createAccountHref = stellarHrefWithSearch('/new/create-account', { fresh: '1', account: proposalAccount, network: proposalNetwork });
 
   return (
     <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
@@ -90,6 +91,7 @@ function NewTransactionChoices() {
           <summary className="cursor-pointer list-none text-sm font-bold">More Stellar actions <span className="ml-1 text-xs font-medium text-neutral-400">Low-frequency workflows</span></summary>
           <p className="mt-2 text-sm leading-6 text-neutral-500 dark:text-neutral-400">Less common account and protocol actions. Transaction builders still return to the same Review, Sign, Submit, and Done flow.</p>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <ChoiceCard href={createAccountHref} icon={<UserPlus className="h-5 w-5" />} title="Create Stellar account" description="Fund an inactive G-address with an explicit CreateAccount operation. You can switch to Payment without losing the entered address or amount." network={proposalNetwork} badge="CreateAccount" />
             <ChoiceCard href={stellarHref('/account/signing')} icon={<KeyRound className="h-5 w-5" />} title="Set up multisig" description="Configure signers and approval rules for any Stellar account. If you cannot authorize it here, export XDR for an authorized signer." network={proposalNetwork} badge="Account signing" />
             <ChoiceCard href={stellarHrefWithSearch('/new/claimable', { fresh: '1', account: proposalAccount, network: proposalNetwork })} icon={<Clock3 className="h-5 w-5" />} title="Claimable payment" description="Create a payment the recipient claims later, with an explicit recovery path." network={proposalNetwork} badge="Claim later" />
             <ChoiceCard href={stellarHrefWithSearch('/new/multi-party', { fresh: '1', network: proposalNetwork })} icon={<UsersRound className="h-5 w-5" />} title="Multi-source transaction" description="Coordinate operations from more than one authorization domain in one atomic transaction." network={proposalNetwork} badge="Multi-source" />
@@ -172,6 +174,7 @@ export default function NewTransactionApp() {
   const { sessionNetwork, networkSource } = useStellarWallet();
   const pathname = window.location.pathname;
   const isPayment = pathname.endsWith('/new/payment');
+  const isCreateAccount = pathname.endsWith('/new/create-account');
   const isBatch = pathname.endsWith('/new/batch');
   const isClaimable = pathname.endsWith('/new/claimable');
   const isMultiParty = pathname.endsWith('/new/multi-party');
@@ -184,11 +187,11 @@ export default function NewTransactionApp() {
     : sessionNetwork
       ? networkSource === 'wallet' ? 'wallet' : 'context'
       : 'default';
-  const editor = isPayment || isBatch || isClaimable || isMultiParty || isContract || isImport;
+  const editor = isPayment || isCreateAccount || isBatch || isClaimable || isMultiParty || isContract || isImport;
 
   return (
     <StellarWorkspaceShell active="new" networkContext={editor ? network : null}>
-      {isPayment || isBatch
+      {isPayment || isCreateAccount || isBatch
         ? <PaymentComposer network={network} />
         : isClaimable
             ? <ClaimablePaymentComposer network={network} />

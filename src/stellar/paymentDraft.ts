@@ -7,8 +7,11 @@ export interface PaymentRecipientDraft {
   assetKey: string;
 }
 
+export type PaymentDraftAction = 'payment' | 'create_account';
+
 export interface PaymentDraft {
-  version: 3;
+  version: 4;
+  action: PaymentDraftAction;
   source: string;
   recipients: PaymentRecipientDraft[];
   memo: string;
@@ -21,12 +24,16 @@ function legacyPaymentDraftStorageKeyV1(ownerAddress: string, network: StellarNe
   return `multisig-tools.stellar.payment-draft.v1:${network}:${ownerAddress}`;
 }
 
+function legacyPaymentDraftStorageKeyV3(ownerAddress: string, network: StellarNetwork): string {
+  return `multisig-tools.stellar.payment-draft.v3:${network}:${ownerAddress}`;
+}
+
 function legacyPaymentDraftStorageKeyV2(ownerAddress: string, network: StellarNetwork): string {
   return `multisig-tools.stellar.payment-draft.v2:${network}:${ownerAddress}`;
 }
 
 export function paymentDraftStorageKey(ownerAddress: string, network: StellarNetwork): string {
-  return `multisig-tools.stellar.payment-draft.v3:${network}:${ownerAddress}`;
+  return `multisig-tools.stellar.payment-draft.v4:${network}:${ownerAddress}`;
 }
 
 function validRecipient(value: unknown): value is PaymentRecipientDraft {
@@ -55,12 +62,27 @@ function parseDraft(value: unknown): PaymentDraft | null {
   const common = commonContext(record);
   if (!common) return null;
 
+  if (record.version === 4) {
+    if (record.action !== 'payment' && record.action !== 'create_account') return null;
+    if (typeof record.privateNote !== 'string' || !Array.isArray(record.recipients)) return null;
+    const recipients = record.recipients.filter(validRecipient);
+    if (recipients.length !== record.recipients.length || recipients.length < 1 || recipients.length > 100) return null;
+    return {
+      version: 4,
+      action: record.action,
+      ...common,
+      recipients,
+      privateNote: record.privateNote,
+    };
+  }
+
   if (record.version === 3) {
     if (typeof record.privateNote !== 'string' || !Array.isArray(record.recipients)) return null;
     const recipients = record.recipients.filter(validRecipient);
     if (recipients.length !== record.recipients.length || recipients.length < 1 || recipients.length > 100) return null;
     return {
-      version: 3,
+      version: 4,
+      action: 'payment',
       ...common,
       recipients,
       privateNote: record.privateNote,
@@ -73,7 +95,8 @@ function parseDraft(value: unknown): PaymentDraft | null {
     if (typeof record.assetKey !== 'string' || typeof record.destination !== 'string') return null;
     if (typeof record.amount !== 'string' || typeof record.privateNote !== 'string') return null;
     return {
-      version: 3,
+      version: 4,
+      action: 'payment',
       ...common,
       recipients: [{ destination: record.destination, amount: record.amount, assetKey: record.assetKey }],
       privateNote: record.privateNote,
@@ -86,7 +109,8 @@ function parseDraft(value: unknown): PaymentDraft | null {
     if (typeof record.assetKey !== 'string' || typeof record.destination !== 'string') return null;
     if (typeof record.amount !== 'string' || typeof record.privateMemo !== 'string') return null;
     return {
-      version: 3,
+      version: 4,
+      action: 'payment',
       ...common,
       recipients: [{ destination: record.destination, amount: record.amount, assetKey: record.assetKey }],
       privateNote: record.privateMemo,
@@ -112,6 +136,7 @@ export function loadPaymentDraft(
   network: StellarNetwork,
 ): PaymentDraft | null {
   return readDraft(storage, paymentDraftStorageKey(ownerAddress, network))
+    ?? readDraft(storage, legacyPaymentDraftStorageKeyV3(ownerAddress, network))
     ?? readDraft(storage, legacyPaymentDraftStorageKeyV2(ownerAddress, network))
     ?? readDraft(storage, legacyPaymentDraftStorageKeyV1(ownerAddress, network));
 }
@@ -131,6 +156,7 @@ export function clearPaymentDraft(
   network: StellarNetwork,
 ): void {
   storage.removeItem(paymentDraftStorageKey(ownerAddress, network));
+  storage.removeItem(legacyPaymentDraftStorageKeyV3(ownerAddress, network));
   storage.removeItem(legacyPaymentDraftStorageKeyV2(ownerAddress, network));
   storage.removeItem(legacyPaymentDraftStorageKeyV1(ownerAddress, network));
 }

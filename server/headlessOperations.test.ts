@@ -32,4 +32,7 @@ test('runtime policy and contract vertical slice are available to every transpor
   assert.equal(byId.get('contract.workspace.list')?.access, 'principal:read');
   assert.equal(byId.get('contract.workspace.keep')?.access, 'principal:write');
   assert.equal(byId.get('contract.workspace.forget')?.path, '/api/contracts');
+  assert.equal(byId.get('classic.payment.prepare')?.path, '/api/payment-prepare');
+  assert.equal(byId.get('classic.account.create.prepare')?.path, '/api/account-create-prepare');
+  assert.equal(byId.get('integration.classic.account.create.prepare')?.access, 'integration:write');
 });

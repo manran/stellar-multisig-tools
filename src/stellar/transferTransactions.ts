@@ -1,5 +1,6 @@
 import { Account, Memo, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk/base';
 import type { StellarNetworkParameters } from './horizon.js';
+import { hexToBytes } from './privateCommitment.js';
 import { paymentDestinationIssue, stellarAssetForChoice } from './paymentAsset.js';
 import { assessPaymentSpendability, paymentSourceIssue } from './paymentPreflight.js';
 import { amountFromStroops, assetForSourceKey, transferTotalsBySourceAsset } from './structuredTransfers.js';
@@ -69,6 +70,7 @@ export function buildTransferTransaction({
   lifetimeSeconds,
   explicitOperationSources,
   memo,
+  memoHashHex,
 }: {
   rows: readonly ResolvedTransferRow[];
   transactionSource: string;
@@ -78,13 +80,16 @@ export function buildTransferTransaction({
   lifetimeSeconds: number;
   explicitOperationSources: boolean;
   memo?: string;
+  memoHashHex?: string;
 }) {
   if (rows.length < 1 || rows.length > 100) throw new Error('A transfer transaction must contain between 1 and 100 operations.');
   const builder = new TransactionBuilder(new Account(transactionSource, transactionSourceSequence), {
     fee: String(parameters.baseFeeInStroops),
     networkPassphrase: networkPassphrase(network),
   });
+  if (memo?.trim() && memoHashHex) throw new Error('A transfer transaction cannot contain both a text memo and a hash memo.');
   if (memo?.trim()) builder.addMemo(Memo.text(memo.trim()));
+  if (memoHashHex) builder.addMemo(Memo.hash(hexToBytes(memoHashHex)));
   for (const row of rows) {
     builder.addOperation(Operation.payment({
       ...(explicitOperationSources ? { source: row.source } : {}),

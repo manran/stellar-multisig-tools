@@ -1,21 +1,16 @@
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
 import { blobAuthStore } from '../server/blobAuthStore.js';
-import {
-  AgentCredentialServiceError,
-  requireAgentAccess,
-} from '../server/agentCredentialService.js';
+import { AgentCredentialServiceError, requireAgentAccess } from '../server/agentCredentialService.js';
 import {
   CallerAuthenticationError,
   machineCallerFromRequest,
   verifiedSignerSessionFromRequest,
 } from '../server/callerAuthentication.js';
 import {
-  ClassicPaymentPrepareError,
-  prepareClassicPayment,
-} from '../src/stellar/classicPaymentPrepare.js';
-import {
-  IntegrationCredentialServiceError,
-} from '../server/integrationCredentialService.js';
+  ClassicCreateAccountPrepareError,
+  prepareClassicCreateAccount,
+} from '../src/stellar/classicCreateAccountPrepare.js';
+import { IntegrationCredentialServiceError } from '../server/integrationCredentialService.js';
 import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import { noStoreJson } from '../server/httpResponse.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
@@ -28,7 +23,7 @@ const MAX_BODY_BYTES = 64 * 1024;
 function errorResponse(cause: unknown): Response {
   if (
     cause instanceof RequestBodyError
-    || cause instanceof ClassicPaymentPrepareError
+    || cause instanceof ClassicCreateAccountPrepareError
     || cause instanceof CallerAuthenticationError
     || cause instanceof AgentCredentialServiceError
     || cause instanceof IntegrationCredentialServiceError
@@ -36,15 +31,15 @@ function errorResponse(cause: unknown): Response {
   ) {
     return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
   }
-  console.error('Classic payment prepare API error', cause);
-  return noStoreJson({ error: 'Classic payment preparation is temporarily unavailable.', code: 'internal_error' }, 500);
+  console.error('Classic account create prepare API error', cause);
+  return noStoreJson({ error: 'Classic account creation preparation is temporarily unavailable.', code: 'internal_error' }, 500);
 }
 
 export async function POST(request: Request): Promise<Response> {
   try {
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
     const network = body.network === 'public' || body.network === 'testnet' ? body.network : null;
-    if (!network) throw new ClassicPaymentPrepareError('Network must be public or testnet.', 400, 'invalid_network');
+    if (!network) throw new ClassicCreateAccountPrepareError('Network must be public or testnet.', 400, 'invalid_network');
     assertDeploymentNetwork(network);
 
     const sourceAccount = typeof body.sourceAccount === 'string' ? body.sourceAccount.trim() : '';
@@ -55,14 +50,12 @@ export async function POST(request: Request): Promise<Response> {
     if (service) {
       if (!service.networks.includes(network)) {
         throw new IntegrationCredentialServiceError(
-          'This Integration credential is not allowed on this Stellar network.',
-          403,
-          'integration_network_not_allowed',
+          'This Integration credential is not allowed on this Stellar network.', 403, 'integration_network_not_allowed',
         );
       }
       if (!service.classicSourceAccounts.includes(sourceAccount)) {
         throw new IntegrationCredentialServiceError(
-          'This Integration credential is not allowed to prepare payments from that Classic source account.',
+          'This Integration credential is not allowed to prepare account creation from that Classic source account.',
           403,
           'integration_classic_source_account_not_allowed',
         );
@@ -88,19 +81,20 @@ export async function POST(request: Request): Promise<Response> {
     if (!service && !agent) {
       const session = await verifiedSignerSessionFromRequest(blobAuthStore, request, network);
       if (!session) {
-        throw new ClassicPaymentPrepareError(
-          'Confirm a signer wallet before preparing a Classic payment.',
+        throw new ClassicCreateAccountPrepareError(
+          'Confirm a signer wallet before preparing Classic account creation.',
           401,
-          'classic_payment_prepare_identity_required',
+          'classic_account_create_prepare_identity_required',
         );
       }
       humanAddress = session.address;
     }
 
-    const result = await prepareClassicPayment({
+    const result = await prepareClassicCreateAccount({
       network,
       sourceAccount: body.sourceAccount,
-      payments: body.payments,
+      destination: body.destination,
+      startingBalance: body.startingBalance,
       memo: body.memo,
       memoHashHex: body.memoHashHex,
       lifetimeSeconds: body.lifetimeSeconds,
@@ -110,10 +104,10 @@ export async function POST(request: Request): Promise<Response> {
     if (signerAddress) {
       const allowed = await signerCanAccessTransaction(signerAddress, result.xdr, network, accountLoader);
       if (!allowed) {
-        throw new ClassicPaymentPrepareError(
-          'The confirmed signer is not a current signer for this payment source.',
+        throw new ClassicCreateAccountPrepareError(
+          'The confirmed signer is not a current signer for this account-creation source.',
           403,
-          'classic_payment_prepare_source_access_denied',
+          'classic_account_create_prepare_source_access_denied',
         );
       }
     }

@@ -79,7 +79,7 @@ Product neutrality does not flatten permissions:
 
 The canonical Headless workflow is `business instruction -> Prepare -> Review -> Authorization -> Ready -> Execution routing -> Execute -> Done`. Protocols keep their real differences inside that lifecycle.
 
-Classic Service work is business-first where MultiSigTools has a stable promoted composer. Payment/batch is the first shipped slice: `classic.payment.prepare` takes a scoped source account plus payment rows, loads current account/network facts, constructs and inspects the exact transaction, and Integration `POST /api/request` can compose that result directly into the existing Request lifecycle. Exact XDR input remains an advanced escape hatch, not the default Integration payment path. Other Classic actions stay XDR-first until their existing Human composer is promoted; do not invent a generic transaction DSL for symmetry.
+Classic Service work is business-first where MultiSigTools has a stable promoted composer. Payment/batch and explicit account creation are promoted slices: `classic.payment.prepare` takes a scoped source account plus payment rows, while `classic.account.create.prepare` takes a source account, inactive destination, and starting XLM balance. Both load current account/network facts and construct one exact unsigned transaction. Integration `POST /api/request` can compose semantic Payment directly into the existing Request lifecycle; CreateAccount currently uses Prepare -> exact XDR -> the same Request lifecycle rather than adding a second Request type. Exact XDR input remains an advanced escape hatch. Other Classic actions stay XDR-first until their existing Human composer is promoted; do not invent a generic transaction DSL for symmetry.
 
 Soroban contract work remains Intent-first and transaction construction stays later than contract authorization:
 
@@ -137,6 +137,7 @@ The first promoted Classic Prepare operation is:
 | Operation | HTTP | Access | Effect |
 | --- | --- | --- | --- |
 | **classic.payment.prepare** | POST /api/payment-prepare | Principal Write / Integration Write | None; fresh business input -> exact unsigned Classic TX |
+| **classic.account.create.prepare** | POST /api/account-create-prepare | Principal Write / Integration Write | None; explicit account-creation input -> exact unsigned CreateAccount TX |
 
 Integration Services may also pass the same semantic payment instruction directly to `POST /api/request`; the server composes Prepare + Request creation while preserving business-level idempotency. The exact-XDR Request form remains available.
 

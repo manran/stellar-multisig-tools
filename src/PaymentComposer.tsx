@@ -1,30 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, CircleAlert, LoaderCircle, Plus, Trash2 } from 'lucide-react';
-import { Account, Memo, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk/base';
 import AddressAliasEditor from './AddressAliasEditor';
 import { useAddressBook } from './AddressBookContext';
 import PaymentAssetPicker from './PaymentAssetPicker';
 import SigningAccountPicker from './SigningAccountPicker';
 import { useStellarWallet } from './StellarWalletContext';
 import { NetworkBadge, TransactionLifetimePicker, WorkflowProgress } from './MultiSigUi';
-import { AccountNotFoundError, isValidStellarAccountId, loadAccount, loadNetworkParameters } from './stellar/horizon';
+import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from './stellar/horizon';
 import type { StellarNetworkParameters } from './stellar/horizon';
-import { paymentAssetChoices, paymentDestinationIssue, stellarAssetForChoice } from './stellar/paymentAsset';
+import { paymentAssetChoices } from './stellar/paymentAsset';
 import type { PaymentAssetChoice } from './stellar/paymentAsset';
 import { clearPaymentDraft, loadPaymentDraft, paymentDraftStorageKey, savePaymentDraft } from './stellar/paymentDraft';
-import type { PaymentRecipientDraft } from './stellar/paymentDraft';
+import type { PaymentDraftAction, PaymentRecipientDraft } from './stellar/paymentDraft';
 import { assessPaymentSpendability, paymentSourceIssue } from './stellar/paymentPreflight';
 import { peekAccountsForSigner } from './stellar/signerAccounts';
 import { isValidStellarTextMemo, stellarTextMemoByteLength } from './stellar/memo';
 import { normalizePrivateNote, MAX_PRIVATE_NOTE_BYTES, privateNoteByteLength } from './stellar/privateNote';
-import { createPrivateCommitment, hexToBytes } from './stellar/privateCommitment';
+import { createPrivateCommitment } from './stellar/privateCommitment';
 import { stellarAmountToStroops, stroopsToStellarAmount } from './stellar/reserve';
 import { writeReviewHandoff } from './stellar/reviewHandoff';
 import { getDefaultTransactionLifetime, setDefaultTransactionLifetime, transactionLifetimeLabel } from './stellar/transactionPreferences';
 import { parseStructuredTransfers, validateTransferRows } from './stellar/structuredTransfers';
-import { buildTransferTransaction, transferDestinationIssues, transferFundingIssues } from './stellar/transferTransactions';
 import { hasSharedSigningControl } from './stellar/treasuryModel';
+import { prepareClassicPayment } from './stellar/classicPaymentPrepare';
+import { prepareClassicCreateAccount } from './stellar/classicCreateAccountPrepare';
 import type { StellarAccountSnapshot, StellarNetwork } from './stellar/types';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
 
@@ -34,10 +34,6 @@ interface Props {
 
 function shortAddress(address: string) {
   return address.length <= 18 ? address : `${address.slice(0, 7)}…${address.slice(-6)}`;
-}
-
-function networkPassphrase(network: StellarNetwork) {
-  return network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC;
 }
 
 function validAmount(value: string) {
@@ -52,21 +48,10 @@ function assetToken(asset: Pick<PaymentAssetChoice, 'code' | 'issuer'>) {
   return asset.issuer ? `${asset.code}:${asset.issuer}` : 'XLM';
 }
 
-async function loadDestinations(ids: string[], network: StellarNetwork): Promise<Map<string, StellarAccountSnapshot | null>> {
-  const values = await Promise.all(ids.map(async (id) => {
-    try {
-      return [id, await loadAccount(id, network)] as const;
-    } catch (cause) {
-      if (cause instanceof AccountNotFoundError) return [id, null] as const;
-      throw cause;
-    }
-  }));
-  return new Map(values);
-}
-
 export default function PaymentComposer({ network }: Props) {
   const { privateUnlocked, sessionAddress } = useStellarWallet();
   const { entries, labelFor } = useAddressBook();
+  const [action, setAction] = useState<PaymentDraftAction>('payment');
   const [source, setSource] = useState('');
   const [sourceAccount, setSourceAccount] = useState<StellarAccountSnapshot | null>(null);
   const [sourceParameters, setSourceParameters] = useState<StellarNetworkParameters | null>(null);
@@ -107,6 +92,8 @@ export default function PaymentComposer({ network }: Props) {
   })), [recipients, assets]);
   const recipientsValid = recipientDetails.length > 0 && recipientDetails.every((row) => row.destinationValid && row.amountValid && row.asset);
   const multipleRecipients = recipients.length > 1;
+  const canConvertToCreateAccount = recipients.length === 1 && recipients[0]?.assetKey === 'native';
+  const actionShapeValid = action === 'payment' || canConvertToCreateAccount;
 
   const fundingState = useMemo(() => {
     if (!sourceAccount || !sourceParameters) return { error: '' };
@@ -134,7 +121,7 @@ export default function PaymentComposer({ network }: Props) {
   }, [sourceAccount, sourceParameters, recipientDetails, assets, recipients.length]);
 
   const canContinue = sourceValid && sourceHasSharedSigning && recipientsValid && contextValid
-    && !fundingState.error && !busy;
+    && actionShapeValid && !fundingState.error && !busy;
   const testnet = network === 'testnet';
   const focusClass = testnet ? 'focus:border-sky-500' : 'focus:border-emerald-500';
   const primaryClass = testnet ? 'bg-sky-700 hover:bg-sky-800' : 'bg-emerald-700 hover:bg-emerald-800';
@@ -144,6 +131,22 @@ export default function PaymentComposer({ network }: Props) {
     setDefaultSigningWindowSeconds(signingWindowSeconds);
   }
 
+  function switchAction(next: PaymentDraftAction) {
+    if (next === action) return;
+    if (next === 'create_account' && !canConvertToCreateAccount) {
+      setError('Create account is a single-recipient XLM action. Keep one recipient and select XLM before switching; your current payment rows were not changed.');
+      return;
+    }
+    setAction(next);
+    setError('');
+    const current = new URL(window.location.href);
+    const target = new URL(stellarHref(next === 'create_account' ? '/new/create-account' : '/new/payment'));
+    target.search = current.search;
+    target.searchParams.delete('action');
+    target.searchParams.delete('fresh');
+    window.history.replaceState(window.history.state, '', target.toString());
+  }
+
   function updateRecipient(index: number, patch: Partial<PaymentRecipientDraft>) {
     setRecipients((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
     setError('');
@@ -151,6 +154,10 @@ export default function PaymentComposer({ network }: Props) {
 
   function addRecipient() {
     setError('');
+    if (action === 'create_account') {
+      setError('Switch to Payment before adding another recipient. Account creation is one explicit CreateAccount operation.');
+      return;
+    }
     if (addOnChainProof) {
       setError('Turn off on-chain proof before adding recipients. A Stellar transaction has one memo field, so MultiSig Tools does not silently change the proof format when a payment becomes multi-recipient.');
       return;
@@ -167,6 +174,10 @@ export default function PaymentComposer({ network }: Props) {
   }
 
   function importRecipientList() {
+    if (action === 'create_account') {
+      setError('Switch to Payment before importing a recipient list.');
+      return;
+    }
     if (!sourceAccount || !sourceValid || !pasteInput.trim()) return;
     const parsed = parseStructuredTransfers('batch', pasteInput, entries);
     if (parsed.issues.length > 0) {
@@ -203,7 +214,9 @@ export default function PaymentComposer({ network }: Props) {
     }
     const draft = freshStart ? null : loadPaymentDraft(sessionStorage, sessionAddress, network);
     const requestedSource = url.searchParams.get('account')?.trim() ?? '';
+    const requestedAction: PaymentDraftAction | null = window.location.pathname.endsWith('/new/create-account') || url.searchParams.get('action') === 'create-account' ? 'create_account' : null;
     setError('');
+    setAction(requestedAction ?? draft?.action ?? 'payment');
     setSourceAccount(null);
     setSourceParameters(null);
     setSource(draft?.source ?? (isValidStellarAccountId(requestedSource) ? requestedSource : ''));
@@ -221,7 +234,8 @@ export default function PaymentComposer({ network }: Props) {
     const key = paymentDraftStorageKey(sessionAddress, network);
     if (hydratedDraftKey !== key) return;
     savePaymentDraft(sessionStorage, sessionAddress, network, {
-      version: 3,
+      version: 4,
+      action,
       source,
       recipients,
       memo,
@@ -229,7 +243,7 @@ export default function PaymentComposer({ network }: Props) {
       addOnChainProof,
       signingWindowSeconds,
     });
-  }, [sessionAddress, network, hydratedDraftKey, source, recipients, memo, privateNote, addOnChainProof, signingWindowSeconds]);
+  }, [sessionAddress, network, hydratedDraftKey, action, source, recipients, memo, privateNote, addOnChainProof, signingWindowSeconds]);
 
   useEffect(() => {
     if (!sourceValid) {
@@ -278,93 +292,83 @@ export default function PaymentComposer({ network }: Props) {
         loadNetworkParameters(network),
       ]);
       if (!hasSharedSigningControl(freshSourceAccount)) {
-        throw new Error('Payments in MultiSig Tools are prepared from treasuries with shared signing control. This account is currently single-signature.');
+        throw new Error('Payments and account creation in MultiSig Tools are prepared from treasuries with shared signing control. This account is currently single-signature.');
       }
 
       const freshAssets = paymentAssetChoices(freshSourceAccount);
-      const structuredRows = recipients.map((recipient, index) => {
-        const asset = freshAssets.find((choice) => choice.key === recipient.assetKey);
-        if (!asset) throw new Error(`Recipient ${index + 1}: the selected asset is no longer available in this treasury.`);
-        return {
-          line: index + 1,
-          destination: recipient.destination.trim(),
-          amount: recipient.amount.trim(),
-          assetToken: assetToken(asset),
-        };
-      });
-      const validated = validateTransferRows('batch', structuredRows, new Map([[freshSourceAccount.accountId, freshSourceAccount]]), freshSourceAccount.accountId);
-      if (validated.issues.length > 0) {
-        throw new Error(validated.issues.map((issue) => issue.line ? `Recipient ${issue.line}: ${issue.message}` : issue.message).join('\n'));
-      }
+      const accountCache = new Map<string, Promise<StellarAccountSnapshot>>([
+        [freshSourceAccount.accountId, Promise.resolve(freshSourceAccount)],
+      ]);
+      const accountLoader = (accountId: string, requestedNetwork: StellarNetwork) => {
+        const key = accountId;
+        const cached = accountCache.get(key);
+        if (cached) return cached;
+        const pending = loadAccount(accountId, requestedNetwork);
+        accountCache.set(key, pending);
+        return pending;
+      };
+      const dependencies = {
+        accountLoader,
+        networkParametersLoader: async () => parameters,
+      };
 
-      const fundingProblems = transferFundingIssues(validated.rows, new Map([[freshSourceAccount.accountId, freshSourceAccount]]), freshSourceAccount.accountId, parameters);
-      if (fundingProblems.length > 0) throw new Error(fundingProblems.map((issue) => issue.message).join('\n'));
+      const privateCommitment = addOnChainProof ? createPrivateCommitment(privateNote) : null;
+      const requestPrivateNote = privateNotePresent && !addOnChainProof ? normalizePrivateNote(privateNote) : '';
+      const memoInput = addOnChainProof
+        ? { memoHashHex: privateCommitment!.hashHex }
+        : { memo: memo.trim() || undefined };
 
-      let transaction;
-      let privateCommitment = null;
-      let requestPrivateNote = '';
-
-      if (validated.rows.length === 1) {
-        const row = validated.rows[0];
-        const destinationAccount = await loadAccount(row.destination, network).catch((cause) => {
-          if (cause instanceof AccountNotFoundError) return null;
-          throw cause;
-        });
-        const destinationProblem = paymentDestinationIssue(row.asset, row.destination, destinationAccount, row.amount);
-        if (destinationProblem) throw new Error(destinationProblem);
-
-        const builder = new TransactionBuilder(new Account(freshSourceAccount.accountId, freshSourceAccount.sequence), {
-          fee: String(parameters.baseFeeInStroops),
-          networkPassphrase: networkPassphrase(network),
-        });
-        if (destinationAccount) {
-          builder.addOperation(Operation.payment({ destination: row.destination, asset: stellarAssetForChoice(row.asset), amount: row.amount }));
-        } else {
-          const minimumStartingBalance = BigInt(parameters.baseReserveInStroops) * 2n;
-          if (stellarAmountToStroops(row.amount) < minimumStartingBalance) {
-            const networkLabel = network === 'public' ? 'Mainnet' : 'Testnet';
-            throw new Error(`This address is not active on ${networkLabel}. Creating it requires at least ${stroopsToStellarAmount(minimumStartingBalance)} XLM.`);
-          }
-          builder.addOperation(Operation.createAccount({ destination: row.destination, startingBalance: row.amount }));
+      let xdr: string;
+      if (action === 'create_account') {
+        if (!canConvertToCreateAccount) {
+          throw new Error('Create account requires exactly one recipient and XLM. Switch back to Payment to keep multiple recipients or issued assets.');
         }
-
-        if (addOnChainProof) {
-          privateCommitment = createPrivateCommitment(privateNote);
-          builder.addMemo(Memo.hash(hexToBytes(privateCommitment.hashHex)));
-        } else {
-          if (memo.trim()) builder.addMemo(Memo.text(memo.trim()));
-          if (privateNotePresent) requestPrivateNote = normalizePrivateNote(privateNote);
-        }
-        transaction = builder.setTimeout(signingWindowSeconds).build();
-      } else {
-        if (addOnChainProof) throw new Error('On-chain proof is available only for a single-recipient payment.');
-        const destinations = await loadDestinations([...new Set(validated.rows.map((row) => row.destination))], network);
-        const destinationProblems = transferDestinationIssues(validated.rows, destinations);
-        if (destinationProblems.length > 0) {
-          throw new Error(destinationProblems.map((issue) => issue.line ? `Recipient ${issue.line}: ${issue.message}` : issue.message).join('\n'));
-        }
-        transaction = buildTransferTransaction({
-          rows: validated.rows,
-          transactionSource: freshSourceAccount.accountId,
-          transactionSourceSequence: freshSourceAccount.sequence,
-          parameters,
+        const recipient = recipients[0];
+        const prepared = await prepareClassicCreateAccount({
           network,
+          sourceAccount: freshSourceAccount.accountId,
+          destination: recipient.destination.trim(),
+          startingBalance: recipient.amount.trim(),
+          ...memoInput,
           lifetimeSeconds: signingWindowSeconds,
-          explicitOperationSources: false,
-          memo: memo.trim() || undefined,
+        }, dependencies);
+        xdr = prepared.xdr;
+      } else {
+        const payments = recipients.map((recipient, index) => {
+          const asset = freshAssets.find((choice) => choice.key === recipient.assetKey);
+          if (!asset) throw new Error(`Recipient ${index + 1}: the selected asset is no longer available in this treasury.`);
+          return {
+            destination: recipient.destination.trim(),
+            amount: recipient.amount.trim(),
+            asset: asset.issuer
+              ? { type: 'credit' as const, code: asset.code, issuer: asset.issuer }
+              : { type: 'native' as const },
+          };
         });
-        if (privateNotePresent) requestPrivateNote = normalizePrivateNote(privateNote);
+        const prepared = await prepareClassicPayment({
+          network,
+          sourceAccount: freshSourceAccount.accountId,
+          payments,
+          ...memoInput,
+          lifetimeSeconds: signingWindowSeconds,
+        }, dependencies);
+        xdr = prepared.xdr;
       }
 
       writeReviewHandoff(sessionStorage, {
-        xdr: transaction.toXDR(),
+        xdr,
         network,
         privateNote: requestPrivateNote || null,
         privateCommitment,
       });
-      navigateWorkspace('/signing-room', { state: { returnTo: stellarHref('/new/payment'), returnLabel: 'Edit payment' } });
+      navigateWorkspace('/signing-room', {
+        state: {
+          returnTo: stellarHref(action === 'create_account' ? '/new/create-account' : '/new/payment'),
+          returnLabel: action === 'create_account' ? 'Edit account creation' : 'Edit payment',
+        },
+      });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to prepare this payment.');
+      setError(cause instanceof Error ? cause.message : `Unable to prepare this ${action === 'create_account' ? 'account creation' : 'payment'}.`);
       setBusy(false);
     }
   }
@@ -374,7 +378,12 @@ export default function PaymentComposer({ network }: Props) {
       <div className="mx-auto max-w-4xl">
         <div className="mb-6"><WorkflowProgress current="prepare" /></div>
         <a href={stellarHref('/new')} className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black dark:text-neutral-300 dark:hover:text-white"><ArrowLeft className="h-4 w-4" />New</a>
-        <div className="mt-4 flex flex-wrap items-center gap-3"><h1 className="text-3xl font-bold tracking-tight">Send payment</h1><NetworkBadge network={network} /></div>
+        <div className="mt-4 flex flex-wrap items-center gap-3"><h1 className="text-3xl font-bold tracking-tight">{action === 'create_account' ? 'Create Stellar account' : 'Send payment'}</h1><NetworkBadge network={network} /></div>
+        <div className="mt-4 inline-flex rounded-xl border border-black/10 bg-white p-1 dark:border-white/10 dark:bg-white/5" role="group" aria-label="Classic action">
+          <button type="button" onClick={() => switchAction('payment')} className={`rounded-lg px-4 py-2 text-sm font-semibold ${action === 'payment' ? 'bg-black text-white dark:bg-white dark:text-black' : 'text-neutral-600 dark:text-neutral-300'}`}>Payment</button>
+          <button type="button" onClick={() => switchAction('create_account')} className={`rounded-lg px-4 py-2 text-sm font-semibold ${action === 'create_account' ? 'bg-black text-white dark:bg-white dark:text-black' : 'text-neutral-600 dark:text-neutral-300'}`}>Create account</button>
+        </div>
+        <p className="mt-2 text-sm leading-6 text-neutral-500 dark:text-neutral-400">{action === 'create_account' ? 'CreateAccount is explicit: the destination must not exist yet and the starting balance is XLM. Switch back to Payment without losing these fields.' : 'Payment requires an active destination. For a new G-address, switch explicitly to Create account; MultiSig Tools will never change the operation automatically.'}</p>
 
         <form onSubmit={buildPayment} className="mt-6 grid gap-5 rounded-2xl border border-black/10 bg-white p-5 shadow-sm shadow-black/[0.02] dark:border-white/10 dark:bg-white/5 sm:p-6 lg:grid-cols-2">
           <div className="lg:col-span-2">
@@ -394,10 +403,10 @@ export default function PaymentComposer({ network }: Props) {
           <section className="lg:col-span-2" aria-labelledby="payment-recipients-heading">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h2 id="payment-recipients-heading" className="text-sm font-semibold">Recipients</h2>
-                <p className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Add another recipient to include multiple payments in the same proposal.</p>
+                <h2 id="payment-recipients-heading" className="text-sm font-semibold">{action === 'create_account' ? 'New account' : 'Recipients'}</h2>
+                <p className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">{action === 'create_account' ? 'Enter the inactive G-address and its starting XLM balance.' : 'Add another recipient to include multiple payments in the same proposal.'}</p>
               </div>
-              <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">{recipients.length} {recipients.length === 1 ? 'recipient' : 'recipients'}</span>
+              {action === 'payment' && <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">{recipients.length} {recipients.length === 1 ? 'recipient' : 'recipients'}</span>}
             </div>
 
             <div className="mt-3 space-y-3">
@@ -440,7 +449,7 @@ export default function PaymentComposer({ network }: Props) {
                       </label>
                       <div>
                         <div className="mb-2 text-sm font-semibold">Asset</div>
-                        <PaymentAssetPicker assets={assets} value={asset?.key ?? 'native'} onChange={(assetKey) => updateRecipient(index, { assetKey })} disabled={!sourceAccount} ariaLabel={`Recipient ${index + 1} asset`} />
+                        {action === 'create_account' ? <div className="rounded-xl border border-black/10 bg-black/[0.015] px-4 py-3 text-sm font-semibold dark:border-white/10 dark:bg-white/[0.025]">XLM <span className="ml-1 font-normal text-neutral-400">required for CreateAccount</span></div> : <PaymentAssetPicker assets={assets} value={asset?.key ?? 'native'} onChange={(assetKey) => updateRecipient(index, { assetKey })} disabled={!sourceAccount} ariaLabel={`Recipient ${index + 1} asset`} />}
                       </div>
                     </div>
                     {recipient.amount && !amountValid && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Enter an amount greater than 0 with up to 7 decimal places.</div>}
@@ -449,17 +458,19 @@ export default function PaymentComposer({ network }: Props) {
               })}
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <button type="button" disabled={busy || recipients.length >= 100} onClick={addRecipient} className="inline-flex items-center gap-2 rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold hover:bg-black/[0.03] disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/[0.06]"><Plus className="h-4 w-4" />Add recipient</button>
-              <span className="text-xs text-neutral-500 dark:text-neutral-400">Up to 100 payment operations in one Stellar transaction.</span>
-            </div>
+            {action === 'payment' && <>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button type="button" disabled={busy || recipients.length >= 100} onClick={addRecipient} className="inline-flex items-center gap-2 rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold hover:bg-black/[0.03] disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/[0.06]"><Plus className="h-4 w-4" />Add recipient</button>
+                <span className="text-xs text-neutral-500 dark:text-neutral-400">Up to 100 payment operations in one Stellar transaction.</span>
+              </div>
 
-            <details className="mt-4 rounded-xl border border-dashed border-black/10 p-3 dark:border-white/10">
-              <summary className="cursor-pointer text-sm font-semibold">Paste a recipient list</summary>
-              <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Optional shortcut. Use recipient, amount, asset as CSV, tab-separated, or whitespace-separated rows. Saved Address Book names and held asset codes are resolved into the same editable rows above.</p>
-              <textarea value={pasteInput} onChange={(event) => setPasteInput(event.target.value)} rows={5} spellCheck={false} placeholder={'Alice, 150, USDC\nBob, 27.5, XLM'} className={`mt-2 w-full resize-y rounded-xl border border-black/10 bg-black/[0.015] p-3 font-mono text-sm leading-6 outline-none dark:border-white/10 dark:bg-white/[0.025] ${focusClass}`} />
-              <div className="mt-2 flex justify-end"><button type="button" disabled={busy || !pasteInput.trim() || !sourceAccount} onClick={importRecipientList} className="rounded-lg border border-black/10 px-3 py-2 text-sm font-semibold hover:bg-black/[0.03] disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/[0.06]">Use pasted rows</button></div>
-            </details>
+              <details className="mt-4 rounded-xl border border-dashed border-black/10 p-3 dark:border-white/10">
+                <summary className="cursor-pointer text-sm font-semibold">Paste a recipient list</summary>
+                <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Optional shortcut. Use recipient, amount, asset as CSV, tab-separated, or whitespace-separated rows. Saved Address Book names and held asset codes are resolved into the same editable rows above.</p>
+                <textarea value={pasteInput} onChange={(event) => setPasteInput(event.target.value)} rows={5} spellCheck={false} placeholder={'Alice, 150, USDC\nBob, 27.5, XLM'} className={`mt-2 w-full resize-y rounded-xl border border-black/10 bg-black/[0.015] p-3 font-mono text-sm leading-6 outline-none dark:border-white/10 dark:bg-white/[0.025] ${focusClass}`} />
+                <div className="mt-2 flex justify-end"><button type="button" disabled={busy || !pasteInput.trim() || !sourceAccount} onClick={importRecipientList} className="rounded-lg border border-black/10 px-3 py-2 text-sm font-semibold hover:bg-black/[0.03] disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/[0.06]">Use pasted rows</button></div>
+              </details>
+            </>}
 
             {fundingState.error && <div className="mt-3 text-sm text-red-700 dark:text-red-300">{fundingState.error}</div>}
           </section>
@@ -527,7 +538,7 @@ export default function PaymentComposer({ network }: Props) {
           {error && <div className="whitespace-pre-line rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-800 dark:text-red-200 lg:col-span-2"><div className="flex gap-2"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div></div>}
 
           <div className="flex justify-end border-t border-black/10 pt-5 dark:border-white/10 lg:col-span-2">
-            <button type="submit" disabled={!canContinue} className={`flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-40 ${primaryClass}`}>{busy && <LoaderCircle className="h-4 w-4 animate-spin" />}Review payment <ArrowRight className="h-4 w-4" /></button>
+            <button type="submit" disabled={!canContinue} className={`flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-40 ${primaryClass}`}>{busy && <LoaderCircle className="h-4 w-4 animate-spin" />}{action === 'create_account' ? 'Review account creation' : 'Review payment'} <ArrowRight className="h-4 w-4" /></button>
           </div>
         </form>
       </div>

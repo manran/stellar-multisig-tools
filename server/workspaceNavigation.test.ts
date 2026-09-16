@@ -14,6 +14,7 @@ const expectedCanonicalPaths = [
   '/inbox',
   '/new',
   '/new/payment',
+  '/new/create-account',
   '/new/batch',
   '/new/claimable',
   '/new/multi-party',
@@ -58,6 +59,12 @@ test('canonical Stellar route inventory matches the public product routes', () =
     assert.equal(stellarWorkspaceRouteForPath(prefixed)?.kind, route.kind);
     assert.equal(stellarWorkspaceRouteForPath(prefixed)?.mode, route.mode);
   }
+});
+
+test('Payment and CreateAccount are distinct canonical entries on the same New surface', () => {
+  assert.equal(stellarWorkspaceRouteForPath('/new/payment')?.kind, 'new');
+  assert.equal(stellarWorkspaceRouteForPath('/new/create-account')?.kind, 'new');
+  assert.equal(stellarWorkspaceRouteForPath('/stellar/new/create-account')?.kind, 'new');
 });
 
 test('retired public URL paths are not routes', () => {

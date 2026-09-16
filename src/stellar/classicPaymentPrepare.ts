@@ -1,19 +1,19 @@
-import type { StellarNetworkParameters } from '../src/stellar/horizon.js';
+import type { StellarNetworkParameters } from './horizon.js';
 import {
   AccountNotFoundError,
   isValidStellarAccountId,
   loadAccount,
   loadNetworkParameters,
-} from '../src/stellar/horizon.js';
-import { isValidStellarTextMemo } from '../src/stellar/memo.js';
-import { paymentAssetChoices, paymentDestinationIssue } from '../src/stellar/paymentAsset.js';
-import { stellarAmountToStroops } from '../src/stellar/reserve.js';
-import { transactionHashHex } from '../src/stellar/signatureMerge.js';
-import { DEFAULT_TRANSACTION_LIFETIME_SECONDS, isTransactionLifetimeSeconds } from '../src/stellar/transactionPreferences.js';
-import { inspectTransactionXdr } from '../src/stellar/transactionXdr.js';
-import { buildTransferTransaction, transferFundingIssues } from '../src/stellar/transferTransactions.js';
-import type { ResolvedTransferRow } from '../src/stellar/structuredTransfers.js';
-import type { StellarAccountSnapshot, StellarNetwork } from '../src/stellar/types.js';
+} from './horizon.js';
+import { isValidStellarTextMemo } from './memo.js';
+import { paymentAssetChoices, paymentDestinationIssue } from './paymentAsset.js';
+import { stellarAmountToStroops } from './reserve.js';
+import { transactionHashHex } from './signatureMerge.js';
+import { DEFAULT_TRANSACTION_LIFETIME_SECONDS, isTransactionLifetimeSeconds } from './transactionPreferences.js';
+import { inspectTransactionXdr } from './transactionXdr.js';
+import { buildTransferTransaction, transferFundingIssues } from './transferTransactions.js';
+import type { ResolvedTransferRow } from './structuredTransfers.js';
+import type { StellarAccountSnapshot, StellarNetwork } from './types.js';
 
 const MAX_PAYMENTS = 100;
 const AMOUNT_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,7})?$/;
@@ -27,6 +27,7 @@ export interface ClassicPaymentInstruction {
   sourceAccount: unknown;
   payments: unknown;
   memo?: unknown;
+  memoHashHex?: unknown;
   lifetimeSeconds?: unknown;
 }
 
@@ -126,6 +127,15 @@ function memoFor(value: unknown): string | undefined {
   return memo || undefined;
 }
 
+function memoHashFor(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const hash = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (!/^[0-9a-f]{64}$/.test(hash)) {
+    throw new ClassicPaymentPrepareError('Hash memo must be exactly 32 bytes encoded as 64 hexadecimal characters.', 400, 'invalid_memo_hash');
+  }
+  return hash;
+}
+
 function lifetimeFor(value: unknown): number {
   if (value === undefined || value === null) return DEFAULT_TRANSACTION_LIFETIME_SECONDS;
   if (typeof value !== 'number' || !isTransactionLifetimeSeconds(value)) {
@@ -139,6 +149,7 @@ export interface NormalizedClassicPaymentInstruction {
   sourceAccount: string;
   payments: Array<{ destination: string; amount: string; asset: ClassicPaymentAssetInput }>;
   memo?: string;
+  memoHashHex?: string;
   lifetimeSeconds: number;
 }
 
@@ -146,11 +157,14 @@ export function normalizeClassicPaymentInstruction(
   input: ClassicPaymentInstruction,
 ): NormalizedClassicPaymentInstruction {
   const memo = memoFor(input.memo);
+  const memoHashHex = memoHashFor(input.memoHashHex);
+  if (memo && memoHashHex) throw new ClassicPaymentPrepareError('Choose either a text memo or a hash memo, not both.', 400, 'invalid_memo');
   return {
     network: networkFor(input.network),
     sourceAccount: accountFor(input.sourceAccount, 'Source account'),
     payments: paymentRows(input.payments),
     ...(memo ? { memo } : {}),
+    ...(memoHashHex ? { memoHashHex } : {}),
     lifetimeSeconds: lifetimeFor(input.lifetimeSeconds),
   };
 }
@@ -164,7 +178,7 @@ export async function prepareClassicPayment(
   dependencies: ClassicPaymentPrepareDependencies = {},
 ): Promise<ClassicPaymentPreparation> {
   const normalized = normalizeClassicPaymentInstruction(input);
-  const { network, sourceAccount, payments, memo, lifetimeSeconds } = normalized;
+  const { network, sourceAccount, payments, memo, memoHashHex, lifetimeSeconds } = normalized;
   const accountLoader = dependencies.accountLoader ?? loadAccount;
   const networkParametersLoader = dependencies.networkParametersLoader ?? loadNetworkParameters;
 
@@ -219,7 +233,7 @@ export async function prepareClassicPayment(
     } catch (cause) {
       if (cause instanceof AccountNotFoundError) {
         throw new ClassicPaymentPrepareError(
-          `Destination ${destination} is not active on this network. classic.payment.prepare never silently changes a Payment into CreateAccount.`,
+          `Destination ${destination} is not active on this network. Payment requires an active destination. MultiSig Tools will not silently change it into CreateAccount; switch explicitly to Create account if this is intended.`,
           409,
           'classic_payment_destination_not_active',
         );
@@ -242,6 +256,7 @@ export async function prepareClassicPayment(
     lifetimeSeconds,
     explicitOperationSources: false,
     memo,
+    memoHashHex,
   });
   const xdr = transaction.toXDR();
   const inspection = inspectTransactionXdr(xdr, network);

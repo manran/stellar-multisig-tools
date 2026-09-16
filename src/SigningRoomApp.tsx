@@ -357,7 +357,7 @@ export default function SigningRoomApp() {
     if (!wallet.sessionAddress) return;
     try {
       const returnUrl = new URL(returnTarget.href);
-      if (!returnUrl.pathname.endsWith('/new/payment')) return;
+      if (!returnUrl.pathname.endsWith('/new/payment') && !returnUrl.pathname.endsWith('/new/create-account')) return;
       clearPaymentDraft(sessionStorage, wallet.sessionAddress, network);
     } catch {
       // A malformed return target should not block the freeze transition.

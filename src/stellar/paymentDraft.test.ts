@@ -16,7 +16,8 @@ const owner = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 test('payment drafts round-trip one or many recipients in one unified shape', () => {
   const storage = memoryStorage();
   const draft = {
-    version: 3 as const,
+    version: 4 as const,
+    action: 'create_account' as const,
     source: 'GSOURCE',
     recipients: [
       { destination: 'GDEST1', amount: '12.5', assetKey: 'native' },
@@ -31,6 +32,18 @@ test('payment drafts round-trip one or many recipients in one unified shape', ()
   assert.deepEqual(loadPaymentDraft(storage, owner, 'public'), draft);
   assert.equal(loadPaymentDraft(storage, owner, 'testnet'), null);
   assert.notEqual(paymentDraftStorageKey(owner, 'public'), paymentDraftStorageKey(owner, 'testnet'));
+  assert.match(paymentDraftStorageKey(owner, 'public'), /payment-draft\.v4:/);
+});
+
+test('v3 payment drafts migrate to explicit payment action', () => {
+  const storage = memoryStorage();
+  const legacyKey = `multisig-tools.stellar.payment-draft.v3:public:${owner}`;
+  storage.setItem(legacyKey, JSON.stringify({
+    version: 3, source: 'GSOURCE', recipients: [{ destination: 'GDEST', amount: '5', assetKey: 'native' }],
+    memo: '', privateNote: '', addOnChainProof: false, signingWindowSeconds: 86400,
+  }));
+  assert.equal(loadPaymentDraft(storage, owner, 'public')?.action, 'payment');
+  assert.equal(loadPaymentDraft(storage, owner, 'public')?.version, 4);
 });
 
 test('v2 single-recipient drafts migrate into the first unified recipient row', () => {
@@ -48,7 +61,8 @@ test('v2 single-recipient drafts migrate into the first unified recipient row', 
     signingWindowSeconds: 86400,
   }));
   assert.deepEqual(loadPaymentDraft(storage, owner, 'public'), {
-    version: 3,
+    version: 4,
+    action: 'payment',
     source: 'GSOURCE',
     recipients: [{ destination: 'GDEST', amount: '12.5', assetKey: 'native' }],
     memo: 'previous public memo',
@@ -74,7 +88,8 @@ test('v1 mutually-exclusive context drafts migrate without losing entered text',
     signingWindowSeconds: 86400,
   }));
   assert.deepEqual(loadPaymentDraft(storage, owner, 'public'), {
-    version: 3,
+    version: 4,
+    action: 'payment',
     source: 'GSOURCE',
     recipients: [{ destination: 'GDEST', amount: '12.5', assetKey: 'native' }],
     memo: 'previous public memo',
@@ -86,14 +101,15 @@ test('v1 mutually-exclusive context drafts migrate without losing entered text',
 
 test('invalid or stale draft payloads fail closed', () => {
   const storage = memoryStorage();
-  storage.setItem(paymentDraftStorageKey(owner, 'public'), JSON.stringify({ version: 3, signingWindowSeconds: 123 }));
+  storage.setItem(paymentDraftStorageKey(owner, 'public'), JSON.stringify({ version: 4, action: 'payment', signingWindowSeconds: 123 }));
   assert.equal(loadPaymentDraft(storage, owner, 'public'), null);
 });
 
-test('successful handoff clears current v3 and both legacy scoped payment drafts', () => {
+test('successful handoff clears current v4 and legacy scoped payment drafts', () => {
   const storage = memoryStorage();
   savePaymentDraft(storage, owner, 'public', {
-    version: 3,
+    version: 4,
+    action: 'payment',
     source: '', recipients: [{ destination: '', amount: '', assetKey: 'native' }], memo: '', privateNote: '', addOnChainProof: false, signingWindowSeconds: 86400,
   });
   storage.setItem(`multisig-tools.stellar.payment-draft.v2:public:${owner}`, JSON.stringify({ stale: true }));

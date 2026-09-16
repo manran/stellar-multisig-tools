@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { PrivateCommitmentRecord } from '../src/stellar/privateCommitment.js';
-import { normalizeClassicPaymentInstruction, prepareClassicPayment, type ClassicPaymentInstruction } from './classicPaymentPrepareService.js';
+import { normalizeClassicPaymentInstruction, prepareClassicPayment, type ClassicPaymentInstruction } from '../src/stellar/classicPaymentPrepare.js';
 import type { SigningRequestSnapshot } from '../src/stellar/requestTypes.js';
 import type { StellarNetwork } from '../src/stellar/types.js';
 import { inspectTransactionXdr } from '../src/stellar/transactionXdr.js';

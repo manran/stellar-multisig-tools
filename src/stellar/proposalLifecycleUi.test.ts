@@ -230,7 +230,9 @@ test('Human Inbox separates Request status from the current signer next action',
 
 test('Payment grows from one recipient to many inside one composer', () => {
   assert.doesNotMatch(newTransaction, /title="Batch payment"/);
-  assert.match(newTransaction, /isPayment \|\| isBatch[\s\S]*<PaymentComposer/);
+  assert.match(newTransaction, /title="Create Stellar account"/);
+  assert.match(newTransaction, /'\/new\/create-account'/);
+  assert.match(newTransaction, /isPayment \|\| isCreateAccount \|\| isBatch[\s\S]*<PaymentComposer/);
   assert.match(payment, /const \[recipients, setRecipients\]/);
   assert.match(payment, /Add recipient/);
   assert.match(payment, /Add another recipient to include multiple payments in the same proposal/);
@@ -238,8 +240,11 @@ test('Payment grows from one recipient to many inside one composer', () => {
   assert.match(payment, /Choose saved recipient/);
   assert.match(payment, /AddressAliasEditor/);
   assert.match(payment, /Paste a recipient list/);
-  assert.match(payment, /buildTransferTransaction/);
-  assert.match(payment, /transferDestinationIssues/);
+  assert.match(payment, /prepareClassicPayment/);
+  assert.match(payment, /prepareClassicCreateAccount/);
+  assert.match(payment, /switchAction\('create_account'\)/);
+  assert.match(payment, /Switch back to Payment without losing these fields/);
+  assert.doesNotMatch(payment, /Operation\.createAccount|Operation\.payment/);
   assert.doesNotMatch(payment, /navigateWorkspace\('\/new\/batch'/);
   assert.doesNotMatch(payment, /batchPromotionDraft|saveTransactionTemplateDraft\(sessionStorage, sessionAddress, network, 'batch'/);
 });

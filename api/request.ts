@@ -16,7 +16,7 @@ import {
 import type { ConfiguredIntegrationCredential } from '../server/integrationCredentialService.js';
 import { CallerAuthenticationError, machineCallerFromRequest, verifiedSignerSessionFromRequest } from '../server/callerAuthentication.js';
 import { createIntegrationPaymentSigningRequest, createIntegrationSigningRequest } from '../server/integrationRequestService.js';
-import { ClassicPaymentPrepareError, type ClassicPaymentInstruction } from '../server/classicPaymentPrepareService.js';
+import { ClassicPaymentPrepareError, type ClassicPaymentInstruction } from '../src/stellar/classicPaymentPrepare.js';
 import { BoxServiceError } from '../server/boxService.js';
 import {
   contributionGrantCookie,

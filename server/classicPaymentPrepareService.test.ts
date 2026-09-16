@@ -3,7 +3,7 @@ import test from 'node:test';
 import { FeeBumpTransaction, Keypair, Networks, TransactionBuilder } from '@stellar/stellar-sdk/base';
 import { AccountNotFoundError, type StellarNetworkParameters } from '../src/stellar/horizon.js';
 import type { StellarAccountSnapshot } from '../src/stellar/types.js';
-import { ClassicPaymentPrepareError, prepareClassicPayment } from './classicPaymentPrepareService.js';
+import { ClassicPaymentPrepareError, prepareClassicPayment } from '../src/stellar/classicPaymentPrepare.js';
 
 const SOURCE = Keypair.random().publicKey();
 const A = Keypair.random().publicKey();
@@ -62,6 +62,19 @@ test('classic.payment.prepare builds one exact unsigned Payment transaction from
   assert.equal(parsed.source, SOURCE);
   assert.equal(parsed.sequence, '8');
   assert.equal(parsed.operations[0].type, 'payment');
+});
+
+test('classic.payment.prepare preserves a hash memo for Private Note proof', async () => {
+  const memoHashHex = 'ab'.repeat(32);
+  const result = await prepareClassicPayment({
+    network: 'testnet', sourceAccount: SOURCE,
+    payments: [{ destination: A, amount: '2', asset: { type: 'native' } }],
+    memoHashHex,
+  }, dependencies());
+  const parsed = TransactionBuilder.fromXdr(result.xdr, Networks.TESTNET);
+  if (parsed instanceof FeeBumpTransaction) assert.fail('Expected a classic transaction.');
+  assert.equal(parsed.memo.type, 'hash');
+  assert.equal(Buffer.from(parsed.memo.value as Uint8Array).toString('hex'), memoHashHex);
 });
 
 test('classic.payment.prepare uses one transaction for a batch and charges one fee per operation', async () => {

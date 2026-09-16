@@ -212,6 +212,15 @@ The root HTML repeats the same `service-desc` and `service-doc` links for DOM-on
 
 A production domain owns exactly one Stellar network. Clients should discover it once and send only matching operation input; a cross-deployment request fails with HTTP 409 and `deployment_network_mismatch`.
 
+Classic business Prepare is explicit rather than inferred from destination state:
+
+```text
+POST /api/payment-prepare         # Payment/batch; destination accounts must already be active
+POST /api/account-create-prepare  # CreateAccount; destination must still be inactive
+```
+
+Both operations accept Human sessions, signer-Agent credentials, or scoped Integration credentials and return exact unsigned XDR after fresh Stellar validation. They share the same source-account authorization checks used by the Request lifecycle. Payment and CreateAccount never auto-convert into each other. A Human composer may switch between the two while preserving compatible form fields; an Agent or Service chooses the operation explicitly. Both support either a text memo or a 32-byte `memoHashHex`, never both.
+
 The canonical Soroban Agent workflow is Intent-first:
 
 ```text

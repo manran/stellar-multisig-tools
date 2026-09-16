@@ -66,6 +66,7 @@ function requestBody(path: string, method: string): OpenApiObject | undefined {
   if (path === '/api/contract-prepare' && method === 'post') return body(schema('ContractPrepareInput'));
   if (path === '/api/contracts' && (method === 'put' || method === 'delete')) return body(schema('ContractWorkspaceInput'));
   if (path === '/api/payment-prepare' && method === 'post') return body(schema('ClassicPaymentPrepareInput'));
+  if (path === '/api/account-create-prepare' && method === 'post') return body(schema('ClassicCreateAccountPrepareInput'));
   if (path === '/api/request' && method === 'post') return body(schema('ProposalCreateInput'));
   if (path === '/api/request' && method === 'patch') return body(schema('ProposalPatchInput'));
   return undefined;
@@ -84,6 +85,7 @@ function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/api/contracts' && method === 'put') return schema('ContractWorkspaceKeepResult');
   if (path === '/api/contracts' && method === 'delete') return schema('ContractWorkspaceForgetResult');
   if (path === '/api/payment-prepare') return schema('ClassicPaymentPrepareResult');
+  if (path === '/api/account-create-prepare') return schema('ClassicCreateAccountPrepareResult');
   if (path === '/api/request') return schema('ProposalResult');
   return { type: 'object', additionalProperties: true };
 }
@@ -95,7 +97,7 @@ function security(path: string, method: string, access: HeadlessOperationAccess)
     return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
   }
   if (path === '/api/contracts') return [{ agentBearer: [] }, { humanSession: [] }];
-  if (path === '/api/payment-prepare') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
+  if (path === '/api/payment-prepare' || path === '/api/account-create-prepare') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
   if (path === '/api/request' && method === 'put') return [{ humanSession: [] }, { requestCapability: [] }];
   if (path === '/api/request' && (method === 'post' || method === 'get')) {
     return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
@@ -754,6 +756,7 @@ const components: OpenApiObject = {
         sourceAccount: accountId,
         payments: { type: 'array', minItems: 1, maxItems: 100, items: schema('ClassicPaymentInput') },
         memo: { type: 'string' },
+        memoHashHex: { type: 'string', pattern: '^[0-9a-fA-F]{64}$' },
         lifetimeSeconds: { type: 'integer', enum: [3600, 86400, 604800], default: 86400 },
       },
       additionalProperties: false,
@@ -766,6 +769,7 @@ const components: OpenApiObject = {
         sourceAccount: accountId,
         payments: { type: 'array', minItems: 1, maxItems: 100, items: schema('ClassicPaymentInput') },
         memo: { type: 'string' },
+        memoHashHex: { type: 'string', pattern: '^[0-9a-fA-F]{64}$' },
         lifetimeSeconds: { type: 'integer', enum: [3600, 86400, 604800], default: 86400 },
       },
       additionalProperties: false,
@@ -780,6 +784,38 @@ const components: OpenApiObject = {
         sourceAccount: accountId,
         sourceSequence: { type: 'string' },
         paymentCount: { type: 'integer', minimum: 1, maximum: 100 },
+        feeStroops: { type: 'string', pattern: '^\\d+$' },
+        validUntil: timestamp,
+        transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        xdr,
+      },
+      additionalProperties: false,
+    },
+    ClassicCreateAccountPrepareInput: {
+      type: 'object',
+      required: ['network', 'sourceAccount', 'destination', 'startingBalance'],
+      properties: {
+        network: stellarNetwork,
+        sourceAccount: accountId,
+        destination: accountId,
+        startingBalance: { type: 'string', pattern: '^(?:0|[1-9]\\d*)(?:\\.\\d{1,7})?$' },
+        memo: { type: 'string' },
+        memoHashHex: { type: 'string', pattern: '^[0-9a-fA-F]{64}$' },
+        lifetimeSeconds: { type: 'integer', enum: [3600, 86400, 604800], default: 86400 },
+      },
+      additionalProperties: false,
+    },
+    ClassicCreateAccountPrepareResult: {
+      type: 'object',
+      required: ['operation', 'version', 'network', 'sourceAccount', 'sourceSequence', 'destination', 'startingBalance', 'feeStroops', 'validUntil', 'transactionHash', 'xdr'],
+      properties: {
+        operation: { type: 'string', const: 'classic.account.create.prepare' },
+        version: operationVersion,
+        network: stellarNetwork,
+        sourceAccount: accountId,
+        sourceSequence: { type: 'string' },
+        destination: accountId,
+        startingBalance: { type: 'string' },
         feeStroops: { type: 'string', pattern: '^\\d+$' },
         validUntil: timestamp,
         transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
