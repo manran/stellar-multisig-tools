@@ -13,9 +13,11 @@ import {
 import { useAddressBook } from './AddressBookContext';
 import PrivateWorkspaceUnlock from './PrivateWorkspaceUnlock';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
+import SorobanIntentActivityCard from './SorobanIntentActivityCard';
 import { useStellarWallet } from './StellarWalletContext';
 import { horizonTransactionUrl, isValidStellarAccountId } from './stellar/horizon';
 import type { ActivityFactEvent, ActivityRequestItem, ActivityResponse } from './stellar/activityTypes';
+import type { WorkActivityItem, WorkActivityResponse } from './stellar/workActivityTypes';
 import { privateSessionAddressHeaders } from './stellar/privateSessionTransport';
 import { projectTransactionSemantics } from './stellar/transactionSemantics';
 import type { StellarNetwork } from './stellar/types';
@@ -31,8 +33,17 @@ function shortAddress(address: string) {
   return address.length <= 22 ? address : `${address.slice(0, 10)}…${address.slice(-8)}`;
 }
 
+interface ActivityData {
+  address: string;
+  network: StellarNetwork;
+  accountId?: string;
+  items: ActivityRequestItem[];
+  workItems?: WorkActivityItem[];
+  nextCursor?: string;
+}
+
 const MAX_ACTIVITY_PROJECTIONS = 8;
-const activityProjectionCache = new Map<string, ActivityResponse>();
+const activityProjectionCache = new Map<string, ActivityData>();
 
 function activityProjectionKey(
   address: string,
@@ -44,11 +55,11 @@ function activityProjectionKey(
   return unlockExpiresAt ? `${unlockExpiresAt}:${network}:${address}:${scope}:${accountId}` : '';
 }
 
-function cachedActivityProjection(key: string): ActivityResponse | null {
+function cachedActivityProjection(key: string): ActivityData | null {
   return key ? activityProjectionCache.get(key) ?? null : null;
 }
 
-function cacheActivityProjection(key: string, data: ActivityResponse) {
+function cacheActivityProjection(key: string, data: ActivityData) {
   if (!key) return;
   activityProjectionCache.delete(key);
   activityProjectionCache.set(key, data);
@@ -235,7 +246,7 @@ export default function ActivityApp() {
   const [accountId, setAccountId] = useState(initialAccountId);
   const [accountOptions, setAccountOptions] = useState<string[]>([]);
   const [treasuryNames, setTreasuryNames] = useState<Record<string, string>>({});
-  const [data, setData] = useState<ActivityResponse | null>(() => cachedActivityProjection(initialProjectionKey));
+  const [data, setData] = useState<ActivityData | null>(() => cachedActivityProjection(initialProjectionKey));
   const [loading, setLoading] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [error, setError] = useState('');
@@ -259,9 +270,16 @@ export default function ActivityApp() {
     if (!accountId && ids.length === 1) setAccountId(ids[0]);
   }, [isTreasuryActivity, address, network, accountId, routeNetworkMismatch]);
 
+  const activityRequestItems = useMemo(() => {
+    if (!data) return [];
+    if (isTreasuryActivity) return data.items;
+    return (data.workItems ?? [])
+      .filter((item) => item.kind === 'request')
+      .map((item) => item.request);
+  }, [data, isTreasuryActivity]);
   const activityAccountIds = useMemo(
-    () => data ? [...new Set(data.items.flatMap((item) => item.accountIds))] : [],
-    [data],
+    () => [...new Set(activityRequestItems.flatMap((item) => item.accountIds))],
+    [activityRequestItems],
   );
   const treasuryNameIds = isTreasuryActivity ? accountOptions : activityAccountIds;
 
@@ -291,10 +309,31 @@ export default function ActivityApp() {
     try {
       const url = new URL('/api/activity', window.location.origin);
       if (isTreasuryActivity && targetAccount) url.searchParams.set('account', targetAccount);
+      else url.searchParams.set('view', 'work');
       if (cursor) url.searchParams.set('cursor', cursor);
       const response = await fetch(url, { cache: 'no-store' });
-      const body = await response.json() as ActivityResponse & { error?: string };
-      if (!response.ok) throw new Error(body.error || 'Unable to load Activity.');
+      const raw = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(raw.error || 'Unable to load Activity.');
+      let body: ActivityData;
+      if (isTreasuryActivity) {
+        const legacy = raw as ActivityResponse;
+        body = {
+          address: legacy.address,
+          network: legacy.network,
+          accountId: legacy.accountId,
+          items: legacy.items,
+          ...(legacy.nextCursor ? { nextCursor: legacy.nextCursor } : {}),
+        };
+      } else {
+        const work = raw as WorkActivityResponse;
+        body = {
+          address: work.address,
+          network: work.network,
+          items: [],
+          workItems: work.workItems,
+          ...(work.nextCursor ? { nextCursor: work.nextCursor } : {}),
+        };
+      }
       if (body.address !== address || body.network !== network) throw new Error('Activity response identity changed.');
       if (isTreasuryActivity && body.accountId !== targetAccount) throw new Error('Activity response treasury changed.');
       const targetProjectionKey = activityProjectionKey(
@@ -306,7 +345,9 @@ export default function ActivityApp() {
       );
       setData((current) => {
         const next = append && current
-          ? { ...body, items: [...current.items, ...body.items] }
+          ? isTreasuryActivity
+            ? { ...body, items: [...current.items, ...body.items] }
+            : { ...body, workItems: [...(current.workItems ?? []), ...(body.workItems ?? [])] }
           : body;
         cacheActivityProjection(targetProjectionKey, next);
         return next;
@@ -338,9 +379,13 @@ export default function ActivityApp() {
   const heading = isTreasuryActivity ? 'Treasury Activity' : 'Activity';
   const subheading = isTreasuryActivity
     ? 'Retained MultiSig Tools proposal and transaction history for this Treasury.'
-    : 'Proposal and transaction history this wallet saved, signed, declined, or otherwise participated in.';
+    : 'Proposal, contract authorization, and transaction history this wallet created, signed, authorized, declined, or otherwise participated in.';
   const accountLabelFor = (id: string) =>
     treasuryDisplayLabel(treasuryNames[id], labelFor(id, 'account')) || shortAddress(id);
+  const personalWorkItems = data?.workItems ?? [];
+  const visibleActivityCount = data
+    ? (isTreasuryActivity ? data.items.length : personalWorkItems.length)
+    : 0;
 
   return (
     <StellarWorkspaceShell active="activity" networkContext={network}>
@@ -398,26 +443,31 @@ export default function ActivityApp() {
             </section>
           )}
 
-          {data && data.items.length === 0 && (
+          {data && visibleActivityCount === 0 && (
             <section className="py-16 text-center sm:py-20">
               <Clock3 className="mx-auto h-8 w-8 text-neutral-400" />
               <h2 className="mt-4 text-2xl font-bold">No Activity yet</h2>
-              <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-neutral-500 dark:text-neutral-400">{isTreasuryActivity ? 'No retained proposal or transaction history is associated with this treasury yet.' : 'Transactions you save or participate in through MultiSig Tools will appear here.'}</p>
+              <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-neutral-500 dark:text-neutral-400">{isTreasuryActivity ? 'No retained proposal or transaction history is associated with this treasury yet.' : 'Transactions and contract authorization work you create or participate in through MultiSig Tools will appear here.'}</p>
             </section>
           )}
 
-          {data && data.items.length > 0 && (
+          {data && visibleActivityCount > 0 && (
             <div className="mt-5 space-y-4">
-              {data.items.map((item, index) => (
-                <ActivityCard
-                  key={item.requestId}
-                  item={item}
-                  currentAddress={data.address}
-                  defaultOpen={data.items.length <= 2 || index === 0}
-                  accountLabelFor={accountLabelFor}
-                  scopeAccountId={isTreasuryActivity ? accountId : undefined}
-                />
-              ))}
+              {isTreasuryActivity
+                ? data.items.map((item, index) => (
+                    <ActivityCard
+                      key={item.requestId}
+                      item={item}
+                      currentAddress={data.address}
+                      defaultOpen={data.items.length <= 2 || index === 0}
+                      accountLabelFor={accountLabelFor}
+                      scopeAccountId={accountId}
+                    />
+                  ))
+                : personalWorkItems.map((item, index) => item.kind === 'request'
+                    ? <ActivityCard key={`request:${item.workId}`} item={item.request} currentAddress={data.address} defaultOpen={personalWorkItems.length <= 2 || index === 0} accountLabelFor={accountLabelFor} />
+                    : <SorobanIntentActivityCard key={`intent:${item.workId}`} item={item} currentAddress={data.address} defaultOpen={personalWorkItems.length <= 2 || index === 0} />
+                  )}
               {data.nextCursor && <div className="flex justify-center pt-2"><button type="button" disabled={loadingOlder} onClick={() => void loadActivity(accountId, data.nextCursor, true)} className="rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/10">{loadingOlder ? 'Loading…' : 'Load older'}</button></div>}
             </div>
           )}

@@ -434,6 +434,14 @@ async function activityPage(
   };
 }
 
+export async function listSignerActivityItems(
+  store: SigningRequestStore,
+  address: string,
+  options: { network: StellarNetwork; knownSignerAddresses?: string[] },
+): Promise<ActivityRequestItem[]> {
+  return listActivityItems(store, address, { ...options, scope: 'signer' });
+}
+
 export async function listSignerActivityPage(
   store: SigningRequestStore,
   address: string,

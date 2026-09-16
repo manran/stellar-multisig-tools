@@ -74,6 +74,9 @@ Execution/audit language follows observed facts rather than workflow aspiration.
 
 `Proposal` scope follows the exact Stellar transaction, not a single Treasury. One atomic transaction may contain operations from multiple source accounts controlled by independent entities, and each source account must satisfy its own authorization policy. The same Proposal may therefore appear in more than one Treasury/account projection. A future business `Party`/entity concept, if added, is a Human/organizational projection and must not replace source-account or signer evidence as the authorization truth.
 
+
+Personal Activity is a projection across both Classic Request facts and Soroban Intent evidence. The opt-in `view=work` query preserves the legacy transaction-only Activity response for existing Agent clients while giving Human/Agent consumers one cursor-ordered history. Historical Soroban access follows proven participation: creator or accepted AUTH contributor, never discovery-candidate status alone. Treasury Activity remains source-account transaction history and is intentionally not widened to arbitrary contract authorization.
+
 Controller invariant:
 
 - Composer owns Draft.

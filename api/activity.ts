@@ -2,6 +2,7 @@ import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js'
 import { blobAuthStore } from '../server/blobAuthStore.js';
 import { blobBoxStore } from '../server/blobBoxStore.js';
 import { blobSigningRequestStore, RequestStorageUnavailableError } from '../server/blobRequestStore.js';
+import { blobSorobanIntentStore } from '../server/blobSorobanIntentStore.js';
 import { authConfigForRequest } from '../server/authConfig.js';
 import { AuthServiceError, requirePrivateWorkspaceSession } from '../server/authService.js';
 import {
@@ -22,6 +23,7 @@ import {
   listTreasuryActivityPage,
 } from '../server/requestActivity.js';
 import { canViewTreasuryActivity } from '../server/treasuryActivityAccess.js';
+import { listWorkActivityPage } from '../server/workActivity.js';
 import { noStoreJson } from '../server/httpResponse.js';
 import { AccountNotFoundError, isValidStellarAccountId, loadAccount } from '../src/stellar/horizon.js';
 import { isValidSigningRequestId } from '../server/requestLocator.js';
@@ -75,6 +77,7 @@ export async function GET(request: Request): Promise<Response> {
     let accountId = url.searchParams.get('account')?.trim() || undefined;
     const requestId = url.searchParams.get('request')?.trim() || undefined;
     const cursor = url.searchParams.get('cursor')?.trim() || undefined;
+    const view = url.searchParams.get('view')?.trim() || undefined;
 
     if (viewer.kind === 'treasury_audit') {
       if (accountId && accountId !== viewer.auditAccountId) {
@@ -90,6 +93,28 @@ export async function GET(request: Request): Promise<Response> {
     }
     if (viewer.kind === 'treasury_audit' && !accountId) {
       return noStoreJson({ error: 'Treasury Audit credentials can read Treasury Activity only.', code: 'treasury_audit_scope_denied' }, 403);
+    }
+
+    if (view === 'work') {
+      if (viewer.kind === 'treasury_audit' || accountId || requestId) {
+        return noStoreJson({
+          error: 'Unified Work Activity is available only for personal Human or Agent history.',
+          code: 'work_activity_scope_denied',
+        }, 400);
+      }
+      const page = await listWorkActivityPage(
+        blobSigningRequestStore,
+        blobSorobanIntentStore,
+        viewer.address,
+        { network: viewer.network, limit: 25, cursor },
+      );
+      return noStoreJson({
+        address: viewer.address,
+        network: viewer.network,
+        actor: viewer.kind,
+        workItems: page.items,
+        ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
+      });
     }
 
     let account;

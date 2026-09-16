@@ -127,6 +127,17 @@ test('Inbox and Dashboard surface source-free Soroban Intents in the same work q
   assert.match(routes, /path: '\/a', kind: 'authorization'/);
 });
 
+test('Personal Activity opts into unified Work history without changing Treasury Activity', () => {
+  const activity = source('../ActivityApp.tsx');
+  const activityApi = source('../../api/activity.ts');
+  assert.match(activity, /else url\.searchParams\.set\('view', 'work'\)/);
+  assert.match(activity, /SorobanIntentActivityCard/);
+  assert.match(activity, /item\.kind === 'request'/);
+  assert.match(activityApi, /view === 'work'/);
+  assert.match(activityApi, /listWorkActivityPage/);
+  assert.match(activityApi, /work_activity_scope_denied/);
+});
+
 test('Activity retention explains that the share link ends without implying the confirmed transaction disappears', () => {
   const notice = source('../ActivityRetentionNotice.tsx');
   const request = source('../RequestApp.tsx');

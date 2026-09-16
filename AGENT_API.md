@@ -248,6 +248,8 @@ For diagnostics and advanced tooling, `POST /api/contract-call` and `POST /api/c
 
 Fresnica CLI, scripts, bots, Agents, and the Web UI are peer consumers of these operations. They must not reproduce a UI click sequence or invent a Contract-only Request lifecycle. Clients branch on typed error `code` values.
 
+`GET /api/activity?view=work` is an additive personal-history projection for Human or signer-Agent callers. It returns one cursor-ordered `workItems[]` stream with `kind=request` or `kind=soroban_intent`; the default `/api/activity` response remains transaction-only for compatibility, and Treasury Activity keeps its existing source-account scope. Soroban Intent history is visible only when the Principal created the Intent or actually contributed detached AUTH; discovery-index membership alone never grants history access.
+
 ## Signer workspace endpoints
 
 Use the same Bearer credential across the Principal's workspace:
@@ -262,6 +264,7 @@ PUT /api/contracts          # Write or Sign
 DELETE /api/contracts       # Write or Sign
 GET /api/inbox
 GET /api/activity
+GET /api/activity?view=work  # opt-in unified Request + Soroban Intent history for this signer Principal
 GET/PATCH/POST /api/request
 ```
 

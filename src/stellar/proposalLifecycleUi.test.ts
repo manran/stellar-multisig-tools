@@ -360,7 +360,7 @@ test('Personal Activity uses shared Treasury identity before Personal note', () 
 test('Personal and Treasury Activity share presentation without sharing data scope', () => {
   assert.match(activityUi, /stellarActivityScopeForPath\(window\.location\.pathname\)/);
   assert.match(activityUi, /activityScope === 'treasury'/);
-  assert.match(activityUi, /Proposal and transaction history this wallet saved, signed, declined, or otherwise participated in/);
+  assert.match(activityUi, /Proposal, contract authorization, and transaction history this wallet created, signed, authorized, declined, or otherwise participated in/);
   assert.match(activityUi, /Retained MultiSig Tools proposal and transaction history for this Treasury/);
   assert.match(activityUi, />View network record<\/a>/);
   assert.doesNotMatch(activityUi, />View on Horizon<\/a>/);

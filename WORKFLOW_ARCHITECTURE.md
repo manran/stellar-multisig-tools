@@ -140,6 +140,9 @@ A fixed external executor therefore remains `Authorization complete · waiting f
 
 When an internally routed Soroban execution continues into the ordinary Proposal lifecycle, the Proposal stores a **server-verified Soroban origin**. The browser may carry the Intent id as navigation context, but the server accepts the link only when the exact Proposal transaction hash matches a durable `execution_prepared` record for the Intent's current AuthorizationPlan revision. Proposal freeze then re-runs enforcing simulation and requires the effects digest to remain identical to that preparation. The client cannot manufacture this relationship by naming an Intent id.
 
+
+Human/Agent **Personal Activity** may project multiple protocol lifecycles without creating a universal Work store. `GET /api/activity?view=work` merges existing Classic Request Activity with durable Soroban Intent evidence under one stable cursor. The legacy transaction-only Activity contract remains the default for compatibility. Historical Intent visibility requires proven participation (creator or accepted AUTH contribution); a stale discovery index is only a candidate locator and never an audit grant. Treasury Activity remains Classic source-account history.
+
 Default portable transaction evidence remains a separate privacy-bounded projection. Machine caller provenance may be a retained audit fact without automatically becoming public/default PDF metadata.
 
 ## 7. Refactor gate
