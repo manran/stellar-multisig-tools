@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { StoredSorobanIntent, StoredSorobanIntentAuthorizationContribution, StoredSorobanIntentExecutionPreparation } from './sorobanIntentStore.js';
+import type { StoredSorobanIntent, StoredSorobanIntentAuthorizationContribution, StoredSorobanIntentExecutionObservation, StoredSorobanIntentExecutionPreparation } from './sorobanIntentStore.js';
 import { projectSorobanIntentEvidence } from './sorobanIntentEvidence.js';
 
 const plan = (digest: string) => ({ authorizationPlanDigest: digest } as StoredSorobanIntent['authorizationPlan']);
@@ -54,8 +54,21 @@ const preparations: StoredSorobanIntentExecutionPreparation[] = [{
   preparedBy: { type: 'service', id: 'fednetwork', label: 'FedNetwork' },
 }];
 
+const observations: StoredSorobanIntentExecutionObservation[] = [
+  {
+    version: 1, transactionHash: 'ab'.repeat(32), authorizationPlanDigest: 'plan-3', authorizationPlanRevision: 3,
+    executionSource: 'GEXECUTOR', ledger: 2001, successful: true, observedAt: '2026-09-15T12:03:05.000Z',
+    networkCreatedAt: '2026-09-15T12:03:00.000Z',
+  },
+  {
+    version: 1, transactionHash: 'cd'.repeat(32), authorizationPlanDigest: 'plan-3', authorizationPlanRevision: 3,
+    executionSource: 'GEXECUTOR', ledger: 2002, successful: false, observedAt: '2026-09-15T12:04:05.000Z',
+    networkCreatedAt: '2026-09-15T12:04:00.000Z',
+  },
+];
+
 test('Soroban Intent evidence projects persisted creation, AUTH, and replan facts without signature payloads', () => {
-  const evidence = projectSorobanIntentEvidence(intent(), contributions, preparations);
+  const evidence = projectSorobanIntentEvidence(intent(), contributions, preparations, observations);
   assert.deepEqual(evidence.map((item) => item.type), [
     'intent_created',
     'authorization_added',
@@ -64,6 +77,8 @@ test('Soroban Intent evidence projects persisted creation, AUTH, and replan fact
     'authorization_plan_revised',
     'authorization_added',
     'execution_prepared',
+    'execution_confirmed',
+    'execution_failed',
   ]);
   assert.deepEqual(evidence[0]?.actor, { type: 'service', id: 'fednetwork', label: 'FedNetwork' });
   assert.equal(evidence[0]?.authorizationPlanDigest, 'plan-1');
@@ -80,6 +95,11 @@ test('Soroban Intent evidence projects persisted creation, AUTH, and replan fact
   assert.equal(evidence[6]?.executionSource, 'GEXECUTOR');
   assert.equal(evidence[6]?.effectsDigest, 'effects-3');
   assert.deepEqual(evidence[6]?.actor, { type: 'service', id: 'fednetwork', label: 'FedNetwork' });
+  assert.equal(evidence[7]?.ledger, 2001);
+  assert.equal(evidence[7]?.successful, true);
+  assert.equal(evidence[7]?.observedAt, '2026-09-15T12:03:05.000Z');
+  assert.equal(evidence[8]?.type, 'execution_failed');
+  assert.equal(evidence[8]?.successful, false);
   assert.equal(JSON.stringify(evidence).includes('SECRET'), false);
   assert.equal(JSON.stringify(evidence).includes('xdr'), false);
 });

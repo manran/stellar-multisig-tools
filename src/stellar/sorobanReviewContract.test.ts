@@ -26,6 +26,8 @@ const intentApi = source('../../api/intent.ts');
 const importedIntentService = source('../../server/importedSorobanIntentService.ts');
 const intentAuthorizationService = source('../../server/sorobanIntentAuthorizationService.ts');
 const intentExecutionService = source('../../server/sorobanIntentExecutionService.ts');
+const intentReconciliationService = source('../../server/sorobanIntentExecutionReconciliationService.ts');
+const intentEvidence = source('../../server/sorobanIntentEvidence.ts');
 const intentPlanningService = source('../../server/sorobanIntentPlanningService.ts');
 const viteConfig = source('../../vite.config.ts');
 const envExample = source('../../.env.example');
@@ -109,6 +111,20 @@ test('final Soroban broadcast remains bound to reviewed effects in both direct a
   assert.match(requestService, /soroban_effects_reauthorization_required/);
   assert.match(effectsDiffView, /Maximum difference/);
   assert.match(effectsDiffView, /Structural change/);
+});
+
+test('external Soroban execution result is independently reconciled from persisted preparation evidence', () => {
+  const reconcileBranch = intentApi.indexOf("body.action === 'reconcile_execution'");
+  const externalExecutorGuard = intentApi.indexOf('externalIntegration && !access.integrationCredential');
+  assert.ok(reconcileBranch >= 0 && externalExecutorGuard > reconcileBranch);
+  assert.match(intentReconciliationService, /listExecutionPreparations/);
+  assert.match(intentReconciliationService, /loadTransactionByHash/);
+  assert.match(intentReconciliationService, /putExecutionObservation/);
+  assert.match(intentReconciliationService, /intent_execution_preparation_not_found/);
+  assert.doesNotMatch(intentReconciliationService, /submittedBy|submitter/);
+  assert.match(intentApi, /listExecutionObservations/);
+  assert.match(intentEvidence, /execution_confirmed/);
+  assert.match(intentEvidence, /execution_failed/);
 });
 
 test('imported prepared Soroban XDR crosses into the source-free Intent workflow', () => {

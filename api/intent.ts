@@ -37,6 +37,10 @@ import {
   SorobanIntentExecutionServiceError,
 } from '../server/sorobanIntentExecutionService.js';
 import {
+  reconcileSorobanIntentExecution,
+  SorobanIntentExecutionReconciliationServiceError,
+} from '../server/sorobanIntentExecutionReconciliationService.js';
+import {
   contributeSorobanIntentAuthorization,
   getSorobanIntentAuthorization,
   SorobanIntentAuthorizationServiceError,
@@ -67,7 +71,7 @@ export async function OPTIONS(): Promise<Response> {
 }
 
 function errorResponse(cause: unknown): Response {
-  if (cause instanceof SorobanIntentExecutionServiceError) {
+  if (cause instanceof SorobanIntentExecutionServiceError || cause instanceof SorobanIntentExecutionReconciliationServiceError) {
     return json({ error: cause.message, code: cause.code, ...(cause.details ? { details: cause.details } : {}) }, cause.status);
   }
   if (
@@ -166,16 +170,17 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
 export async function GET(request: Request): Promise<Response> {
   try {
     const access = await storedIntentAccess(request, 'read');
-    const [contributions, preparations] = await Promise.all([
+    const [contributions, preparations, observations] = await Promise.all([
       blobSorobanIntentStore.listContributions(access.id),
       blobSorobanIntentStore.listExecutionPreparations?.(access.id) ?? Promise.resolve([]),
+      blobSorobanIntentStore.listExecutionObservations?.(access.id) ?? Promise.resolve([]),
     ]);
     return json({
       operation: 'contract.intent.inspect',
       version: 1,
       intent: access.stored,
       authorization: access.authorization,
-      evidence: projectSorobanIntentEvidence(access.stored, contributions, preparations),
+      evidence: projectSorobanIntentEvidence(access.stored, contributions, preparations, observations),
     });
   } catch (cause) {
     return errorResponse(cause);
@@ -405,6 +410,21 @@ export async function PUT(request: Request): Promise<Response> {
   try {
     const access = await storedIntentAccess(request, 'write');
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    if (body.action === 'reconcile_execution') {
+      const result = await reconcileSorobanIntentExecution(
+        blobSorobanIntentStore,
+        access.id,
+        typeof body.transactionHash === 'string' ? body.transactionHash : '',
+      );
+      return json({
+        operation: 'contract.intent.execution.reconcile',
+        version: 1,
+        transactionHash: result.transactionHash,
+        observed: result.observed,
+        replayed: result.replayed,
+        ...(result.observation ? { observation: result.observation } : {}),
+      });
+    }
     const externalIntegration = access.stored.executionPolicy?.mode === 'external';
     if (externalIntegration && !access.integrationCredential) {
       throw new SorobanIntentExecutionServiceError(

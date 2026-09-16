@@ -41,6 +41,18 @@ export interface StoredSorobanIntentExecutionPreparation {
   preparedBy?: MachineCallerProvenance;
 }
 
+export interface StoredSorobanIntentExecutionObservation {
+  version: 1;
+  transactionHash: string;
+  authorizationPlanDigest: string;
+  authorizationPlanRevision: number;
+  executionSource: string;
+  ledger: number;
+  successful: boolean;
+  observedAt: string;
+  networkCreatedAt?: string;
+}
+
 export interface StoredSorobanAuthorizationPlanRevision {
   revision: number;
   authorizationPlan: SorobanAuthorizationPlan;
@@ -74,4 +86,7 @@ export interface SorobanIntentStore {
   putContribution(id: string, contribution: StoredSorobanIntentAuthorizationContribution): Promise<void>;
   listExecutionPreparations?(id: string): Promise<StoredSorobanIntentExecutionPreparation[]>;
   putExecutionPreparation?(id: string, preparation: StoredSorobanIntentExecutionPreparation): Promise<void>;
+  listExecutionObservations?(id: string): Promise<StoredSorobanIntentExecutionObservation[]>;
+  getExecutionObservation?(id: string, transactionHash: string): Promise<StoredSorobanIntentExecutionObservation | null>;
+  putExecutionObservation?(id: string, observation: StoredSorobanIntentExecutionObservation): Promise<void>;
 }

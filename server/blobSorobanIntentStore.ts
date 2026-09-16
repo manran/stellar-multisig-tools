@@ -6,6 +6,7 @@ import type {
   SorobanIntentStore,
   StoredSorobanIntent,
   StoredSorobanIntentAuthorizationContribution,
+  StoredSorobanIntentExecutionObservation,
   StoredSorobanIntentExecutionPreparation,
 } from './sorobanIntentStore.js';
 
@@ -36,6 +37,14 @@ function executionPreparationPrefix(id: string): string {
 function executionPreparationPath(id: string, preparation: StoredSorobanIntentExecutionPreparation): string {
   const timeKey = preparation.preparedAt.replace(/[:.]/g, '-');
   return `${executionPreparationPrefix(id)}${timeKey}-${preparation.transactionHash}.json`;
+}
+
+function executionObservationPrefix(id: string): string {
+  return `intents/${id}/execution-results/`;
+}
+
+function executionObservationPath(id: string, transactionHash: string): string {
+  return `${executionObservationPrefix(id)}${transactionHash}.json`;
 }
 
 async function readJson<T>(pathname: string): Promise<T | null> {
@@ -158,6 +167,39 @@ export const blobSorobanIntentStore: SorobanIntentStore = {
   async putExecutionPreparation(id, preparation) {
     await withBlobStorage(async () => {
       await put(executionPreparationPath(id, preparation), JSON.stringify(preparation), {
+        access: 'private',
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: 'application/json',
+        cacheControlMaxAge: 60,
+      });
+    });
+  },
+
+  async listExecutionObservations(id) {
+    return withBlobStorage(async () => {
+      const values: StoredSorobanIntentExecutionObservation[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await list({ prefix: executionObservationPrefix(id), limit: 100, cursor });
+        for (const blob of page.blobs) {
+          if (!blob.pathname.endsWith('.json')) continue;
+          const value = await readJson<StoredSorobanIntentExecutionObservation>(blob.pathname);
+          if (value) values.push(value);
+        }
+        cursor = page.cursor;
+      } while (cursor);
+      return values.sort((a, b) => a.observedAt.localeCompare(b.observedAt) || a.transactionHash.localeCompare(b.transactionHash));
+    });
+  },
+
+  getExecutionObservation(id, transactionHash) {
+    return readJson<StoredSorobanIntentExecutionObservation>(executionObservationPath(id, transactionHash));
+  },
+
+  async putExecutionObservation(id, observation) {
+    await withBlobStorage(async () => {
+      await put(executionObservationPath(id, observation.transactionHash), JSON.stringify(observation), {
         access: 'private',
         addRandomSuffix: false,
         allowOverwrite: true,

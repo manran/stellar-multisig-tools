@@ -80,10 +80,12 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(intentInspect.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }]);
   assert.equal(intentContribute.operationId, 'contract.intent.contribute');
   assert.deepEqual(intentContribute.security, [{ agentBearer: [] }, { humanSession: [] }]);
-  assert.equal(intentExecution.operationId, 'contract.intent.execution.prepare.integration.intent.execution.prepare.contract.intent.replan.integration.intent.replan');
+  assert.equal(intentExecution.operationId, 'contract.intent.execution.prepare.integration.intent.execution.prepare.contract.intent.execution.reconcile.integration.intent.execution.reconcile.contract.intent.replan.integration.intent.replan');
   assert.deepEqual(intentExecution['x-multisig-operation-ids'], [
     'contract.intent.execution.prepare',
     'integration.intent.execution.prepare',
+    'contract.intent.execution.reconcile',
+    'integration.intent.execution.reconcile',
     'contract.intent.replan',
     'integration.intent.replan',
   ]);
@@ -116,7 +118,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
     'version', 'eventId', 'type', 'occurredAt', 'authorizationPlanDigest', 'authorizationPlanRevision',
   ]);
   assert.deepEqual((schemas.SorobanIntentEvidenceEvent.properties as JsonObject).type, {
-    type: 'string', enum: ['intent_created', 'authorization_added', 'authorization_plan_revised', 'execution_prepared'],
+    type: 'string', enum: ['intent_created', 'authorization_added', 'authorization_plan_revised', 'execution_prepared', 'execution_confirmed', 'execution_failed'],
   });
   assert.deepEqual(schemas.ContractIntentContributionInput.required, ['entryIndex', 'signatureBase64']);
   assert.ok((schemas.ProposalCreateInput.properties as JsonObject).sorobanIntentId);
@@ -124,6 +126,9 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.ok((schemas.SigningRequest.properties as JsonObject).sorobanOrigin);
   assert.deepEqual(schemas.ContractIntentExecutionInput.required, ['executionSource']);
   assert.ok((schemas.ContractIntentExecutionInput.properties as JsonObject).acceptedEffectsDigest);
+  assert.deepEqual(schemas.ContractIntentExecutionReconcileInput.required, ['action', 'transactionHash']);
+  assert.deepEqual(schemas.ContractIntentExecutionReconcileResult.required, ['operation', 'version', 'transactionHash', 'observed', 'replayed']);
+  assert.deepEqual(schemas.SorobanIntentExecutionObservation.required, ['version', 'transactionHash', 'authorizationPlanDigest', 'authorizationPlanRevision', 'executionSource', 'ledger', 'successful', 'observedAt']);
   assert.deepEqual(schemas.SorobanEffectsDiff.required, ['version', 'kind', 'severity', 'requiresExplicitReview', 'requiresReauthorization', 'expectedDigest', 'currentDigest', 'structureChanged', 'maxChangeBasisPoints', 'numericChanges']);
   assert.deepEqual(schemas.ContractIntentReplanInput.required, ['action']);
   assert.deepEqual(schemas.ContractCallBuildInput.required, [

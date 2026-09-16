@@ -2,6 +2,7 @@ import type { SorobanIntentEvidenceEvent } from '../src/stellar/sorobanIntentApi
 import type {
   StoredSorobanIntent,
   StoredSorobanIntentAuthorizationContribution,
+  StoredSorobanIntentExecutionObservation,
   StoredSorobanIntentExecutionPreparation,
 } from './sorobanIntentStore.js';
 
@@ -25,6 +26,7 @@ export function projectSorobanIntentEvidence(
   stored: StoredSorobanIntent,
   contributions: readonly StoredSorobanIntentAuthorizationContribution[],
   preparations: readonly StoredSorobanIntentExecutionPreparation[] = [],
+  observations: readonly StoredSorobanIntentExecutionObservation[] = [],
 ): SorobanIntentEvidenceEvent[] {
   const initial = initialPlan(stored);
   const events: SorobanIntentEvidenceEvent[] = [{
@@ -93,11 +95,29 @@ export function projectSorobanIntentEvidence(
     });
   }
 
+  for (const observation of observations) {
+    events.push({
+      version: 1,
+      eventId: `execution-result-${observation.transactionHash}`,
+      type: observation.successful ? 'execution_confirmed' : 'execution_failed',
+      occurredAt: observation.networkCreatedAt ?? observation.observedAt,
+      authorizationPlanDigest: observation.authorizationPlanDigest,
+      authorizationPlanRevision: observation.authorizationPlanRevision,
+      executionSource: observation.executionSource,
+      transactionHash: observation.transactionHash,
+      ledger: observation.ledger,
+      successful: observation.successful,
+      observedAt: observation.observedAt,
+    });
+  }
+
   const order: Record<SorobanIntentEvidenceEvent['type'], number> = {
     intent_created: 0,
     authorization_plan_revised: 1,
     authorization_added: 2,
     execution_prepared: 3,
+    execution_confirmed: 4,
+    execution_failed: 4,
   };
   return events.sort((left, right) =>
     left.occurredAt.localeCompare(right.occurredAt)

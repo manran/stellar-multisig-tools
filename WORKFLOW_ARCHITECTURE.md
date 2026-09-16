@@ -124,7 +124,7 @@ Inbox/Dashboard show the current viewer's next action rather than exposing inter
 
 ### Evidence projection boundary
 
-Evidence is projected from durable protocol facts rather than a second audit state machine. Classic Activity derives creation, signature, decision, and network-confirmation facts from the Request record/contributions/submission. Soroban Intent inspection derives creation provenance, accepted AUTH contributions, AuthorizationPlan revisions, and successfully materialized execution preparations from the Intent store. Projections must not expose raw signature/XDR payloads or manufacture execution/confirmation events that MultiSigTools did not persist or independently verify.
+Evidence is projected from durable protocol facts rather than a second audit state machine. Classic Activity derives creation, signature, decision, and network-confirmation facts from the Request record/contributions/submission. Soroban Intent inspection derives creation provenance, accepted AUTH contributions, AuthorizationPlan revisions, successfully materialized execution preparations, and independently reconciled Stellar results from the Intent store. Reconciliation is explicit and accepts only a persisted preparation hash; a transaction not yet found on Horizon is `observed=false`, not a fabricated workflow state. Projections must not expose raw signature/XDR payloads or manufacture execution/confirmation events that MultiSigTools did not persist or independently verify.
 
 Execution vocabulary is evidence-strength specific:
 
@@ -134,8 +134,9 @@ Execution vocabulary is evidence-strength specific:
 | `handed off` | a future durable delivery mechanism records delivery/receipt; browser copy/navigation alone is not canonical evidence | submission or confirmation |
 | `submitted by <actor>` | this invocation's MultiSigTools-controlled Horizon submission returned success and the actor is known | that every confirmed transaction was submitted by that actor |
 | `confirmed` | Horizon returned or reconciliation independently found the exact transaction hash successful with a ledger | who submitted it when that provenance was not observed |
+| `failed` | reconciliation independently found the exact prepared transaction hash in a ledger with `successful=false` | that an external submitter identity is known |
 
-A fixed external executor therefore remains `Authorization complete · waiting for execution` until MultiSigTools later observes or is given a separately verifiable execution fact. External ownership is not execution evidence.
+A fixed external executor therefore remains `Authorization complete · waiting for execution` until MultiSigTools independently observes the exact persisted preparation hash on Stellar. External ownership is not execution evidence, and client-reported success/ledger fields are not accepted as a substitute.
 
 When an internally routed Soroban execution continues into the ordinary Proposal lifecycle, the Proposal stores a **server-verified Soroban origin**. The browser may carry the Intent id as navigation context, but the server accepts the link only when the exact Proposal transaction hash matches a durable `execution_prepared` record for the Intent's current AuthorizationPlan revision. Proposal freeze then re-runs enforcing simulation and requires the effects digest to remain identical to that preparation. The client cannot manufacture this relationship by naming an Intent id.
 

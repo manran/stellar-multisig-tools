@@ -61,6 +61,14 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'integration:write', effect: 'none', summary: 'Prepare an externally executed Soroban transaction only from an Integration-scoped execution account and unchanged reviewed effects.',
   },
   {
+    id: 'contract.intent.execution.reconcile', version: 1, method: 'PUT', path: '/api/intent',
+    access: 'principal:write', effect: 'coordination-state', summary: 'Independently verify a persisted Soroban execution preparation against Stellar and retain the observed ledger result.',
+  },
+  {
+    id: 'integration.intent.execution.reconcile', version: 1, method: 'PUT', path: '/api/intent',
+    access: 'integration:write', effect: 'coordination-state', summary: 'Independently verify an Integration-owned Soroban execution preparation against Stellar and retain the observed ledger result.',
+  },
+  {
     id: 'contract.intent.replan', version: 1, method: 'PUT', path: '/api/intent',
     access: 'principal:write', effect: 'coordination-state', summary: 'Replace an expired or structurally changed authorization plan with a fresh revision for the same Soroban Intent.',
   },

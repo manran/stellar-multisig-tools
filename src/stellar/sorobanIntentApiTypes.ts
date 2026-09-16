@@ -35,7 +35,9 @@ export type SorobanIntentEvidenceEventType =
   | 'intent_created'
   | 'authorization_added'
   | 'authorization_plan_revised'
-  | 'execution_prepared';
+  | 'execution_prepared'
+  | 'execution_confirmed'
+  | 'execution_failed';
 
 export interface SorobanIntentEvidenceEvent {
   version: 1;
@@ -56,7 +58,11 @@ export interface SorobanIntentEvidenceEvent {
   effectsAccepted?: boolean;
   validUntil?: string | null;
   latestLedger?: number;
+  ledger?: number;
+  successful?: boolean;
+  observedAt?: string;
 }
+
 
 export interface SorobanIntentAuthorizationSnapshot {
   id: string;
@@ -101,6 +107,27 @@ export interface SorobanIntentContributionResponse {
   version: 1;
   added: boolean;
   authorization: SorobanIntentAuthorizationSnapshot;
+}
+
+export interface SorobanIntentExecutionObservation {
+  version: 1;
+  transactionHash: string;
+  authorizationPlanDigest: string;
+  authorizationPlanRevision: number;
+  executionSource: string;
+  ledger: number;
+  successful: boolean;
+  observedAt: string;
+  networkCreatedAt?: string;
+}
+
+export interface SorobanIntentExecutionReconciliationResponse {
+  operation: 'contract.intent.execution.reconcile';
+  version: 1;
+  transactionHash: string;
+  observed: boolean;
+  replayed: boolean;
+  observation?: SorobanIntentExecutionObservation;
 }
 
 export interface SorobanIntentExecutionResponse {

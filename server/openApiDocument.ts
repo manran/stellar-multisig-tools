@@ -61,7 +61,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
 function requestBody(path: string, method: string): OpenApiObject | undefined {
   if (path === '/api/intent' && method === 'post') return body(schema('ContractIntentCreateInput'));
   if (path === '/api/intent' && method === 'patch') return body(schema('ContractIntentContributionInput'));
-  if (path === '/api/intent' && method === 'put') return body({ oneOf: [schema('ContractIntentExecutionInput'), schema('ContractIntentReplanInput')] });
+  if (path === '/api/intent' && method === 'put') return body({ oneOf: [schema('ContractIntentExecutionInput'), schema('ContractIntentExecutionReconcileInput'), schema('ContractIntentReplanInput')] });
   if (path === '/api/contract-call' && method === 'post') return body(schema('ContractCallBuildInput'));
   if (path === '/api/contract-prepare' && method === 'post') return body(schema('ContractPrepareInput'));
   if (path === '/api/contracts' && (method === 'put' || method === 'delete')) return body(schema('ContractWorkspaceInput'));
@@ -77,7 +77,7 @@ function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/api/intent' && method === 'post') return schema('ContractIntentCreateResult');
   if (path === '/api/intent' && method === 'get') return schema('ContractIntentInspectResult');
   if (path === '/api/intent' && method === 'patch') return schema('ContractIntentContributionResult');
-  if (path === '/api/intent' && method === 'put') return { oneOf: [schema('ContractIntentExecutionResult'), schema('ContractIntentReplanResult')] };
+  if (path === '/api/intent' && method === 'put') return { oneOf: [schema('ContractIntentExecutionResult'), schema('ContractIntentExecutionReconcileResult'), schema('ContractIntentReplanResult')] };
   if (path === '/api/contract-call') return schema('ContractCallBuildResult');
   if (path === '/api/contract-prepare') return { oneOf: [schema('ContractPrepareResult'), schema('ContractEnforceResult')] };
   if (path === '/api/contracts' && method === 'get') return schema('ContractWorkspaceListResult');
@@ -365,7 +365,7 @@ const components: OpenApiObject = {
       properties: {
         version: operationVersion,
         eventId: { type: 'string', minLength: 1 },
-        type: { type: 'string', enum: ['intent_created', 'authorization_added', 'authorization_plan_revised', 'execution_prepared'] },
+        type: { type: 'string', enum: ['intent_created', 'authorization_added', 'authorization_plan_revised', 'execution_prepared', 'execution_confirmed', 'execution_failed'] },
         occurredAt: timestamp,
         actorAddress: accountId,
         actor: { type: 'object', additionalProperties: true },
@@ -381,6 +381,9 @@ const components: OpenApiObject = {
         effectsAccepted: { type: 'boolean' },
         validUntil: { oneOf: [timestamp, { type: 'null' }] },
         latestLedger: { type: 'integer', minimum: 1 },
+        ledger: { type: 'integer', minimum: 1 },
+        successful: { type: 'boolean' },
+        observedAt: timestamp,
       },
       additionalProperties: false,
     },
@@ -434,6 +437,15 @@ const components: OpenApiObject = {
       properties: { executionSource: accountId, acceptedEffectsDigest: { type: 'string', pattern: '^[0-9a-f]{64}$', description: 'Explicit acceptance of the exact current effects digest after reviewing a critical numeric-only diff. Structural changes cannot be accepted here and require a fresh authorization-plan revision.' } },
       additionalProperties: false,
     },
+    ContractIntentExecutionReconcileInput: {
+      type: 'object',
+      required: ['action', 'transactionHash'],
+      properties: {
+        action: { type: 'string', const: 'reconcile_execution' },
+        transactionHash: { type: 'string', pattern: '^[0-9a-fA-F]{64}$' },
+      },
+      additionalProperties: false,
+    },
     ContractIntentReplanInput: {
       type: 'object',
       required: ['action'],
@@ -467,6 +479,35 @@ const components: OpenApiObject = {
         operation: { type: 'string', const: 'contract.intent.execution.prepare' },
         version: operationVersion,
         execution: schema('SorobanIntentExecutionPreparation'),
+      },
+      additionalProperties: false,
+    },
+    SorobanIntentExecutionObservation: {
+      type: 'object',
+      required: ['version', 'transactionHash', 'authorizationPlanDigest', 'authorizationPlanRevision', 'executionSource', 'ledger', 'successful', 'observedAt'],
+      properties: {
+        version: operationVersion,
+        transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        authorizationPlanDigest: { type: 'string', minLength: 1 },
+        authorizationPlanRevision: { type: 'integer', minimum: 1 },
+        executionSource: accountId,
+        ledger: { type: 'integer', minimum: 1 },
+        successful: { type: 'boolean' },
+        observedAt: timestamp,
+        networkCreatedAt: timestamp,
+      },
+      additionalProperties: false,
+    },
+    ContractIntentExecutionReconcileResult: {
+      type: 'object',
+      required: ['operation', 'version', 'transactionHash', 'observed', 'replayed'],
+      properties: {
+        operation: { type: 'string', const: 'contract.intent.execution.reconcile' },
+        version: operationVersion,
+        transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        observed: { type: 'boolean' },
+        replayed: { type: 'boolean' },
+        observation: schema('SorobanIntentExecutionObservation'),
       },
       additionalProperties: false,
     },
