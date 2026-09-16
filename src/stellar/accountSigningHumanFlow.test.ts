@@ -49,7 +49,8 @@ test('account-signing Review exports XDR instead of creating a Proposal for an u
 test('external signer can return signed XDR without being forced to submit', () => {
   assert.match(request, /Add a signed XDR manually/);
   assert.match(request, /Copy XDR/);
-  assert.match(request, />Not now<\/button>/);
+  assert.match(request, /Handle outside MultiSigTools/);
+  assert.match(request, /Copy authorized XDR/);
   assert.match(request, /Submit transaction/);
 });
 

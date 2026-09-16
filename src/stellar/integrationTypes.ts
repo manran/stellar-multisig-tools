@@ -16,4 +16,8 @@ export interface ExternalServiceExecution {
   executor: ServiceCallerProvenance;
 }
 
-export type ExternalRequestExecution = ExternalServiceExecution;
+export interface MultiSigToolsExecution {
+  mode: 'multisigtools';
+}
+
+export type RequestExecution = ExternalServiceExecution | MultiSigToolsExecution;

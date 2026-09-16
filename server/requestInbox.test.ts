@@ -134,13 +134,64 @@ test('Human Inbox action projection recognizes the current signer signature and 
     { ...baseSnapshot, id: '0'.repeat(16), mergedXdr: signed.toXDR(), status: 'awaiting_signatures' as const },
     { ...baseSnapshot, id: '1'.repeat(16), mergedXdr: unsigned.toXDR(), status: 'awaiting_signatures' as const },
     { ...baseSnapshot, id: '2'.repeat(16), mergedXdr: unsigned.toXDR(), status: 'ready' as const, statusReason: 'authorization_complete' as const },
-    { ...baseSnapshot, id: '3'.repeat(16), mergedXdr: unsigned.toXDR(), status: 'ready' as const, statusReason: 'authorization_complete' as const, execution: { mode: 'external' as const, executor: { type: 'service' as const, id: 'fednetwork' } } },
+    { ...baseSnapshot, id: '3'.repeat(16), mergedXdr: unsigned.toXDR(), status: 'ready' as const, statusReason: 'authorization_complete' as const, execution: { mode: 'multisigtools' as const } },
+    { ...baseSnapshot, id: '4'.repeat(16), mergedXdr: unsigned.toXDR(), status: 'ready' as const, statusReason: 'authorization_complete' as const, execution: { mode: 'external' as const, executor: { type: 'service' as const, id: 'fednetwork' } } },
   ]);
 
   assert.deepEqual(projected.map((item) => item.viewerAction), [
     'waiting_for_others',
     'declined',
+    'route_execution',
     'submit',
     'waiting_execution',
   ]);
+});
+
+test('legacy exact Soroban Proposal stays on the already-routed submit path when stored execution policy is absent', async () => {
+  const {
+    Account,
+    Contract,
+    Keypair,
+    Networks,
+    Operation,
+    SorobanDataBuilder,
+    TimeoutInfinite,
+    TransactionBuilder,
+    nativeToScVal,
+    xdr,
+  } = await import('@stellar/stellar-sdk');
+  const source = Keypair.random();
+  const contract = new Contract('CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE');
+  const invokeArgs = new xdr.InvokeContractArgs({
+    contractAddress: contract.address().toScAddress(),
+    functionName: 'approve_proposal',
+    args: [nativeToScVal('proposal')],
+  });
+  const transaction = new TransactionBuilder(new Account(source.publicKey(), '1'), {
+    fee: '100',
+    networkPassphrase: Networks.TESTNET,
+  })
+    .addOperation(Operation.invokeHostFunction({
+      func: xdr.HostFunction.hostFunctionTypeInvokeContract(invokeArgs),
+      auth: [],
+    }))
+    .setSorobanData(new SorobanDataBuilder().build())
+    .setTimeout(TimeoutInfinite)
+    .build();
+  const { projectHumanInboxRequests } = await import('./requestInbox.js');
+  const [projected] = await projectHumanInboxRequests(baseStore(), source.publicKey(), [{
+    id: '5'.repeat(16),
+    network: 'testnet',
+    transactionHash: 'legacy-soroban',
+    baseXdr: transaction.toXDR(),
+    mergedXdr: transaction.toXDR(),
+    createdAt: '2026-09-06T00:00:00.000Z',
+    expiresAt: '2026-09-07T00:00:00.000Z',
+    contributionCount: 0,
+    signatureCount: 0,
+    status: 'ready',
+    statusReason: 'authorization_complete',
+  }]);
+
+  assert.equal(projected.viewerAction, 'submit');
 });

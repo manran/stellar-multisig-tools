@@ -262,6 +262,8 @@ export default function RequestApp() {
     || snapshot?.status === 'submitted',
   );
   const authorizationStatus = projectTransactionReviewAuthorizationStatus(authorization);
+  const isSorobanTransaction = Boolean(inspection?.operations.some((operation) => operation.type === 'invokeHostFunction'));
+  const executionAlreadyRoutedToMst = snapshot?.execution?.mode === 'multisigtools' || isSorobanTransaction;
   const workflowStage = snapshot
     ? proposalWorkflowStage(snapshot.status, { reviewComplete, signaturesComplete })
     : 'sign';
@@ -784,10 +786,12 @@ async function submitRequest(acceptedEffectsDigest?: string) {
 
                   {snapshot.status === 'ready' && (
                     <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.08] p-5 sm:p-6">
-                      <div className="font-semibold text-emerald-800 dark:text-emerald-200">{snapshot.execution?.mode === 'external' ? 'Authorization complete' : 'Ready for submission'}</div>
+                      <div className="font-semibold text-emerald-800 dark:text-emerald-200">Authorization complete</div>
                       <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{snapshot.execution?.mode === 'external'
                         ? `All required signatures are present. ${snapshot.execution.executor.label ?? snapshot.execution.executor.id} owns final execution; MultiSigTools will not broadcast this transaction.`
-                        : 'All required signatures are present.'}</p>
+                        : executionAlreadyRoutedToMst
+                          ? 'All required signatures are present. This work is already routed through MultiSigTools execution.'
+                          : 'All required signatures are present. Choose how this exact authorized transaction should be executed.'}</p>
                       {snapshot.execution?.mode === 'external' ? (
                         <div className="mt-4 rounded-xl border border-violet-500/25 bg-violet-500/[0.07] p-4 text-sm">
                           <div className="font-semibold text-violet-800 dark:text-violet-200">Waiting for external execution</div>
@@ -795,31 +799,41 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                         </div>
                       ) : (
                         <>
-                      {submissionEffectsDiff && <div className="mt-4"><SorobanEffectsDiffView diff={submissionEffectsDiff} /></div>}
-                      {submissionEffectsDiff?.requiresReauthorization ? (
-                        <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/[0.07] p-4 text-sm">
-                          <div className="font-semibold text-red-700 dark:text-red-300">Submission stopped: contract effects changed structurally.</div>
-                          <p className="mt-1 leading-6 text-neutral-600 dark:text-neutral-300">The existing signatures cannot approve a different effect shape. Return to the original Soroban Intent, refresh authorization, and create a fresh Proposal.</p>
-                        </div>
-                      ) : !submitArmed ? (
-                        <button type="button" onClick={() => setSubmitArmed(true)} className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white"><Send className="h-4 w-4" />Submit transaction</button>
-                      ) : (
-                        <div className={`mt-4 rounded-xl border p-4 ${snapshot.network === 'public' ? 'border-red-500/30 bg-red-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}>
-                          <div className="text-sm font-semibold">Submit this transaction to Stellar {snapshot.network === 'public' ? 'Mainnet' : 'Testnet'}?</div>
-                          <p className="mt-1 text-sm opacity-70">Once Stellar confirms it, this transaction cannot be withdrawn.</p>
-                          {submissionEffectsDiff?.requiresExplicitReview && <p className="mt-3 text-sm font-semibold text-red-700 dark:text-red-300">The final simulation found a material numeric change. Continuing accepts this exact effects digest; the server will simulate again before broadcast and stop if it changes again.</p>}
-                          {snapshot.network === 'public' && (
-                            <label className="mt-3 flex cursor-pointer items-start gap-3">
-                              <input type="checkbox" checked={mainnetConfirmed} onChange={(event) => setMainnetConfirmed(event.target.checked)} className="mt-1" />
-                              <span className="text-sm font-semibold">I intend to submit this transaction on Mainnet.</span>
-                            </label>
+                          {submissionEffectsDiff && <div className="mt-4"><SorobanEffectsDiffView diff={submissionEffectsDiff} /></div>}
+                          {submissionEffectsDiff?.requiresReauthorization ? (
+                            <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/[0.07] p-4 text-sm">
+                              <div className="font-semibold text-red-700 dark:text-red-300">Submission stopped: contract effects changed structurally.</div>
+                              <p className="mt-1 leading-6 text-neutral-600 dark:text-neutral-300">The existing signatures cannot approve a different effect shape. Return to the original Soroban Intent, refresh authorization, and create a fresh Proposal.</p>
+                            </div>
+                          ) : !submitArmed && !executionAlreadyRoutedToMst ? (
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                              <button type="button" onClick={() => setSubmitArmed(true)} className="rounded-xl border border-emerald-500/35 bg-white/70 p-4 text-left hover:border-emerald-500/60 dark:bg-black/15">
+                                <div className="flex items-center gap-2 text-sm font-semibold"><Send className="h-4 w-4 text-emerald-600" />MultiSigTools submits</div>
+                                <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Re-check final conditions, then broadcast this exact authorized transaction through MultiSigTools.</p>
+                              </button>
+                              <button type="button" onClick={() => void copyXdr()} className="rounded-xl border border-black/10 bg-white/70 p-4 text-left hover:border-emerald-500/40 dark:border-white/10 dark:bg-black/15">
+                                <div className="flex items-center gap-2 text-sm font-semibold"><ClipboardCopy className="h-4 w-4" />Handle outside MultiSigTools</div>
+                                <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Copy the fully authorized XDR for another wallet, CLI, service, or operator to submit. Copying is not handoff or submission evidence.</p>
+                                <div className="mt-3 text-xs font-semibold text-emerald-700 dark:text-emerald-300">{copied === 'xdr' ? 'Authorized XDR copied' : 'Copy authorized XDR'}</div>
+                              </button>
+                            </div>
+                          ) : (
+                            <div className={`mt-4 rounded-xl border p-4 ${snapshot.network === 'public' ? 'border-red-500/30 bg-red-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}>
+                              <div className="text-sm font-semibold">Submit this transaction to Stellar {snapshot.network === 'public' ? 'Mainnet' : 'Testnet'}?</div>
+                              <p className="mt-1 text-sm opacity-70">Once Stellar confirms it, this transaction cannot be withdrawn.</p>
+                              {submissionEffectsDiff?.requiresExplicitReview && <p className="mt-3 text-sm font-semibold text-red-700 dark:text-red-300">The final simulation found a material numeric change. Continuing accepts this exact effects digest; the server will simulate again before broadcast and stop if it changes again.</p>}
+                              {snapshot.network === 'public' && (
+                                <label className="mt-3 flex cursor-pointer items-start gap-3">
+                                  <input type="checkbox" checked={mainnetConfirmed} onChange={(event) => setMainnetConfirmed(event.target.checked)} className="mt-1" />
+                                  <span className="text-sm font-semibold">I intend to submit this transaction on Mainnet.</span>
+                                </label>
+                              )}
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                <button type="button" onClick={() => void submitRequest(submissionEffectsDiff?.requiresExplicitReview ? submissionEffectsDiff.currentDigest : undefined)} disabled={submitting || (snapshot.network === 'public' && !mainnetConfirmed)} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{submitting ? 'Checking and submitting…' : submissionEffectsDiff?.requiresExplicitReview ? 'Accept current effects and submit' : 'Submit transaction'}</button>
+                                {!executionAlreadyRoutedToMst && <button type="button" disabled={submitting} onClick={() => { setSubmitArmed(false); setMainnetConfirmed(false); }} className="rounded-xl border border-black/10 px-4 py-3 text-sm font-semibold dark:border-white/10">Choose another route</button>}
+                              </div>
+                            </div>
                           )}
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            <button type="button" onClick={() => void submitRequest(submissionEffectsDiff?.requiresExplicitReview ? submissionEffectsDiff.currentDigest : undefined)} disabled={submitting || (snapshot.network === 'public' && !mainnetConfirmed)} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{submitting ? 'Checking and submitting…' : submissionEffectsDiff?.requiresExplicitReview ? 'Accept current effects and submit' : 'Submit transaction'}</button>
-                            <button type="button" disabled={submitting} onClick={() => { setSubmitArmed(false); setMainnetConfirmed(false); }} className="rounded-xl border border-black/10 px-4 py-3 text-sm font-semibold dark:border-white/10">Not now</button>
-                          </div>
-                        </div>
-                      )}
                         </>
                       )}
                     </section>

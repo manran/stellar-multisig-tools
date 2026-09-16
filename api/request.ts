@@ -892,7 +892,7 @@ export async function POST(request: Request): Promise<Response> {
         ...serviceOptions,
         accountLoader,
         capabilityHash: capabilityHashForToken(capability),
-        ...(sorobanOrigin ? { sorobanOrigin } : {}),
+        ...(sorobanOrigin ? { sorobanOrigin, executionPolicy: { mode: 'multisigtools' as const } } : {}),
       },
     );
     const activityBound = creatorSession

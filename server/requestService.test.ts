@@ -402,10 +402,12 @@ test('Soroban Request freeze retains verified Intent origin and rejects effects 
       networkParametersLoader,
       sorobanExecutionVerifier: async () => ({ status: 'verified' as const, effects }),
       sorobanOrigin: origin,
+      executionPolicy: { mode: 'multisigtools' },
       idFactory: () => 'Y'.repeat(16),
     },
   );
   assert.deepEqual(created.sorobanOrigin, origin);
+  assert.equal(created.execution?.mode, 'multisigtools');
   assert.deepEqual(store.requests.get(created.id)?.sorobanOrigin, origin);
 
   await assert.rejects(

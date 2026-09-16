@@ -46,6 +46,7 @@ Classic and Soroban therefore discover authority differently:
 - **Soroban**: semantic Intent + recording simulation determines detached `require_auth()` authorizers. A Service is scoped to contract/method; it does not declare those authorizers.
 
 Execution ownership is a third concern and is stored separately from caller identity. The same Service may create a Classic Request that MultiSigTools submits after Human review, while another scoped work item remains externally executed by the Service.
+Request inspection projects that stored ownership explicitly: `execution.mode=multisigtools` means routing is already fixed to MultiSigTools submission, `execution.mode=external` means the configured Service owns execution, and absence of an execution mode on an ordinary Human Classic Proposal leaves Ready open for a Human choice between MultiSigTools submission and external XDR handling.
 
 A future **Team / Workspace / enterprise account is not another Actor or Principal**. It is an optional ownership/policy container that may own Humans, Service credentials, shared metadata, webhooks, or resource policy. Workspace membership must never become Stellar/Soroban authorization evidence.
 

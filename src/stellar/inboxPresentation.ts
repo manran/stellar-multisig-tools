@@ -3,6 +3,7 @@ import type { InboxSorobanIntentSnapshot } from './sorobanIntentApiTypes.js';
 
 export type InboxViewerAction =
   | 'sign'
+  | 'route_execution'
   | 'submit'
   | 'waiting_for_others'
   | 'waiting_preconditions'
@@ -27,9 +28,13 @@ export interface InboxActionCounts {
 
 export function projectInboxViewerAction(
   status: SigningRequestStatus,
-  options: { hasSigned: boolean; declined?: boolean; externalExecution?: boolean },
+  options: { hasSigned: boolean; declined?: boolean; executionMode?: 'multisigtools' | 'external' },
 ): InboxViewerAction {
-  if (status === 'ready') return options.externalExecution ? 'waiting_execution' : 'submit';
+  if (status === 'ready') {
+    if (options.executionMode === 'external') return 'waiting_execution';
+    if (options.executionMode === 'multisigtools') return 'submit';
+    return 'route_execution';
+  }
   if (status === 'waiting_preconditions') return 'waiting_preconditions';
   if (status === 'stale' || status === 'blocked') return 'attention';
   if (status === 'awaiting_signatures') {
@@ -41,7 +46,7 @@ export function projectInboxViewerAction(
 }
 
 export function inboxViewerActionNeedsAction(action: InboxViewerAction): boolean {
-  return action === 'sign' || action === 'submit' || action === 'attention';
+  return action === 'sign' || action === 'route_execution' || action === 'submit' || action === 'attention';
 }
 
 export function summarizeInboxActions(
@@ -61,6 +66,7 @@ export function summarizeInboxActions(
   for (const request of requests) {
     if (inboxViewerActionNeedsAction(request.viewerAction)) counts.actionRequired += 1;
     if (request.viewerAction === 'sign') counts.signatureNeeded += 1;
+    else if (request.viewerAction === 'route_execution') counts.readyForExecutionRouting += 1;
     else if (request.viewerAction === 'submit') counts.readyToSubmit += 1;
     else if (request.viewerAction === 'attention') counts.needsAttention += 1;
     else counts.waiting += 1;
@@ -96,10 +102,17 @@ export function inboxViewerActionPresentation(action: InboxViewerAction): {
         cta: 'Review & sign',
         tone: 'warning',
       };
+    case 'route_execution':
+      return {
+        label: 'Authorization complete',
+        detail: 'Required authorization is complete. Choose how this transaction should be executed.',
+        cta: 'Choose execution',
+        tone: 'success',
+      };
     case 'submit':
       return {
         label: 'Ready for submission',
-        detail: 'Required authorization is complete.',
+        detail: 'Authorization is complete and this work is already routed through MultiSigTools execution.',
         cta: 'Review & submit',
         tone: 'success',
       };

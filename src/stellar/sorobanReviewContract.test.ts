@@ -88,6 +88,7 @@ test('final Soroban broadcast remains bound to reviewed effects in both direct a
   assert.match(sorobanIntentApp, /sorobanIntentId: intent\.id/);
   assert.match(signingRoom, /sorobanIntentId: handoff\.sorobanIntentId/);
   assert.match(requestApi, /verifySorobanRequestOrigin/);
+  assert.match(requestApi, /sorobanOrigin \? \{ sorobanOrigin, executionPolicy: \{ mode: 'multisigtools' as const \} \} : \{\}/);
   assert.match(requestOriginService, /item\.transactionHash === input\.transactionHash/);
   assert.match(requestService, /soroban_origin_effects_changed/);
   assert.match(reviewHandoff, /SOROBAN_EFFECTS_HANDOFF_KEY/);

@@ -8,6 +8,7 @@ import { isValidSigningRequestId } from './requestLocator.js';
 import type { SigningRequestStore, StoredSigningRequest } from './requestStore.js';
 import { getSigningRequest } from './requestService.js';
 import { signerCanAccessTransaction, signerHasSignedTransaction } from './requestAccess.js';
+import { inspectTransactionXdr } from '../src/stellar/transactionXdr.js';
 
 interface InboxOptions {
   now?: Date;
@@ -100,6 +101,17 @@ export async function listSignerInbox(
 }
 
 
+function projectedRequestExecutionMode(snapshot: SigningRequestSnapshot): 'multisigtools' | 'external' | undefined {
+  if (snapshot.execution?.mode) return snapshot.execution.mode;
+  try {
+    return inspectTransactionXdr(snapshot.mergedXdr, snapshot.network).operations.some((operation) => operation.type === 'invokeHostFunction')
+      ? 'multisigtools'
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function projectHumanInboxRequests(
   store: SigningRequestStore,
   address: string,
@@ -116,7 +128,7 @@ export async function projectHumanInboxRequests(
       viewerAction: projectInboxViewerAction(snapshot.status, {
         hasSigned: signerHasSignedTransaction(address, snapshot.mergedXdr, snapshot.network),
         declined,
-        externalExecution: snapshot.execution?.mode === 'external',
+        executionMode: projectedRequestExecutionMode(snapshot),
       }),
     };
   }));

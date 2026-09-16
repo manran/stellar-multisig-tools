@@ -12,8 +12,9 @@ test('Inbox viewer action stays separate from canonical Request status', () => {
   assert.equal(projectInboxViewerAction('awaiting_signatures', { hasSigned: false }), 'sign');
   assert.equal(projectInboxViewerAction('awaiting_signatures', { hasSigned: true }), 'waiting_for_others');
   assert.equal(projectInboxViewerAction('awaiting_signatures', { hasSigned: false, declined: true }), 'declined');
-  assert.equal(projectInboxViewerAction('ready', { hasSigned: false }), 'submit');
-  assert.equal(projectInboxViewerAction('ready', { hasSigned: false, externalExecution: true }), 'waiting_execution');
+  assert.equal(projectInboxViewerAction('ready', { hasSigned: false }), 'route_execution');
+  assert.equal(projectInboxViewerAction('ready', { hasSigned: false, executionMode: 'external' }), 'waiting_execution');
+  assert.equal(projectInboxViewerAction('ready', { hasSigned: false, executionMode: 'multisigtools' }), 'submit');
   assert.equal(projectInboxViewerAction('waiting_preconditions', { hasSigned: false }), 'waiting_preconditions');
   assert.equal(projectInboxViewerAction('stale', { hasSigned: false }), 'attention');
   assert.equal(projectInboxViewerAction('blocked', { hasSigned: false }), 'attention');
@@ -22,7 +23,7 @@ test('Inbox viewer action stays separate from canonical Request status', () => {
 test('Inbox action counts describe what the current viewer can do now', () => {
   const counts = summarizeInboxActions([
     { viewerAction: 'sign' },
-    { viewerAction: 'submit' },
+    { viewerAction: 'route_execution' },
     { viewerAction: 'attention' },
     { viewerAction: 'waiting_for_others' },
     { viewerAction: 'waiting_preconditions' },
@@ -31,11 +32,11 @@ test('Inbox action counts describe what the current viewer can do now', () => {
   assert.deepEqual(counts, {
     actionRequired: 3,
     signatureNeeded: 1,
-    readyToSubmit: 1,
+    readyToSubmit: 0,
     needsAttention: 1,
     waiting: 3,
     contractAuthorizationNeeded: 0,
-    readyForExecutionRouting: 0,
+    readyForExecutionRouting: 1,
   });
   assert.equal(inboxViewerActionNeedsAction('sign'), true);
   assert.equal(inboxViewerActionNeedsAction('waiting_for_others'), false);
@@ -59,6 +60,7 @@ test('Inbox action counts describe what the current viewer can do now', () => {
 
 test('Inbox Human copy distinguishes viewer action from transaction-wide status', () => {
   assert.equal(inboxViewerActionPresentation('sign').label, 'Your signature is needed');
+  assert.equal(inboxViewerActionPresentation('route_execution').cta, 'Choose execution');
   assert.equal(inboxViewerActionPresentation('submit').cta, 'Review & submit');
   assert.equal(inboxViewerActionPresentation('waiting_execution').cta, 'View status');
   assert.match(inboxViewerActionPresentation('waiting_for_others').label, /You signed/);
@@ -74,10 +76,10 @@ test('Dashboard action summary reuses the Human semantic tones', () => {
     needsAttention: 1,
     waiting: 3,
     contractAuthorizationNeeded: 1,
-    readyForExecutionRouting: 1,
+    readyForExecutionRouting: 2,
   }), [
     { key: 'contract-auth', label: '1 contract auth', tone: 'warning' },
-    { key: 'execution-route', label: '1 to choose execution', tone: 'success' },
+    { key: 'execution-route', label: '2 to choose execution', tone: 'success' },
     { key: 'sign', label: '2 to sign', tone: 'warning' },
     { key: 'submit', label: '1 to submit', tone: 'success' },
     { key: 'attention', label: '1 need review', tone: 'danger' },

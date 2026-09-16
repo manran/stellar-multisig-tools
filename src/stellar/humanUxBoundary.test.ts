@@ -140,6 +140,11 @@ test('external-service work keeps final execution out of signer UI', () => {
   const intentApi = source('../../api/intent.ts');
 
   assert.match(request, /snapshot\.execution\?\.mode === 'external'/);
+  assert.match(request, /snapshot\?\.execution\?\.mode === 'multisigtools'/);
+  assert.match(request, /Handle outside MultiSigTools/);
+  assert.match(request, /MultiSigTools submits/);
+  assert.match(request, /isSorobanTransaction/);
+  assert.match(request, /executionAlreadyRoutedToMst/);
   assert.match(request, /Waiting for external execution/);
   assert.match(request, /MultiSigTools will not broadcast this transaction/);
   assert.match(requestApi, /external_executor_required/);

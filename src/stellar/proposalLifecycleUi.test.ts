@@ -468,7 +468,8 @@ test('Request owns an explicit reversible submit confirmation', () => {
   assert.match(requestUi, /Transaction confirmed/);
   assert.match(requestUi, />View network record<\/a>/);
   assert.doesNotMatch(requestUi, />View on Horizon<\/a>/);
-  assert.match(requestUi, />Not now<\/button>/);
+  assert.match(requestUi, />Choose another route<\/button>/);
+  assert.match(requestUi, /!executionAlreadyRoutedToMst/);
   assert.match(requestUi, /snapshot\.status !== 'ready' \|\| !submitArmed/);
 });
 

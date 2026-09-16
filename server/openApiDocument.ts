@@ -629,6 +629,15 @@ const components: OpenApiObject = {
       },
       additionalProperties: false,
     },
+    MultiSigToolsExecution: {
+      type: 'object',
+      required: ['mode'],
+      properties: { mode: { type: 'string', const: 'multisigtools' } },
+      additionalProperties: false,
+    },
+    RequestExecution: {
+      oneOf: [schema('MultiSigToolsExecution'), schema('ExternalServiceExecution')],
+    },
     Principal: {
       type: 'object',
       required: ['type', 'network', 'address'],
@@ -792,7 +801,7 @@ const components: OpenApiObject = {
         statusReason: { type: 'string' },
         statusDetail: { type: 'string' },
         submission: { type: 'object', additionalProperties: true },
-        execution: schema('ExternalServiceExecution'),
+        execution: schema('RequestExecution'),
         sorobanOrigin: schema('SorobanRequestOrigin'),
       },
       additionalProperties: false,

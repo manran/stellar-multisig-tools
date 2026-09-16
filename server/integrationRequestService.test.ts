@@ -95,7 +95,7 @@ test('Integration Classic treasury defaults to the ordinary MultiSigTools execut
     idempotencyKey: 'treasury-payment-42',
   }, { accountLoader: async () => snapshot });
 
-  assert.equal(result.request.execution, undefined);
+  assert.equal(result.request.execution?.mode, 'multisigtools');
   const stored = store.requests.get(result.request.id);
   assert.equal(stored?.executionPolicy?.mode, 'multisigtools');
   assert.deepEqual(stored?.integration, { version: 1, serviceId: 'fednetwork', serviceLabel: 'FedNetwork' });

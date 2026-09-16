@@ -72,6 +72,22 @@ These are routing intentions, not authority. After materialization, MultiSigTool
 
 A fixed external-Service policy may narrow routing to `external_service`. Signers then authorize only; they cannot seize final execution from the owning business system.
 
+Classic exact-transaction work reaches the same execution-routing boundary after envelope authorization, but its available routes are simpler because the transaction already exists:
+
+```text
+no fixed execution policy
+  -> MultiSigTools submits
+  -> handle outside MultiSigTools (deliver the fully authorized XDR)
+
+executionPolicy = multisigtools
+  -> MultiSigTools submission only
+
+executionPolicy = external
+  -> wait for the configured external executor
+```
+
+`Handle outside MultiSigTools` exposes the already-authorized transaction artifact; copying or reading that XDR is not durable handoff evidence. A fixed execution policy is ownership policy and cannot be replaced by a signer at Ready.
+
 Every route shares the same final safety boundary:
 
 ```text

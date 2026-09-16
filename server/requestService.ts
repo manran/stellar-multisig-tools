@@ -105,6 +105,7 @@ interface RequestServiceOptions {
   sorobanExecutionVerifier?: SorobanExecutionVerifier;
   capabilityHash?: string;
   sorobanOrigin?: SorobanRequestOrigin;
+  executionPolicy?: { mode: 'multisigtools' };
 }
 
 interface SubmitRequestOptions extends RequestServiceOptions {
@@ -756,7 +757,9 @@ async function buildSnapshot(
             ...(request.integration.serviceLabel ? { label: request.integration.serviceLabel } : {}),
           },
         } }
-      : {}),
+      : request.executionPolicy?.mode === 'multisigtools'
+        ? { execution: { mode: 'multisigtools' as const } }
+        : {}),
   };
 
   if (submission) {
@@ -898,6 +901,7 @@ export async function createSigningRequest(
     expiresAt: expiryForInspection(inspection, now).toISOString(),
     discoverySignerKeys,
     capabilityHash: options.capabilityHash,
+    ...(options.executionPolicy ? { executionPolicy: options.executionPolicy } : {}),
     ...(analysis.sorobanEffects ? { sorobanEffectsBaseline: analysis.sorobanEffects } : {}),
     ...(options.sorobanOrigin ? { sorobanOrigin: options.sorobanOrigin } : {}),
   };
