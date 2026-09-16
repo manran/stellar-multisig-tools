@@ -34,7 +34,8 @@ export interface StoredSorobanIntentSnapshot {
 export type SorobanIntentEvidenceEventType =
   | 'intent_created'
   | 'authorization_added'
-  | 'authorization_plan_revised';
+  | 'authorization_plan_revised'
+  | 'execution_prepared';
 
 export interface SorobanIntentEvidenceEvent {
   version: 1;
@@ -48,6 +49,13 @@ export interface SorobanIntentEvidenceEvent {
   previousAuthorizationPlanDigest?: string;
   entryIndex?: number;
   contributionDigest?: string;
+  executionSource?: string;
+  transactionSequence?: string;
+  transactionHash?: string;
+  effectsDigest?: string;
+  effectsAccepted?: boolean;
+  validUntil?: string | null;
+  latestLedger?: number;
 }
 
 export interface SorobanIntentAuthorizationSnapshot {

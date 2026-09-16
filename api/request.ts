@@ -32,7 +32,6 @@ import type { RequestAccountLoader } from '../server/requestAccess.js';
 import {
   getSignerActivityItemForRequest,
   getTreasuryActivityItemForRequest,
-  recordSubmittedActivity,
 } from '../server/requestActivity.js';
 import { PrivateCommitmentValidationError, validatePrivateCommitmentForMemo } from '../server/requestPrivateCommitment.js';
 import { latestPrivateNoteForRequest } from '../server/requestPrivateNote.js';
@@ -1081,13 +1080,11 @@ export async function PUT(request: Request): Promise<Response> {
       acceptedEffectsDigest: typeof submitBody.acceptedEffectsDigest === 'string'
         ? submitBody.acceptedEffectsDigest
         : undefined,
+      submittedByAddress: access.actorAddress,
     });
     if (access.mode === 'session' && access.actorAddress && !access.activityBound) {
       await bindRequestParticipantBestEffort(snapshot.id, access.actorAddress);
     }
-    await recordActivityBestEffort(() =>
-      recordSubmittedActivity(blobSigningRequestStore, snapshot, access.actorAddress),
-    );
     return noStoreJson({ request: snapshot });
   } catch (cause) {
     return errorResponse(cause);

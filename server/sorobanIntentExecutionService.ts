@@ -15,7 +15,8 @@ import {
   getSorobanIntentAuthorization,
   type SorobanIntentAuthorizationSnapshot,
 } from './sorobanIntentAuthorizationService.js';
-import type { SorobanIntentStore } from './sorobanIntentStore.js';
+import type { MachineCallerProvenance } from '../src/stellar/coordinationActorTypes.js';
+import type { SorobanIntentStore, StoredSorobanIntentExecutionPreparation } from './sorobanIntentStore.js';
 
 export class SorobanIntentExecutionServiceError extends Error {
   constructor(message: string, readonly status: number, readonly code: string, readonly details?: unknown) {
@@ -34,6 +35,10 @@ interface ExecutionOptions {
   enforcer?: Enforcer;
   lifetimeSeconds?: number;
   acceptedEffectsDigest?: string;
+  requireExactEffects?: boolean;
+  preparedByAddress?: string;
+  preparedBy?: MachineCallerProvenance;
+  now?: Date;
 }
 
 export interface SorobanIntentExecutionPreparation {
@@ -123,6 +128,14 @@ export async function prepareSorobanIntentExecution(
     );
   }
   const effectsDiff = compareSorobanEffects(expectedEffects, enforced.effects);
+  if (options.requireExactEffects && effectsDiff.currentDigest !== effectsDiff.expectedDigest) {
+    throw new SorobanIntentExecutionServiceError(
+      'Final effects changed after external-service authorization. Refresh the AuthorizationPlan and collect fresh AUTH before execution.',
+      409,
+      'intent_execution_effects_reauthorization_required',
+      { effectsDiff },
+    );
+  }
   if (effectsDiff.requiresReauthorization) {
     throw new SorobanIntentExecutionServiceError(
       'Final simulation changed the structure of the reviewed effects. Refresh the authorization plan, review the new effects, and collect fresh AUTH before preparing the transaction.',
@@ -150,7 +163,7 @@ export async function prepareSorobanIntentExecution(
   if (prepared instanceof FeeBumpTransaction || prepared.source !== source.accountId) {
     throw new SorobanIntentExecutionServiceError('Prepared execution changed its transaction source.', 503, 'intent_execution_unavailable');
   }
-  return {
+  const result: SorobanIntentExecutionPreparation = {
     version: 1,
     intentId: stored.id,
     network: stored.network,
@@ -166,4 +179,28 @@ export async function prepareSorobanIntentExecution(
     effectsAccepted,
     xdr: enforced.assembledXdr,
   };
+  if (!store.putExecutionPreparation) {
+    throw new SorobanIntentExecutionServiceError(
+      'Soroban execution evidence storage is unavailable. The prepared transaction was not released.',
+      503,
+      'intent_execution_evidence_unavailable',
+    );
+  }
+  const preparation: StoredSorobanIntentExecutionPreparation = {
+    version: 1,
+    transactionHash: result.transactionHash,
+    authorizationPlanDigest: result.authorizationPlanDigest,
+    authorizationPlanRevision: stored.authorizationPlanRevision ?? 1,
+    executionSource: result.executionSource,
+    transactionSequence: result.transactionSequence,
+    validUntil: result.validUntil,
+    latestLedger: result.latestLedger,
+    effectsDigest: result.effects.digest,
+    effectsAccepted: result.effectsAccepted,
+    preparedAt: (options.now ?? new Date()).toISOString(),
+    ...(options.preparedByAddress ? { preparedByAddress: options.preparedByAddress } : {}),
+    ...(options.preparedBy ? { preparedBy: options.preparedBy } : {}),
+  };
+  await store.putExecutionPreparation(stored.id, preparation);
+  return result;
 }

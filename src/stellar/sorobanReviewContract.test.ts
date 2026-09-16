@@ -25,6 +25,7 @@ const contractPrepareApi = source('../../api/contract-prepare.ts');
 const intentApi = source('../../api/intent.ts');
 const importedIntentService = source('../../server/importedSorobanIntentService.ts');
 const intentAuthorizationService = source('../../server/sorobanIntentAuthorizationService.ts');
+const intentExecutionService = source('../../server/sorobanIntentExecutionService.ts');
 const intentPlanningService = source('../../server/sorobanIntentPlanningService.ts');
 const viteConfig = source('../../vite.config.ts');
 const envExample = source('../../.env.example');
@@ -74,6 +75,8 @@ test('Soroban Review routes detached authorization into Intent before envelope s
   assert.match(sorobanIntentApp, /Simulation effects at authorization/);
   assert.match(sorobanIntentApp, /Execution effects comparison/);
   assert.match(sorobanIntentApp, /I reviewed this numeric change/);
+  assert.match(intentApi, /acceptedEffectsDigest: body\.acceptedEffectsDigest/);
+  assert.match(intentExecutionService, /putExecutionPreparation/);
   assert.match(sorobanIntentApp, /Review changed effects and re-authorize/);
   assert.match(sorobanIntentApp, /requiresReauthorization/);
 });

@@ -9,6 +9,7 @@ import {
 import { createAgentSorobanIntent } from '../server/agentSorobanIntentService.js';
 import {
   IntegrationCredentialServiceError,
+  integrationCallerForCredential,
 } from '../server/integrationCredentialService.js';
 import {
   assertIntegrationSorobanExecutionAccount,
@@ -165,13 +166,16 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
 export async function GET(request: Request): Promise<Response> {
   try {
     const access = await storedIntentAccess(request, 'read');
-    const contributions = await blobSorobanIntentStore.listContributions(access.id);
+    const [contributions, preparations] = await Promise.all([
+      blobSorobanIntentStore.listContributions(access.id),
+      blobSorobanIntentStore.listExecutionPreparations?.(access.id) ?? Promise.resolve([]),
+    ]);
     return json({
       operation: 'contract.intent.inspect',
       version: 1,
       intent: access.stored,
       authorization: access.authorization,
-      evidence: projectSorobanIntentEvidence(access.stored, contributions),
+      evidence: projectSorobanIntentEvidence(access.stored, contributions, preparations),
     });
   } catch (cause) {
     return errorResponse(cause);
@@ -458,7 +462,14 @@ export async function PUT(request: Request): Promise<Response> {
         blobSorobanIntentStore,
         access.id,
         executionSource,
-        { authorization: access.authorization },
+        {
+          authorization: access.authorization,
+          ...(typeof body.acceptedEffectsDigest === 'string' ? { acceptedEffectsDigest: body.acceptedEffectsDigest } : {}),
+          ...(access.integrationCredential ? { requireExactEffects: true } : {}),
+          ...(access.address ? { preparedByAddress: access.address } : {}),
+          ...(access.agent ? { preparedBy: agentActorForCredential(access.agent) } : {}),
+          ...(access.integrationCredential ? { preparedBy: integrationCallerForCredential(access.integrationCredential) } : {}),
+        },
       );
     } catch (cause) {
       if (

@@ -108,7 +108,18 @@ Inbox/Dashboard show the current viewer's next action rather than exposing inter
 
 ### Evidence projection boundary
 
-Evidence is projected from durable protocol facts rather than a second audit state machine. Classic Activity derives creation, signature, decision, and submission facts from the Request record/contributions/submission. Soroban Intent inspection derives creation provenance, accepted AUTH contributions, and AuthorizationPlan revisions from the Intent store. Projections must not expose raw signature payloads or manufacture execution/confirmation events that were never persisted.
+Evidence is projected from durable protocol facts rather than a second audit state machine. Classic Activity derives creation, signature, decision, and network-confirmation facts from the Request record/contributions/submission. Soroban Intent inspection derives creation provenance, accepted AUTH contributions, AuthorizationPlan revisions, and successfully materialized execution preparations from the Intent store. Projections must not expose raw signature/XDR payloads or manufacture execution/confirmation events that MultiSigTools did not persist or independently verify.
+
+Execution vocabulary is evidence-strength specific:
+
+| Term | MultiSigTools may state it when | What it does **not** imply |
+| --- | --- | --- |
+| `prepared` | final transaction materialization and enforcing simulation succeeded and the preparation summary was durably recorded | the XDR was handed to another party, signed, submitted, or accepted by Stellar |
+| `handed off` | a future durable delivery mechanism records delivery/receipt; browser copy/navigation alone is not canonical evidence | submission or confirmation |
+| `submitted by <actor>` | this invocation's MultiSigTools-controlled Horizon submission returned success and the actor is known | that every confirmed transaction was submitted by that actor |
+| `confirmed` | Horizon returned or reconciliation independently found the exact transaction hash successful with a ledger | who submitted it when that provenance was not observed |
+
+A fixed external executor therefore remains `Authorization complete · waiting for execution` until MultiSigTools later observes or is given a separately verifiable execution fact. External ownership is not execution evidence.
 
 Default portable transaction evidence remains a separate privacy-bounded projection. Machine caller provenance may be a retained audit fact without automatically becoming public/default PDF metadata.
 

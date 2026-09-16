@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { StoredSorobanIntent, StoredSorobanIntentAuthorizationContribution } from './sorobanIntentStore.js';
+import type { StoredSorobanIntent, StoredSorobanIntentAuthorizationContribution, StoredSorobanIntentExecutionPreparation } from './sorobanIntentStore.js';
 import { projectSorobanIntentEvidence } from './sorobanIntentEvidence.js';
 
 const plan = (digest: string) => ({ authorizationPlanDigest: digest } as StoredSorobanIntent['authorizationPlan']);
@@ -39,8 +39,23 @@ const contributions: StoredSorobanIntentAuthorizationContribution[] = [
   },
 ];
 
+const preparations: StoredSorobanIntentExecutionPreparation[] = [{
+  version: 1,
+  transactionHash: 'ab'.repeat(32),
+  authorizationPlanDigest: 'plan-3',
+  authorizationPlanRevision: 3,
+  executionSource: 'GEXECUTOR',
+  transactionSequence: '99',
+  validUntil: '2026-09-15T12:05:00.000Z',
+  latestLedger: 1234,
+  effectsDigest: 'effects-3',
+  effectsAccepted: false,
+  preparedAt: '2026-09-15T12:00:00.000Z',
+  preparedBy: { type: 'service', id: 'fednetwork', label: 'FedNetwork' },
+}];
+
 test('Soroban Intent evidence projects persisted creation, AUTH, and replan facts without signature payloads', () => {
-  const evidence = projectSorobanIntentEvidence(intent(), contributions);
+  const evidence = projectSorobanIntentEvidence(intent(), contributions, preparations);
   assert.deepEqual(evidence.map((item) => item.type), [
     'intent_created',
     'authorization_added',
@@ -48,6 +63,7 @@ test('Soroban Intent evidence projects persisted creation, AUTH, and replan fact
     'authorization_plan_revised',
     'authorization_plan_revised',
     'authorization_added',
+    'execution_prepared',
   ]);
   assert.deepEqual(evidence[0]?.actor, { type: 'service', id: 'fednetwork', label: 'FedNetwork' });
   assert.equal(evidence[0]?.authorizationPlanDigest, 'plan-1');
@@ -60,5 +76,10 @@ test('Soroban Intent evidence projects persisted creation, AUTH, and replan fact
   assert.equal(evidence[3]?.authorizationPlanDigest, 'plan-2');
   assert.equal(evidence[4]?.previousAuthorizationPlanDigest, 'plan-2');
   assert.equal(evidence[4]?.authorizationPlanDigest, 'plan-3');
+  assert.equal(evidence[6]?.transactionHash, 'ab'.repeat(32));
+  assert.equal(evidence[6]?.executionSource, 'GEXECUTOR');
+  assert.equal(evidence[6]?.effectsDigest, 'effects-3');
+  assert.deepEqual(evidence[6]?.actor, { type: 'service', id: 'fednetwork', label: 'FedNetwork' });
   assert.equal(JSON.stringify(evidence).includes('SECRET'), false);
+  assert.equal(JSON.stringify(evidence).includes('xdr'), false);
 });

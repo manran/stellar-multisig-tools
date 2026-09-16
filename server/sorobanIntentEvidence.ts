@@ -2,6 +2,7 @@ import type { SorobanIntentEvidenceEvent } from '../src/stellar/sorobanIntentApi
 import type {
   StoredSorobanIntent,
   StoredSorobanIntentAuthorizationContribution,
+  StoredSorobanIntentExecutionPreparation,
 } from './sorobanIntentStore.js';
 
 function currentRevision(stored: StoredSorobanIntent): number {
@@ -23,6 +24,7 @@ function initialPlan(stored: StoredSorobanIntent): { digest: string; revision: n
 export function projectSorobanIntentEvidence(
   stored: StoredSorobanIntent,
   contributions: readonly StoredSorobanIntentAuthorizationContribution[],
+  preparations: readonly StoredSorobanIntentExecutionPreparation[] = [],
 ): SorobanIntentEvidenceEvent[] {
   const initial = initialPlan(stored);
   const events: SorobanIntentEvidenceEvent[] = [{
@@ -71,10 +73,31 @@ export function projectSorobanIntentEvidence(
     });
   }
 
+  for (const preparation of preparations) {
+    events.push({
+      version: 1,
+      eventId: `execution-prepared-${preparation.preparedAt}-${preparation.transactionHash}`,
+      type: 'execution_prepared',
+      occurredAt: preparation.preparedAt,
+      ...(preparation.preparedByAddress ? { actorAddress: preparation.preparedByAddress } : {}),
+      ...(preparation.preparedBy ? { actor: preparation.preparedBy } : {}),
+      authorizationPlanDigest: preparation.authorizationPlanDigest,
+      authorizationPlanRevision: preparation.authorizationPlanRevision,
+      executionSource: preparation.executionSource,
+      transactionSequence: preparation.transactionSequence,
+      transactionHash: preparation.transactionHash,
+      effectsDigest: preparation.effectsDigest,
+      effectsAccepted: preparation.effectsAccepted,
+      validUntil: preparation.validUntil,
+      latestLedger: preparation.latestLedger,
+    });
+  }
+
   const order: Record<SorobanIntentEvidenceEvent['type'], number> = {
     intent_created: 0,
     authorization_plan_revised: 1,
     authorization_added: 2,
+    execution_prepared: 3,
   };
   return events.sort((left, right) =>
     left.occurredAt.localeCompare(right.occurredAt)

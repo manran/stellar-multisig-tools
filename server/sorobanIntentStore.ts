@@ -25,6 +25,22 @@ export interface StoredSorobanIntentAuthorizationContribution {
   submittedBy?: AgentActorProvenance;
 }
 
+export interface StoredSorobanIntentExecutionPreparation {
+  version: 1;
+  transactionHash: string;
+  authorizationPlanDigest: string;
+  authorizationPlanRevision: number;
+  executionSource: string;
+  transactionSequence: string;
+  validUntil: string | null;
+  latestLedger: number;
+  effectsDigest: string;
+  effectsAccepted: boolean;
+  preparedAt: string;
+  preparedByAddress?: string;
+  preparedBy?: MachineCallerProvenance;
+}
+
 export interface StoredSorobanAuthorizationPlanRevision {
   revision: number;
   authorizationPlan: SorobanAuthorizationPlan;
@@ -56,4 +72,6 @@ export interface SorobanIntentStore {
   listIntentsBySigner?(network: StellarNetwork, signerAddress: string): Promise<StoredSorobanIntent[]>;
   listContributions(id: string): Promise<StoredSorobanIntentAuthorizationContribution[]>;
   putContribution(id: string, contribution: StoredSorobanIntentAuthorizationContribution): Promise<void>;
+  listExecutionPreparations?(id: string): Promise<StoredSorobanIntentExecutionPreparation[]>;
+  putExecutionPreparation?(id: string, preparation: StoredSorobanIntentExecutionPreparation): Promise<void>;
 }

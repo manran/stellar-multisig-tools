@@ -99,7 +99,7 @@ Soroban contract work remains Intent-first and transaction construction stays la
 
 `SOURCE_ACCOUNT` authorization is intentionally rejected by the Intent workflow because it binds contract authorization to the final transaction source and defeats source-late execution. Integrations must expose detached address authorization instead.
 
-`contract.intent.inspect` also projects a durable evidence timeline from facts already stored with the Intent: creation provenance, accepted detached-AUTH contributions, and AuthorizationPlan revisions. It never includes raw AUTH signature payloads and it does not invent execution or confirmation facts that were not persisted. External execution remains external until a later explicit confirmation contract exists.
+`contract.intent.inspect` also projects a durable evidence timeline from facts already stored with the Intent: creation provenance, accepted detached-AUTH contributions, AuthorizationPlan revisions, and successful late execution preparations. A preparation record contains only its auditable summary (plan revision/digest, executor, sequence/hash, effects digest, validity and caller provenance), never the final XDR or raw AUTH signature payload. Preparation is not handoff, submission, or confirmation. External execution remains external until a later explicit delivery/confirmation contract or independent network reconciliation supplies that fact.
 
 `contract.call.build` and `contract.call.prepare` remain low-level public construction/simulation primitives for inspection, diagnostics, and external tooling. They are not the canonical shared-authorization lifecycle. `WORKFLOW_ARCHITECTURE.md` records the protocol-neutral lifecycle and execution-routing contract.
 

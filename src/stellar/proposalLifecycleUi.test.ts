@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 
 const requestApi = readFileSync(new URL('../../api/request.ts', import.meta.url), 'utf8');
+const requestService = readFileSync(new URL('../../server/requestService.ts', import.meta.url), 'utf8');
 const signingRoom = readFileSync(new URL('../SigningRoomApp.tsx', import.meta.url), 'utf8');
 const settings = readFileSync(new URL('../TreasuryBoxSettingsApp.tsx', import.meta.url), 'utf8');
 const requestUi = readFileSync(new URL('../RequestApp.tsx', import.meta.url), 'utf8');
@@ -71,6 +72,8 @@ test('Demo and Production share one Human workflow and semantic status presentat
   assert.match(payment, /WorkflowProgress current="prepare"/);
   assert.match(newTransaction, /WorkflowProgress current="review"/);
   assert.match(signingRoom, /WorkflowProgress current=\{directSubmission \? 'done' : 'review'\}/);
+  assert.match(signingRoom, /Transaction confirmed/);
+  assert.match(signingRoom, /Stellar confirmed the exact reviewed transaction/);
   assert.match(requestUi, /proposalWorkflowStage\(snapshot\.status, \{ reviewComplete, signaturesComplete \}\)/);
   assert.match(requestUi, /<WorkflowProgress current=\{workflowStage\} \/>/);
   assert.match(transactionReceipt, /WorkflowProgress current="done"/);
@@ -562,7 +565,8 @@ test('Treasury onboarding can be dismissed while keeping Create and generic offl
 test('known Request creator and submitter actors are persisted only when provenance is available', () => {
   assert.match(requestApi, /creatorAddress: creatorSession\.address/);
   assert.match(signingRoom, /privateSessionAddressHeaders\(wallet\.address\)/);
-  assert.match(requestApi, /recordSubmittedActivity\(blobSigningRequestStore, snapshot, access\.actorAddress\)/);
+  assert.match(requestApi, /submittedByAddress: access\.actorAddress/);
+  assert.match(requestService, /recordSubmittedActivity\(store, snapshot, options\.submittedByAddress\)/);
 });
 
 test('authorization evidence keeps raw signer identities instead of shortening them', () => {

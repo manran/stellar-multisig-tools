@@ -19,15 +19,18 @@ import {
   SorobanIntentExecutionServiceError,
 } from './sorobanIntentExecutionService.js';
 import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
-import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';
+import type { SorobanIntentStore, StoredSorobanIntent, StoredSorobanIntentExecutionPreparation } from './sorobanIntentStore.js';
 
 class MemoryIntentStore implements SorobanIntentStore {
+  readonly preparations: StoredSorobanIntentExecutionPreparation[] = [];
   constructor(readonly stored: StoredSorobanIntent) {}
   async createIntent() { throw new Error('not used'); }
   async getIntent(id: string) { return id === this.stored.id ? this.stored : null; }
   async updateIntent() { throw new Error('not used'); }
   async listContributions() { return []; }
   async putContribution() { throw new Error('not used'); }
+  async listExecutionPreparations() { return this.preparations; }
+  async putExecutionPreparation(_id: string, preparation: StoredSorobanIntentExecutionPreparation) { this.preparations.push(preparation); }
 }
 function fixture(effects: SorobanEffectsSnapshot = emptySorobanEffectsSnapshot()) {
   const contract = new Contract('CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE');
@@ -99,6 +102,9 @@ test('execution late-binds a fresh source and preserves finalized detached AUTH'
       enforcedInput = envelopeXdr;
       return { endpointUrl: 'test', latestLedger: 123, assembledXdr: envelopeXdr, effects: f.stored.authorizationPlan.effects };
     },
+    preparedByAddress: f.stored.creatorAddress,
+    preparedBy: { type: 'agent', id: 'agent-a', label: 'Agent A', principalAddress: f.stored.creatorAddress! },
+    now: new Date('2026-09-16T00:00:00.000Z'),
   });
   const parsed = TransactionBuilder.fromXdr(enforcedInput, Networks.TESTNET);
   if (parsed instanceof FeeBumpTransaction) throw new Error('unexpected fee bump');
@@ -112,6 +118,34 @@ test('execution late-binds a fresh source and preserves finalized detached AUTH'
   assert.equal(result.latestLedger, 123);
   assert.equal(result.authorizationPlanDigest, f.stored.authorizationPlan.authorizationPlanDigest);
   assert.equal(result.xdr, enforcedInput);
+  assert.equal(store.preparations.length, 1);
+  assert.equal(store.preparations[0]?.transactionHash, result.transactionHash);
+  assert.equal(store.preparations[0]?.executionSource, source.publicKey());
+  assert.equal(store.preparations[0]?.preparedAt, '2026-09-16T00:00:00.000Z');
+  assert.equal(store.preparations[0]?.preparedByAddress, f.stored.creatorAddress);
+  assert.deepEqual(store.preparations[0]?.preparedBy, { type: 'agent', id: 'agent-a', label: 'Agent A', principalAddress: f.stored.creatorAddress });
+});
+
+test('execution fails closed when durable preparation evidence cannot be stored', async () => {
+  const f = fixture();
+  const source = Keypair.random();
+  const store: SorobanIntentStore = {
+    async createIntent() { throw new Error('not used'); },
+    async getIntent(id) { return id === f.stored.id ? f.stored : null; },
+    async updateIntent() { throw new Error('not used'); },
+    async listContributions() { return []; },
+    async putContribution() { throw new Error('not used'); },
+  };
+  await assert.rejects(
+    () => prepareSorobanIntentExecution(store, f.stored.id, source.publicKey(), {
+      authorization: f.authorization,
+      accountLoader: async () => ({ accountId: source.publicKey(), sequence: '7' } as never),
+      networkParametersLoader: async () => ({ baseFeeInStroops: 100 } as never),
+      enforcer: async ({ envelopeXdr }) => ({ endpointUrl: 'test', latestLedger: 123, assembledXdr: envelopeXdr, effects: f.stored.authorizationPlan.effects }),
+    }),
+    (cause: unknown) => cause instanceof SorobanIntentExecutionServiceError
+      && cause.code === 'intent_execution_evidence_unavailable',
+  );
 });
 
 test('execution refuses to materialize before detached AUTH is ready', async () => {
@@ -187,6 +221,23 @@ test('small numeric effects drift stays executable and returns the measured diff
   assert.equal(result.effectsDiff.maxChangeBasisPoints, 100);
   assert.equal(result.effectsDiff.requiresExplicitReview, false);
   assert.equal(result.effectsAccepted, false);
+});
+
+test('exact-effects execution policy rejects drift before persisting execution evidence', async () => {
+  const expected = effectSnapshot(100);
+  const current = effectSnapshot(99);
+  const f = fixture(expected);
+  const source = Keypair.random();
+  const store = new MemoryIntentStore(f.stored);
+  await assert.rejects(
+    () => prepareSorobanIntentExecution(store, f.stored.id, source.publicKey(), {
+      ...executionOptions(f, source, current),
+      requireExactEffects: true,
+    }),
+    (cause: unknown) => cause instanceof SorobanIntentExecutionServiceError
+      && cause.code === 'intent_execution_effects_reauthorization_required',
+  );
+  assert.equal(store.preparations.length, 0);
 });
 
 test('large numeric effects drift blocks until the current digest is explicitly accepted', async () => {

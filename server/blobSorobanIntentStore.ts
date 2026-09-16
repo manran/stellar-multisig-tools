@@ -6,6 +6,7 @@ import type {
   SorobanIntentStore,
   StoredSorobanIntent,
   StoredSorobanIntentAuthorizationContribution,
+  StoredSorobanIntentExecutionPreparation,
 } from './sorobanIntentStore.js';
 
 function intentPath(id: string): string {
@@ -26,6 +27,15 @@ function contributionPrefix(id: string): string {
 
 function contributionPath(id: string, digest: string): string {
   return `${contributionPrefix(id)}${encodeURIComponent(digest)}.json`;
+}
+
+function executionPreparationPrefix(id: string): string {
+  return `intents/${id}/execution-preparations/`;
+}
+
+function executionPreparationPath(id: string, preparation: StoredSorobanIntentExecutionPreparation): string {
+  const timeKey = preparation.preparedAt.replace(/[:.]/g, '-');
+  return `${executionPreparationPrefix(id)}${timeKey}-${preparation.transactionHash}.json`;
 }
 
 async function readJson<T>(pathname: string): Promise<T | null> {
@@ -119,6 +129,35 @@ export const blobSorobanIntentStore: SorobanIntentStore = {
   async putContribution(id, contribution) {
     await withBlobStorage(async () => {
       await put(contributionPath(id, contribution.digest), JSON.stringify(contribution), {
+        access: 'private',
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: 'application/json',
+        cacheControlMaxAge: 60,
+      });
+    });
+  },
+
+  async listExecutionPreparations(id) {
+    return withBlobStorage(async () => {
+      const values: StoredSorobanIntentExecutionPreparation[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await list({ prefix: executionPreparationPrefix(id), limit: 100, cursor });
+        for (const blob of page.blobs) {
+          if (!blob.pathname.endsWith('.json')) continue;
+          const value = await readJson<StoredSorobanIntentExecutionPreparation>(blob.pathname);
+          if (value) values.push(value);
+        }
+        cursor = page.cursor;
+      } while (cursor);
+      return values.sort((a, b) => a.preparedAt.localeCompare(b.preparedAt) || a.transactionHash.localeCompare(b.transactionHash));
+    });
+  },
+
+  async putExecutionPreparation(id, preparation) {
+    await withBlobStorage(async () => {
+      await put(executionPreparationPath(id, preparation), JSON.stringify(preparation), {
         access: 'private',
         addRandomSuffix: false,
         allowOverwrite: true,

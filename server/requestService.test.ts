@@ -31,6 +31,7 @@ import type {
 } from './requestStore.js';
 import type { StellarAccountSnapshot } from '../src/stellar/types.js';
 import type { SorobanEffectsSnapshot } from '../src/stellar/sorobanEffects.js';
+import type { ActivityFactEvent } from '../src/stellar/activityTypes.js';
 import {
   mergeSorobanGAccountSignature,
   sorobanAuthorizationPreimageXdr,
@@ -40,6 +41,7 @@ class MemoryStore implements SigningRequestStore {
   requests = new Map<string, StoredSigningRequest>();
   contributions = new Map<string, Map<string, StoredSignatureContribution>>();
   submissions = new Map<string, StoredSubmissionResult>();
+  activityEvents = new Map<string, ActivityFactEvent[]>();
 
   async createRequest(request: StoredSigningRequest) {
     if (this.requests.has(request.id)) throw new Error('duplicate request');
@@ -67,6 +69,15 @@ class MemoryStore implements SigningRequestStore {
 
   async putSubmission(id: string, submission: StoredSubmissionResult) {
     this.submissions.set(id, submission);
+  }
+
+  async listActivityEvents(id: string) {
+    return this.activityEvents.get(id) ?? [];
+  }
+
+  async putActivityEvent(id: string, event: ActivityFactEvent) {
+    const events = this.activityEvents.get(id) ?? [];
+    this.activityEvents.set(id, [...events.filter((item) => item.eventId !== event.eventId), event]);
   }
 }
 
@@ -956,6 +967,33 @@ test('recognizes an externally submitted transaction when a Request becomes stal
   assert.equal((await store.getSubmission(id, created.transactionHash))?.ledger, 777);
 });
 
+test('reconciliation never attributes an already-confirmed transaction to the current caller', async () => {
+  const store = new MemoryStore();
+  const { source, second, transaction } = paymentTransaction();
+  const id = 'R'.repeat(16);
+  const accountLoader = async () => accountSnapshot(source, second, 2);
+  const created = await createSigningRequest(
+    store,
+    { network: 'testnet', xdr: transaction.toXdr() },
+    { accountLoader, idFactory: () => id },
+  );
+
+  const reconciled = await submitSigningRequest(store, id, {
+    accountLoader,
+    submittedByAddress: second.publicKey(),
+    transactionLoader: async () => ({
+      hash: created.transactionHash,
+      ledger: 999,
+      successful: true,
+      createdAt: '2026-08-29T00:03:00Z',
+    }),
+    transactionSubmitter: async () => { throw new Error('must not broadcast after reconciliation'); },
+  });
+
+  assert.equal(reconciled.status, 'submitted');
+  assert.equal((await store.listActivityEvents(id)).some((item) => item.type === 'transaction_submitted'), false);
+});
+
 test('submits a ready request once, records the result, and rejects later signatures', async () => {
   const store = new MemoryStore();
   const { source, second, transaction } = paymentTransaction();
@@ -984,11 +1022,14 @@ test('submits a ready request once, records the result, and rejects later signat
         createdAt: '2026-08-29T00:00:00Z',
       };
     },
+    submittedByAddress: source.publicKey(),
   });
   assert.equal(submitted.status, 'submitted');
   assert.equal(submitted.statusReason, 'ledger_confirmed');
   assert.equal(submitted.submission?.ledger, 12345);
   assert.equal(submitCalls, 1);
+  const submitEvent = (await store.listActivityEvents(id)).find((item) => item.type === 'transaction_submitted');
+  assert.equal(submitEvent?.actorAddress, source.publicKey());
 
   const replay = await submitSigningRequest(store, id, {
     accountLoader,

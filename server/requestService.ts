@@ -32,6 +32,7 @@ import type {
 import type { StellarAccountSnapshot, StellarNetwork, StellarSigner } from '../src/stellar/types.js';
 import { createSigningRequestId, isValidSigningRequestId } from './requestLocator.js';
 import { requestDiscoverySignerKeys } from './requestDiscovery.js';
+import { recordSubmittedActivity } from './requestActivity.js';
 import type {
   SigningRequestStore,
   StoredAcceptedSignature,
@@ -107,6 +108,7 @@ interface RequestServiceOptions {
 interface SubmitRequestOptions extends RequestServiceOptions {
   transactionSubmitter?: TransactionSubmitter;
   acceptedEffectsDigest?: string;
+  submittedByAddress?: string;
 }
 
 function normalizeXdr(xdr: string): string {
@@ -1191,7 +1193,7 @@ export async function submitSigningRequest(
   try {
     const result = await transactionSubmitter(current.mergedXdr, request.network);
     const submission = await persistConfirmedSubmission(store, request, result, now);
-    return buildSnapshot(
+    const snapshot = await buildSnapshot(
       request,
       contributions,
       submission,
@@ -1199,6 +1201,16 @@ export async function submitSigningRequest(
       accountLoader,
       networkParametersLoader,
     );
+    if (options.submittedByAddress) {
+      try {
+        await recordSubmittedActivity(store, snapshot, options.submittedByAddress);
+      } catch (cause) {
+        // Confirmation is the hard fact. Audit projection failure must not make
+        // a successful on-chain submission look failed to the caller.
+        console.error('Signing request submitter activity write failed', { requestId: request.id, cause });
+      }
+    }
+    return snapshot;
   } catch (cause) {
     if (cause instanceof SigningRequestServiceError) throw cause;
     if (cause instanceof TransactionSubmissionError) {
