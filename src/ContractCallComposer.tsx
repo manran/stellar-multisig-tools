@@ -25,6 +25,7 @@ function fieldPlaceholder(input: ContractInputDescriptor): string {
     case 'bytes': return 'Hex bytes, optional 0x prefix';
     case 'symbol': return 'Symbol';
     case 'string': return 'Text';
+    case 'json': return 'JSON matching the contract type';
     default: return '';
   }
 }
@@ -253,10 +254,13 @@ export default function ContractCallComposer({ network }: Props) {
                       <div className="flex flex-wrap items-center justify-between gap-2"><label htmlFor={`contract-arg-${input.name}`} className="text-sm font-semibold">{input.name}</label><span className="font-mono text-xs text-neutral-500 dark:text-neutral-400">{input.typeLabel}</span></div>
                       {input.kind === 'bool' ? (
                         <select id={`contract-arg-${input.name}`} value={rawArgs[input.name] ?? ''} disabled={building} onChange={(event) => setRawArgs((current) => ({ ...current, [input.name]: event.target.value }))} className={`mt-2 w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-sm outline-none dark:border-white/10 dark:bg-[#141414] ${focusClass}`}><option value="">Choose…</option><option value="true">true</option><option value="false">false</option></select>
+                      ) : input.kind === 'json' ? (
+                        <textarea id={`contract-arg-${input.name}`} value={rawArgs[input.name] ?? ''} disabled={building} rows={5} onChange={(event) => setRawArgs((current) => ({ ...current, [input.name]: event.target.value }))} placeholder={fieldPlaceholder(input)} spellCheck={false} className={`mt-2 w-full resize-y rounded-xl border border-black/10 bg-transparent px-4 py-3 font-mono text-sm leading-6 outline-none disabled:opacity-50 dark:border-white/10 ${focusClass}`} />
                       ) : (
                         <input id={`contract-arg-${input.name}`} value={rawArgs[input.name] ?? ''} disabled={building} onChange={(event) => setRawArgs((current) => ({ ...current, [input.name]: event.target.value }))} placeholder={fieldPlaceholder(input)} spellCheck={false} className={`mt-2 w-full rounded-xl border border-black/10 bg-transparent px-4 py-3 font-mono text-sm outline-none disabled:opacity-50 dark:border-white/10 ${focusClass}`} />
                       )}
                       {input.doc && <p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-neutral-500 dark:text-neutral-400">Contract spec: {input.doc}</p>}
+                      {input.kind === 'json' && <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">Enter structured JSON. MultiSigTools validates the complete value against the loaded Contract Spec before encoding it.</p>}
                       {(input.kind === 'bytes' || input.kind === 'bytesN') && <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">Enter hexadecimal bytes; `0x` prefix is optional.</p>}
                     </div>
                   ))}

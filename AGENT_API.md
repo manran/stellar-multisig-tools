@@ -251,7 +251,10 @@ Example semantic creation:
 }
 ```
 
-For guided `Option<Address>` / `Option<MuxedAddress>` inputs, omit the argument (or send an empty string from a form client) to encode `None`; send a normal Stellar address string to encode `Some(address)`. Other complex optional types remain outside the guided composer until explicitly supported.
+`GET /api/contract-interface` exposes the recursive `fresnica-soroban-abi-v1` model and a `composition` decision for every input. `typed_json` inputs are `guided=true` and may include recursively typed `Option`, `Vec`, `Map`, `Tuple`, `BytesN`, and supported UDT struct/union/enum values. MultiSig Tools validates the complete JSON shape against the deployed Contract Spec before delegating ScVal encoding to the official Stellar SDK. For optional inputs, omission or JSON `null` encodes `None`. `dynamic_scval_json`, `scval_xdr_success_only`, `unsupported`, and any unknown future composition mode are not semantic guided input and fail closed rather than being guessed.
+
+
+A generic ABI description explains how to call a contract, not what a protocol action means. For example, ABI support can safely compose Blend-style `Vec<Request>` values without knowing that a particular `request_type` means Supply or Borrow. Protocol/domain knowledge is an additive product layer used for richer Human explanations and stable Agent semantics; recognizing a familiar protocol never relaxes AUTH, effects comparison, executor scope, revalidation, or signature requirements. See `SOROBAN_ABI_PRODUCT_MODEL.md`.
 
 For signer-Agent callers, Intent create/inspect/contribute/prepare/reconcile/replan responses expose the same typed `task` projection used by Classic Request workflow. It derives Principal action from current authorization/execution facts and reports whether the current Agent credential can perform it.
 

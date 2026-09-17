@@ -34,14 +34,14 @@ function normalizedNetwork(value: unknown): StellarNetwork {
   throw new ContractIntentServiceError('Network must be public or testnet.', 400, 'invalid_network');
 }
 
-function normalizedArguments(value: unknown): Record<string, string> {
+function normalizedArguments(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new ContractIntentServiceError('Contract arguments must be a JSON object.', 400, 'invalid_arguments');
   }
   const entries = Object.entries(value);
-  if (entries.length > 64 || entries.some(([key, item]) => !key || typeof item !== 'string')) {
+  if (entries.length > 64 || entries.some(([key]) => !key)) {
     throw new ContractIntentServiceError(
-      'Contract arguments must contain at most 64 named string values.',
+      'Contract arguments must contain at most 64 named values.',
       400,
       'invalid_arguments',
     );

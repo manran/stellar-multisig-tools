@@ -102,6 +102,12 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.ok(securitySchemes.integrationBearer);
   assert.match(String(securitySchemes.integrationBearer.description), /non-signer external service credential/i);
   assert.deepEqual(schemas.ContractIntentCreateInput.required, ['network']);
+  assert.deepEqual(schemas.ContractInterfaceResult.required, ['operation', 'version', 'network', 'contractId', 'methods', 'abi']);
+  assert.deepEqual(schemas.ContractAbi.required, ['schema', 'functions', 'types']);
+  assert.deepEqual((schemas.ContractAbi.properties as JsonObject).schema, { type: 'string', const: 'fresnica-soroban-abi-v1' });
+  assert.deepEqual(schemas.ContractInputComposition.required, ['mode', 'guided']);
+  assert.ok((((schemas.ContractInput.properties as JsonObject).kind as JsonObject).enum as string[]).includes('json'));
+  assert.equal(((schemas.ContractIntentCreateInput.properties as JsonObject).arguments as JsonObject).additionalProperties, true);
   assert.ok(!(schemas.StoredSorobanIntent.required as string[]).includes('creatorAddress'));
   assert.ok((schemas.StoredSorobanIntent.properties as JsonObject).integration);
   assert.ok((schemas.SigningRequest.properties as JsonObject).execution);

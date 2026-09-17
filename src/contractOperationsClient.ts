@@ -1,4 +1,4 @@
-import type { ContractMethodDescriptor } from './stellar/contractSpec';
+import type { ContractAbiDescriptor, ContractMethodDescriptor } from './stellar/contractSpec';
 import { SorobanSimulationError } from './stellar/sorobanRpc';
 import type { SorobanSimulationSummary } from './stellar/sorobanRpc';
 import type { SorobanEffectsSnapshot } from './stellar/sorobanEffects';
@@ -25,15 +25,16 @@ async function responseJson<T>(response: Response, fallback: string): Promise<T>
 export async function inspectContractOperation(
   contractId: string,
   network: StellarNetwork,
-): Promise<{ contractId: string; network: StellarNetwork; methods: ContractMethodDescriptor[] }> {
+): Promise<{ contractId: string; network: StellarNetwork; methods: ContractMethodDescriptor[]; abi: ContractAbiDescriptor }> {
   const query = new URLSearchParams({ contract: contractId, network });
   const response = await fetch(`/api/contract-interface?${query}`, { cache: 'no-store' });
   const body = await responseJson<{
     contractId: string;
     network: StellarNetwork;
     methods: ContractMethodDescriptor[];
+    abi: ContractAbiDescriptor;
   }>(response, 'Unable to load contract interface');
-  if (!Array.isArray(body.methods)) throw new Error('Contract interface response is invalid.');
+  if (!Array.isArray(body.methods) || body.abi?.schema !== 'fresnica-soroban-abi-v1') throw new Error('Contract interface response is invalid.');
   return body;
 }
 
@@ -42,7 +43,7 @@ export async function buildContractCallOperation(input: {
   transactionSource: string;
   contractId: string;
   method: string;
-  arguments: Record<string, string>;
+  arguments: Record<string, unknown>;
   lifetimeSeconds: number;
 }): Promise<{ xdr: string; validUntil: string }> {
   const response = await fetch('/api/contract-call', {

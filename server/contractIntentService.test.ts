@@ -45,6 +45,28 @@ function transferInterface() {
   return { spec, methods: describeContractSpec(spec) };
 }
 
+
+function blendLikeInterface() {
+  const request = xdr.ScSpecEntry.scSpecEntryUdtStructV0(new xdr.ScSpecUdtStructV0({
+    name: 'Request', doc: '', lib: '',
+    fields: [
+      new xdr.ScSpecUdtStructFieldV0({ name: 'address', doc: '', type: xdr.ScSpecTypeDef.scSpecTypeAddress() }),
+      new xdr.ScSpecUdtStructFieldV0({ name: 'amount', doc: '', type: xdr.ScSpecTypeDef.scSpecTypeI128() }),
+      new xdr.ScSpecUdtStructFieldV0({ name: 'request_type', doc: '', type: xdr.ScSpecTypeDef.scSpecTypeU32() }),
+    ],
+  }));
+  const requestType = xdr.ScSpecTypeDef.scSpecTypeUdt(new xdr.ScSpecTypeUdt({ name: 'Request' }));
+  const requests = xdr.ScSpecTypeDef.scSpecTypeVec(new xdr.ScSpecTypeVec({ elementType: requestType }));
+  const submit = xdr.ScSpecEntry.scSpecEntryFunctionV0(new xdr.ScSpecFunctionV0({
+    name: 'submit',
+    inputs: [new xdr.ScSpecFunctionInputV0({ name: 'requests', type: requests, doc: '' })],
+    outputs: [],
+    doc: '',
+  }));
+  const spec = new Spec([request, submit]);
+  return { spec, methods: describeContractSpec(spec) };
+}
+
 test('builds a source-free Soroban Intent from guided contract inputs', async () => {
   const result = await buildContractIntent({
     network: 'testnet',
@@ -116,4 +138,21 @@ test('rejects unknown methods and invalid typed arguments before creating Intent
     }, dependencies),
     (cause: unknown) => cause instanceof ContractIntentServiceError && cause.code === 'invalid_arguments',
   );
+});
+
+
+test('builds a source-free Intent from Blend-style typed JSON without prepared XDR', async () => {
+  const owner = Keypair.random().publicKey();
+  const result = await buildContractIntent({
+    network: 'testnet',
+    contractId: CONTRACT_ID,
+    method: 'submit',
+    arguments: { requests: [{ address: owner, amount: '10000000', request_type: 0 }] },
+  }, { interfaceLoader: async () => blendLikeInterface() });
+
+  const hostFunction = xdr.HostFunction.fromXDR(result.intent.hostFunctionXdr, 'base64');
+  assert.equal(hostFunction.type, 'hostFunctionTypeInvokeContract');
+  if (hostFunction.type !== 'hostFunctionTypeInvokeContract') return;
+  assert.equal(hostFunction.value.args[0]?.type, 'scvVec');
+  assert.equal('preparedXdr' in result, false);
 });

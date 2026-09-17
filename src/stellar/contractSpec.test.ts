@@ -6,6 +6,7 @@ import {
   contractArgumentsToScVals,
   contractCallOperation,
   contractTypeLabel,
+  describeContractAbi,
   describeContractSpec,
 } from './contractSpec.js';
 
@@ -31,6 +32,32 @@ function fn(
 
 function specWith(...functions: xdr.ScSpecEntry[]) {
   return new Spec(functions);
+}
+
+
+function udtStruct(
+  name: string,
+  fields: Array<[string, xdr.ScSpecTypeDef]>,
+  doc = '',
+) {
+  return xdr.ScSpecEntry.scSpecEntryUdtStructV0(new xdr.ScSpecUdtStructV0({
+    name,
+    doc,
+    lib: '',
+    fields: fields.map(([fieldName, type]) => new xdr.ScSpecUdtStructFieldV0({
+      name: fieldName,
+      doc: '',
+      type,
+    })),
+  }));
+}
+
+function udt(name: string) {
+  return xdr.ScSpecTypeDef.scSpecTypeUdt(new xdr.ScSpecTypeUdt({ name }));
+}
+
+function vec(elementType: xdr.ScSpecTypeDef) {
+  return xdr.ScSpecTypeDef.scSpecTypeVec(new xdr.ScSpecTypeVec({ elementType }));
 }
 
 test('contract spec describes BytesN and optional Address inputs as guided types', () => {
@@ -118,4 +145,138 @@ test('guided contract call produces a normal InvokeHostFunction operation for th
   assert.equal(operation.body.type, 'invokeHostFunction');
   assert.equal(operation.body.value.hostFunction.type, 'hostFunctionTypeInvokeContract');
   assert.equal(operation.body.value.hostFunction.value.functionName.toString(), 'pause');
+});
+
+
+test('Blend-style Vec<UDT> is typed JSON guided and encodes through the Stellar SDK', () => {
+  const owner = Keypair.random().publicKey();
+  const requestType = udt('Request');
+  const spec = specWith(
+    udtStruct('Request', [
+      ['address', xdr.ScSpecTypeDef.scSpecTypeAddress()],
+      ['amount', xdr.ScSpecTypeDef.scSpecTypeI128()],
+      ['request_type', xdr.ScSpecTypeDef.scSpecTypeU32()],
+    ]),
+    fn('submit', [input('requests', vec(requestType))]),
+  );
+
+  const method = describeContractSpec(spec)[0]!;
+  assert.equal(method.name, 'submit');
+  assert.equal(method.guided, true);
+  assert.deepEqual(method.inputs[0]?.composition, { mode: 'typed_json', guided: true });
+  assert.equal(method.inputs[0]?.kind, 'json');
+  const abi = describeContractAbi(spec);
+  const abiSubmit = abi.functions.find((item) => item.name === 'submit');
+  assert.equal(abi.schema, 'fresnica-soroban-abi-v1');
+  assert.deepEqual(abiSubmit?.inputs[0]?.composition, { mode: 'typed_json', guided: true });
+  assert.deepEqual(abiSubmit?.inputs[0]?.type, {
+    kind: 'vec',
+    element: { kind: 'udt', name: 'Request' },
+  });
+  assert.deepEqual(method.inputs[0]?.abiType, {
+    kind: 'vec',
+    element: { kind: 'udt', name: 'Request' },
+  });
+
+  const args = contractArgumentsToScVals(spec, 'submit', {
+    requests: [{ address: owner, amount: '10000000', request_type: 0 }],
+  });
+  assert.equal(args.length, 1);
+  assert.equal(args[0]?.type, 'scvVec');
+  const decoded = scValToNative(args[0]!);
+  assert.equal(decoded.length, 1);
+  assert.equal(decoded[0].address, owner);
+  assert.equal(decoded[0].amount, 10000000n);
+  assert.equal(decoded[0].request_type, 0);
+});
+
+test('typed UDT validation rejects unknown struct fields before SDK encoding can discard them', () => {
+  const owner = Keypair.random().publicKey();
+  const requestType = udt('Request');
+  const spec = specWith(
+    udtStruct('Request', [
+      ['address', xdr.ScSpecTypeDef.scSpecTypeAddress()],
+      ['amount', xdr.ScSpecTypeDef.scSpecTypeI128()],
+      ['request_type', xdr.ScSpecTypeDef.scSpecTypeU32()],
+    ]),
+    fn('submit', [input('requests', vec(requestType))]),
+  );
+
+  assert.throws(
+    () => contractArgumentsToScVals(spec, 'submit', {
+      requests: [{
+        address: owner,
+        amount: '1',
+        request_type: 0,
+        extra: 'must-not-be-ignored',
+      }],
+    }),
+    /requests\[0\]\.extra is not declared by struct Request/,
+  );
+  assert.throws(
+    () => contractArgumentsToScVals(spec, 'submit', {
+      requests: [{ address: owner, amount: '1' }],
+    }),
+    /requests\[0\]\.request_type is required by struct Request/,
+  );
+});
+
+
+test('typed JSON recursively composes Map, Tuple and UDT Union inputs', () => {
+  const owner = Keypair.random().publicKey();
+  const noneCase = xdr.ScSpecUdtUnionCaseV0.scSpecUdtUnionCaseVoidV0(
+    new xdr.ScSpecUdtUnionCaseVoidV0({ name: 'None', doc: '' }),
+  );
+  const amountCase = xdr.ScSpecUdtUnionCaseV0.scSpecUdtUnionCaseTupleV0(
+    new xdr.ScSpecUdtUnionCaseTupleV0({
+      name: 'Amount',
+      doc: '',
+      type: [xdr.ScSpecTypeDef.scSpecTypeI128()],
+    }),
+  );
+  const action = xdr.ScSpecEntry.scSpecEntryUdtUnionV0(new xdr.ScSpecUdtUnionV0({
+    name: 'Action',
+    doc: '',
+    lib: '',
+    cases: [noneCase, amountCase],
+  }));
+  const actionType = udt('Action');
+  const mapType = xdr.ScSpecTypeDef.scSpecTypeMap(new xdr.ScSpecTypeMap({
+    keyType: xdr.ScSpecTypeDef.scSpecTypeAddress(),
+    valueType: xdr.ScSpecTypeDef.scSpecTypeI128(),
+  }));
+  const tupleType = xdr.ScSpecTypeDef.scSpecTypeTuple(new xdr.ScSpecTypeTuple({
+    valueTypes: [xdr.ScSpecTypeDef.scSpecTypeU32(), actionType],
+  }));
+  const spec = specWith(
+    action,
+    fn('compose', [input('balances', mapType), input('instruction', tupleType)]),
+  );
+
+  const method = describeContractSpec(spec)[0]!;
+  assert.equal(method.guided, true);
+  assert.deepEqual(method.inputs.map((item) => item.composition.mode), ['typed_json', 'typed_json']);
+
+  const args = contractArgumentsToScVals(spec, 'compose', {
+    balances: { [owner]: '9' },
+    instruction: [7, { Amount: '5' }],
+  });
+  assert.equal(args[0]?.type, 'scvMap');
+  assert.equal(args[1]?.type, 'scvVec');
+  const balances = scValToNative(args[0]!) as Record<string, bigint>;
+  assert.equal(balances[owner], 9n);
+  const instruction = scValToNative(args[1]!);
+  assert.equal(instruction[0], 7);
+  assert.deepEqual(instruction[1], ['Amount', 5n]);
+});
+
+test('open-ended Val remains explicitly unguided instead of guessing a JSON representation', () => {
+  const spec = specWith(fn('execute', [input('value', xdr.ScSpecTypeDef.scSpecTypeVal())]));
+  const method = describeContractSpec(spec)[0]!;
+  assert.equal(method.guided, false);
+  assert.deepEqual(method.inputs[0]?.composition, { mode: 'dynamic_scval_json', guided: false });
+  assert.throws(
+    () => contractArgumentsToScVals(spec, 'execute', { value: { u32: 7 } }),
+    /open-ended Soroban Val/,
+  );
 });

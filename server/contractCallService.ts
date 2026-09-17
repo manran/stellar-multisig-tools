@@ -2,10 +2,11 @@ import { Account, Networks, TransactionBuilder } from '@stellar/stellar-sdk/base
 import {
   contractArgumentsToScVals,
   contractCallOperation,
+  describeContractAbi,
   isValidContractId,
   loadContractInterface,
 } from '../src/stellar/contractSpec.js';
-import type { ContractMethodDescriptor, LoadedContractInterface } from '../src/stellar/contractSpec.js';
+import type { ContractAbiDescriptor, ContractMethodDescriptor, LoadedContractInterface } from '../src/stellar/contractSpec.js';
 import {
   AccountNotFoundError,
   isValidStellarAccountId,
@@ -33,6 +34,7 @@ export interface ContractInterfaceResult {
   network: StellarNetwork;
   contractId: string;
   methods: ContractMethodDescriptor[];
+  abi: ContractAbiDescriptor;
 }
 
 export interface BuildContractCallInput {
@@ -40,7 +42,7 @@ export interface BuildContractCallInput {
   transactionSource: string;
   contractId: string;
   method: string;
-  arguments: Record<string, string>;
+  arguments: Record<string, unknown>;
   lifetimeSeconds: number;
 }
 
@@ -56,7 +58,8 @@ export interface BuiltContractCall {
   validUntil: string;
 }
 
-type InterfaceLoader = (contractId: string, network: StellarNetwork) => Promise<LoadedContractInterface>;
+type InterfaceLoaderResult = Pick<LoadedContractInterface, 'spec' | 'methods'> & Partial<Pick<LoadedContractInterface, 'abi'>>;
+type InterfaceLoader = (contractId: string, network: StellarNetwork) => Promise<InterfaceLoaderResult>;
 type AccountLoader = (accountId: string, network: StellarNetwork) => Promise<{ accountId: string; sequence: string }>;
 type NetworkParametersLoader = (network: StellarNetwork) => Promise<{ baseFeeInStroops: number }>;
 
@@ -71,13 +74,13 @@ function normalizedNetwork(value: unknown): StellarNetwork {
   throw new ContractCallServiceError('Network must be public or testnet.', 400, 'invalid_network');
 }
 
-function normalizedArguments(value: unknown): Record<string, string> {
+function normalizedArguments(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new ContractCallServiceError('Contract arguments must be a JSON object.', 400, 'invalid_arguments');
   }
   const entries = Object.entries(value);
-  if (entries.length > 64 || entries.some(([key, item]) => !key || typeof item !== 'string')) {
-    throw new ContractCallServiceError('Contract arguments must contain at most 64 named string values.', 400, 'invalid_arguments');
+  if (entries.length > 64 || entries.some(([key]) => !key)) {
+    throw new ContractCallServiceError('Contract arguments must contain at most 64 named values.', 400, 'invalid_arguments');
   }
   return Object.fromEntries(entries);
 }
@@ -98,7 +101,14 @@ export async function inspectContractInterface(
   }
   try {
     const loaded = await (dependencies.interfaceLoader ?? loadContractInterface)(contractId, network);
-    return { operation: 'contract.interface.inspect', version: 1, contractId, network, methods: loaded.methods };
+    return {
+      operation: 'contract.interface.inspect',
+      version: 1,
+      contractId,
+      network,
+      methods: loaded.methods,
+      abi: loaded.abi ?? describeContractAbi(loaded.spec),
+    };
   } catch (cause) {
     if (cause instanceof ContractCallServiceError) throw cause;
     throw new ContractCallServiceError(
@@ -140,7 +150,7 @@ export async function buildContractCall(
     throw new ContractCallServiceError('Transaction lifetime must be 1 hour, 24 hours, or 7 days.', 400, 'invalid_lifetime');
   }
 
-  let loaded: LoadedContractInterface;
+  let loaded: InterfaceLoaderResult;
   let source: Awaited<ReturnType<AccountLoader>>;
   let parameters: Awaited<ReturnType<NetworkParametersLoader>>;
   try {
