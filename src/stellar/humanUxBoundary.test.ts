@@ -130,7 +130,7 @@ test('Inbox and Dashboard surface source-free Soroban Intents in the same work q
 
 test('Personal Activity opts into unified Work history without changing Treasury Activity', () => {
   const activity = source('../ActivityApp.tsx');
-  const activityApi = source('../../api/activity.ts');
+  const activityApi = source('../../apps/api/stellar/routes/activity.ts');
   assert.match(activity, /else url\.searchParams\.set\('view', 'work'\)/);
   assert.match(activity, /SorobanIntentActivityCard/);
   assert.match(activity, /item\.kind === 'request'/);
@@ -154,8 +154,8 @@ test('Activity retention explains that the share link ends without implying the 
 test('external-service work keeps final execution out of signer UI', () => {
   const request = source('../RequestApp.tsx');
   const intent = source('../SorobanIntentApp.tsx');
-  const requestApi = source('../../api/request.ts');
-  const intentApi = source('../../api/intent.ts');
+  const requestApi = source('../../apps/api/stellar/routes/request.ts');
+  const intentApi = source('../../apps/api/stellar/routes/intent.ts');
 
   assert.match(request, /snapshot\.execution\?\.mode === 'external'/);
   assert.match(request, /snapshot\?\.execution\?\.mode === 'multisigtools'/);

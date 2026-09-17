@@ -7,6 +7,6 @@
   },
   "include": [
     "api/**/*.ts",
-    "server/**/*.ts"
+    "apps/api/stellar/**/*.ts"
   ]
 }

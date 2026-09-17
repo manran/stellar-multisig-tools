@@ -1,7 +1,7 @@
 import {
   configuredIntegrationCredentials,
   createIntegrationApiKey,
-} from '../server/integrationCredentialService.js';
+} from '../apps/api/stellar/server/integrationCredentialService.js';
 
 type Parsed = {
   serviceId: string;

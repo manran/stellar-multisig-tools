@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { HEADLESS_OPERATION_CATALOG } from '../../../../src/stellar/headlessOperations.js';
+
+test('headless operation ids are unique and explicitly versioned', () => {
+  const ids = HEADLESS_OPERATION_CATALOG.map((operation) => operation.id);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(HEADLESS_OPERATION_CATALOG.every((operation) => operation.version === 1));
+});
+
+test('runtime policy and contract vertical slice are available to every transport consumer', () => {
+  const byId = new Map(HEADLESS_OPERATION_CATALOG.map((operation) => [operation.id, operation]));
+  assert.equal(byId.get('runtime.config.inspect')?.path, '/api/runtime-config');
+  assert.equal(byId.get('runtime.config.inspect')?.access, 'public');
+  assert.equal(byId.get('contract.interface.inspect')?.access, 'public');
+  assert.equal(byId.get('contract.intent.create')?.path, '/api/intent');
+  assert.equal(byId.get('contract.intent.create')?.access, 'principal:write');
+  assert.equal(byId.get('contract.intent.inspect')?.access, 'principal:read');
+  assert.equal(byId.get('contract.intent.contribute')?.access, 'principal:sign');
+  assert.equal(byId.get('contract.intent.execution.prepare')?.method, 'PUT');
+  assert.equal(byId.get('contract.intent.execution.prepare')?.effect, 'none');
+  assert.equal(byId.get('contract.intent.execution.reconcile')?.method, 'PUT');
+  assert.equal(byId.get('contract.intent.execution.reconcile')?.access, 'principal:write');
+  assert.equal(byId.get('contract.intent.execution.reconcile')?.effect, 'coordination-state');
+  assert.equal(byId.get('integration.intent.execution.reconcile')?.access, 'integration:write');
+  assert.equal(byId.get('contract.intent.replan')?.method, 'PUT');
+  assert.equal(byId.get('contract.intent.replan')?.access, 'principal:write');
+  assert.equal(byId.get('contract.intent.replan')?.effect, 'coordination-state');
+  assert.equal(byId.get('contract.call.build')?.effect, 'none');
+  assert.equal(byId.get('contract.call.prepare')?.path, '/api/contract-prepare');
+  assert.equal(byId.has('contract.authorization.create'), false);
+  assert.equal(byId.get('contract.workspace.list')?.access, 'principal:read');
+  assert.equal(byId.get('contract.workspace.keep')?.access, 'principal:write');
+  assert.equal(byId.get('contract.workspace.forget')?.path, '/api/contracts');
+  assert.equal(byId.get('classic.payment.prepare')?.path, '/api/payment-prepare');
+  assert.equal(byId.get('classic.account.create.prepare')?.path, '/api/account-create-prepare');
+  assert.equal(byId.get('integration.classic.account.create.prepare')?.access, 'integration:write');
+});

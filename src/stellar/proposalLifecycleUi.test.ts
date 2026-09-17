@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 
-const requestApi = readFileSync(new URL('../../api/request.ts', import.meta.url), 'utf8');
-const requestService = readFileSync(new URL('../../server/requestService.ts', import.meta.url), 'utf8');
+const requestApi = readFileSync(new URL('../../apps/api/stellar/routes/request.ts', import.meta.url), 'utf8');
+const requestService = readFileSync(new URL('../../apps/api/stellar/server/requestService.ts', import.meta.url), 'utf8');
 const signingRoom = readFileSync(new URL('../SigningRoomApp.tsx', import.meta.url), 'utf8');
 const settings = readFileSync(new URL('../TreasuryBoxSettingsApp.tsx', import.meta.url), 'utf8');
 const requestUi = readFileSync(new URL('../RequestApp.tsx', import.meta.url), 'utf8');
@@ -18,8 +18,8 @@ const unlockPreferences = readFileSync(new URL('./unlockPreferences.ts', import.
 const addressBook = readFileSync(new URL('../AddressBookApp.tsx', import.meta.url), 'utf8');
 const signerIdentityList = readFileSync(new URL('../SignerIdentityList.tsx', import.meta.url), 'utf8');
 const inbox = readFileSync(new URL('../InboxApp.tsx', import.meta.url), 'utf8');
-const inboxApi = readFileSync(new URL('../../api/inbox.ts', import.meta.url), 'utf8');
-const requestInbox = readFileSync(new URL('../../server/requestInbox.ts', import.meta.url), 'utf8');
+const inboxApi = readFileSync(new URL('../../apps/api/stellar/routes/inbox.ts', import.meta.url), 'utf8');
+const requestInbox = readFileSync(new URL('../../apps/api/stellar/server/requestInbox.ts', import.meta.url), 'utf8');
 const dashboard = readFileSync(new URL('../StellarDashboardApp.tsx', import.meta.url), 'utf8');
 const inboxPresentation = readFileSync(new URL('./inboxPresentation.ts', import.meta.url), 'utf8');
 const workspaceOnboarding = readFileSync(new URL('../WorkspaceModeOnboarding.tsx', import.meta.url), 'utf8');
