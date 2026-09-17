@@ -10,6 +10,7 @@ import {
 } from '../server/agentCredentialService.js';
 import type { StoredSignerAgentCredential } from '../server/agentCredentialStore.js';
 import { createAgentSigningRequest } from '../server/agentRequestService.js';
+import { projectClassicAgentTask } from '../server/agentTaskProjection.js';
 import {
   IntegrationCredentialServiceError,
 } from '../server/integrationCredentialService.js';
@@ -498,6 +499,20 @@ async function recordDecline(requestId: string, actorAddress: string): Promise<v
   }
 }
 
+function agentRequestTask(access: AuthorizedRequest, snapshot: Awaited<ReturnType<typeof getSigningRequest>>, declined = false) {
+  if (access.mode !== 'agent' || !access.agentCredential) return undefined;
+  return projectClassicAgentTask({
+    request: snapshot,
+    credentialAccess: access.agentCredential.access,
+    hasSigned: signerHasSignedTransaction(
+      access.agentCredential.principal.address,
+      snapshot.mergedXdr,
+      snapshot.network,
+    ),
+    declined,
+  });
+}
+
 export async function GET(request: Request): Promise<Response> {
   try {
     const url = new URL(request.url);
@@ -655,6 +670,7 @@ export async function GET(request: Request): Promise<Response> {
         ...(access.privateCommitment ? { privateCommitment: access.privateCommitment } : {}),
       },
       ...(history ? { history } : {}),
+      ...(access.mode === 'agent' ? { task: agentRequestTask(access, snapshot, declined) } : {}),
     });
   } catch (cause) {
     return errorResponse(cause);
@@ -814,6 +830,11 @@ export async function POST(request: Request): Promise<Response> {
         context: {
           ...(privateNoteText ? { privateNote: initialPrivateNote(privateNoteText, result.request.createdAt) } : {}),
         },
+        task: projectClassicAgentTask({
+          request: result.request,
+          credentialAccess: agentCredential.access,
+          hasSigned: signerHasSignedTransaction(agentCredential.principal.address, result.request.mergedXdr, result.request.network),
+        }),
       }, result.replayed ? 200 : 201);
     }
     const privateCommitment = privateCommitmentForCreate(body, xdr);
@@ -993,7 +1014,11 @@ export async function PATCH(request: Request): Promise<Response> {
       }
       await recordDecline(access.id, access.actorAddress);
       const snapshot = await getSigningRequest(blobSigningRequestStore, access.id, serviceOptions);
-      return noStoreJson({ request: snapshot, decision: 'declined' as const });
+      return noStoreJson({
+        request: snapshot,
+        decision: 'declined' as const,
+        ...(access.mode === 'agent' ? { task: agentRequestTask(access, snapshot, true) } : {}),
+      });
     }
 
     const signedXdr = typeof body.signedXdr === 'string' ? body.signedXdr : '';
@@ -1051,6 +1076,7 @@ export async function PATCH(request: Request): Promise<Response> {
       ...(access.contributionGrantExpiresAt
         ? { access: { contributionGrantExpiresAt: access.contributionGrantExpiresAt } }
         : {}),
+      ...(access.mode === 'agent' ? { task: agentRequestTask(access, result.request) } : {}),
     });
   } catch (cause) {
     return errorResponse(cause);

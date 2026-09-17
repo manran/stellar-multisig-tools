@@ -130,7 +130,7 @@ test('Intent Inbox treats discovery as candidates and revalidates live signer au
   );
   assert.equal(signerInbox.length, 1);
   assert.equal(signerInbox[0]?.id, f.stored.id);
-  assert.equal(signerInbox[0]?.viewerAction, 'authorize');
+  assert.equal(signerInbox[0]?.viewerAction, 'sign');
 
   const staleCandidate = await listSorobanIntentInbox(
     f.store,

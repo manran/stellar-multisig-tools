@@ -187,8 +187,8 @@ test('Integration creates one external Soroban Intent and simulation discovers t
 
   const fromInbox = await listSorobanIntentInbox(store, f.from.publicKey(), 'testnet', f.authOptions);
   const toInbox = await listSorobanIntentInbox(store, f.to.publicKey(), 'testnet', f.authOptions);
-  assert.equal(fromInbox[0]?.viewerAction, 'authorize');
-  assert.equal(toInbox[0]?.viewerAction, 'authorize');
+  assert.equal(fromInbox[0]?.viewerAction, 'sign');
+  assert.equal(toInbox[0]?.viewerAction, 'sign');
   assert.deepEqual(fromInbox[0]?.creatorActor, { type: 'service', id: 'fednetwork', label: 'FedNetwork' });
 });
 

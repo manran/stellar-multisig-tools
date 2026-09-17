@@ -1,3 +1,4 @@
+import type { AgentTaskProjection } from './agentTaskTypes.js';
 import type { SorobanGAccountAuthorizerStatus } from './sorobanAuthorization.js';
 import type { SorobanAuthorizationPlan } from './sorobanAuthorizationPlan.js';
 import type { SorobanIntent } from './sorobanIntent.js';
@@ -119,7 +120,7 @@ export interface IntegrationSorobanJobProjection {
   };
 }
 
-export type SorobanIntentViewerAction = 'authorize' | 'route_execution' | 'waiting' | 'waiting_execution' | 'execution_failed' | 'attention';
+export type SorobanIntentViewerAction = 'sign' | 'route_execution' | 'waiting' | 'waiting_execution' | 'execution_failed' | 'attention';
 
 export interface InboxSorobanIntentSnapshot {
   id: string;
@@ -142,6 +143,7 @@ export interface SorobanIntentResponse {
   authorization: SorobanIntentAuthorizationSnapshot;
   evidence?: SorobanIntentEvidenceEvent[];
   job?: IntegrationSorobanJobProjection;
+  task?: AgentTaskProjection;
 }
 
 export interface SorobanIntentContributionResponse {
@@ -149,6 +151,7 @@ export interface SorobanIntentContributionResponse {
   version: 1;
   added: boolean;
   authorization: SorobanIntentAuthorizationSnapshot;
+  task?: AgentTaskProjection;
 }
 
 export interface SorobanIntentExecutionObservation {
@@ -171,6 +174,7 @@ export interface SorobanIntentExecutionReconciliationResponse {
   replayed: boolean;
   observation?: SorobanIntentExecutionObservation;
   job?: IntegrationSorobanJobProjection;
+  task?: AgentTaskProjection;
 }
 
 export interface SorobanIntentExecutionResponse {
@@ -196,6 +200,7 @@ export interface SorobanIntentExecutionResponse {
     xdr: string;
   };
   job?: IntegrationSorobanJobProjection;
+  task?: AgentTaskProjection;
 }
 
 export interface SorobanIntentReplanResponse {
@@ -206,4 +211,5 @@ export interface SorobanIntentReplanResponse {
   previousAuthorizationPlanDigest: string;
   authorizationPlanRevision: number;
   job?: IntegrationSorobanJobProjection;
+  task?: AgentTaskProjection;
 }

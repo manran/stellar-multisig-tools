@@ -4,7 +4,7 @@ import type {
 } from './sorobanIntentApiTypes.js';
 
 export function intentViewerActionNeedsAction(action: SorobanIntentViewerAction): boolean {
-  return action === 'authorize' || action === 'route_execution' || action === 'execution_failed' || action === 'attention';
+  return action === 'sign' || action === 'route_execution' || action === 'execution_failed' || action === 'attention';
 }
 
 export function intentViewerActionPresentation(action: SorobanIntentViewerAction): {
@@ -13,11 +13,11 @@ export function intentViewerActionPresentation(action: SorobanIntentViewerAction
   cta: string;
   tone: 'warning' | 'success' | 'danger' | 'neutral';
 } {
-  if (action === 'authorize') {
+  if (action === 'sign') {
     return {
-      label: 'Contract authorization needed',
-      detail: 'Review the Intent and add your Soroban authorization.',
-      cta: 'Review & authorize',
+      label: 'Your signature is needed',
+      detail: 'Review the contract action before signing.',
+      cta: 'Review & sign',
       tone: 'warning',
     };
   }

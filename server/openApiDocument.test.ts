@@ -124,6 +124,15 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   for (const name of ['ContractIntentCreateResult', 'ContractIntentInspectResult', 'ContractIntentExecutionResult', 'ContractIntentExecutionReconcileResult', 'ContractIntentReplanResult']) {
     assert.ok((schemas[name].properties as JsonObject).job);
   }
+  assert.deepEqual(schemas.AgentTask.required, ['version', 'id', 'kind', 'network', 'state', 'nextActions']);
+  assert.deepEqual((schemas.AgentTask.properties as JsonObject).state, {
+    type: 'string', enum: ['action_required', 'waiting', 'completed', 'expired', 'failed'],
+  });
+  const agentTaskAction = (((schemas.AgentTask.properties as JsonObject).nextActions as JsonObject).items as JsonObject);
+  assert.deepEqual(agentTaskAction.required, ['code', 'requiredAccess', 'available']);
+  for (const name of ['ContractIntentCreateResult', 'ContractIntentInspectResult', 'ContractIntentContributionResult', 'ContractIntentExecutionResult', 'ContractIntentExecutionReconcileResult', 'ContractIntentReplanResult', 'ProposalResult']) {
+    assert.ok((schemas[name].properties as JsonObject).task);
+  }
   assert.deepEqual(schemas.SorobanIntentEvidenceEvent.required, [
     'version', 'eventId', 'type', 'occurredAt', 'authorizationPlanDigest', 'authorizationPlanRevision',
   ]);

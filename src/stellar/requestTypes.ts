@@ -1,4 +1,5 @@
 import type { ActivityRequestItem } from './activityTypes.js';
+import type { AgentTaskProjection } from './agentTaskTypes.js';
 import type { RequestExecution } from './integrationTypes.js';
 import type { PrivateCommitmentRecord } from './privateCommitment.js';
 import type { PrivateNoteRevision } from './privateNote.js';
@@ -89,6 +90,7 @@ export interface CreateSigningRequestResponse {
   access?: SigningRequestAccess;
   context?: SigningRequestPrivateContext;
   history?: SigningRequestHistoryProjection;
+  task?: AgentTaskProjection;
 }
 
 export interface ContributeSigningRequestResponse {
@@ -96,6 +98,7 @@ export interface ContributeSigningRequestResponse {
   addedSignatureCount: number;
   duplicateSignatureCount: number;
   access?: { contributionGrantExpiresAt?: number };
+  task?: AgentTaskProjection;
 }
 
 export interface SubmitSigningRequestResponse {

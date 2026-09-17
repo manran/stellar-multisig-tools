@@ -118,6 +118,8 @@ Mapping:
 
 Inbox/Dashboard show the current viewer's next action rather than exposing internal workflow phase names. `authorization_ready` therefore projects to **Choose execution**, not directly to **Execute**.
 
+Audience-specific business packaging is governed by `AUDIENCE_PROJECTION_MODEL.md`: Human uses one current action, signer Agent uses typed `task`, and external Integration uses `job`. All three derive from the same Request/Intent facts rather than creating new workflow state.
+
 ## 6. Identity and ownership remain separate
 
 - Human/Agent may represent a signer Principal.

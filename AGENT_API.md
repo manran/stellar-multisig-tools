@@ -82,6 +82,10 @@ Rules:
 
 The Agent credential is not bound to one Treasury. One signer may participate in multiple Treasuries or a multi-party transaction. Each transaction is authorized against fresh Stellar signer state.
 
+Agent responses also expose a typed `task` projection. Normal Agent orchestration should consume `task.state` and `task.nextActions` before interpreting Request/Intent lifecycle internals. Each action reports `requiredAccess` and whether the current `msa_...` credential has that capability. `available=false` means the signer Principal may need the action even though this credential cannot perform it; it does not grant or simulate authority. The underlying Request/Intent status, authorization and evidence fields remain available for diagnostics and compatibility.
+
+The stable Agent Task states are `action_required`, `waiting`, `completed`, `expired`, and `failed`. Current action codes are `contribute_signature`, `contribute_authorization`, `decline`, `prepare_execution`, `refresh_execution`, and `replan`. Human-facing copy is not a machine contract. See `AUDIENCE_PROJECTION_MODEL.md`.
+
 Response uses the normal Request projection plus Agent retry metadata:
 
 ```json
@@ -129,7 +133,7 @@ x-multisig-request-id: 0123456789ABCDEF
 
 Read requires **Read** and current Principal access to that transaction.
 
-Clients branch on typed `statusReason`, not Human-facing `statusDetail`.
+Advanced clients may still branch on typed `statusReason`, not Human-facing `statusDetail`. Normal Agent workflow should prefer the additive `task` projection for current action/capability decisions.
 
 Current reason vocabulary includes:
 
@@ -248,6 +252,8 @@ Example semantic creation:
 ```
 
 For guided `Option<Address>` / `Option<MuxedAddress>` inputs, omit the argument (or send an empty string from a form client) to encode `None`; send a normal Stellar address string to encode `Some(address)`. Other complex optional types remain outside the guided composer until explicitly supported.
+
+For signer-Agent callers, Intent create/inspect/contribute/prepare/reconcile/replan responses expose the same typed `task` projection used by Classic Request workflow. It derives Principal action from current authorization/execution facts and reports whether the current Agent credential can perform it.
 
 For Integration Service callers, create/inspect/prepare/reconcile/replan responses also expose a `job` business projection. Normal business code may consume this projection without interpreting `AuthorizationPlan`, contribution, preparation, or evidence internals. The stable states are `waiting_for_authorization`, `ready`, `executing`, `completed`, `expired`, and `failed`; `nextActions` tells the Service what action, if any, it should take next. `waitingFor` identifies unresolved authorizer addresses, not every signer candidate in a multisig threshold. The full technical fields remain available for diagnostics and advanced clients.
 

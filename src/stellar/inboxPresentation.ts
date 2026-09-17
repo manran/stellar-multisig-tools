@@ -21,7 +21,6 @@ export interface InboxActionCounts {
   readyToSubmit: number;
   needsAttention: number;
   waiting: number;
-  contractAuthorizationNeeded: number;
   readyForExecutionRouting: number;
 }
 
@@ -59,7 +58,6 @@ export function summarizeInboxActions(
     readyToSubmit: 0,
     needsAttention: 0,
     waiting: 0,
-    contractAuthorizationNeeded: 0,
     readyForExecutionRouting: 0,
   };
 
@@ -72,9 +70,9 @@ export function summarizeInboxActions(
     else counts.waiting += 1;
   }
   for (const intent of intents) {
-    if (intent.viewerAction === 'authorize') {
+    if (intent.viewerAction === 'sign') {
       counts.actionRequired += 1;
-      counts.contractAuthorizationNeeded += 1;
+      counts.signatureNeeded += 1;
     } else if (intent.viewerAction === 'route_execution') {
       counts.actionRequired += 1;
       counts.readyForExecutionRouting += 1;
@@ -155,16 +153,15 @@ export function inboxViewerActionPresentation(action: InboxViewerAction): {
 }
 
 export function inboxActionCountPresentations(counts: InboxActionCounts): Array<{
-  key: 'contract-auth' | 'execution-route' | 'sign' | 'submit' | 'attention' | 'waiting';
+  key: 'execution-route' | 'sign' | 'submit' | 'attention' | 'waiting';
   label: string;
   tone: 'warning' | 'success' | 'danger' | 'neutral';
 }> {
   const items: Array<{
-    key: 'contract-auth' | 'execution-route' | 'sign' | 'submit' | 'attention' | 'waiting';
+    key: 'execution-route' | 'sign' | 'submit' | 'attention' | 'waiting';
     label: string;
     tone: 'warning' | 'success' | 'danger' | 'neutral';
   }> = [];
-  if (counts.contractAuthorizationNeeded > 0) items.push({ key: 'contract-auth', label: `${counts.contractAuthorizationNeeded} contract auth`, tone: 'warning' });
   if (counts.readyForExecutionRouting > 0) items.push({ key: 'execution-route', label: `${counts.readyForExecutionRouting} to choose execution`, tone: 'success' });
   if (counts.signatureNeeded > 0) items.push({ key: 'sign', label: `${counts.signatureNeeded} to sign`, tone: 'warning' });
   if (counts.readyToSubmit > 0) items.push({ key: 'submit', label: `${counts.readyToSubmit} to submit`, tone: 'success' });

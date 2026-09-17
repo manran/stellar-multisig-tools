@@ -40,7 +40,7 @@ export function projectSorobanIntentViewerAction(
     !authorizer.ready
     && authorizer.activeSigners.some((signer) => signer.publicKey === address)
     && !authorizer.signerEvidence.some((signer) => signer.publicKey === address),
-  ) ? 'authorize' : 'waiting';
+  ) ? 'sign' : 'waiting';
 }
 
 function latestPreparation(

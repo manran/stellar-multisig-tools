@@ -105,6 +105,8 @@ A Sign Agent credential contains no Stellar private key and does not itself sati
 
 Agent access should link to `/developers` for protocol details. Human-facing controls should say **Agent access**, not force users to learn MCP, Skill, Box, or Automation terminology.
 
+Agent machine responses should prefer the typed `task` projection for current action/capability decisions. Human text is not a machine contract. Shared facts with Human and Integration projections are defined in `AUDIENCE_PROJECTION_MODEL.md`.
+
 ## Treasury Audit access UX
 
 Treasury Settings may create a fixed-scope `mta_...` **Treasury Audit credential** for machine observation of that one Treasury's Activity.

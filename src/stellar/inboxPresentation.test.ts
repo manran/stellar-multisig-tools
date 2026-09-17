@@ -35,25 +35,23 @@ test('Inbox action counts describe what the current viewer can do now', () => {
     readyToSubmit: 0,
     needsAttention: 1,
     waiting: 3,
-    contractAuthorizationNeeded: 0,
     readyForExecutionRouting: 1,
   });
   assert.equal(inboxViewerActionNeedsAction('sign'), true);
   assert.equal(inboxViewerActionNeedsAction('waiting_for_others'), false);
 
   const withIntents = summarizeInboxActions([], [
-    { viewerAction: 'authorize' },
+    { viewerAction: 'sign' },
     { viewerAction: 'route_execution' },
     { viewerAction: 'attention' },
     { viewerAction: 'waiting' },
   ]);
   assert.deepEqual(withIntents, {
     actionRequired: 3,
-    signatureNeeded: 0,
+    signatureNeeded: 1,
     readyToSubmit: 0,
     needsAttention: 1,
     waiting: 1,
-    contractAuthorizationNeeded: 1,
     readyForExecutionRouting: 1,
   });
   const failedExecution = summarizeInboxActions([], [{ viewerAction: 'execution_failed' }]);
@@ -79,10 +77,8 @@ test('Dashboard action summary reuses the Human semantic tones', () => {
     readyToSubmit: 1,
     needsAttention: 1,
     waiting: 3,
-    contractAuthorizationNeeded: 1,
     readyForExecutionRouting: 2,
   }), [
-    { key: 'contract-auth', label: '1 contract auth', tone: 'warning' },
     { key: 'execution-route', label: '2 to choose execution', tone: 'success' },
     { key: 'sign', label: '2 to sign', tone: 'warning' },
     { key: 'submit', label: '1 to submit', tone: 'success' },

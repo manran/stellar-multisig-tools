@@ -7,6 +7,7 @@ import {
   requireAgentAccess,
 } from '../server/agentCredentialService.js';
 import { createAgentSorobanIntent } from '../server/agentSorobanIntentService.js';
+import { projectSorobanAgentTask } from '../server/agentTaskProjection.js';
 import {
   IntegrationCredentialServiceError,
   integrationCallerForCredential,
@@ -185,6 +186,16 @@ export async function GET(request: Request): Promise<Response> {
       ...(access.integrationCredential ? {
         job: integrationJob(request, access.stored, access.authorization, preparations, observations),
       } : {}),
+      ...(access.agent ? {
+        task: agentTask(
+          access.stored,
+          access.authorization,
+          access.agent.access,
+          access.agent.principal.address,
+          preparations,
+          observations,
+        ),
+      } : {}),
     });
   } catch (cause) {
     return errorResponse(cause);
@@ -223,6 +234,44 @@ async function loadIntegrationJob(
     blobSorobanIntentStore.listExecutionObservations?.(stored.id) ?? Promise.resolve([]),
   ]);
   return integrationJob(request, latestStored ?? stored, authorization, preparations, observations);
+}
+
+function agentTask(
+  stored: Parameters<typeof projectSorobanAgentTask>[0]['stored'],
+  authorization: Parameters<typeof projectSorobanAgentTask>[0]['authorization'],
+  credentialAccess: Parameters<typeof projectSorobanAgentTask>[0]['credentialAccess'],
+  principalAddress: string,
+  preparations: Parameters<typeof projectSorobanAgentTask>[0]['preparations'] = [],
+  observations: Parameters<typeof projectSorobanAgentTask>[0]['observations'] = [],
+) {
+  return projectSorobanAgentTask({
+    stored,
+    authorization,
+    credentialAccess,
+    principalAddress,
+    preparations,
+    observations,
+  });
+}
+
+async function loadAgentTask(
+  stored: Parameters<typeof projectSorobanAgentTask>[0]['stored'],
+  authorization: Parameters<typeof projectSorobanAgentTask>[0]['authorization'],
+  agent: NonNullable<Awaited<ReturnType<typeof storedIntentAccess>>['agent']>,
+) {
+  const [latestStored, preparations, observations] = await Promise.all([
+    blobSorobanIntentStore.getIntent(stored.id),
+    blobSorobanIntentStore.listExecutionPreparations?.(stored.id) ?? Promise.resolve([]),
+    blobSorobanIntentStore.listExecutionObservations?.(stored.id) ?? Promise.resolve([]),
+  ]);
+  return agentTask(
+    latestStored ?? stored,
+    authorization,
+    agent.access,
+    agent.principal.address,
+    preparations,
+    observations,
+  );
 }
 
 function executorFromBody(body: Record<string, unknown>): unknown {
@@ -390,6 +439,12 @@ export async function POST(request: Request): Promise<Response> {
         replayed: result.replayed,
         intent: result.intent,
         authorization,
+        task: agentTask(
+          result.intent,
+          authorization,
+          agent.access,
+          agent.principal.address,
+        ),
       }, result.replayed ? 200 : 201);
     }
 
@@ -460,6 +515,14 @@ export async function PATCH(request: Request): Promise<Response> {
       version: 1,
       added: result.added,
       authorization: result.authorization,
+      ...(access.agent ? {
+        task: agentTask(
+          access.stored,
+          result.authorization,
+          access.agent.access,
+          access.agent.principal.address,
+        ),
+      } : {}),
     });
   } catch (cause) {
     return errorResponse(cause);
@@ -479,6 +542,9 @@ export async function PUT(request: Request): Promise<Response> {
       const job = access.integrationCredential
         ? await loadIntegrationJob(request, access.stored, access.authorization)
         : undefined;
+      const task = access.agent
+        ? await loadAgentTask(access.stored, access.authorization, access.agent)
+        : undefined;
       return json({
         operation: 'contract.intent.execution.reconcile',
         version: 1,
@@ -487,6 +553,7 @@ export async function PUT(request: Request): Promise<Response> {
         replayed: result.replayed,
         ...(result.observation ? { observation: result.observation } : {}),
         ...(job ? { job } : {}),
+        ...(task ? { task } : {}),
       });
     }
     const integrationOwnedExecution = Boolean(access.stored.integration);
@@ -519,6 +586,9 @@ export async function PUT(request: Request): Promise<Response> {
       const job = access.integrationCredential
         ? await loadIntegrationJob(request, result.intent, result.authorization)
         : undefined;
+      const task = access.agent
+        ? await loadAgentTask(result.intent, result.authorization, access.agent)
+        : undefined;
       return json({
         operation: 'contract.intent.replan',
         version: 1,
@@ -527,6 +597,7 @@ export async function PUT(request: Request): Promise<Response> {
         previousAuthorizationPlanDigest: result.previousAuthorizationPlanDigest,
         authorizationPlanRevision: result.authorizationPlanRevision,
         ...(job ? { job } : {}),
+        ...(task ? { task } : {}),
       });
     }
     if (body.action !== undefined && body.action !== 'prepare_execution' && body.action !== 'refresh_execution') {
@@ -610,11 +681,15 @@ export async function PUT(request: Request): Promise<Response> {
     const job = access.integrationCredential
       ? await loadIntegrationJob(request, access.stored, access.authorization)
       : undefined;
+    const task = access.agent
+      ? await loadAgentTask(access.stored, access.authorization, access.agent)
+      : undefined;
     return json({
       operation: 'contract.intent.execution.prepare',
       version: 1,
       execution: { ...execution, ...(executorBinding ? { executor: executorBinding } : {}) },
       ...(job ? { job } : {}),
+      ...(task ? { task } : {}),
     });
   } catch (cause) {
     return errorResponse(cause);
