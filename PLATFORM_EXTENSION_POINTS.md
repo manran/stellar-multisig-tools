@@ -5,7 +5,7 @@ Date: 2026-08-30
 
 This document records the minimum extension points needed so the current Stellar multisig product can grow into Team/Workspace and external API use without prematurely building a generic SaaS platform.
 
-It complements `WORKSPACE_MODEL.md`, `MULTI_AUTHORITY_INTENTS.md`, `TRANSACTION_CONTEXT.md`, and `PRIVACY_AUDIT_MODEL.md`.
+It complements `WORKSPACE_MODEL.md`, `MULTI_AUTHORITY_INTENTS.md`, `TRANSACTION_CONTEXT.md`, `PRIVACY_AUDIT_MODEL.md`, and `INTEGRATION_PRODUCT_MODEL.md`. The latter now defines the business-facing Job projection and reliable webhook boundary validated by the first real Integration.
 
 ## 1. Product growth rule
 
@@ -415,7 +415,7 @@ Current MVP should not build:
 - organizations/Workspace tables solely for future compatibility;
 - a generic policy DSL;
 - generic arbitrary-intent execution;
-- webhook infrastructure before a real integration needs it;
+- unreliable webhook delivery without a durable outbox, signed delivery, retry, and delivery history;
 - OAuth/service-account administration without an external consumer;
 - a generalized event bus solely because the future API may use events.
 

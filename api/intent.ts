@@ -26,6 +26,7 @@ import { createHumanSorobanIntent } from '../server/humanSorobanIntentService.js
 import { createImportedSorobanIntent } from '../server/importedSorobanIntentService.js';
 import { noStoreJson, publicCorsHeaders } from '../server/httpResponse.js';
 import { projectSorobanIntentEvidence } from '../server/sorobanIntentEvidence.js';
+import { projectIntegrationSorobanJob } from '../server/integrationSorobanJobProjection.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
 import { configuredSorobanManagedExecutor, configuredSorobanPlanningSource } from '../server/sorobanIntentConfig.js';
@@ -181,10 +182,47 @@ export async function GET(request: Request): Promise<Response> {
       intent: access.stored,
       authorization: access.authorization,
       evidence: projectSorobanIntentEvidence(access.stored, contributions, preparations, observations),
+      ...(access.integrationCredential ? {
+        job: integrationJob(request, access.stored, access.authorization, preparations, observations),
+      } : {}),
     });
   } catch (cause) {
     return errorResponse(cause);
   }
+}
+
+function integrationReviewUrl(request: Request, id: string): string {
+  const url = new URL(request.url);
+  url.pathname = '/a';
+  url.search = '';
+  url.hash = id;
+  return url.toString();
+}
+
+function integrationJob(
+  request: Request,
+  stored: Parameters<typeof projectIntegrationSorobanJob>[0]['stored'],
+  authorization: Parameters<typeof projectIntegrationSorobanJob>[0]['authorization'],
+  preparations: Parameters<typeof projectIntegrationSorobanJob>[0]['preparations'] = [],
+  observations: Parameters<typeof projectIntegrationSorobanJob>[0]['observations'] = [],
+) {
+  return projectIntegrationSorobanJob({
+    stored, authorization, preparations, observations,
+    reviewUrl: integrationReviewUrl(request, stored.id),
+  });
+}
+
+async function loadIntegrationJob(
+  request: Request,
+  stored: Parameters<typeof projectIntegrationSorobanJob>[0]['stored'],
+  authorization: Parameters<typeof projectIntegrationSorobanJob>[0]['authorization'],
+) {
+  const [latestStored, preparations, observations] = await Promise.all([
+    blobSorobanIntentStore.getIntent(stored.id),
+    blobSorobanIntentStore.listExecutionPreparations?.(stored.id) ?? Promise.resolve([]),
+    blobSorobanIntentStore.listExecutionObservations?.(stored.id) ?? Promise.resolve([]),
+  ]);
+  return integrationJob(request, latestStored ?? stored, authorization, preparations, observations);
 }
 
 function executorFromBody(body: Record<string, unknown>): unknown {
@@ -306,6 +344,7 @@ export async function POST(request: Request): Promise<Response> {
         replayed: result.replayed,
         intent: result.intent,
         authorization,
+        job: integrationJob(request, result.intent, authorization),
       }, result.replayed ? 200 : 201);
     }
 
@@ -437,6 +476,9 @@ export async function PUT(request: Request): Promise<Response> {
         access.id,
         typeof body.transactionHash === 'string' ? body.transactionHash : '',
       );
+      const job = access.integrationCredential
+        ? await loadIntegrationJob(request, access.stored, access.authorization)
+        : undefined;
       return json({
         operation: 'contract.intent.execution.reconcile',
         version: 1,
@@ -444,6 +486,7 @@ export async function PUT(request: Request): Promise<Response> {
         observed: result.observed,
         replayed: result.replayed,
         ...(result.observation ? { observation: result.observation } : {}),
+        ...(job ? { job } : {}),
       });
     }
     const integrationOwnedExecution = Boolean(access.stored.integration);
@@ -473,6 +516,9 @@ export async function PUT(request: Request): Promise<Response> {
         configuredSorobanPlanningSource(access.stored.network),
         { authorization: access.authorization },
       );
+      const job = access.integrationCredential
+        ? await loadIntegrationJob(request, result.intent, result.authorization)
+        : undefined;
       return json({
         operation: 'contract.intent.replan',
         version: 1,
@@ -480,6 +526,7 @@ export async function PUT(request: Request): Promise<Response> {
         authorization: result.authorization,
         previousAuthorizationPlanDigest: result.previousAuthorizationPlanDigest,
         authorizationPlanRevision: result.authorizationPlanRevision,
+        ...(job ? { job } : {}),
       });
     }
     if (body.action !== undefined && body.action !== 'prepare_execution' && body.action !== 'refresh_execution') {
@@ -560,10 +607,14 @@ export async function PUT(request: Request): Promise<Response> {
         { effectsDiff: execution.effectsDiff },
       );
     }
+    const job = access.integrationCredential
+      ? await loadIntegrationJob(request, access.stored, access.authorization)
+      : undefined;
     return json({
       operation: 'contract.intent.execution.prepare',
       version: 1,
       execution: { ...execution, ...(executorBinding ? { executor: executorBinding } : {}) },
+      ...(job ? { job } : {}),
     });
   } catch (cause) {
     return errorResponse(cause);

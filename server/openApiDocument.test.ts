@@ -114,6 +114,16 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
     { required: ['preparedXdr'] },
   ]);
   assert.deepEqual(schemas.ContractIntentInspectResult.required, ['operation', 'version', 'intent', 'authorization', 'evidence']);
+  assert.deepEqual(schemas.IntegrationSorobanJob.required, ['version', 'id', 'kind', 'network', 'state', 'nextActions', 'reviewUrl']);
+  assert.deepEqual((schemas.IntegrationSorobanJob.properties as JsonObject).state, {
+    type: 'string', enum: ['waiting_for_authorization', 'ready', 'executing', 'completed', 'expired', 'failed'],
+  });
+  assert.deepEqual(((schemas.IntegrationSorobanJob.properties as JsonObject).nextActions as JsonObject).items, {
+    type: 'string', enum: ['prepare_execution', 'submit_execution', 'reconcile_execution', 'refresh_execution', 'replan'],
+  });
+  for (const name of ['ContractIntentCreateResult', 'ContractIntentInspectResult', 'ContractIntentExecutionResult', 'ContractIntentExecutionReconcileResult', 'ContractIntentReplanResult']) {
+    assert.ok((schemas[name].properties as JsonObject).job);
+  }
   assert.deepEqual(schemas.SorobanIntentEvidenceEvent.required, [
     'version', 'eventId', 'type', 'occurredAt', 'authorizationPlanDigest', 'authorizationPlanRevision',
   ]);

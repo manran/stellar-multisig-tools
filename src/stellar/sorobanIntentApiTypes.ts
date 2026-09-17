@@ -78,6 +78,47 @@ export interface SorobanIntentAuthorizationSnapshot {
 }
 
 
+export type IntegrationJobState =
+  | 'waiting_for_authorization'
+  | 'ready'
+  | 'executing'
+  | 'completed'
+  | 'expired'
+  | 'failed';
+
+export type IntegrationJobNextAction =
+  | 'prepare_execution'
+  | 'submit_execution'
+  | 'reconcile_execution'
+  | 'refresh_execution'
+  | 'replan';
+
+export interface IntegrationSorobanJobProjection {
+  version: 1;
+  id: string;
+  kind: 'soroban_contract';
+  network: StellarNetwork;
+  state: IntegrationJobState;
+  nextActions: IntegrationJobNextAction[];
+  reviewUrl: string;
+  waitingFor?: string[];
+  expiresAtLedger?: number;
+  externalReference?: string;
+  reason?: 'authorization_blocked' | 'execution_failed';
+  execution?: {
+    owner: 'external_service' | 'multisigtools';
+    executor: string;
+    transactionHash: string;
+    preparedAt: string;
+    validUntil: string | null;
+  };
+  result?: {
+    transactionHash: string;
+    ledger: number;
+    successful: boolean;
+  };
+}
+
 export type SorobanIntentViewerAction = 'authorize' | 'route_execution' | 'waiting' | 'waiting_execution' | 'execution_failed' | 'attention';
 
 export interface InboxSorobanIntentSnapshot {
@@ -100,6 +141,7 @@ export interface SorobanIntentResponse {
   intent: StoredSorobanIntentSnapshot;
   authorization: SorobanIntentAuthorizationSnapshot;
   evidence?: SorobanIntentEvidenceEvent[];
+  job?: IntegrationSorobanJobProjection;
 }
 
 export interface SorobanIntentContributionResponse {
@@ -128,6 +170,7 @@ export interface SorobanIntentExecutionReconciliationResponse {
   observed: boolean;
   replayed: boolean;
   observation?: SorobanIntentExecutionObservation;
+  job?: IntegrationSorobanJobProjection;
 }
 
 export interface SorobanIntentExecutionResponse {
@@ -152,6 +195,7 @@ export interface SorobanIntentExecutionResponse {
     preparedAt: string;
     xdr: string;
   };
+  job?: IntegrationSorobanJobProjection;
 }
 
 export interface SorobanIntentReplanResponse {
@@ -161,4 +205,5 @@ export interface SorobanIntentReplanResponse {
   authorization: SorobanIntentAuthorizationSnapshot;
   previousAuthorizationPlanDigest: string;
   authorizationPlanRevision: number;
+  job?: IntegrationSorobanJobProjection;
 }
