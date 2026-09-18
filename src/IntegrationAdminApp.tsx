@@ -3,6 +3,7 @@ import { Check, ClipboardCopy, KeyRound, LoaderCircle, Plus, RefreshCw, Save, Sh
 import { PageHeader } from './MultiSigUi';
 
 interface ContractScope { contractId: string; methods: string[]; }
+interface WebhookSummary { version: 1; url: string; enabled: boolean; secretVersion: number; }
 interface ServiceSummary {
   serviceId: string; label: string; enabled: boolean; source: 'bootstrap' | 'durable';
   networks: Array<'public' | 'testnet'>;
@@ -11,6 +12,7 @@ interface ServiceSummary {
   sorobanContracts: ContractScope[];
   sorobanExecutionAccounts: string[];
   sorobanDefaultExecutor?: string;
+  webhook?: WebhookSummary;
   createdAt?: string; updatedAt?: string;
 }
 interface Draft {
@@ -76,7 +78,11 @@ export default function IntegrationAdminApp() {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [editingId, setEditingId] = useState('');
   const [generatedKey, setGeneratedKey] = useState('');
+  const [generatedWebhookSecret, setGeneratedWebhookSecret] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [webhookEnabled, setWebhookEnabled] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [webhookCopied, setWebhookCopied] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -84,8 +90,9 @@ export default function IntegrationAdminApp() {
 
   const headers = () => ({ Authorization: `Bearer ${adminSecret.trim()}`, 'Content-Type': 'application/json' });
 
-  async function load(preserveGeneratedKey = false) {
-    setBusy(true); setError(''); if (!preserveGeneratedKey) setGeneratedKey('');
+  async function load(preserveGeneratedSecrets = false) {
+    setBusy(true); setError('');
+    if (!preserveGeneratedSecrets) { setGeneratedKey(''); setGeneratedWebhookSecret(''); }
     try {
       const body = await apiJson<{ services: ServiceSummary[] }>(await fetch('/api/integration-admin', { headers: { Authorization: `Bearer ${adminSecret.trim()}` }, cache: 'no-store' }));
       setServices(body.services); setLoaded(true);
@@ -94,15 +101,17 @@ export default function IntegrationAdminApp() {
   }
 
   function select(service: ServiceSummary) {
-    setEditingId(service.serviceId); setDraft(draftFrom(service)); setGeneratedKey(''); setError('');
+    setEditingId(service.serviceId); setDraft(draftFrom(service)); setGeneratedKey(''); setGeneratedWebhookSecret('');
+    setWebhookUrl(service.webhook?.url ?? ''); setWebhookEnabled(service.webhook?.enabled ?? true); setError('');
   }
 
   function createNew() {
-    setEditingId(''); setDraft(emptyDraft); setGeneratedKey(''); setError('');
+    setEditingId(''); setDraft(emptyDraft); setGeneratedKey(''); setGeneratedWebhookSecret('');
+    setWebhookUrl(''); setWebhookEnabled(true); setError('');
   }
 
   async function save() {
-    setBusy(true); setError(''); setGeneratedKey('');
+    setBusy(true); setError(''); setGeneratedKey(''); setGeneratedWebhookSecret('');
     try {
       const method = editingId ? 'PATCH' : 'POST';
       const body = await apiJson<{ service: ServiceSummary; apiKey?: string }>(await fetch('/api/integration-admin', {
@@ -117,7 +126,7 @@ export default function IntegrationAdminApp() {
 
   async function rotate() {
     if (!editingId) return;
-    setBusy(true); setError(''); setGeneratedKey('');
+    setBusy(true); setError(''); setGeneratedKey(''); setGeneratedWebhookSecret('');
     try {
       const body = await apiJson<{ service: ServiceSummary; apiKey: string }>(await fetch('/api/integration-admin', {
         method: 'PATCH', headers: headers(), body: JSON.stringify({ action: 'rotate', serviceId: editingId }),
@@ -127,9 +136,41 @@ export default function IntegrationAdminApp() {
     finally { setBusy(false); }
   }
 
+  async function configureWebhook(webhook: { url: string; enabled: boolean } | null) {
+    if (!editingId) return;
+    setBusy(true); setError(''); setGeneratedWebhookSecret('');
+    try {
+      const body = await apiJson<{ service: ServiceSummary; webhookSecret?: string }>(await fetch('/api/integration-admin', {
+        method: 'PATCH', headers: headers(), body: JSON.stringify({ action: 'configure_webhook', serviceId: editingId, webhook }),
+      }));
+      setGeneratedWebhookSecret(body.webhookSecret ?? '');
+      setWebhookUrl(body.service.webhook?.url ?? ''); setWebhookEnabled(body.service.webhook?.enabled ?? true);
+      await load(true);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to configure webhook delivery.'); }
+    finally { setBusy(false); }
+  }
+
+  async function rotateWebhookSecret() {
+    if (!editingId) return;
+    setBusy(true); setError(''); setGeneratedWebhookSecret('');
+    try {
+      const body = await apiJson<{ service: ServiceSummary; webhookSecret: string }>(await fetch('/api/integration-admin', {
+        method: 'PATCH', headers: headers(), body: JSON.stringify({ action: 'rotate_webhook_secret', serviceId: editingId }),
+      }));
+      setGeneratedWebhookSecret(body.webhookSecret);
+      await load(true);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to rotate webhook secret.'); }
+    finally { setBusy(false); }
+  }
+
   async function copyKey() {
     if (!generatedKey) return;
     await navigator.clipboard.writeText(generatedKey); setCopied(true); window.setTimeout(() => setCopied(false), 1500);
+  }
+
+  async function copyWebhookSecret() {
+    if (!generatedWebhookSecret) return;
+    await navigator.clipboard.writeText(generatedWebhookSecret); setWebhookCopied(true); window.setTimeout(() => setWebhookCopied(false), 1500);
   }
 
   return <main className="min-h-screen bg-[#f6f6f2] px-4 py-10 text-[#171717] dark:bg-[#090909] dark:text-[#f5f5f0] sm:px-6 lg:px-8">
@@ -144,6 +185,7 @@ export default function IntegrationAdminApp() {
 
       {error && <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">{error}</div>}
       {generatedKey && <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5"><div className="font-bold">Integration API key — shown once</div><p className="mt-2 break-all font-mono text-sm">{generatedKey}</p><button type="button" onClick={() => void copyKey()} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-black/10 px-3 py-2 text-sm font-semibold dark:border-white/10">{copied ? <Check className="h-4 w-4" /> : <ClipboardCopy className="h-4 w-4" />}{copied ? 'Copied' : 'Copy key'}</button></section>}
+      {generatedWebhookSecret && <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5"><div className="font-bold">Webhook signing secret</div><p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">Store this <code>whsec_*</code> value in the webhook receiver and use it to verify Standard Webhooks signatures.</p><p className="mt-3 break-all font-mono text-sm">{generatedWebhookSecret}</p><button type="button" onClick={() => void copyWebhookSecret()} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-black/10 px-3 py-2 text-sm font-semibold dark:border-white/10">{webhookCopied ? <Check className="h-4 w-4" /> : <ClipboardCopy className="h-4 w-4" />}{webhookCopied ? 'Copied' : 'Copy webhook secret'}</button></section>}
 
       {loaded && <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
         <section className="rounded-2xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
@@ -166,6 +208,18 @@ export default function IntegrationAdminApp() {
             <ScopeField title="Allowed Soroban executors" value={draft.sorobanExecutionAccounts} onChange={(value) => setDraft({ ...draft, sorobanExecutionAccounts: value })} placeholder={'G...A\nG...B'} />
           </div>
           <label className="mt-4 block text-sm font-semibold">Default Soroban executor<input value={draft.sorobanDefaultExecutor} onChange={(event) => setDraft({ ...draft, sorobanDefaultExecutor: event.target.value })} placeholder="Optional G...; must also be allowed above" className="mt-2 w-full rounded-xl border border-black/10 bg-transparent px-3 py-3 font-mono text-sm dark:border-white/10" /></label>
+
+          {editingId && <div className="mt-6 border-t border-black/10 pt-6 dark:border-white/10">
+            <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold">Webhook delivery</h3><p className="mt-1 text-sm text-neutral-500">Send Integration work changes to an HTTPS callback using Standard Webhooks signatures.</p></div>{editing?.webhook && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${editing.webhook.enabled ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-neutral-500/10 text-neutral-500'}`}>{editing.webhook.enabled ? 'Enabled' : 'Disabled'} · secret v{editing.webhook.secretVersion}</span>}</div>
+            <label className="mt-4 block text-sm font-semibold">Webhook URL<input value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://fed.network/api/webhooks/multisig-tools" className="mt-2 w-full rounded-xl border border-black/10 bg-transparent px-3 py-3 font-mono text-sm dark:border-white/10" /></label>
+            <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={webhookEnabled} onChange={(event) => setWebhookEnabled(event.target.checked)} />Delivery enabled</label>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" disabled={busy || !webhookUrl.trim()} onClick={() => void configureWebhook({ url: webhookUrl.trim(), enabled: webhookEnabled })} className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40">{editing?.webhook ? 'Save webhook' : 'Configure webhook'}</button>
+              {editing?.webhook && <button type="button" disabled={busy} onClick={() => void rotateWebhookSecret()} className="inline-flex items-center gap-2 rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold dark:border-white/10"><RefreshCw className="h-4 w-4" />Rotate webhook secret</button>}
+              {editing?.webhook && <button type="button" disabled={busy} onClick={() => void configureWebhook(null)} className="rounded-xl border border-red-500/20 px-4 py-2.5 text-sm font-semibold text-red-700 dark:text-red-300">Remove webhook</button>}
+            </div>
+          </div>}
+
           <div className="mt-6 flex justify-end"><button type="button" disabled={busy || !draft.serviceId.trim() || !draft.label.trim()} onClick={() => void save()} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40"><Save className="h-4 w-4" />{editingId ? 'Save configuration' : 'Create Service & key'}</button></div>
         </section>
       </div>}
