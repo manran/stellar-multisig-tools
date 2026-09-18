@@ -1,7 +1,10 @@
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
 import { blobAuthStore } from '../server/blobAuthStore.js';
-import { blobSigningRequestStore, RequestStorageUnavailableError } from '../server/blobRequestStore.js';
-import { blobSorobanIntentStore } from '../server/blobSorobanIntentStore.js';
+import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
+import {
+  runtimeSigningRequestStore,
+  runtimeSorobanIntentStore,
+} from '../server/coordinationStores.js';
 import { authConfigForRequest } from '../server/authConfig.js';
 import { AuthServiceError, requirePrivateWorkspaceSession } from '../server/authService.js';
 import {
@@ -13,6 +16,9 @@ import { listSignerInbox, projectHumanInboxRequests } from '../server/requestInb
 import { listSorobanIntentInbox } from '../server/sorobanIntentInbox.js';
 import { noStoreJson } from '../server/httpResponse.js';
 import { summarizeInboxActions } from '../../../../src/stellar/inboxPresentation.js';
+
+const signingRequestStore = runtimeSigningRequestStore();
+const sorobanIntentStore = runtimeSorobanIntentStore();
 
 async function signerContext(request: Request) {
   const authorization = request.headers.get('authorization') ?? '';
@@ -35,11 +41,11 @@ async function signerContext(request: Request) {
 export async function GET(request: Request): Promise<Response> {
   try {
     const context = await signerContext(request);
-    const requests = await listSignerInbox(blobSigningRequestStore, context.address, { network: context.network });
+    const requests = await listSignerInbox(signingRequestStore, context.address, { network: context.network });
     if (context.actor === 'human') {
       const [humanRequests, intents] = await Promise.all([
-        projectHumanInboxRequests(blobSigningRequestStore, context.address, requests),
-        listSorobanIntentInbox(blobSorobanIntentStore, context.address, context.network),
+        projectHumanInboxRequests(signingRequestStore, context.address, requests),
+        listSorobanIntentInbox(sorobanIntentStore, context.address, context.network),
       ]);
       const actionCounts = summarizeInboxActions(humanRequests, intents);
       return noStoreJson({

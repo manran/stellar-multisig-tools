@@ -390,7 +390,7 @@ test('Transaction Receipt uses one server history projection instead of serial A
   assert.doesNotMatch(transactionReceipt, /loadTransactionSourceAnalyses\(/);
   assert.match(requestApi, /loadTransactionSourceAnalyses\([\s\S]*access\.stored\.baseXdr[\s\S]*accountLoader/);
   assert.match(requestApi, /getSigningRequestForStoredRequest\([\s\S]*access\.stored/);
-  assert.match(requestApi, /loadSigningRequestReadFacts\(blobSigningRequestStore, access\.stored\)/);
+  assert.match(requestApi, /loadSigningRequestReadFacts\(signingRequestStore, access\.stored\)/);
   assert.match(requestApi, /privateNoteRevisionsPromise/);
 });
 

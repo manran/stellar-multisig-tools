@@ -1,6 +1,9 @@
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
 import { blobAuthStore } from '../server/blobAuthStore.js';
-import { blobSorobanIntentStore } from '../server/blobSorobanIntentStore.js';
+import {
+  runtimeSorobanIntentStore,
+  withSorobanIntentCreate,
+} from '../server/coordinationStores.js';
 import {
   AgentCredentialServiceError,
   agentActorForCredential,
@@ -67,6 +70,7 @@ import {
 
 const MAX_BODY_BYTES = 64 * 1024;
 const METHODS = 'GET, POST, PATCH, PUT, OPTIONS';
+const sorobanIntentStore = runtimeSorobanIntentStore();
 const INTENT_ID_HEADER = 'x-multisig-intent-id';
 const CORS_HEADERS = {
   ...publicCorsHeaders(METHODS),
@@ -125,14 +129,14 @@ function intentIdFromRequest(request: Request): string {
 
 async function storedIntentAccess(request: Request, required: 'read' | 'write' | 'sign') {
   const id = intentIdFromRequest(request);
-  const stored = await blobSorobanIntentStore.getIntent(id);
+  const stored = await sorobanIntentStore.getIntent(id);
   if (!stored) throw new SorobanIntentAuthorizationServiceError('Soroban Intent not found.', 404, 'intent_not_found');
   assertDeploymentNetwork(stored.network);
   const machineCaller = await machineCallerFromRequest(blobAgentCredentialStore, request);
   const integrationCredential = machineCaller?.kind === 'service' ? machineCaller.credential : null;
   const agent = machineCaller?.kind === 'agent' ? machineCaller.credential : null;
   const session = machineCaller ? null : await verifiedSignerSessionFromRequest(blobAuthStore, request, stored.network);
-  const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, id);
+  const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, id);
 
   if (integrationCredential) {
     if (stored.integration?.serviceId !== integrationCredential.serviceId) {
@@ -184,9 +188,9 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const access = await storedIntentAccess(request, 'read');
     const [contributions, preparations, observations] = await Promise.all([
-      blobSorobanIntentStore.listContributions(access.id),
-      blobSorobanIntentStore.listExecutionPreparations?.(access.id) ?? Promise.resolve([]),
-      blobSorobanIntentStore.listExecutionObservations?.(access.id) ?? Promise.resolve([]),
+      sorobanIntentStore.listContributions(access.id),
+      sorobanIntentStore.listExecutionPreparations?.(access.id) ?? Promise.resolve([]),
+      sorobanIntentStore.listExecutionObservations?.(access.id) ?? Promise.resolve([]),
     ]);
     return json({
       operation: 'contract.intent.inspect',
@@ -240,9 +244,9 @@ async function loadIntegrationJob(
   authorization: Parameters<typeof projectIntegrationSorobanJob>[0]['authorization'],
 ) {
   const [latestStored, preparations, observations] = await Promise.all([
-    blobSorobanIntentStore.getIntent(stored.id),
-    blobSorobanIntentStore.listExecutionPreparations?.(stored.id) ?? Promise.resolve([]),
-    blobSorobanIntentStore.listExecutionObservations?.(stored.id) ?? Promise.resolve([]),
+    sorobanIntentStore.getIntent(stored.id),
+    sorobanIntentStore.listExecutionPreparations?.(stored.id) ?? Promise.resolve([]),
+    sorobanIntentStore.listExecutionObservations?.(stored.id) ?? Promise.resolve([]),
   ]);
   return integrationJob(request, latestStored ?? stored, authorization, preparations, observations);
 }
@@ -271,9 +275,9 @@ async function loadAgentTask(
   agent: NonNullable<Awaited<ReturnType<typeof storedIntentAccess>>['agent']>,
 ) {
   const [latestStored, preparations, observations] = await Promise.all([
-    blobSorobanIntentStore.getIntent(stored.id),
-    blobSorobanIntentStore.listExecutionPreparations?.(stored.id) ?? Promise.resolve([]),
-    blobSorobanIntentStore.listExecutionObservations?.(stored.id) ?? Promise.resolve([]),
+    sorobanIntentStore.getIntent(stored.id),
+    sorobanIntentStore.listExecutionPreparations?.(stored.id) ?? Promise.resolve([]),
+    sorobanIntentStore.listExecutionObservations?.(stored.id) ?? Promise.resolve([]),
   ]);
   return agentTask(
     latestStored ?? stored,
@@ -348,13 +352,13 @@ export async function POST(request: Request): Promise<Response> {
           errorMessage: 'This signer has created too many Intents recently. Try again later.',
         });
       });
-      const intent = await createImportedSorobanIntent(blobSorobanIntentStore, session.address, {
+      const intent = await createImportedSorobanIntent(sorobanIntentStore, session.address, {
         network,
         preparedXdr: body.preparedXdr,
         privateNote: body.privateNote,
         externalReference: body.externalReference,
       }, { beforeCreate });
-      const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, intent.id);
+      const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, intent.id);
       return json({ operation: 'contract.intent.create', version: 1, replayed: false, intent, authorization }, 201);
     }
     if (integrationCredential) {
@@ -377,13 +381,13 @@ export async function POST(request: Request): Promise<Response> {
           errorMessage: 'This Integration has created too many Intents recently. Try again later.',
         });
       });
-      const quotaStore = {
-        ...blobSorobanIntentStore,
-        createIntent: async (...args: Parameters<typeof blobSorobanIntentStore.createIntent>) => {
+      const quotaStore = withSorobanIntentCreate(
+        sorobanIntentStore,
+        async (...args) => {
           await beforeCreate();
-          return blobSorobanIntentStore.createIntent(...args);
+          return sorobanIntentStore.createIntent(...args);
         },
-      };
+      );
       const result = await createIntegrationSorobanIntent(
         quotaStore,
         integrationCredential,
@@ -398,7 +402,7 @@ export async function POST(request: Request): Promise<Response> {
         },
         { planningSource: configuredSorobanPlanningSource(network) },
       );
-      const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, result.intent.id);
+      const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, result.intent.id);
       return json({
         operation: 'contract.intent.create',
         version: 1,
@@ -431,7 +435,7 @@ export async function POST(request: Request): Promise<Response> {
       };
       const result = await createAgentSorobanIntent(
         quotaStore,
-        blobSorobanIntentStore,
+        sorobanIntentStore,
         agent,
         {
           network,
@@ -444,7 +448,7 @@ export async function POST(request: Request): Promise<Response> {
         },
         { planningSource: configuredSorobanPlanningSource(network) },
       );
-      const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, result.intent.id);
+      const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, result.intent.id);
       return json({
         operation: 'contract.intent.create',
         version: 1,
@@ -477,7 +481,7 @@ export async function POST(request: Request): Promise<Response> {
       });
     });
     const intent = await createHumanSorobanIntent(
-      blobSorobanIntentStore,
+      sorobanIntentStore,
       session.address,
       {
         network,
@@ -492,7 +496,7 @@ export async function POST(request: Request): Promise<Response> {
         beforeCreate,
       },
     );
-    const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, intent.id);
+    const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, intent.id);
     return json({
       operation: 'contract.intent.create',
       version: 1,
@@ -514,7 +518,7 @@ export async function PATCH(request: Request): Promise<Response> {
       throw new SorobanIntentAuthorizationServiceError('A current signer is required.', 403, 'intent_signer_required');
     }
     const result = await contributeSorobanIntentAuthorization(
-      blobSorobanIntentStore,
+      sorobanIntentStore,
       access.id,
       {
         entryIndex: body.entryIndex as number,
@@ -549,7 +553,7 @@ export async function PUT(request: Request): Promise<Response> {
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
     if (body.action === 'reconcile_execution') {
       const result = await reconcileSorobanIntentExecution(
-        blobSorobanIntentStore,
+        sorobanIntentStore,
         access.id,
         typeof body.transactionHash === 'string' ? body.transactionHash : '',
       );
@@ -575,7 +579,7 @@ export async function PUT(request: Request): Promise<Response> {
         ? { serviceId: access.integrationCredential.serviceId }
         : { principalAddress: access.address });
       const result = await cancelSorobanIntent(
-        blobSorobanIntentStore,
+        sorobanIntentStore,
         access.id,
         access.integrationCredential
           ? { cancelledBy: integrationCallerForCredential(access.integrationCredential) }
@@ -584,7 +588,7 @@ export async function PUT(request: Request): Promise<Response> {
               ...(access.agent ? { cancelledBy: agentActorForCredential(access.agent) } : {}),
             },
       );
-      const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, access.id);
+      const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, access.id);
       const job = access.integrationCredential
         ? await loadIntegrationJob(request, result.intent, authorization)
         : undefined;
@@ -624,7 +628,7 @@ export async function PUT(request: Request): Promise<Response> {
         errorMessage: 'This actor has refreshed Soroban authorization too many times recently. Try again later.',
       });
       const result = await replanExpiredSorobanIntent(
-        blobSorobanIntentStore,
+        sorobanIntentStore,
         access.id,
         configuredSorobanPlanningSource(access.stored.network),
         { authorization: access.authorization },
@@ -665,7 +669,7 @@ export async function PUT(request: Request): Promise<Response> {
         );
       }
       const resolved = await resolveAndBindIntegrationSorobanExecutor(
-        blobSorobanIntentStore,
+        sorobanIntentStore,
         access.stored,
         access.integrationCredential,
         requestedExecutor,
@@ -686,7 +690,7 @@ export async function PUT(request: Request): Promise<Response> {
     let execution;
     try {
       execution = await prepareSorobanIntentExecution(
-        blobSorobanIntentStore,
+        sorobanIntentStore,
         access.id,
         executionSource,
         {

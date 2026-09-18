@@ -1,7 +1,11 @@
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
 import { blobAuthStore } from '../server/blobAuthStore.js';
-import { blobSigningRequestStore, RequestStorageUnavailableError } from '../server/blobRequestStore.js';
-import { blobSorobanIntentStore } from '../server/blobSorobanIntentStore.js';
+import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
+import {
+  runtimeSigningRequestStore,
+  runtimeSorobanIntentStore,
+  withSigningRequestCreate,
+} from '../server/coordinationStores.js';
 import { authConfigForRequest } from '../server/authConfig.js';
 import {
   AgentCredentialServiceError,
@@ -80,6 +84,8 @@ import {
 const MAX_BODY_BYTES = 300 * 1024;
 const CAPABILITY_HEADER = 'x-multisig-capability';
 const REQUEST_ID_HEADER = 'x-multisig-request-id';
+const signingRequestStore = runtimeSigningRequestStore();
+const sorobanIntentStore = runtimeSorobanIntentStore();
 const serviceOptions = {
   networkParametersLoader: loadNetworkParameters,
   sorobanExecutionVerifier: async (envelopeXdr: string, network: StellarNetwork) => {
@@ -116,7 +122,7 @@ interface AuthorizedRequest {
   contributionGrantExpiresAt?: number;
   agentCredential?: StoredSignerAgentCredential;
   integrationCredential?: ConfiguredIntegrationCredential;
-  privateCommitment?: NonNullable<Awaited<ReturnType<typeof blobSigningRequestStore.getRequest>>>['privateCommitment'];
+  privateCommitment?: NonNullable<Awaited<ReturnType<typeof signingRequestStore.getRequest>>>['privateCommitment'];
 }
 
 function errorResponse(cause: unknown): Response {
@@ -193,8 +199,8 @@ function requestLocator(request: Request): { id: string; capability: string } {
 }
 
 async function bindRequestParticipant(id: string, address: string): Promise<void> {
-  if (!blobSigningRequestStore.putRequestParticipant) return;
-  await blobSigningRequestStore.putRequestParticipant(id, {
+  if (!signingRequestStore.putRequestParticipant) return;
+  await signingRequestStore.putRequestParticipant(id, {
     version: 1,
     address,
     joinedAt: new Date().toISOString(),
@@ -237,7 +243,7 @@ async function authorizeRequest(
   const purpose = options.purpose ?? 'active';
   const accountLoader = options.accountLoader;
   const { id, capability } = requestLocator(request);
-  const stored = await blobSigningRequestStore.getRequest(id);
+  const stored = await signingRequestStore.getRequest(id);
   if (!stored) throw new SigningRequestServiceError('Signing request not found.', 404, 'request_not_found');
   assertDeploymentNetwork(stored.network);
 
@@ -301,7 +307,7 @@ async function authorizeRequest(
       }
       throw cause;
     }
-    const participant = await blobSigningRequestStore.getRequestParticipant?.(id, agentCredential.principal.address) ?? null;
+    const participant = await signingRequestStore.getRequestParticipant?.(id, agentCredential.principal.address) ?? null;
     await blobAgentCredentialStore.touchCredential(agentCredential.credentialId, new Date().toISOString());
     return {
       id,
@@ -316,7 +322,7 @@ async function authorizeRequest(
     };
   }
   if (session && purpose === 'history') {
-    const participant = await blobSigningRequestStore.getRequestParticipant?.(id, session.address) ?? null;
+    const participant = await signingRequestStore.getRequestParticipant?.(id, session.address) ?? null;
     if (participant) {
       return {
         id,
@@ -333,9 +339,9 @@ async function authorizeRequest(
 
   if (capabilityMatched) {
     const [submission, participant] = await Promise.all([
-      blobSigningRequestStore.getSubmission(id, stored.transactionHash),
+      signingRequestStore.getSubmission(id, stored.transactionHash),
       session
-        ? blobSigningRequestStore.getRequestParticipant?.(id, session.address) ?? Promise.resolve(null)
+        ? signingRequestStore.getRequestParticipant?.(id, session.address) ?? Promise.resolve(null)
         : Promise.resolve(null),
     ]);
     return {
@@ -472,17 +478,17 @@ function initialPrivateNote(text: string, createdAt: string): PrivateNoteRevisio
 }
 
 async function viewerDeclined(requestId: string, actorAddress?: string): Promise<boolean> {
-  if (!actorAddress || !blobSigningRequestStore.listActivityEvents) return false;
-  const events = await blobSigningRequestStore.listActivityEvents(requestId);
+  if (!actorAddress || !signingRequestStore.listActivityEvents) return false;
+  const events = await signingRequestStore.listActivityEvents(requestId);
   return events.some((item) => item.type === 'approval_declined' && item.actorAddress === actorAddress);
 }
 
 async function recordDecline(requestId: string, actorAddress: string): Promise<void> {
-  const stored = await blobSigningRequestStore.getRequest(requestId);
+  const stored = await signingRequestStore.getRequest(requestId);
   if (!stored) throw new SigningRequestServiceError('Signing request not found.', 404, 'request_not_found');
   const allowed = await signerCanAccessTransaction(actorAddress, stored.baseXdr, stored.network);
   if (!allowed) throw new SigningRequestServiceError('Only a current signer can decline this proposal.', 403, 'decline_not_authorized');
-  const snapshot = await getSigningRequest(blobSigningRequestStore, requestId, serviceOptions);
+  const snapshot = await getSigningRequest(signingRequestStore, requestId, serviceOptions);
   if (snapshot.status !== 'awaiting_signatures') {
     throw new SigningRequestServiceError('This proposal is no longer waiting for signer decisions.', 409, 'request_not_declinable');
   }
@@ -490,8 +496,8 @@ async function recordDecline(requestId: string, actorAddress: string): Promise<v
     throw new SigningRequestServiceError('This signer already approved the proposal and cannot decline it afterward.', 409, 'proposal_already_approved');
   }
   await bindRequestParticipant(requestId, actorAddress);
-  if (blobSigningRequestStore.putActivityEvent) {
-    await blobSigningRequestStore.putActivityEvent(requestId, {
+  if (signingRequestStore.putActivityEvent) {
+    await signingRequestStore.putActivityEvent(requestId, {
       version: 1,
       eventId: `declined-${actorAddress}`,
       requestId,
@@ -560,26 +566,26 @@ export async function GET(request: Request): Promise<Response> {
     let activityBound = access.activityBound;
 
     const readFactsPromise = historyRequested
-      ? loadSigningRequestReadFacts(blobSigningRequestStore, access.stored)
+      ? loadSigningRequestReadFacts(signingRequestStore, access.stored)
       : null;
     const privateNoteRevisionsPromise = historyRequested
-      ? blobSigningRequestStore.listPrivateNoteRevisions?.(access.id) ?? Promise.resolve([])
+      ? signingRequestStore.listPrivateNoteRevisions?.(access.id) ?? Promise.resolve([])
       : null;
     const snapshotPromise = historyRequested
       ? readFactsPromise!.then((readFacts) => getSigningRequestForStoredRequest(
-          blobSigningRequestStore,
+          signingRequestStore,
           access.stored,
           { ...serviceOptions, accountLoader },
           readFacts,
         ))
-      : getSigningRequestForStoredRequest(blobSigningRequestStore, access.stored, serviceOptions);
+      : getSigningRequestForStoredRequest(signingRequestStore, access.stored, serviceOptions);
     const privateNotePromise = historyRequested
       ? privateNoteRevisionsPromise!.then((revisions) => latestPrivateNoteForRequest(
-          blobSigningRequestStore,
+          signingRequestStore,
           access.stored,
           revisions,
         ))
-      : latestPrivateNoteForRequest(blobSigningRequestStore, access.stored);
+      : latestPrivateNoteForRequest(signingRequestStore, access.stored);
     const sourceAnalysesPromise = historyRequested
       ? loadTransactionSourceAnalyses(
           inspectTransactionXdr(access.stored.baseXdr, access.stored.network),
@@ -625,7 +631,7 @@ export async function GET(request: Request): Promise<Response> {
             .filter((signer) => signer.weight > 0)
             .map((signer) => signer.key);
           return getTreasuryActivityItemForRequest(
-            blobSigningRequestStore,
+            signingRequestStore,
             access.actorAddress!,
             access.stored,
             historyAccountId,
@@ -635,7 +641,7 @@ export async function GET(request: Request): Promise<Response> {
           );
         }
         return getSignerActivityItemForRequest(
-          blobSigningRequestStore,
+          signingRequestStore,
           access.actorAddress!,
           access.stored,
           { network: snapshot.network },
@@ -723,13 +729,13 @@ export async function POST(request: Request): Promise<Response> {
           );
         }
         const beforeCreate = requestCreationQuota(request, body.network, `service:${integrationCredential.serviceId}`);
-        const quotaRequestStore = {
-          ...blobSigningRequestStore,
-          createRequest: async (stored: Parameters<typeof blobSigningRequestStore.createRequest>[0]) => {
+        const quotaRequestStore = withSigningRequestCreate(
+          signingRequestStore,
+          async (stored) => {
             await beforeCreate();
-            return blobSigningRequestStore.createRequest(stored);
+            return signingRequestStore.createRequest(stored);
           },
-        };
+        );
         const result = await createIntegrationPaymentSigningRequest(
           quotaRequestStore,
           integrationCredential,
@@ -754,13 +760,13 @@ export async function POST(request: Request): Promise<Response> {
       }
       const privateCommitment = privateCommitmentForCreate(body, xdr);
       const beforeCreate = requestCreationQuota(request, body.network, `service:${integrationCredential.serviceId}`);
-      const quotaRequestStore = {
-        ...blobSigningRequestStore,
-        createRequest: async (stored: Parameters<typeof blobSigningRequestStore.createRequest>[0]) => {
+      const quotaRequestStore = withSigningRequestCreate(
+        signingRequestStore,
+        async (stored) => {
           await beforeCreate();
-          return blobSigningRequestStore.createRequest(stored);
+          return signingRequestStore.createRequest(stored);
         },
-      };
+      );
       const result = await createIntegrationSigningRequest(
         quotaRequestStore,
         integrationCredential,
@@ -816,7 +822,7 @@ export async function POST(request: Request): Promise<Response> {
       };
       const result = await createAgentSigningRequest(
         quotaAgentStore,
-        blobSigningRequestStore,
+        signingRequestStore,
         agentCredential,
         {
           network: body.network,
@@ -891,7 +897,7 @@ export async function POST(request: Request): Promise<Response> {
     }
     const sorobanIntentId = typeof body.sorobanIntentId === 'string' ? body.sorobanIntentId.trim().toUpperCase() : '';
     const sorobanOrigin = body.sorobanIntentId !== undefined
-      ? await verifySorobanRequestOrigin(blobSorobanIntentStore, {
+      ? await verifySorobanRequestOrigin(sorobanIntentStore, {
           intentId: sorobanIntentId,
           network: requestNetwork,
           transactionHash: transactionHashHex(xdr, requestNetwork),
@@ -899,18 +905,18 @@ export async function POST(request: Request): Promise<Response> {
       : undefined;
     const capability = createCapabilityToken();
     const beforeCreate = requestCreationQuota(request, requestNetwork, creatorSession.address);
-    const requestStore = {
-      ...blobSigningRequestStore,
-      createRequest: async (stored: Parameters<typeof blobSigningRequestStore.createRequest>[0]) => {
+    const requestStore = withSigningRequestCreate(
+      signingRequestStore,
+      async (stored) => {
         await beforeCreate();
-        return blobSigningRequestStore.createRequest({
+        return signingRequestStore.createRequest({
           ...stored,
           creatorAddress: creatorSession.address,
           ...(privateNoteText ? { initialPrivateNote: initialPrivateNote(privateNoteText, stored.createdAt) } : {}),
           ...(privateCommitment ? { privateCommitment: { ...privateCommitment, createdAt: stored.createdAt } } : {}),
         });
       },
-    };
+    );
     const result = await createSigningRequest(
       requestStore,
       { network: body.network, xdr },
@@ -964,7 +970,7 @@ export async function PATCH(request: Request): Promise<Response> {
     }
     if (access.mode === 'capability') {
       if (access.capabilityClosed) return capabilityClosedResponse(access.network, access.capabilityClosed);
-      const current = await getSigningRequest(blobSigningRequestStore, access.id, serviceOptions);
+      const current = await getSigningRequest(signingRequestStore, access.id, serviceOptions);
       if (current.status === 'submitted' || current.status === 'expired') {
         return capabilityClosedResponse(current.network, current.status);
       }
@@ -993,7 +999,7 @@ export async function PATCH(request: Request): Promise<Response> {
           'history_access_denied',
         );
       }
-      const snapshot = await getSigningRequest(blobSigningRequestStore, access.id, serviceOptions);
+      const snapshot = await getSigningRequest(signingRequestStore, access.id, serviceOptions);
       if (snapshot.status === 'submitted' || snapshot.status === 'expired') {
         throw new SigningRequestServiceError(
           'This proposal is already closed. Retained Activity access must be established while it is active.',
@@ -1019,7 +1025,7 @@ export async function PATCH(request: Request): Promise<Response> {
         throw new SigningRequestServiceError('Unlock a signer wallet before declining this proposal.', 401, 'decline_identity_required');
       }
       await recordDecline(access.id, access.actorAddress);
-      const snapshot = await getSigningRequest(blobSigningRequestStore, access.id, serviceOptions);
+      const snapshot = await getSigningRequest(signingRequestStore, access.id, serviceOptions);
       return noStoreJson({
         request: snapshot,
         decision: 'declined' as const,
@@ -1029,7 +1035,7 @@ export async function PATCH(request: Request): Promise<Response> {
 
     const signedXdr = typeof body.signedXdr === 'string' ? body.signedXdr : '';
     const result = await contributeSigningRequest(
-      blobSigningRequestStore,
+      signingRequestStore,
       access.id,
       signedXdr,
       access.mode === 'agent' && access.agentCredential
@@ -1121,7 +1127,7 @@ export async function PUT(request: Request): Promise<Response> {
       return capabilityClosedResponse(access.network, access.capabilityClosed);
     }
     if (access.mode === 'capability') {
-      const current = await getSigningRequest(blobSigningRequestStore, access.id, serviceOptions);
+      const current = await getSigningRequest(signingRequestStore, access.id, serviceOptions);
       if (current.status === 'submitted' || current.status === 'expired') {
         return capabilityClosedResponse(current.network, current.status);
       }
@@ -1129,7 +1135,7 @@ export async function PUT(request: Request): Promise<Response> {
     const submitBody = request.headers.get('content-type')?.toLowerCase().includes('application/json')
       ? await readJsonBody(request)
       : {};
-    const snapshot = await submitSigningRequest(blobSigningRequestStore, access.id, {
+    const snapshot = await submitSigningRequest(signingRequestStore, access.id, {
       ...serviceOptions,
       acceptedEffectsDigest: typeof submitBody.acceptedEffectsDigest === 'string'
         ? submitBody.acceptedEffectsDigest

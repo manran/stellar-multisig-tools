@@ -28,6 +28,34 @@ export function coordinationStorageMode(
 let postgresRequestStore: SigningRequestStore | null = null;
 let postgresIntentStore: SorobanIntentStore | null = null;
 
+function overrideBoundMethod<T extends object>(
+  target: T,
+  methodName: PropertyKey,
+  replacement: unknown,
+): T {
+  return new Proxy(target, {
+    get(current, property) {
+      if (property === methodName) return replacement;
+      const value = Reflect.get(current, property, current);
+      return typeof value === 'function' ? value.bind(current) : value;
+    },
+  });
+}
+
+export function withSigningRequestCreate(
+  store: SigningRequestStore,
+  createRequest: SigningRequestStore['createRequest'],
+): SigningRequestStore {
+  return overrideBoundMethod(store, 'createRequest', createRequest);
+}
+
+export function withSorobanIntentCreate(
+  store: SorobanIntentStore,
+  createIntent: SorobanIntentStore['createIntent'],
+): SorobanIntentStore {
+  return overrideBoundMethod(store, 'createIntent', createIntent);
+}
+
 export function runtimeSigningRequestStore(
   mode: CoordinationStorageMode = coordinationStorageMode(),
 ): SigningRequestStore {

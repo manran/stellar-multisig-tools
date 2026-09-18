@@ -1,8 +1,11 @@
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
 import { blobAuthStore } from '../server/blobAuthStore.js';
 import { blobBoxStore } from '../server/blobBoxStore.js';
-import { blobSigningRequestStore, RequestStorageUnavailableError } from '../server/blobRequestStore.js';
-import { blobSorobanIntentStore } from '../server/blobSorobanIntentStore.js';
+import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
+import {
+  runtimeSigningRequestStore,
+  runtimeSorobanIntentStore,
+} from '../server/coordinationStores.js';
 import { authConfigForRequest } from '../server/authConfig.js';
 import { AuthServiceError, requirePrivateWorkspaceSession } from '../server/authService.js';
 import {
@@ -28,6 +31,9 @@ import { noStoreJson } from '../server/httpResponse.js';
 import { AccountNotFoundError, isValidStellarAccountId, loadAccount } from '../../../../src/stellar/horizon.js';
 import { isValidSigningRequestId } from '../server/requestLocator.js';
 import type { StellarNetwork } from '../../../../src/stellar/types.js';
+
+const signingRequestStore = runtimeSigningRequestStore();
+const sorobanIntentStore = runtimeSorobanIntentStore();
 
 interface ActivityViewer {
   address: string;
@@ -103,8 +109,8 @@ export async function GET(request: Request): Promise<Response> {
         }, 400);
       }
       const page = await listWorkActivityPage(
-        blobSigningRequestStore,
-        blobSorobanIntentStore,
+        signingRequestStore,
+        sorobanIntentStore,
         viewer.address,
         { network: viewer.network, limit: 25, cursor },
       );
@@ -141,11 +147,11 @@ export async function GET(request: Request): Promise<Response> {
 
     if (requestId) {
       const item = accountId
-        ? await getTreasuryActivityItem(blobSigningRequestStore, viewer.address, requestId, accountId, {
+        ? await getTreasuryActivityItem(signingRequestStore, viewer.address, requestId, accountId, {
             network: viewer.network,
             knownSignerAddresses,
           })
-        : await getSignerActivityItem(blobSigningRequestStore, viewer.address, requestId, {
+        : await getSignerActivityItem(signingRequestStore, viewer.address, requestId, {
             network: viewer.network,
           });
       if (!item) return noStoreJson({ error: 'Activity item not found.', code: 'activity_not_found' }, 404);
@@ -160,13 +166,13 @@ export async function GET(request: Request): Promise<Response> {
     }
 
     const page = accountId
-      ? await listTreasuryActivityPage(blobSigningRequestStore, viewer.address, accountId, {
+      ? await listTreasuryActivityPage(signingRequestStore, viewer.address, accountId, {
           network: viewer.network,
           limit: 25,
           cursor,
           knownSignerAddresses,
         })
-      : await listSignerActivityPage(blobSigningRequestStore, viewer.address, {
+      : await listSignerActivityPage(signingRequestStore, viewer.address, {
           network: viewer.network,
           limit: 25,
           cursor,
