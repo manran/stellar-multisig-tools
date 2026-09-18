@@ -75,6 +75,13 @@ export async function prepareSorobanIntentExecution(
     throw new SorobanIntentExecutionServiceError('Soroban Intent not found.', 404, 'intent_not_found');
   }
   const authorization = options.authorization ?? await getSorobanIntentAuthorization(store, id);
+  if (stored.cancellation || authorization.status === 'cancelled') {
+    throw new SorobanIntentExecutionServiceError(
+      'This Soroban Intent is cancelled and MultiSigTools will not prepare another execution package.',
+      409,
+      'intent_cancelled',
+    );
+  }
   if (authorization.status !== 'authorization_ready') {
     throw new SorobanIntentExecutionServiceError(
       'Soroban Intent authorization is not ready for execution.',
@@ -165,6 +172,14 @@ export async function prepareSorobanIntentExecution(
   if (prepared instanceof FeeBumpTransaction || prepared.source !== source.accountId) {
     throw new SorobanIntentExecutionServiceError('Prepared execution changed its transaction source.', 503, 'intent_execution_unavailable');
   }
+  const latest = await store.getIntent(id);
+  if (latest?.cancellation) {
+    throw new SorobanIntentExecutionServiceError(
+      'This Soroban Intent was cancelled while execution was being prepared. No execution package was released.',
+      409,
+      'intent_cancelled',
+    );
+  }
   const preparedAt = (options.now ?? new Date()).toISOString();
   const result: SorobanIntentExecutionPreparation = {
     version: 1,
@@ -207,5 +222,13 @@ export async function prepareSorobanIntentExecution(
     ...(options.preparedBy ? { preparedBy: options.preparedBy } : {}),
   };
   await store.putExecutionPreparation(stored.id, preparation);
+  const afterWrite = await store.getIntent(id);
+  if (afterWrite?.cancellation) {
+    throw new SorobanIntentExecutionServiceError(
+      'This Soroban Intent was cancelled before the prepared execution package was released.',
+      409,
+      'intent_cancelled',
+    );
+  }
   return result;
 }

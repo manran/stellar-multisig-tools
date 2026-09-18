@@ -23,7 +23,8 @@ export type SorobanIntentAuthorizationStatus =
   | 'awaiting_authorization'
   | 'authorization_ready'
   | 'expired'
-  | 'blocked';
+  | 'blocked'
+  | 'cancelled';
 
 export class SorobanIntentAuthorizationServiceError extends Error {
   constructor(message: string, readonly status: number, readonly code: string) {
@@ -234,6 +235,20 @@ export async function getSorobanIntentAuthorization(
     stored.network,
     contributions,
   );
+  if (stored.cancellation) {
+    return {
+      id: stored.id,
+      network: stored.network,
+      intentDigest: stored.intent.intentDigest,
+      authorizationPlanDigest: stored.authorizationPlan.authorizationPlanDigest,
+      executionBinding: stored.authorizationPlan.executionBinding,
+      status: 'cancelled',
+      statusDetail: 'Cancelled in MultiSigTools. Detached AUTH or prepared XDR already disclosed outside MultiSigTools cannot be revoked and remains subject to its Stellar validity window.',
+      authorizationEntriesXdr: entries.map((entry) => entry.toXdr('base64')),
+      contributionCount: contributions.length,
+      authorizers: [],
+    };
+  }
   const parameters = await (options.networkParametersLoader ?? loadNetworkParameters)(stored.network);
   const analysis = await analyzeIntentAuthorizationEntries({
     entries,
@@ -321,6 +336,13 @@ export async function contributeSorobanIntentAuthorization(
   }
 
   const stored = await store.getIntent(id);
+  if (stored?.cancellation) {
+    throw new SorobanIntentAuthorizationServiceError(
+      'This Soroban Intent was cancelled while the authorization signature was being verified.',
+      409,
+      'intent_cancelled',
+    );
+  }
   if (!stored || stored.authorizationPlan.authorizationPlanDigest !== before.authorizationPlanDigest) {
     throw new SorobanIntentAuthorizationServiceError(
       'The Soroban authorization plan changed while this signature was being verified. Reload the Intent before signing again.',
@@ -341,5 +363,13 @@ export async function contributeSorobanIntentAuthorization(
     ...(options.contributionActor ? { submittedBy: options.contributionActor } : {}),
   };
   await store.putContribution(id, contribution);
+  const afterWrite = await store.getIntent(id);
+  if (afterWrite?.cancellation) {
+    throw new SorobanIntentAuthorizationServiceError(
+      'This Soroban Intent was cancelled while the authorization contribution was being stored.',
+      409,
+      'intent_cancelled',
+    );
+  }
   return { authorization: await getSorobanIntentAuthorization(store, id, options), added: true };
 }

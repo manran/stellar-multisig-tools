@@ -240,6 +240,33 @@ test('expired plan is replaced by a fresh revision without reusing old AUTH', as
   );
 });
 
+test('cancelled Intent cannot create a fresh AuthorizationPlan', async () => {
+  const f = await fixture();
+  await f.store.updateIntent({
+    ...f.stored,
+    cancellation: {
+      version: 1,
+      cancelledAt: '2026-09-15T00:31:00.000Z',
+      authorizationPlanDigest: f.stored.authorizationPlan.authorizationPlanDigest,
+      authorizationPlanRevision: 1,
+      cancelledByAddress: f.authorizer.publicKey(),
+    },
+  });
+  await assert.rejects(
+    () => replanExpiredSorobanIntent(
+      f.store,
+      f.stored.id,
+      f.planningSource.publicKey(),
+      {
+        authorizationDependencies: f.expiredAuthorizationDependencies,
+        planningDependencies: f.planningDependencies,
+      },
+    ),
+    (cause: unknown) => cause instanceof SorobanIntentReplanServiceError
+      && cause.code === 'intent_cancelled',
+  );
+});
+
 test('re-plan is rejected while the current authorization plan is still active', async () => {
   const f = await fixture();
   let planningCalled = false;

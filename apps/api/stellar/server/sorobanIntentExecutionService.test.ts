@@ -148,6 +148,27 @@ test('execution fails closed when durable preparation evidence cannot be stored'
   );
 });
 
+test('cancelled Intent refuses to materialize even when detached AUTH was ready', async () => {
+  const f = fixture();
+  f.stored.cancellation = {
+    version: 1,
+    cancelledAt: '2026-09-16T00:00:00.000Z',
+    authorizationPlanDigest: f.stored.authorizationPlan.authorizationPlanDigest,
+    authorizationPlanRevision: 1,
+    cancelledByAddress: f.stored.creatorAddress,
+  };
+  const store = new MemoryIntentStore(f.stored);
+  await assert.rejects(
+    () => prepareSorobanIntentExecution(store, f.stored.id, Keypair.random().publicKey(), {
+      authorization: { ...f.authorization, status: 'cancelled' },
+      accountLoader: async () => { throw new Error('account loader must not run'); },
+    }),
+    (cause: unknown) => cause instanceof SorobanIntentExecutionServiceError
+      && cause.code === 'intent_cancelled',
+  );
+  assert.equal(store.preparations.length, 0);
+});
+
 test('execution refuses to materialize before detached AUTH is ready', async () => {
   const f = fixture();
   const store = new MemoryIntentStore(f.stored);

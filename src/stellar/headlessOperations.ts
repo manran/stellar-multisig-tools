@@ -77,6 +77,14 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'integration:write', effect: 'coordination-state', summary: "Refresh an external service's own AuthorizationPlan when fresh signer AUTH is required.",
   },
   {
+    id: 'contract.intent.cancel', version: 1, method: 'PUT', path: '/api/intent',
+    access: 'principal:write', effect: 'coordination-state', summary: 'Cancel a creator-owned Soroban Intent inside MultiSigTools coordination. Detached AUTH or prepared XDR already disclosed outside MultiSigTools is not revoked.',
+  },
+  {
+    id: 'integration.intent.cancel', version: 1, method: 'PUT', path: '/api/intent',
+    access: 'integration:write', effect: 'coordination-state', summary: "Cancel an Integration's own Soroban Intent inside MultiSigTools coordination without claiming Stellar-level AUTH revocation.",
+  },
+  {
     id: 'contract.call.build', version: 1, method: 'POST', path: '/api/contract-call',
     access: 'public', effect: 'none', summary: 'Build an unsigned contract-call transaction from typed string inputs.',
   },

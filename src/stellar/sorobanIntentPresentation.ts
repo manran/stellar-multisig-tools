@@ -45,6 +45,14 @@ export function intentViewerActionPresentation(action: SorobanIntentViewerAction
       tone: 'danger',
     };
   }
+  if (action === 'cancelled') {
+    return {
+      label: 'Intent cancelled',
+      detail: 'This Intent is closed in MultiSigTools and no further coordination action is required.',
+      cta: 'View history',
+      tone: 'neutral',
+    };
+  }
   if (action === 'attention') {
     return {
       label: 'Authorization needs review',
@@ -64,6 +72,7 @@ export function intentViewerActionPresentation(action: SorobanIntentViewerAction
 export function intentAuthorizationWindowLabel(
   intent: Pick<InboxSorobanIntentSnapshot, 'authorizers' | 'status'>,
 ): string {
+  if (intent.status === 'cancelled') return 'Intent cancelled';
   if (intent.status === 'expired') return 'Authorization expired';
   const expirations = intent.authorizers
     .map((authorizer) => authorizer.expirationLedger)

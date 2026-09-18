@@ -27,6 +27,7 @@ test('Soroban AUTH stays in Sign and execution routing remains inside Submit', (
   assert.equal(sorobanIntentWorkflowStage('authorization_ready'), 'submit');
   assert.equal(sorobanIntentWorkflowStage('expired'), 'sign');
   assert.equal(sorobanIntentWorkflowStage('blocked'), 'sign');
+  assert.equal(sorobanIntentWorkflowStage('cancelled'), 'done');
 });
 
 test('Request status colors keep waiting, success, failure, and expiry semantically distinct', () => {
@@ -36,4 +37,5 @@ test('Request status colors keep waiting, success, failure, and expiry semantica
   assert.deepEqual(requestStatusPresentation('expired'), { label: 'Expired', tone: 'neutral' });
   assert.deepEqual(sorobanAuthorizationStatusPresentation('awaiting_authorization'), { label: 'Collecting contract authorization', tone: 'warning' });
   assert.deepEqual(sorobanAuthorizationStatusPresentation('authorization_ready'), { label: 'Contract authorization complete', tone: 'success' });
+  assert.deepEqual(sorobanAuthorizationStatusPresentation('cancelled'), { label: 'Intent cancelled', tone: 'neutral' });
 });

@@ -110,6 +110,7 @@ waiting
 completed
 expired
 failed
+cancelled
 ```
 
 These are projections, not replacements for Request status or Soroban authorization status.
@@ -122,11 +123,12 @@ decline                   # non-cryptographic Request collaboration
 prepare_execution         # materialize a permitted Soroban execution package
 refresh_execution         # rebuild a stale/lost Soroban execution package
 replan                    # refresh expired Soroban authorization
+cancel                    # creator-owned coordination cancellation; does not revoke disclosed Stellar AUTH/XDR
 ```
 
 Each action reports its minimum Agent access level and whether the current credential satisfies it. `available=false` is useful information: the Principal may need to sign even when the current Read/Write credential cannot do so.
 
-The Task should optionally project `waitingFor`, expiry and confirmed result facts when they are useful. It must not copy raw signatures, raw AUTH XDR, private capability secrets, or make an Agent credential look like chain authority.
+A creator Agent with Write access may receive `cancel`; non-creator signer Agents do not. `cancelled` is terminal for Task/Job/Human workflow projection, but the underlying evidence remains inspectable. The Task should optionally project `waitingFor`, expiry and confirmed result facts when they are useful. It must not copy raw signatures, raw AUTH XDR, private capability secrets, or make an Agent credential look like chain authority.
 
 Agent `task` is additive to existing technical Request/Intent fields. MCP, Skills and SDK adapters should consume `task` before reimplementing workflow branching themselves.
 

@@ -57,11 +57,14 @@ export function sorobanAuthorizationStatusPresentation(
     case 'authorization_ready': return { label: 'Contract authorization complete', tone: 'success' };
     case 'expired': return { label: 'Authorization expired', tone: 'danger' };
     case 'blocked': return { label: 'Authorization blocked', tone: 'danger' };
+    case 'cancelled': return { label: 'Intent cancelled', tone: 'neutral' };
   }
 }
 
 export function sorobanIntentWorkflowStage(
   status: SorobanIntentAuthorizationSnapshot['status'],
 ): HumanWorkflowStage {
-  return sorobanCoordinationPhase(status) === 'ready' ? 'submit' : 'sign';
+  const phase = sorobanCoordinationPhase(status);
+  if (phase === 'done') return 'done';
+  return phase === 'ready' ? 'submit' : 'sign';
 }

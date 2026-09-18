@@ -61,7 +61,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
 function requestBody(path: string, method: string): OpenApiObject | undefined {
   if (path === '/api/intent' && method === 'post') return body(schema('ContractIntentCreateInput'));
   if (path === '/api/intent' && method === 'patch') return body(schema('ContractIntentContributionInput'));
-  if (path === '/api/intent' && method === 'put') return body({ oneOf: [schema('ContractIntentExecutionInput'), schema('ContractIntentExecutionReconcileInput'), schema('ContractIntentReplanInput')] });
+  if (path === '/api/intent' && method === 'put') return body({ oneOf: [schema('ContractIntentExecutionInput'), schema('ContractIntentExecutionReconcileInput'), schema('ContractIntentReplanInput'), schema('ContractIntentCancelInput')] });
   if (path === '/api/contract-call' && method === 'post') return body(schema('ContractCallBuildInput'));
   if (path === '/api/contract-prepare' && method === 'post') return body(schema('ContractPrepareInput'));
   if (path === '/api/contracts' && (method === 'put' || method === 'delete')) return body(schema('ContractWorkspaceInput'));
@@ -78,7 +78,7 @@ function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/api/intent' && method === 'post') return schema('ContractIntentCreateResult');
   if (path === '/api/intent' && method === 'get') return schema('ContractIntentInspectResult');
   if (path === '/api/intent' && method === 'patch') return schema('ContractIntentContributionResult');
-  if (path === '/api/intent' && method === 'put') return { oneOf: [schema('ContractIntentExecutionResult'), schema('ContractIntentExecutionReconcileResult'), schema('ContractIntentReplanResult')] };
+  if (path === '/api/intent' && method === 'put') return { oneOf: [schema('ContractIntentExecutionResult'), schema('ContractIntentExecutionReconcileResult'), schema('ContractIntentReplanResult'), schema('ContractIntentCancelResult')] };
   if (path === '/api/contract-call') return schema('ContractCallBuildResult');
   if (path === '/api/contract-prepare') return { oneOf: [schema('ContractPrepareResult'), schema('ContractEnforceResult')] };
   if (path === '/api/contracts' && method === 'get') return schema('ContractWorkspaceListResult');
@@ -363,7 +363,21 @@ const components: OpenApiObject = {
         creatorActor: { type: 'object', additionalProperties: true },
         integration: schema('ServiceIntegrationContext'),
         executionPolicy: schema('ExecutionPolicy'),
+        cancellation: schema('SorobanIntentCancellation'),
         privateContext: { type: 'object', additionalProperties: true },
+      },
+      additionalProperties: false,
+    },
+    SorobanIntentCancellation: {
+      type: 'object',
+      required: ['version', 'cancelledAt', 'authorizationPlanDigest', 'authorizationPlanRevision'],
+      properties: {
+        version: operationVersion,
+        cancelledAt: timestamp,
+        authorizationPlanDigest: { type: 'string', minLength: 1 },
+        authorizationPlanRevision: { type: 'integer', minimum: 1 },
+        cancelledByAddress: accountId,
+        cancelledBy: { type: 'object', additionalProperties: true },
       },
       additionalProperties: false,
     },
@@ -376,7 +390,7 @@ const components: OpenApiObject = {
         intentDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
         authorizationPlanDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
         executionBinding: { type: 'string', const: 'detached' },
-        status: { type: 'string', enum: ['awaiting_authorization', 'authorization_ready', 'expired', 'blocked'] },
+        status: { type: 'string', enum: ['awaiting_authorization', 'authorization_ready', 'expired', 'blocked', 'cancelled'] },
         statusDetail: { type: 'string' },
         authorizationEntriesXdr: { type: 'array', items: { type: 'string' } },
         contributionCount: { type: 'integer', minimum: 0 },
@@ -392,11 +406,11 @@ const components: OpenApiObject = {
         id: { type: 'string', minLength: 1 },
         kind: { type: 'string', const: 'soroban_contract' },
         network: stellarNetwork,
-        state: { type: 'string', enum: ['waiting_for_authorization', 'ready', 'executing', 'completed', 'expired', 'failed'] },
+        state: { type: 'string', enum: ['waiting_for_authorization', 'ready', 'executing', 'completed', 'expired', 'failed', 'cancelled'] },
         nextActions: {
           type: 'array',
           uniqueItems: true,
-          items: { type: 'string', enum: ['prepare_execution', 'submit_execution', 'reconcile_execution', 'refresh_execution', 'replan'] },
+          items: { type: 'string', enum: ['prepare_execution', 'submit_execution', 'reconcile_execution', 'refresh_execution', 'replan', 'cancel'] },
         },
         reviewUrl: { type: 'string', format: 'uri' },
         waitingFor: { type: 'array', uniqueItems: true, items: { oneOf: [accountId, contractId] } },
@@ -436,14 +450,14 @@ const components: OpenApiObject = {
         id: { type: 'string', minLength: 1 },
         kind: { type: 'string', enum: ['classic_transaction', 'soroban_contract'] },
         network: stellarNetwork,
-        state: { type: 'string', enum: ['action_required', 'waiting', 'completed', 'expired', 'failed'] },
+        state: { type: 'string', enum: ['action_required', 'waiting', 'completed', 'expired', 'failed', 'cancelled'] },
         nextActions: {
           type: 'array',
           items: {
             type: 'object',
             required: ['code', 'requiredAccess', 'available'],
             properties: {
-              code: { type: 'string', enum: ['contribute_signature', 'contribute_authorization', 'decline', 'prepare_execution', 'refresh_execution', 'replan'] },
+              code: { type: 'string', enum: ['contribute_signature', 'contribute_authorization', 'decline', 'prepare_execution', 'refresh_execution', 'replan', 'cancel'] },
               requiredAccess: { type: 'string', enum: ['write', 'sign'] },
               available: { type: 'boolean' },
             },
@@ -472,7 +486,7 @@ const components: OpenApiObject = {
       properties: {
         version: operationVersion,
         eventId: { type: 'string', minLength: 1 },
-        type: { type: 'string', enum: ['intent_created', 'authorization_added', 'authorization_plan_revised', 'execution_prepared', 'execution_confirmed', 'execution_failed'] },
+        type: { type: 'string', enum: ['intent_created', 'intent_cancelled', 'authorization_added', 'authorization_plan_revised', 'execution_prepared', 'execution_confirmed', 'execution_failed'] },
         occurredAt: timestamp,
         actorAddress: accountId,
         actor: { type: 'object', additionalProperties: true },
@@ -571,6 +585,33 @@ const components: OpenApiObject = {
       type: 'object',
       required: ['action'],
       properties: { action: { type: 'string', const: 'replan' } },
+      additionalProperties: false,
+    },
+    ContractIntentCancelInput: {
+      type: 'object',
+      required: ['action'],
+      properties: {
+        action: {
+          type: 'string',
+          const: 'cancel',
+          description: 'Close this Intent inside MultiSigTools coordination. Detached AUTH or prepared XDR already disclosed outside MultiSigTools cannot be revoked by this operation.',
+        },
+      },
+      additionalProperties: false,
+    },
+    ContractIntentCancelResult: {
+      type: 'object',
+      required: ['operation', 'version', 'replayed', 'intent', 'authorization', 'cancellation'],
+      properties: {
+        operation: { type: 'string', const: 'contract.intent.cancel' },
+        version: operationVersion,
+        replayed: { type: 'boolean' },
+        intent: schema('StoredSorobanIntent'),
+        authorization: schema('SorobanIntentAuthorizationSnapshot'),
+        cancellation: schema('SorobanIntentCancellation'),
+        job: schema('IntegrationSorobanJob'),
+        task: schema('AgentTask'),
+      },
       additionalProperties: false,
     },
     SorobanIntentExecutionPreparation: {

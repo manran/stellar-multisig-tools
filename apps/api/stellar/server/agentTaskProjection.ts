@@ -131,6 +131,7 @@ export function projectSorobanAgentTask({
     latestPreparation?.validUntil
     && Date.parse(latestPreparation.validUntil) <= now.getTime(),
   );
+  const canCancel = !stored.integration && stored.creatorAddress === principalAddress;
   const needsPrincipalAuthorization = authorization.authorizers.some((authorizer) =>
     !authorizer.ready
     && authorizer.activeSigners.some((signer) => signer.publicKey === principalAddress)
@@ -139,6 +140,7 @@ export function projectSorobanAgentTask({
   let state: AgentTaskProjection['state'];
   let nextActions: AgentTaskAction[] = [];
   if (latestObservation?.successful) state = 'completed';
+  else if (stored.cancellation || authorization.status === 'cancelled') state = 'cancelled';
   else if (latestObservation && !latestObservation.successful) state = 'failed';
   else if (authorization.status === 'expired') {
     state = 'action_required';
@@ -159,6 +161,10 @@ export function projectSorobanAgentTask({
       credentialAccess,
     )];
   } else state = 'waiting';
+
+  if (canCancel && state !== 'completed' && state !== 'cancelled') {
+    nextActions = [...nextActions, action('cancel', 'write', credentialAccess)];
+  }
 
   const expiry = earliestExpiry(authorization);
   return {

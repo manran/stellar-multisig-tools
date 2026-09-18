@@ -177,6 +177,10 @@ test('ready and blocked Intent states project to execution and attention actions
     status: 'blocked',
     statusDetail: 'unsupported',
   }, Keypair.random().publicKey()), 'attention');
+  assert.equal(projectSorobanIntentViewerAction({
+    ...base,
+    status: 'cancelled',
+  }, Keypair.random().publicKey()), 'cancelled');
 });
 
 test('Integration-owned managed execution stays waiting for the Service instead of routing execution to the signer', async () => {
@@ -193,6 +197,22 @@ test('Integration-owned managed execution stays waiting for the Service instead 
   const items = await listSorobanIntentInbox(f.store, f.creator.publicKey(), 'testnet', f.options);
   assert.equal(items[0]?.status, 'authorization_ready');
   assert.equal(items[0]?.viewerAction, 'waiting_execution');
+});
+
+test('cancelled Intent leaves the pending Inbox', async () => {
+  const f = await fixture();
+  await f.store.updateIntent({
+    ...f.stored,
+    cancellation: {
+      version: 1,
+      cancelledAt: '2026-09-14T10:01:00.000Z',
+      authorizationPlanDigest: f.stored.authorizationPlan.authorizationPlanDigest,
+      authorizationPlanRevision: 1,
+      cancelledByAddress: f.creator.publicKey(),
+    },
+  });
+  const cancelled = await listSorobanIntentInbox(f.store, f.creator.publicKey(), 'testnet', f.options);
+  assert.deepEqual(cancelled, []);
 });
 
 test('confirmed external execution leaves the pending Inbox', async () => {

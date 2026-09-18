@@ -10,6 +10,7 @@ import {
 } from './stellar/sorobanAuthorization';
 import type {
   SorobanIntentAuthorizationSnapshot,
+  SorobanIntentCancelResponse,
   SorobanIntentContributionResponse,
   SorobanIntentEvidenceEvent,
   SorobanIntentExecutionReconciliationResponse,
@@ -250,6 +251,42 @@ export default function SorobanIntentApp() {
     setCopied(true);
   }
 
+  async function cancelIntent() {
+    if (!intent || !authorization || busy || authorization.status === 'cancelled' || confirmedExecution) return;
+    const warning = pendingExecutionPreparation
+      ? 'Cancel this Intent in MultiSigTools? A prepared transaction already exists. Cancellation stops further MultiSigTools coordination, but it cannot revoke detached AUTH or prepared XDR already disclosed outside MultiSigTools.'
+      : 'Cancel this Intent in MultiSigTools? Cancellation stops further MultiSigTools coordination, but it cannot revoke detached AUTH already disclosed outside MultiSigTools.';
+    if (!window.confirm(warning)) return;
+    setBusy(true);
+    setError('');
+    try {
+      let address = sessionAddress;
+      if (!address) address = await confirmSigner();
+      if (!address) return;
+      const response = await fetch('/api/intent', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-MultiSig-Intent-Id': intent.id,
+          ...privateSessionAddressHeaders(address),
+        },
+        body: JSON.stringify({ action: 'cancel' }),
+      });
+      const body = await apiJson<SorobanIntentCancelResponse>(response);
+      setIntent(body.intent);
+      setAuthorization(body.authorization);
+      setExecutionDiff(null);
+      setPendingExecution(null);
+      setPendingExecutionRoute(null);
+      setExecutionCopied(false);
+      await loadIntent(address, true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to cancel this Soroban Intent.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function refreshAuthorization() {
     const refreshingChangedStructure = executionDiff?.requiresReauthorization === true;
     if (!intent || !authorization || (authorization.status !== 'expired' && !refreshingChangedStructure) || busy) return;
@@ -448,7 +485,7 @@ export default function SorobanIntentApp() {
               <div className="flex flex-wrap items-center justify-between gap-3"><StatusBadge tone={primaryStatus.tone}>{primaryStatus.label}</StatusBadge><span className="font-mono text-xs text-neutral-400">{intent.id}</span></div>
               <div className="mt-3 break-all font-mono text-[11px] text-neutral-500">Intent {intent.intent.intentDigest}</div>
               {authorization.statusDetail && <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{authorization.statusDetail}</p>}
-              <div className="mt-4 flex flex-wrap gap-2"><ActionButton variant="secondary" size="sm" onClick={() => void copyShareLink()}><Share2 className="h-4 w-4" />{copied ? 'Intent link copied' : 'Share with another signer'}</ActionButton><ActionButton variant="secondary" size="sm" onClick={() => void loadIntent(sessionAddress)}><RefreshCw className="h-4 w-4" />Refresh</ActionButton></div>
+              <div className="mt-4 flex flex-wrap gap-2"><ActionButton variant="secondary" size="sm" onClick={() => void copyShareLink()}><Share2 className="h-4 w-4" />{copied ? 'Intent link copied' : 'Share with another signer'}</ActionButton><ActionButton variant="secondary" size="sm" onClick={() => void loadIntent(sessionAddress)}><RefreshCw className="h-4 w-4" />Refresh</ActionButton>{!confirmedExecution && authorization.status !== 'cancelled' && !intent.integration && intent.creatorAddress === sessionAddress && <ActionButton variant="danger" size="sm" disabled={busy} onClick={() => void cancelIntent()}><CircleAlert className="h-4 w-4" />{busy ? 'Cancelling…' : 'Cancel Intent'}</ActionButton>}</div>
             </section>
 
             {confirmedExecution?.transactionHash && <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] p-5 sm:p-6"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div className="min-w-0 flex-1"><h2 className="text-xl font-bold">Transaction confirmed</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">MultiSigTools independently observed this prepared transaction on Stellar{confirmedExecution.ledger ? ` in ledger ${confirmedExecution.ledger.toLocaleString()}` : ''}. External submitter identity is not inferred.</p><div className="mt-3 break-all font-mono text-xs text-neutral-500">{confirmedExecution.transactionHash}</div><a href={horizonTransactionUrl(confirmedExecution.transactionHash, intent.network)} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-semibold text-emerald-700 underline decoration-emerald-500/30 underline-offset-4 dark:text-emerald-300">View network record</a></div></div></section>}
@@ -456,6 +493,8 @@ export default function SorobanIntentApp() {
             {!confirmedExecution && latestExecutionResult?.type === 'execution_failed' && latestExecutionResult.transactionHash && <section className="rounded-2xl border border-red-500/25 bg-red-500/[0.07] p-5 sm:p-6"><div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-600" /><div className="min-w-0 flex-1"><h2 className="text-xl font-bold">Execution failed on Stellar</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">This exact prepared transaction was observed{latestExecutionResult.ledger ? ` in ledger ${latestExecutionResult.ledger.toLocaleString()}` : ''}, but it did not succeed. Authorization evidence remains separate from this network result.</p><div className="mt-3 break-all font-mono text-xs text-neutral-500">{latestExecutionResult.transactionHash}</div><a href={horizonTransactionUrl(latestExecutionResult.transactionHash, intent.network)} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-semibold text-red-700 underline decoration-red-500/30 underline-offset-4 dark:text-red-300">View network record</a></div></div></section>}
 
             {!confirmedExecution && pendingExecutionPreparation?.transactionHash && <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:p-6"><h2 className="text-xl font-bold">Prepared execution</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">MultiSigTools has durable preparation evidence for this exact transaction hash, but no Stellar result has been recorded yet. Checking verifies the network directly; it does not submit anything.</p><div className="mt-3 break-all font-mono text-xs text-neutral-500">{pendingExecutionPreparation.transactionHash}</div><div className="mt-4 flex flex-wrap items-center gap-3"><ActionButton variant="secondary" disabled={busy} onClick={() => void reconcileExecution(pendingExecutionPreparation.transactionHash!)}><RefreshCw className={busy ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{busy ? 'Checking Stellar…' : 'Check Stellar result'}</ActionButton>{executionCheckMessage && <span className="text-sm text-neutral-600 dark:text-neutral-300">{executionCheckMessage}</span>}</div></section>}
+
+            {!confirmedExecution && authorization.status === 'cancelled' && <section className="rounded-2xl border border-black/10 bg-black/[0.025] p-5 dark:border-white/10 dark:bg-white/[0.04] sm:p-6"><h2 className="text-xl font-bold">Intent cancelled</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">MultiSigTools will not collect more AUTH, refresh the AuthorizationPlan, or prepare another execution package for this Intent. Detached AUTH or prepared XDR already disclosed outside MultiSigTools cannot be revoked here and may remain usable until its Stellar validity window ends.</p>{intent.cancellation?.cancelledAt && <p className="mt-3 text-xs text-neutral-500">Cancelled {new Date(intent.cancellation.cancelledAt).toLocaleString()}.</p>}</section>}
 
             {intent.privateContext?.initialPrivateNote && <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:p-6"><div className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-400">Private Note</div><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-neutral-700 dark:text-neutral-200">{intent.privateContext.initialPrivateNote.text}</p></section>}
 

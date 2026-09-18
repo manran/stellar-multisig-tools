@@ -33,6 +33,7 @@ export function projectSorobanIntentViewerAction(
   integrationOwnedExecution = false,
   executionFailed = false,
 ): InboxSorobanIntentSnapshot['viewerAction'] {
+  if (authorization.status === 'cancelled') return 'cancelled';
   if (authorization.status === 'blocked' || authorization.status === 'expired') return 'attention';
   if (authorization.status === 'authorization_ready' && executionFailed) return 'execution_failed';
   if (authorization.status === 'authorization_ready') return integrationOwnedExecution ? 'waiting_execution' : 'route_execution';
@@ -106,7 +107,7 @@ export async function listSorobanIntentInbox(
       ]);
       if (!isLiveParticipant(stored, address, authorization)) return null;
       const executionState = executionEvidenceState(preparations, observations);
-      if (executionState === 'confirmed') return null;
+      if (executionState === 'confirmed' || authorization.status === 'cancelled') return null;
       return snapshot(stored, authorization, address, executionState === 'failed');
     } catch {
       return null;

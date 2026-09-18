@@ -6,7 +6,8 @@ export type AgentTaskState =
   | 'waiting'
   | 'completed'
   | 'expired'
-  | 'failed';
+  | 'failed'
+  | 'cancelled';
 
 export type AgentTaskActionCode =
   | 'contribute_signature'
@@ -14,7 +15,8 @@ export type AgentTaskActionCode =
   | 'decline'
   | 'prepare_execution'
   | 'refresh_execution'
-  | 'replan';
+  | 'replan'
+  | 'cancel';
 
 export interface AgentTaskAction {
   code: AgentTaskActionCode;

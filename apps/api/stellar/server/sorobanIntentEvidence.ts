@@ -40,6 +40,19 @@ export function projectSorobanIntentEvidence(
     authorizationPlanRevision: initial.revision,
   }];
 
+  if (stored.cancellation) {
+    events.push({
+      version: 1,
+      eventId: 'intent-cancelled',
+      type: 'intent_cancelled',
+      occurredAt: stored.cancellation.cancelledAt,
+      ...(stored.cancellation.cancelledByAddress ? { actorAddress: stored.cancellation.cancelledByAddress } : {}),
+      ...(stored.cancellation.cancelledBy ? { actor: stored.cancellation.cancelledBy } : {}),
+      authorizationPlanDigest: stored.cancellation.authorizationPlanDigest,
+      authorizationPlanRevision: stored.cancellation.authorizationPlanRevision,
+    });
+  }
+
   const history = planHistory(stored);
   for (let index = 0; index < history.length; index += 1) {
     const previous = history[index];
@@ -116,8 +129,9 @@ export function projectSorobanIntentEvidence(
     authorization_plan_revised: 1,
     authorization_added: 2,
     execution_prepared: 3,
-    execution_confirmed: 4,
-    execution_failed: 4,
+    intent_cancelled: 4,
+    execution_confirmed: 5,
+    execution_failed: 5,
   };
   return events.sort((left, right) =>
     left.occurredAt.localeCompare(right.occurredAt)

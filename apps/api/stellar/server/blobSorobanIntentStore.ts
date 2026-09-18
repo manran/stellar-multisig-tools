@@ -7,6 +7,7 @@ import type {
   SorobanIntentStore,
   StoredSorobanIntent,
   StoredSorobanIntentAuthorizationContribution,
+  StoredSorobanIntentCancellation,
   StoredSorobanIntentExecutionObservation,
   StoredSorobanIntentExecutionPreparation,
 } from './sorobanIntentStore.js';
@@ -25,6 +26,10 @@ function signerPath(network: StellarNetwork, address: string, id: string): strin
 
 function executionBindingPath(id: string): string {
   return `intents/${id}/execution-binding.json`;
+}
+
+function cancellationPath(id: string): string {
+  return `intents/${id}/cancellation.json`;
 }
 
 function contributionPrefix(id: string): string {
@@ -68,9 +73,18 @@ async function readJson<T>(pathname: string): Promise<T | null> {
 
 async function readIntent(id: string): Promise<StoredSorobanIntent | null> {
   const stored = await readJson<StoredSorobanIntent>(intentPath(id));
-  if (!stored || stored.executionPolicy?.executor) return stored;
-  const binding = await readJson<StoredExecutionPolicyBinding>(executionBindingPath(id));
-  return binding ? { ...stored, executionPolicy: binding.executionPolicy } : stored;
+  if (!stored) return null;
+  const [binding, cancellation] = await Promise.all([
+    stored.executionPolicy?.executor
+      ? Promise.resolve(null)
+      : readJson<StoredExecutionPolicyBinding>(executionBindingPath(id)),
+    readJson<StoredSorobanIntentCancellation>(cancellationPath(id)),
+  ]);
+  return {
+    ...stored,
+    ...(binding ? { executionPolicy: binding.executionPolicy } : {}),
+    ...(cancellation ? { cancellation } : {}),
+  };
 }
 
 async function intentIdsForSigner(network: StellarNetwork, address: string): Promise<string[]> {
@@ -127,6 +141,26 @@ export const blobSorobanIntentStore: SorobanIntentStore = {
         cacheControlMaxAge: 60,
       });
     });
+  },
+
+  async cancelIntent(id, cancellation) {
+    const pathname = cancellationPath(id);
+    try {
+      await withBlobStorage(async () => {
+        await put(pathname, JSON.stringify(cancellation), {
+          access: 'private',
+          addRandomSuffix: false,
+          allowOverwrite: false,
+          contentType: 'application/json',
+          cacheControlMaxAge: 60,
+        });
+      });
+      return { cancellation, created: true };
+    } catch (cause) {
+      const existing = await readJson<StoredSorobanIntentCancellation>(pathname);
+      if (!existing) throw cause;
+      return { cancellation: existing, created: false };
+    }
   },
 
   async bindExecutionPolicy(id, executionPolicy) {

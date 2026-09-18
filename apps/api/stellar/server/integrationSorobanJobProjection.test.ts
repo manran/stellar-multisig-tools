@@ -90,7 +90,7 @@ test('projects open authorization as a simple waiting Job', () => {
     reviewUrl: REVIEW_URL,
   });
   assert.equal(job.state, 'waiting_for_authorization');
-  assert.deepEqual(job.nextActions, []);
+  assert.deepEqual(job.nextActions, ['cancel']);
   assert.deepEqual(job.waitingFor, ['GAUTH1']);
   assert.equal(job.expiresAtLedger, 500);
   assert.equal(job.externalReference, 'fed-42');
@@ -104,7 +104,7 @@ test('projects ready authorization into one explicit next action', () => {
     reviewUrl: REVIEW_URL,
   });
   assert.equal(job.state, 'ready');
-  assert.deepEqual(job.nextActions, ['prepare_execution']);
+  assert.deepEqual(job.nextActions, ['prepare_execution', 'cancel']);
 });
 test('projects a current execution package as executing', () => {
   const job = projectIntegrationSorobanJob({
@@ -115,7 +115,7 @@ test('projects a current execution package as executing', () => {
     now: BEFORE_EXPIRY,
   });
   assert.equal(job.state, 'executing');
-  assert.deepEqual(job.nextActions, ['submit_execution', 'reconcile_execution', 'refresh_execution']);
+  assert.deepEqual(job.nextActions, ['submit_execution', 'reconcile_execution', 'refresh_execution', 'cancel']);
   assert.deepEqual(job.execution, {
     owner: 'external_service',
     executor: 'GEXECUTOR',
@@ -133,6 +133,7 @@ test('ignores stale preparation evidence from an older AuthorizationPlan revisio
     reviewUrl: REVIEW_URL,
   });
   assert.equal(job.state, 'ready');
+  assert.deepEqual(job.nextActions, ['prepare_execution', 'cancel']);
   assert.equal(job.execution, undefined);
 });
 
@@ -145,7 +146,7 @@ test('stale execution package returns to ready with refresh as the only safe act
     now: new Date('2026-09-17T02:00:00.000Z'),
   });
   assert.equal(job.state, 'ready');
-  assert.deepEqual(job.nextActions, ['refresh_execution']);
+  assert.deepEqual(job.nextActions, ['refresh_execution', 'cancel']);
 });
 
 test('projects confirmed execution into a compact result', () => {
@@ -167,7 +168,7 @@ test('projects expiry as an explicit replan action', () => {
     reviewUrl: REVIEW_URL,
   });
   assert.equal(job.state, 'expired');
-  assert.deepEqual(job.nextActions, ['replan']);
+  assert.deepEqual(job.nextActions, ['replan', 'cancel']);
 });
 
 test('projects observed execution failure without guessing a recovery action', () => {
@@ -180,7 +181,7 @@ test('projects observed execution failure without guessing a recovery action', (
   });
   assert.equal(job.state, 'failed');
   assert.equal(job.reason, 'execution_failed');
-  assert.deepEqual(job.nextActions, []);
+  assert.deepEqual(job.nextActions, ['cancel']);
 });
 
 test('managed execution does not tell an external Service to submit', () => {
@@ -193,5 +194,26 @@ test('managed execution does not tell an external Service to submit', () => {
   });
   assert.equal(job.state, 'executing');
   assert.equal(job.execution?.owner, 'multisigtools');
+  assert.deepEqual(job.nextActions, ['cancel']);
+});
+
+test('cancelled Integration work is terminal and advertises no further action', () => {
+  const job = projectIntegrationSorobanJob({
+    stored: stored({
+      cancellation: {
+        version: 1,
+        cancelledAt: '2026-09-17T00:25:00.000Z',
+        authorizationPlanDigest: DIGEST,
+        authorizationPlanRevision: 1,
+        cancelledBy: { type: 'service', id: 'fednetwork' },
+      },
+    }),
+    authorization: authorization('cancelled'),
+    preparations: [preparation()],
+    reviewUrl: REVIEW_URL,
+    now: BEFORE_EXPIRY,
+  });
+  assert.equal(job.state, 'cancelled');
   assert.deepEqual(job.nextActions, []);
+  assert.equal(job.execution?.transactionHash, 'c'.repeat(64));
 });

@@ -21,12 +21,13 @@ function classic(status: SigningRequestSnapshot['status']): SigningRequestSnapsh
   };
 }
 
-function stored(integration = false): StoredSorobanIntent {
+function stored(integration = false, creator = false): StoredSorobanIntent {
   return {
     version: 1, id: 'FEDTASK000000001', network: 'testnet', createdAt: '2026-09-17T00:00:00.000Z',
     intent: { version: 1, network: 'testnet', hostFunctionXdr: 'AAAA', intentDigest: DIGEST },
     authorizationPlan: { authorizationPlanDigest: DIGEST } as StoredSorobanIntent['authorizationPlan'],
     discoverySignerKeys: [PRINCIPAL],
+    ...(creator ? { creatorAddress: PRINCIPAL } : {}),
     ...(integration ? { integration: { version: 1, serviceId: 'fednetwork' } } : {}),
   };
 }
@@ -114,6 +115,35 @@ test('Soroban Agent Task refreshes a stale prepared package instead of suggestin
   assert.deepEqual(task.nextActions, [
     { code: 'refresh_execution', requiredAccess: 'write', available: true },
   ]);
+});
+
+test('creator Agent gets explicit cancellation as a write action', () => {
+  const task = projectSorobanAgentTask({
+    stored: stored(false, true), authorization: authorization('awaiting_authorization'),
+    credentialAccess: 'write', principalAddress: PRINCIPAL,
+  });
+  assert.equal(task.state, 'action_required');
+  assert.deepEqual(task.nextActions, [
+    { code: 'contribute_authorization', requiredAccess: 'sign', available: false },
+    { code: 'cancel', requiredAccess: 'write', available: true },
+  ]);
+});
+
+test('cancelled Soroban Agent Task is terminal', () => {
+  const value = stored(false, true);
+  value.cancellation = {
+    version: 1,
+    cancelledAt: '2026-09-17T00:02:00.000Z',
+    authorizationPlanDigest: DIGEST,
+    authorizationPlanRevision: 1,
+    cancelledByAddress: PRINCIPAL,
+  };
+  const task = projectSorobanAgentTask({
+    stored: value, authorization: authorization('cancelled'),
+    credentialAccess: 'write', principalAddress: PRINCIPAL,
+  });
+  assert.equal(task.state, 'cancelled');
+  assert.deepEqual(task.nextActions, []);
 });
 
 test('Integration-owned Soroban work does not make a signer Agent its executor', () => {

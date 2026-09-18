@@ -214,4 +214,6 @@ test('Testnet is a network-bound runtime rather than a duplicate content site', 
   assert.match(docs, /prepare_execution/);
   assert.match(docs, /refresh_execution/);
   assert.match(docs, /serviceIntentCreateExample/);
+  assert.match(docs, /serviceIntentCancelExample/);
+  assert.match(docs, /Cancellation is coordination-level, not cryptographic revocation/);
 });

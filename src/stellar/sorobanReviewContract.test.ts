@@ -74,11 +74,17 @@ test('Soroban Review routes detached authorization into Intent before envelope s
   assert.match(sorobanIntentApp, /prepareExecution/);
   assert.match(sorobanIntentApp, /executionSource/);
   assert.match(sorobanIntentApp, /action: 'replan'/);
+  assert.match(sorobanIntentApp, /action: 'cancel'/);
+  assert.match(sorobanIntentApp, /Cancel Intent/);
+  assert.match(sorobanIntentApp, /cannot revoke detached AUTH/);
   assert.match(sorobanIntentApp, /Refresh authorization/);
   assert.match(sorobanIntentApp, /Simulation effects at authorization/);
   assert.match(sorobanIntentApp, /Execution effects comparison/);
   assert.match(sorobanIntentApp, /I reviewed this numeric change/);
   assert.match(intentApi, /acceptedEffectsDigest: body\.acceptedEffectsDigest/);
+  assert.match(intentApi, /body\.action === 'cancel'/);
+  assert.match(intentApi, /assertSorobanIntentCancellationOwner/);
+  assert.match(intentApi, /cancelSorobanIntent/);
   assert.match(intentExecutionService, /putExecutionPreparation/);
   assert.match(sorobanIntentApp, /Review changed effects and re-authorize/);
   assert.match(sorobanIntentApp, /requiresReauthorization/);

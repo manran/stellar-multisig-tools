@@ -59,6 +59,15 @@ export interface StoredSorobanAuthorizationPlanRevision {
   supersededAt: string;
 }
 
+export interface StoredSorobanIntentCancellation {
+  version: 1;
+  cancelledAt: string;
+  authorizationPlanDigest: string;
+  authorizationPlanRevision: number;
+  cancelledByAddress?: string;
+  cancelledBy?: MachineCallerProvenance;
+}
+
 export interface StoredSorobanIntent {
   version: 1;
   id: string;
@@ -75,12 +84,14 @@ export interface StoredSorobanIntent {
   integration?: SorobanIntentIntegrationContext;
   executionPolicy?: SorobanExecutionPolicy;
   privateContext?: SorobanIntentPrivateContext;
+  cancellation?: StoredSorobanIntentCancellation;
 }
 
 export interface SorobanIntentStore {
   createIntent(value: StoredSorobanIntent): Promise<void>;
   getIntent(id: string): Promise<StoredSorobanIntent | null>;
   updateIntent(value: StoredSorobanIntent): Promise<void>;
+  cancelIntent?(id: string, cancellation: StoredSorobanIntentCancellation): Promise<{ cancellation: StoredSorobanIntentCancellation; created: boolean }>;
   bindExecutionPolicy?(id: string, executionPolicy: SorobanExecutionPolicy): Promise<SorobanExecutionPolicy>;
   listIntentsBySigner?(network: StellarNetwork, signerAddress: string): Promise<StoredSorobanIntent[]>;
   listContributions(id: string): Promise<StoredSorobanIntentAuthorizationContribution[]>;

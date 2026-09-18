@@ -15,6 +15,7 @@ test('Classic Request and Soroban Intent project onto the same post-Review phase
   assert.equal(sorobanCoordinationPhase('awaiting_authorization'), 'authorization');
   assert.equal(sorobanCoordinationPhase('authorization_ready'), 'ready');
   assert.equal(sorobanCoordinationPhase('expired'), 'attention');
+  assert.equal(sorobanCoordinationPhase('cancelled'), 'done');
 });
 
 test('ordinary Soroban Ready exposes routing while fixed execution policy narrows it', () => {

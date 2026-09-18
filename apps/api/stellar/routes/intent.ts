@@ -20,6 +20,11 @@ import { BoxServiceError } from '../server/boxService.js';
 import { CallerAuthenticationError, machineCallerFromRequest, verifiedSignerSessionFromRequest } from '../server/callerAuthentication.js';
 import { ContractIntentServiceError } from '../server/contractIntentService.js';
 import {
+  assertSorobanIntentCancellationOwner,
+  cancelSorobanIntent,
+  SorobanIntentCancellationServiceError,
+} from '../server/sorobanIntentCancellationService.js';
+import {
   assertDeploymentNetwork,
   DeploymentNetworkPolicyError,
 } from '../server/deploymentNetworkPolicy.js';
@@ -86,6 +91,7 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof ContractIntentServiceError
     || cause instanceof SorobanIntentServiceError
     || cause instanceof SorobanIntentAuthorizationServiceError
+    || cause instanceof SorobanIntentCancellationServiceError
     || cause instanceof SorobanIntentReplanServiceError
   ) {
     return json({ error: cause.message, code: cause.code }, cause.status);
@@ -552,6 +558,38 @@ export async function PUT(request: Request): Promise<Response> {
         observed: result.observed,
         replayed: result.replayed,
         ...(result.observation ? { observation: result.observation } : {}),
+        ...(job ? { job } : {}),
+        ...(task ? { task } : {}),
+      });
+    }
+    if (body.action === 'cancel') {
+      assertSorobanIntentCancellationOwner(access.stored, access.integrationCredential
+        ? { serviceId: access.integrationCredential.serviceId }
+        : { principalAddress: access.address });
+      const result = await cancelSorobanIntent(
+        blobSorobanIntentStore,
+        access.id,
+        access.integrationCredential
+          ? { cancelledBy: integrationCallerForCredential(access.integrationCredential) }
+          : {
+              ...(access.address ? { cancelledByAddress: access.address } : {}),
+              ...(access.agent ? { cancelledBy: agentActorForCredential(access.agent) } : {}),
+            },
+      );
+      const authorization = await getSorobanIntentAuthorization(blobSorobanIntentStore, access.id);
+      const job = access.integrationCredential
+        ? await loadIntegrationJob(request, result.intent, authorization)
+        : undefined;
+      const task = access.agent
+        ? await loadAgentTask(result.intent, authorization, access.agent)
+        : undefined;
+      return json({
+        operation: 'contract.intent.cancel',
+        version: 1,
+        replayed: result.replayed,
+        intent: result.intent,
+        authorization,
+        cancellation: result.cancellation,
         ...(job ? { job } : {}),
         ...(task ? { task } : {}),
       });

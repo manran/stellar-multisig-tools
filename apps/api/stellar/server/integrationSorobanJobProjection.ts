@@ -74,6 +74,7 @@ export function projectIntegrationSorobanJob({
   );
   let state: IntegrationSorobanJobProjection['state'];
   if (latestObservation?.successful) state = 'completed';
+  else if (stored.cancellation || authorization.status === 'cancelled') state = 'cancelled';
   else if (latestObservation && !latestObservation.successful) state = 'failed';
   else if (authorization.status === 'expired') state = 'expired';
   else if (authorization.status === 'blocked') state = 'failed';
@@ -81,12 +82,16 @@ export function projectIntegrationSorobanJob({
   else state = latestPreparation && !preparationExpired ? 'executing' : 'ready';
 
   const nextActions: IntegrationSorobanJobProjection['nextActions'] = state === 'ready'
-    ? preparationExpired ? ['refresh_execution'] : ['prepare_execution']
+    ? preparationExpired ? ['refresh_execution', 'cancel'] : ['prepare_execution', 'cancel']
     : state === 'executing' && !managed
-      ? ['submit_execution', 'reconcile_execution', 'refresh_execution']
-      : state === 'expired'
-        ? ['replan']
-        : [];
+      ? ['submit_execution', 'reconcile_execution', 'refresh_execution', 'cancel']
+      : state === 'executing'
+        ? ['cancel']
+        : state === 'expired'
+          ? ['replan', 'cancel']
+          : state === 'waiting_for_authorization' || state === 'failed'
+            ? ['cancel']
+            : [];
 
   const expiry = expiresAtLedger(authorization);
   return {

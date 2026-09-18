@@ -255,6 +255,35 @@ test('expired Intent AUTH is visible but refuses further contributions', async (
   );
 });
 
+test('cancelled Intent AUTH stays inspectable but refuses further contributions', async () => {
+  const f = await fixture();
+  await f.store.updateIntent({
+    ...f.stored,
+    cancellation: {
+      version: 1,
+      cancelledAt: '2026-09-14T10:05:00.000Z',
+      authorizationPlanDigest: f.plan.authorizationPlanDigest,
+      authorizationPlanRevision: 1,
+      cancelledByAddress: f.signerA.publicKey(),
+    },
+  });
+  const cancelled = await getSorobanIntentAuthorization(f.store, f.stored.id, {
+    ...f.options,
+    accountLoader: async () => { throw new Error('cancelled state must not require Horizon'); },
+    networkParametersLoader: async () => { throw new Error('cancelled state must not require network parameters'); },
+  });
+  assert.equal(cancelled.status, 'cancelled');
+  assert.match(cancelled.statusDetail ?? '', /cannot be revoked/i);
+  await assert.rejects(
+    () => contributeSorobanIntentAuthorization(f.store, f.stored.id, {
+      entryIndex: 0,
+      signerAddress: f.signerA.publicKey(),
+      signatureBase64: signatureFor(f.plan, f.signerA),
+    }, f.options),
+    (cause: unknown) => cause instanceof Error && 'code' in cause && cause.code === 'intent_authorization_not_open',
+  );
+});
+
 test('Intent AUTH rejects a signer outside the current authorizer policy', async () => {
   const f = await fixture();
   const outsider = Keypair.random();

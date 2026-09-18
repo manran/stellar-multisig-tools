@@ -26,14 +26,25 @@ export interface StoredSorobanIntentSnapshot {
   creatorActor?: MachineCallerProvenance;
   integration?: SorobanIntentIntegrationContext;
   executionPolicy?: SorobanExecutionPolicy;
+  cancellation?: SorobanIntentCancellation;
   privateContext?: {
     externalReference?: string;
     initialPrivateNote?: PrivateNoteRevision;
   };
 }
 
+export interface SorobanIntentCancellation {
+  version: 1;
+  cancelledAt: string;
+  authorizationPlanDigest: string;
+  authorizationPlanRevision: number;
+  cancelledByAddress?: string;
+  cancelledBy?: MachineCallerProvenance;
+}
+
 export type SorobanIntentEvidenceEventType =
   | 'intent_created'
+  | 'intent_cancelled'
   | 'authorization_added'
   | 'authorization_plan_revised'
   | 'execution_prepared'
@@ -71,7 +82,7 @@ export interface SorobanIntentAuthorizationSnapshot {
   intentDigest: string;
   authorizationPlanDigest: string;
   executionBinding: 'detached';
-  status: 'awaiting_authorization' | 'authorization_ready' | 'expired' | 'blocked';
+  status: 'awaiting_authorization' | 'authorization_ready' | 'expired' | 'blocked' | 'cancelled';
   statusDetail?: string;
   authorizationEntriesXdr: string[];
   contributionCount: number;
@@ -85,14 +96,16 @@ export type IntegrationJobState =
   | 'executing'
   | 'completed'
   | 'expired'
-  | 'failed';
+  | 'failed'
+  | 'cancelled';
 
 export type IntegrationJobNextAction =
   | 'prepare_execution'
   | 'submit_execution'
   | 'reconcile_execution'
   | 'refresh_execution'
-  | 'replan';
+  | 'replan'
+  | 'cancel';
 
 export interface IntegrationSorobanJobProjection {
   version: 1;
@@ -120,7 +133,7 @@ export interface IntegrationSorobanJobProjection {
   };
 }
 
-export type SorobanIntentViewerAction = 'sign' | 'route_execution' | 'waiting' | 'waiting_execution' | 'execution_failed' | 'attention';
+export type SorobanIntentViewerAction = 'sign' | 'route_execution' | 'waiting' | 'waiting_execution' | 'execution_failed' | 'attention' | 'cancelled';
 
 export interface InboxSorobanIntentSnapshot {
   id: string;
@@ -199,6 +212,17 @@ export interface SorobanIntentExecutionResponse {
     preparedAt: string;
     xdr: string;
   };
+  job?: IntegrationSorobanJobProjection;
+  task?: AgentTaskProjection;
+}
+
+export interface SorobanIntentCancelResponse {
+  operation: 'contract.intent.cancel';
+  version: 1;
+  replayed: boolean;
+  intent: StoredSorobanIntentSnapshot;
+  authorization: SorobanIntentAuthorizationSnapshot;
+  cancellation: SorobanIntentCancellation;
   job?: IntegrationSorobanJobProjection;
   task?: AgentTaskProjection;
 }

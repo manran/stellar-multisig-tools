@@ -99,6 +99,12 @@ const serviceIntentRefreshExample = `curl -X PUT ${STELLAR_TESTNET_ORIGIN}/api/i
   -H "X-MultiSig-Intent-Id: 0123456789ABCDEF" \
   -d '{"action":"refresh_execution"}'`;
 
+const serviceIntentCancelExample = `curl -X PUT ${STELLAR_TESTNET_ORIGIN}/api/intent \
+  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
+  -H "Content-Type: application/json" \
+  -H "X-MultiSig-Intent-Id: 0123456789ABCDEF" \
+  -d '{"action":"cancel"}'`;
+
 function CodeBlock({ children }: { children: string }) {
   return <pre className="overflow-x-auto rounded-2xl bg-[#111] p-4 text-xs leading-6 text-neutral-100"><code>{children}</code></pre>;
 }
@@ -521,6 +527,9 @@ function AutomationPage() {
           <CodeBlock>{serviceIntentPrepareExample}</CodeBlock>
           <p>If the package was lost, expired, or failed to submit, <code>refresh_execution</code> rebuilds a fresh package with the same bound executor and all enforcing checks repeated. Refresh cannot replace the executor.</p>
           <CodeBlock>{serviceIntentRefreshExample}</CodeBlock>
+          <p>An owning Service may explicitly close work with <code>action: "cancel"</code>. The resulting Job is terminal <code>cancelled</code>, and MultiSigTools stops accepting new AUTH, replanning, and preparing new execution packages for that Intent.</p>
+          <CodeBlock>{serviceIntentCancelExample}</CodeBlock>
+          <p><strong>Cancellation is coordination-level, not cryptographic revocation.</strong> Detached AUTH or prepared XDR already disclosed outside MultiSigTools cannot be withdrawn by the API and may remain usable until its Stellar validity window ends. A previously prepared transaction can still be reconciled afterward so its actual ledger result remains observable.</p>
           <p>The response includes the unsigned XDR plus transaction hash, sequence, validity, latest ledger, AuthorizationPlan digest/revision, executor provenance, effects, effects diff, and preparation time. Preparation evidence is durable; returning XDR does not by itself mean handoff, submission, or confirmation.</p>
         </TechnicalDetails>
       </section>

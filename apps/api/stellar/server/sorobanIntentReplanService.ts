@@ -39,6 +39,13 @@ export async function replanExpiredSorobanIntent(
     id,
     options.authorizationDependencies,
   );
+  if (stored.cancellation || authorization.status === 'cancelled') {
+    throw new SorobanIntentReplanServiceError(
+      'A cancelled Soroban Intent cannot create a fresh AuthorizationPlan.',
+      409,
+      'intent_cancelled',
+    );
+  }
   if (authorization.status !== 'expired' && authorization.status !== 'authorization_ready') {
     throw new SorobanIntentReplanServiceError(
       'Soroban authorization can be refreshed only after expiration or after execution detects a structural effects change.',
@@ -75,6 +82,13 @@ export async function replanExpiredSorobanIntent(
   }
 
   const latest = await store.getIntent(id);
+  if (latest?.cancellation) {
+    throw new SorobanIntentReplanServiceError(
+      'This Soroban Intent was cancelled while authorization was being refreshed.',
+      409,
+      'intent_cancelled',
+    );
+  }
   if (
     !latest
     || latest.authorizationPlan.authorizationPlanDigest !== stored.authorizationPlan.authorizationPlanDigest
@@ -103,6 +117,14 @@ export async function replanExpiredSorobanIntent(
     ])].sort(),
   };
   await store.updateIntent(updated);
+  const afterWrite = await store.getIntent(id);
+  if (afterWrite?.cancellation) {
+    throw new SorobanIntentReplanServiceError(
+      'This Soroban Intent was cancelled before the refreshed AuthorizationPlan was released.',
+      409,
+      'intent_cancelled',
+    );
+  }
   return {
     intent: updated,
     authorization: await getSorobanIntentAuthorization(

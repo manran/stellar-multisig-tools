@@ -19,6 +19,13 @@ function intent(): StoredSorobanIntent {
     ],
     createdAt: '2026-09-15T09:00:00.000Z',
     creatorActor: { type: 'service', id: 'fednetwork', label: 'FedNetwork' },
+    cancellation: {
+      version: 1,
+      cancelledAt: '2026-09-15T12:02:00.000Z',
+      authorizationPlanDigest: 'plan-3',
+      authorizationPlanRevision: 3,
+      cancelledBy: { type: 'service', id: 'fednetwork', label: 'FedNetwork' },
+    },
     discoverySignerKeys: [],
   };
 }
@@ -77,6 +84,7 @@ test('Soroban Intent evidence projects persisted creation, AUTH, and replan fact
     'authorization_plan_revised',
     'authorization_added',
     'execution_prepared',
+    'intent_cancelled',
     'execution_confirmed',
     'execution_failed',
   ]);
@@ -95,11 +103,13 @@ test('Soroban Intent evidence projects persisted creation, AUTH, and replan fact
   assert.equal(evidence[6]?.executionSource, 'GEXECUTOR');
   assert.equal(evidence[6]?.effectsDigest, 'effects-3');
   assert.deepEqual(evidence[6]?.actor, { type: 'service', id: 'fednetwork', label: 'FedNetwork' });
-  assert.equal(evidence[7]?.ledger, 2001);
-  assert.equal(evidence[7]?.successful, true);
-  assert.equal(evidence[7]?.observedAt, '2026-09-15T12:03:05.000Z');
-  assert.equal(evidence[8]?.type, 'execution_failed');
-  assert.equal(evidence[8]?.successful, false);
+  assert.equal(evidence[7]?.type, 'intent_cancelled');
+  assert.deepEqual(evidence[7]?.actor, { type: 'service', id: 'fednetwork', label: 'FedNetwork' });
+  assert.equal(evidence[8]?.ledger, 2001);
+  assert.equal(evidence[8]?.successful, true);
+  assert.equal(evidence[8]?.observedAt, '2026-09-15T12:03:05.000Z');
+  assert.equal(evidence[9]?.type, 'execution_failed');
+  assert.equal(evidence[9]?.successful, false);
   assert.equal(JSON.stringify(evidence).includes('SECRET'), false);
   assert.equal(JSON.stringify(evidence).includes('xdr'), false);
 });

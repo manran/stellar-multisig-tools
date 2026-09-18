@@ -56,6 +56,7 @@ executing
 completed
 expired
 failed
+cancelled
 ```
 
 These states are derived from durable coordination facts; callers never write them directly.
@@ -70,6 +71,7 @@ State derivation for Soroban Integration work:
 | successful execution observation | `completed` |
 | authorization window expired | `expired` |
 | unsupported/blocked authorization or confirmed execution failure | `failed` |
+| owning Service records the immutable cancellation fact | `cancelled` |
 
 Only facts for the current AuthorizationPlan revision participate in execution-state projection. Old preparations or observations remain evidence but must not make a replanned Job look `executing` or `completed`.
 
@@ -120,16 +122,17 @@ submit_execution
 reconcile_execution
 refresh_execution
 replan
+cancel
 ```
 
 Rules:
 
-- `waiting_for_authorization` -> no Service action; wait for signers.
-- `ready` -> `prepare_execution`, or `refresh_execution` when only a stale prior package exists.
-- externally owned `executing` -> `submit_execution`, `reconcile_execution`, `refresh_execution`.
-- `expired` -> `replan`.
-- `completed` -> no action.
-- `failed` -> no automatic action unless a future safely-derived recovery action is explicit.
+- `waiting_for_authorization` -> `cancel` is available to the owning Service; otherwise wait for signers.
+- `ready` -> `prepare_execution` (or `refresh_execution` when only a stale prior package exists) plus `cancel`.
+- externally owned `executing` -> `submit_execution`, `reconcile_execution`, `refresh_execution`, or `cancel`.
+- `expired` -> `replan` or `cancel`.
+- `failed` -> `cancel` is the only generic close-work action; no automatic recovery is inferred.
+- `completed` and `cancelled` -> no action.
 
 Clients must not infer authorization or execution permission solely from this list; the corresponding API operation remains authoritative.
 ## 6. Webhook contract
@@ -154,6 +157,7 @@ job.executing
 job.completed
 job.expired
 job.failed
+job.cancelled
 ```
 
 `job.created` reports successful creation even though `created` is not a durable Job state.
@@ -173,7 +177,15 @@ Do not implement webhook as an untracked `fetch()` after an API mutation. That c
 
 The preferred implementation point is the PostgreSQL persistence milestone, where state transition + outbox insertion can share one database transaction. Until then, polling remains a supported fallback and the Job projection removes the need for callers to understand internal states.
 
-## 7. Expiry and replan
+## 7. Cancellation, expiry and replan
+
+Cancellation is an authoritative MultiSigTools coordination fact, not Stellar cryptographic revocation. `PUT /api/intent` with `action: "cancel"` is allowed only to the original Human/Agent creator or the Integration Service that owns the Intent. It closes further AUTH contribution, replan and execution-package preparation in MultiSigTools and projects terminal `cancelled`.
+
+Detached AUTH or prepared XDR already disclosed outside MultiSigTools cannot be withdrawn by this operation and can remain usable until its Stellar validity window ends. Existing execution preparation evidence remains visible, and reconciliation remains allowed after cancellation so a transaction that was already handed off can still be reported truthfully if it later lands on-chain.
+
+The cancellation marker is immutable/write-once. While coordination is still on Blob storage, it is stored separately from mutable Intent state so a stale `intent.json` rewrite cannot erase cancellation. PostgreSQL can later make cancellation/outbox ordering transactional without changing this product contract.
+
+### Expiry and replan
 
 Long-lived multisig work makes authorization expiry normal rather than exceptional.
 
@@ -236,6 +248,7 @@ This product simplification must not cause:
 - hidden acceptance of effects drift;
 - implicit signer authority for `msi_*`;
 - implicit executor authority from the planning source;
+- claiming that Intent cancellation revokes already disclosed detached AUTH or prepared XDR;
 - breaking replacement of existing `/api/intent` or `/api/request` contracts.
 
 This document refines the Integration direction in `PLATFORM_EXTENSION_POINTS.md`; internal architecture remains governed by the existing Workflow, authority, privacy and evidence documents.
