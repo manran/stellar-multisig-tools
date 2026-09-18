@@ -140,14 +140,46 @@ export async function dispatchIntegrationWebhookEvent(
       : { status: 'lease_lost' };
   }
 
-  const signed = signIntegrationWebhookPayload({
-    serviceId: record.serviceId,
-    secretVersion: stored.webhook.secretVersion,
-    eventId: record.eventId,
-    timestamp: startedAt,
-    payload,
-    masterSecret: dependencies.webhookMasterSecret,
-  });
+  let signed;
+  try {
+    signed = signIntegrationWebhookPayload({
+      serviceId: record.serviceId,
+      secretVersion: stored.webhook.secretVersion,
+      eventId: record.eventId,
+      timestamp: startedAt,
+      payload,
+      masterSecret: dependencies.webhookMasterSecret,
+    });
+  } catch {
+    const outcome = classifyIntegrationWebhookTransportFailure(
+      'signing_unavailable',
+      record.attemptCount,
+      now(),
+    );
+    const completedAt = now();
+    await completeIntegrationWebhookDelivery(delivery.deliveryId, {
+      outcome: outcome.outcome === 'retry' ? 'retry' : 'permanent_failure',
+      completedAt,
+      errorCode: outcome.errorCode,
+      durationMs: Math.max(0, completedAt.getTime() - startedAt.getTime()),
+    }, pool);
+    if (outcome.outcome === 'retry') {
+      const released = await releaseIntegrationOutboxEvent(eventId, leaseToken, {
+        pool,
+        nextAvailableAt: outcome.nextAvailableAt,
+      });
+      return released
+        ? {
+            status: 'retry_scheduled',
+            errorCode: outcome.errorCode,
+            nextAvailableAt: outcome.nextAvailableAt.toISOString(),
+          }
+        : { status: 'lease_lost' };
+    }
+    return await completeTerminal(eventId, leaseToken, pool)
+      ? { status: 'permanent_failure', errorCode: outcome.errorCode }
+      : { status: 'lease_lost' };
+  }
 
   try {
     const response = await dependencies.transport.post({

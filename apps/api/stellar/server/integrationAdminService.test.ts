@@ -109,6 +109,27 @@ test('operator-managed webhook config stores only URL/generation and rotates der
   assert.equal(removed.webhookSecret, undefined);
 });
 
+test('webhook configuration fails before persistence when deployment signing is unavailable', async () => {
+  const store = new MemoryStore();
+  const previous = process.env.MULTISIG_WEBHOOK_MASTER_SECRET;
+  try {
+    delete process.env.MULTISIG_WEBHOOK_MASTER_SECRET;
+    await assert.rejects(
+      () => createIntegrationAdminService(store, {
+        ...input('no-signing'),
+        webhook: { url: 'https://hooks.example.com/mst' },
+      }),
+      (cause: unknown) => cause instanceof Error
+        && 'code' in cause
+        && cause.code === 'integration_webhook_signing_not_configured',
+    );
+    assert.equal(store.values.has('no-signing'), false);
+  } finally {
+    if (previous === undefined) delete process.env.MULTISIG_WEBHOOK_MASTER_SECRET;
+    else process.env.MULTISIG_WEBHOOK_MASTER_SECRET = previous;
+  }
+});
+
 test('durable disabled record suppresses bootstrap env credential with the same service id', async () => {
   const previous = process.env.MULTISIG_INTEGRATION_CREDENTIALS_JSON;
   const store = new MemoryStore();

@@ -13,7 +13,10 @@ import {
   IntegrationWebhookConfigError,
   type IntegrationWebhookConfig,
 } from './integrationWebhookConfig.js';
-import { deriveIntegrationWebhookSecret } from './integrationWebhookSigning.js';
+import {
+  deriveIntegrationWebhookSecret,
+  IntegrationWebhookSigningError,
+} from './integrationWebhookSigning.js';
 
 const ADMIN_KEY_PREFIX = 'mia';
 const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
@@ -105,6 +108,25 @@ export async function listIntegrationAdminServices(store: IntegrationCredentialS
   return [...byId.values()].sort((a, b) => a.serviceId.localeCompare(b.serviceId));
 }
 
+function integrationWebhookSecret(
+  serviceId: string,
+  webhook: IntegrationWebhookConfig,
+  masterSecret?: string,
+): string {
+  try {
+    return deriveIntegrationWebhookSecret(serviceId, webhook.secretVersion, masterSecret);
+  } catch (cause) {
+    if (cause instanceof IntegrationWebhookSigningError) {
+      throw new IntegrationAdminServiceError(
+        'Integration webhook signing is not configured for this deployment.',
+        503,
+        'integration_webhook_signing_not_configured',
+      );
+    }
+    throw cause;
+  }
+}
+
 function normalizeInput(input: Record<string, unknown>, secretHash: string): ConfiguredIntegrationCredential {
   try {
     return normalizeConfiguredIntegrationCredential({ ...input, secretHash });
@@ -149,6 +171,9 @@ export async function createIntegrationAdminService(
     }
     throw cause;
   }
+  const webhookSecret = webhook
+    ? integrationWebhookSecret(serviceId, webhook, webhookMasterSecret)
+    : undefined;
   const record: StoredIntegrationCredential = {
     version: 1, credential, enabled,
     ...(webhook ? { webhook } : {}),
@@ -158,9 +183,7 @@ export async function createIntegrationAdminService(
   return {
     service: summary(record, 'durable'),
     apiKey: generated.apiKey,
-    ...(webhook ? {
-      webhookSecret: deriveIntegrationWebhookSecret(serviceId, webhook.secretVersion, webhookMasterSecret),
-    } : {}),
+    ...(webhookSecret ? { webhookSecret } : {}),
   };
 }
 
@@ -206,6 +229,9 @@ export async function configureIntegrationAdminWebhook(
     }
     throw cause;
   }
+  const webhookSecret = webhook
+    ? integrationWebhookSecret(serviceId, webhook, webhookMasterSecret)
+    : undefined;
   const updated: StoredIntegrationCredential = {
     ...current,
     ...(webhook ? { webhook } : {}),
@@ -215,9 +241,7 @@ export async function configureIntegrationAdminWebhook(
   await store.putCredential(updated);
   return {
     service: summary(updated, 'durable'),
-    ...(webhook ? {
-      webhookSecret: deriveIntegrationWebhookSecret(serviceId, webhook.secretVersion, webhookMasterSecret),
-    } : {}),
+    ...(webhookSecret ? { webhookSecret } : {}),
   };
 }
 
@@ -234,6 +258,7 @@ export async function rotateIntegrationAdminWebhookSecret(
     throw new IntegrationAdminServiceError('Integration Service webhook is not configured.', 409, 'integration_webhook_not_configured');
   }
   const webhook = { ...current.webhook, secretVersion: current.webhook.secretVersion + 1 };
+  const webhookSecret = integrationWebhookSecret(serviceId, webhook, webhookMasterSecret);
   const updated: StoredIntegrationCredential = {
     ...current,
     webhook,
@@ -242,7 +267,7 @@ export async function rotateIntegrationAdminWebhookSecret(
   await store.putCredential(updated);
   return {
     service: summary(updated, 'durable'),
-    webhookSecret: deriveIntegrationWebhookSecret(serviceId, webhook.secretVersion, webhookMasterSecret),
+    webhookSecret,
   };
 }
 

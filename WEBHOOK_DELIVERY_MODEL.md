@@ -158,7 +158,7 @@ Redaction is a contract: callback payload tests contain sentinel XDR/AUTH/privat
 
 ## 8. Vercel execution plan
 
-Use Vercel Queues for immediate dispatch and retry execution once the public callback contract exists.
+The Vercel Queue/Cron adapter is implemented but intentionally dormant until the Testnet PostgreSQL cutover is complete. The portable dispatcher/sweeper does not import Vercel; only `apps/api/stellar/platform/vercel/` imports `@vercel/queue`.
 
 Current Vercel Queues supports:
 
@@ -170,34 +170,31 @@ Current Vercel Queues supports:
 
 Use one topic for this product boundary, e.g. `mst-stellar-integration-webhooks`. Do not create one topic per Integration Service.
 
-The Queue callback Function belongs under the backend application boundary, conceptually:
+Implemented adapters:
 
 ```
-apps/api/stellar/workers/integrationWebhookDispatcher.ts
-api/integration-webhook-dispatch.ts
+apps/api/stellar/platform/vercel/integrationWebhookQueueAdapter.ts
+apps/api/stellar/platform/vercel/integrationWebhookCronAdapter.ts
 ```
 
-The root `api/` file remains a Vercel deployment adapter, consistent with the rest of the API architecture.
+The Queue message carries only `{ version: 1, eventId }`. It deliberately does not use `eventId` as a 24-hour Queue idempotency key because the same outbox event must be wakeable again after PostgreSQL backoff. Duplicate Queue messages are safe because the PostgreSQL lease is the real claim/idempotency boundary.
 
-Use Vercel Cron only for a sweeper Function, conceptually:
+When the dispatcher schedules a PostgreSQL retry, the Vercel adapter makes a best-effort delayed Queue wake. Failure to schedule that wake does not lose the event: Cron later scans due unpublished outbox rows and re-enqueues them.
 
-```
-apps/api/stellar/workers/integrationWebhookSweep.ts
-api/integration-webhook-sweep.ts
-```
+No Queue trigger, Cron entry, or public Function entrypoint is enabled in `vercel.json` yet. Those deployment adapters are activated only after Testnet has a real remote `DATABASE_URL`, migration/backfill/hash verification is complete, and runtime coordination is switched to PostgreSQL.
 
-The sweeper reads due outbox event ids and sends Queue wake-up messages. It does not deliver customer webhooks directly.
+## 9. What is intentionally not enabled yet
 
-## 9. What is intentionally not implemented yet
+The delivery core, retry policy, redaction contract, Standard Webhooks signing, SSRF-safe Node transport, delivery history, Vercel Queue publisher/callback adapter and Cron sweeper adapter are implemented and tested.
 
-Before enabling Queue triggers or customer delivery, freeze and implement these contracts separately:
+Before enabling live customer delivery:
 
-- Vercel Queue publisher/subscriber adapters;
-- Cron sweeper deployment adapter;
-- retry classification (2xx success, permanent 4xx policy, transient network/5xx/429);
-- redaction tests proving no API credential, capability token, private note, raw signature/AUTH or private-commitment opening can enter a webhook.
-
-Do not add `@vercel/queue` until that consumer can perform a real, safe delivery. A Queue dependency without a valid dispatcher would be a half-built operational path.
+- provision the real Testnet PostgreSQL resource and set `DATABASE_URL`;
+- execute the documented Blob -> PostgreSQL backfill/final hash-verification cutover;
+- add the two thin Vercel Function entrypoints plus Queue trigger/Cron schedule to deployment configuration;
+- configure `MULTISIG_WEBHOOK_MASTER_SECRET` and `CRON_SECRET` in the Testnet deployment;
+- run a real external callback E2E (including Standard Webhooks verification, duplicate delivery and retry recovery) with a dedicated Testnet Integration Service;
+- keep Mainnet disabled until explicit approval after Testnet evidence is clean.
 
 ## 10. Database table impact
 

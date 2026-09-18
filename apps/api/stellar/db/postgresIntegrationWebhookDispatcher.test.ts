@@ -212,3 +212,38 @@ test('projection failure is durable audit evidence and follows the same PG retry
   assert.equal(history[0]?.outcome, 'retry');
   assert.equal(history[0]?.errorCode, 'projection_error');
 });
+
+test('missing webhook signing configuration records a retry and releases the lease immediately', {
+  skip: !TEST_URL || !RESET_ALLOWED,
+}, async () => {
+  await insertOutbox('evt-signing-missing');
+  const previous = process.env.MULTISIG_WEBHOOK_MASTER_SECRET;
+  delete process.env.MULTISIG_WEBHOOK_MASTER_SECRET;
+  try {
+    const result = await dispatchIntegrationWebhookEvent('evt-signing-missing', {
+      credentials: new MemoryCredentialStore(credential()),
+      transport: new MemoryTransport({ status: 204 }),
+      payloadBuilder,
+      pool: coordinationPool(),
+      now: () => new Date(NOW),
+    });
+    assert.equal(result.status, 'retry_scheduled');
+    if (result.status === 'retry_scheduled') {
+      assert.equal(result.errorCode, 'signing_unavailable');
+    }
+    const state = await coordinationPool().query<{
+      lease_token: string | null;
+      published_at: Date | null;
+    }>(
+      "SELECT lease_token, published_at FROM mst_stellar.integration_outbox WHERE event_id = 'evt-signing-missing'",
+    );
+    assert.equal(state.rows[0]?.lease_token, null);
+    assert.equal(state.rows[0]?.published_at, null);
+    const history = await listIntegrationWebhookDeliveries('evt-signing-missing');
+    assert.equal(history[0]?.outcome, 'retry');
+    assert.equal(history[0]?.errorCode, 'signing_unavailable');
+  } finally {
+    if (previous === undefined) delete process.env.MULTISIG_WEBHOOK_MASTER_SECRET;
+    else process.env.MULTISIG_WEBHOOK_MASTER_SECRET = previous;
+  }
+});
