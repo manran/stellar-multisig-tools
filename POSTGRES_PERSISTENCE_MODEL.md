@@ -216,19 +216,15 @@ Use ordinary PostgreSQL first:
 
 Do not introduce Prisma/Drizzle/Kysely merely to wrap this first schema. The current domain interfaces are already the abstraction boundary.
 
-Provider provisioning is deliberately separate from code. The current Testnet Vercel project has no database environment variable yet.
+Provider provisioning is deliberately separate from code. The current VPS/operator environment has no `DATABASE_URL`; the available Vercel connector does not expose project environment-variable or Marketplace-resource mutation, so Testnet database provisioning remains an explicit deployment operation.
 
 ## 10. Cutover plan
 
-1. Build schema + PG repositories behind an explicit persistence selector. Soroban and Classic repository adapters now both preserve the existing Store interfaces; the selector remains intentionally unconnected until backfill verification is complete.
-2. Validate migrations/repositories against disposable local PostgreSQL.
-3. Add a one-shot Testnet backfill script:
-   - read Blob;
-   - write PG;
-   - extract private context into dedicated Blob private-context records;
-   - compare resource/fact counts and deterministic hashes.
-4. Stop Testnet writes briefly for final delta/backfill.
-5. Switch Testnet API to PG repositories.
+1. Build schema + PG repositories behind an explicit persistence selector. Soroban and Classic repository adapters now both preserve the existing Store interfaces; the selector exists but remains intentionally unconnected to routes until real Testnet backfill verification is complete.
+2. Validate migrations/repositories against disposable local PostgreSQL. **Implemented and covered by PostgreSQL 18 integration tests.**
+3. Add a resumable Testnet backfill command that reads Blob, writes PG with outbox suppressed, extracts private context into dedicated Blob records, drops legacy projection rows, and compares resource/fact counts plus deterministic source/target hashes. **Implemented as `npm run db:backfill` and covered by integration tests.**
+4. Stop Testnet Request/Intent writes briefly for final delta/backfill using `MULTISIG_COORDINATION_WRITE_FREEZE=1`; reads remain available. **Gate implemented; real Testnet freeze not yet performed.**
+5. After real Testnet backfill/hash verification only, connect the runtime Store selector and switch Testnet API to PostgreSQL.
 6. Keep legacy Blob coordination objects read-only for rollback evidence; runtime no longer treats them as authoritative.
 7. Run FedNetwork E2E, including cancel, Service Activity and later webhook.
 8. Only after the Testnet evidence is clean decide any Mainnet migration. Mainnet remains frozen until explicit approval.
@@ -243,7 +239,7 @@ Before webhook is called reliable:
 - all existing regression tests pass;
 - PG repository contract tests cover concurrency/idempotency;
 - Blob discovery/activity rebuild machinery is no longer used by the PG path;
-- Service Activity query is indexed and paginated;
+- Service Activity query is indexed and paginated; the PostgreSQL query is implemented, while public Integration routing remains deferred until Testnet cutover;
 - resource mutation + outbox insertion is proven atomic;
 - no private context or credential secret appears in SQL/outbox fixtures;
 - FedNetwork E2E passes against the Testnet PG path;

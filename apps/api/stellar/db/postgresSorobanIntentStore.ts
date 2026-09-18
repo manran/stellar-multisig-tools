@@ -203,6 +203,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
   constructor(
     private readonly pool: Pool = coordinationPool(),
     private readonly privateStore: SorobanIntentPrivateDataStore = blobSorobanIntentPrivateDataStore,
+    private readonly emitOutbox = true,
   ) {}
 
   async createIntent(value: StoredSorobanIntent): Promise<void> {
@@ -246,7 +247,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
           [value.id, value.executionPolicy],
         );
       }
-      if (value.integration) {
+      if (this.emitOutbox && value.integration) {
         await enqueueCoordinationChange(client, {
           serviceId: value.integration.serviceId,
           resourceKind: 'soroban_intent',
@@ -315,7 +316,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
         ],
       );
       await syncSigners(client, value);
-      if (value.integration && nextRevision > row.authorization_plan_revision) {
+      if (this.emitOutbox && value.integration && nextRevision > row.authorization_plan_revision) {
         await enqueueCoordinationChange(client, {
           serviceId: value.integration.serviceId,
           resourceKind: 'soroban_intent',
@@ -389,7 +390,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
           value.cancelledBy ?? null,
         ],
       );
-      if (parent.integration_service_id) {
+      if (this.emitOutbox && parent.integration_service_id) {
         await enqueueCoordinationChange(client, {
           serviceId: parent.integration_service_id,
           resourceKind: 'soroban_intent',
@@ -423,7 +424,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
         'UPDATE mst_stellar.soroban_intents SET execution_policy = $2 WHERE id = $1',
         [id, executionPolicy],
       );
-      if (parent.integration_service_id) {
+      if (this.emitOutbox && parent.integration_service_id) {
         await enqueueCoordinationChange(client, {
           serviceId: parent.integration_service_id,
           resourceKind: 'soroban_intent',
@@ -485,7 +486,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
           contribution,
         ],
       );
-      if (inserted.rowCount && parent.integration_service_id) {
+      if (this.emitOutbox && inserted.rowCount && parent.integration_service_id) {
         await enqueueCoordinationChange(client, {
           serviceId: parent.integration_service_id,
           resourceKind: 'soroban_intent',
@@ -569,7 +570,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
           value.preparedBy ?? null,
         ],
       );
-      if (inserted.rowCount && parent.integration_service_id) {
+      if (this.emitOutbox && inserted.rowCount && parent.integration_service_id) {
         await enqueueCoordinationChange(client, {
           serviceId: parent.integration_service_id,
           resourceKind: 'soroban_intent',
@@ -667,7 +668,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
           value.networkCreatedAt ?? null,
         ],
       );
-      if (inserted.rowCount && parent.integration_service_id) {
+      if (this.emitOutbox && inserted.rowCount && parent.integration_service_id) {
         await enqueueCoordinationChange(client, {
           serviceId: parent.integration_service_id,
           resourceKind: 'soroban_intent',
@@ -684,6 +685,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
 export function createPostgresSorobanIntentStore(
   pool: Pool = coordinationPool(),
   privateStore: SorobanIntentPrivateDataStore = blobSorobanIntentPrivateDataStore,
+  options: { emitOutbox?: boolean } = {},
 ): SorobanIntentStore {
-  return new PostgresSorobanIntentStore(pool, privateStore);
+  return new PostgresSorobanIntentStore(pool, privateStore, options.emitOutbox ?? true);
 }

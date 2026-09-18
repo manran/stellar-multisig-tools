@@ -31,6 +31,10 @@ import {
 import { createHumanSorobanIntent } from '../server/humanSorobanIntentService.js';
 import { createImportedSorobanIntent } from '../server/importedSorobanIntentService.js';
 import { noStoreJson, publicCorsHeaders } from '../server/httpResponse.js';
+import {
+  assertCoordinationWritesEnabled,
+  CoordinationWriteFrozenError,
+} from '../server/coordinationWriteFreeze.js';
 import { projectSorobanIntentEvidence } from '../server/sorobanIntentEvidence.js';
 import { projectIntegrationSorobanJob } from '../server/integrationSorobanJobProjection.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
@@ -93,6 +97,7 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof SorobanIntentAuthorizationServiceError
     || cause instanceof SorobanIntentCancellationServiceError
     || cause instanceof SorobanIntentReplanServiceError
+    || cause instanceof CoordinationWriteFrozenError
   ) {
     return json({ error: cause.message, code: cause.code }, cause.status);
   }
@@ -295,6 +300,7 @@ function executorFromBody(body: Record<string, unknown>): unknown {
 
 export async function POST(request: Request): Promise<Response> {
   try {
+    assertCoordinationWritesEnabled();
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
     const network = body.network === 'public' || body.network === 'testnet' ? body.network : null;
     if (!network) {
@@ -501,6 +507,7 @@ export async function POST(request: Request): Promise<Response> {
 
 export async function PATCH(request: Request): Promise<Response> {
   try {
+    assertCoordinationWritesEnabled();
     const access = await storedIntentAccess(request, 'sign');
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
     if (!access.address) {
@@ -537,6 +544,7 @@ export async function PATCH(request: Request): Promise<Response> {
 
 export async function PUT(request: Request): Promise<Response> {
   try {
+    assertCoordinationWritesEnabled();
     const access = await storedIntentAccess(request, 'write');
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
     if (body.action === 'reconcile_execution') {

@@ -66,6 +66,10 @@ import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import { noStoreJson } from '../server/httpResponse.js';
 import {
+  assertCoordinationWritesEnabled,
+  CoordinationWriteFrozenError,
+} from '../server/coordinationWriteFreeze.js';
+import {
   beforeFirstDurableWrite,
   enforceSemanticRateLimit,
   SEMANTIC_RATE_LIMIT_IDS,
@@ -132,7 +136,7 @@ function errorResponse(cause: unknown): Response {
       ...(cause.details ? { details: cause.details } : {}),
     } satisfies SigningRequestApiError, cause.status);
   }
-  if (cause instanceof SemanticRateLimitError) {
+  if (cause instanceof SemanticRateLimitError || cause instanceof CoordinationWriteFrozenError) {
     return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
   }
   if (cause instanceof RequestStorageUnavailableError) {
@@ -679,6 +683,7 @@ export async function GET(request: Request): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   try {
+    assertCoordinationWritesEnabled();
     const body = await readJsonBody(request);
     const xdr = typeof body.xdr === 'string' ? body.xdr : '';
     const machineCaller = await machineCallerFromRequest(blobAgentCredentialStore, request);
@@ -935,6 +940,7 @@ export async function POST(request: Request): Promise<Response> {
 
 export async function PATCH(request: Request): Promise<Response> {
   try {
+    assertCoordinationWritesEnabled();
     const access = await authorizeRequest(request);
     const body = await readJsonBody(request);
     if (access.mode === 'service') {
@@ -1085,6 +1091,7 @@ export async function PATCH(request: Request): Promise<Response> {
 
 export async function PUT(request: Request): Promise<Response> {
   try {
+    assertCoordinationWritesEnabled();
     const access = await authorizeRequest(request);
     if (access.stored.executionPolicy?.mode === 'external') {
       throw new SigningRequestServiceError(

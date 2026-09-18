@@ -189,6 +189,7 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
   constructor(
     private readonly pool: Pool = coordinationPool(),
     private readonly privateStore: RequestPrivateDataStore = blobRequestPrivateDataStore,
+    private readonly emitOutbox = true,
   ) {}
 
   async createRequest(request: StoredSigningRequest): Promise<void> {
@@ -245,7 +246,7 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
         ...(request.creatorAddress ? { actorAddress: request.creatorAddress } : {}),
         ...(request.creatorActor ? { actor: request.creatorActor } : {}),
       });
-      if (request.integration) {
+      if (this.emitOutbox && request.integration) {
         await enqueueCoordinationChange(client, {
           serviceId: request.integration.serviceId,
           resourceKind: 'classic_request',
@@ -329,7 +330,7 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
         ...(actorAddresses.length === 1 ? { actorAddress: actorAddresses[0] } : {}),
         ...(contribution.submittedBy ? { actor: contribution.submittedBy } : {}),
       });
-      if (parent.integration_service_id) {
+      if (this.emitOutbox && parent.integration_service_id) {
         await enqueueCoordinationChange(client, {
           serviceId: parent.integration_service_id,
           resourceKind: 'classic_request',
@@ -383,7 +384,7 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
         occurredAt: submission.submittedAt,
         ledger: submission.ledger,
       });
-      if (parent.integration_service_id) {
+      if (this.emitOutbox && parent.integration_service_id) {
         await enqueueCoordinationChange(client, {
           serviceId: parent.integration_service_id,
           resourceKind: 'classic_request',
@@ -477,7 +478,7 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
       if (inserted && event.actorAddress && isValidStellarAccountId(event.actorAddress)) {
         await insertSubjects(client, id, parent.network, 'activity', 'signer', [event.actorAddress]);
       }
-      if (inserted && parent.integration_service_id) {
+      if (this.emitOutbox && inserted && parent.integration_service_id) {
         await enqueueCoordinationChange(client, {
           serviceId: parent.integration_service_id,
           resourceKind: 'classic_request',
@@ -502,6 +503,7 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
 export function createPostgresSigningRequestStore(
   pool: Pool = coordinationPool(),
   privateStore: RequestPrivateDataStore = blobRequestPrivateDataStore,
+  options: { emitOutbox?: boolean } = {},
 ): SigningRequestStore {
-  return new PostgresSigningRequestStore(pool, privateStore);
+  return new PostgresSigningRequestStore(pool, privateStore, options.emitOutbox ?? true);
 }
