@@ -1,5 +1,23 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/integration-webhook-dispatch.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "mst-stellar-integration-webhooks",
+          "retryAfterSeconds": 180,
+          "initialDelaySeconds": 0
+        }
+      ]
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/integration-webhook-sweep",
+      "schedule": "0 * * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

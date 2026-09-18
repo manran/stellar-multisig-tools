@@ -107,7 +107,7 @@ test('durable Proposal creation requires a verified current signer and has no sc
   assert.match(requestApi, /signerCanAccessTransaction\(/);
   assert.match(signingRoom, /await wallet\.unlock\(undefined, network\)/);
   assert.match(readme, /Request expiry closes collaboration; it does not trigger scheduled physical deletion/);
-  assert.doesNotMatch(vercelConfig, /request-cleanup|"crons"/);
+  assert.doesNotMatch(vercelConfig, /request-cleanup/);
 });
 
 test('private Proposal context states the server-private and bearer-link boundaries at the action surface', () => {
