@@ -89,6 +89,8 @@ This is deliberate. None of these is required for Integration Service Activity o
 
 At cutover, legacy Request/Intent root Blob objects become read-only migration sources, not a second authority. Runtime private context must be read from dedicated private-context Blob records, not from the legacy whole-resource object.
 
+The relational root carries only a boolean presence flag (`classic_requests.has_private_data`, `soroban_intents.has_private_note`). Normal resources therefore read entirely from PostgreSQL; Blob is touched only when the authoritative SQL row says private context exists. The flag reveals presence only, never private content.
+
 ## 5. Schema shape
 
 Use PostgreSQL schema `mst_stellar`.
@@ -218,7 +220,7 @@ Provider provisioning is deliberately separate from code. The current Testnet Ve
 
 ## 10. Cutover plan
 
-1. Build schema + PG repositories behind an explicit persistence selector.
+1. Build schema + PG repositories behind an explicit persistence selector. Soroban and Classic repository adapters now both preserve the existing Store interfaces; the selector remains intentionally unconnected until backfill verification is complete.
 2. Validate migrations/repositories against disposable local PostgreSQL.
 3. Add a one-shot Testnet backfill script:
    - read Blob;

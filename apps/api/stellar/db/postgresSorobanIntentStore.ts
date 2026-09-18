@@ -32,6 +32,7 @@ interface IntentRow {
   integration_context: SorobanIntentIntegrationContext | null;
   external_reference: string | null;
   execution_policy: SorobanExecutionPolicy | null;
+  has_private_note: boolean;
   bound_execution_policy: SorobanExecutionPolicy | null;
   cancelled_at: Date | string | null;
   cancellation_plan_digest: string | null;
@@ -104,6 +105,7 @@ async function readIntent(
        i.integration_context,
        i.external_reference,
        i.execution_policy,
+       i.has_private_note,
        b.execution_policy AS bound_execution_policy,
        c.cancelled_at,
        c.authorization_plan_digest AS cancellation_plan_digest,
@@ -120,7 +122,7 @@ async function readIntent(
   if (!row) return null;
   const [signers, secret] = await Promise.all([
     signerAddresses(db, id),
-    privateStore.getIntentPrivateData(id),
+    row.has_private_note ? privateStore.getIntentPrivateData(id) : Promise.resolve(null),
   ]);
   const privateContext = row.external_reference || secret?.initialPrivateNote
     ? {
@@ -212,10 +214,11 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
            id, network, intent_digest, intent, authorization_plan,
            authorization_plan_revision, authorization_plan_history,
            created_at, creator_address, creator_actor,
-           integration_service_id, integration_context, external_reference, execution_policy
+           integration_service_id, integration_context, external_reference, execution_policy,
+           has_private_note
          ) VALUES (
            $1, $2, $3, $4, $5, $6, $7,
-           $8, $9, $10, $11, $12, $13, $14
+           $8, $9, $10, $11, $12, $13, $14, $15
          )`,
         [
           value.id,
@@ -232,6 +235,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
           value.integration ?? null,
           value.privateContext?.externalReference ?? null,
           policy,
+          Boolean(value.privateContext?.initialPrivateNote),
         ],
       );
       await syncSigners(client, value);

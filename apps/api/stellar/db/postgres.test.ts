@@ -25,12 +25,12 @@ after(async () => {
 test('coordination migration is repeatable through the migration runner', {
   skip: !TEST_URL || !RESET_ALLOWED,
 }, async () => {
-  assert.deepEqual(await applyCoordinationMigrations(), ['0001_coordination']);
+  assert.deepEqual(await applyCoordinationMigrations(), ['0001_coordination', '0002_private_context_flags']);
   assert.deepEqual(await applyCoordinationMigrations(), []);
   const rows = await coordinationPool().query<{ version: string }>(
     'SELECT version FROM mst_stellar.schema_migrations ORDER BY version',
   );
-  assert.deepEqual(rows.rows.map((row) => row.version), ['0001_coordination']);
+  assert.deepEqual(rows.rows.map((row) => row.version), ['0001_coordination', '0002_private_context_flags']);
 });
 
 test('business mutation and outbox insertion share one rollback boundary', {
