@@ -5,8 +5,8 @@
 ## 前提
 
 - 代码至少包含 `b35117d` 及后续 PostgreSQL/backfill checkpoint。
-- Testnet Vercel 项目连接独立 PostgreSQL 资源并提供 `DATABASE_URL`。
-- 操作环境同时具备 Testnet Blob 访问权限与 `DATABASE_URL`；凭据不得写入仓库。
+- Testnet Vercel 项目连接独立 PostgreSQL 资源并提供 `DATABASE_URL`；migration 环境同时提供 `DATABASE_URL_UNPOOLED` 时优先使用 unpooled URL。
+- 操作环境同时具备 Testnet Blob 访问权限与数据库 URL；凭据不得写入仓库。Runtime 使用 pooled `DATABASE_URL`，migration 使用 `DATABASE_URL_UNPOOLED`，避免 transaction pooler 破坏 advisory-lock 会话语义。
 - `MULTISIG_COORDINATION_STORAGE` 仍保持 `blob`。
 
 ## 1. 初始化数据库

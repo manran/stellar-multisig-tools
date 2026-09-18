@@ -13,6 +13,7 @@ import { emptySorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffe
 import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
 import { applyCoordinationMigrations } from './migrate.js';
 import { backfillCoordinationData } from './postgresBackfill.js';
+import { assertCoordinationBackfillSchemaReady } from './postgresBackfillRuntime.js';
 import { closeCoordinationPool, coordinationPool } from './postgres.js';
 import { createPostgresSigningRequestStore } from './postgresSigningRequestStore.js';
 import { createPostgresSorobanIntentStore } from './postgresSorobanIntentStore.js';
@@ -286,6 +287,12 @@ before(async () => {
 
 after(async () => {
   await closeCoordinationPool();
+});
+
+test('runtime backfill requires the migration gate instead of applying schema implicitly', {
+  skip: !TEST_URL || !RESET_ALLOWED,
+}, async () => {
+  await assert.doesNotReject(() => assertCoordinationBackfillSchemaReady(coordinationPool()));
 });
 
 test('backfill is resumable, hash-verifies both protocols, drops legacy projections, and emits no outbox backlog', {

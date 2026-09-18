@@ -4,6 +4,7 @@ import { applyCoordinationMigrations } from './migrate.js';
 import {
   closeCoordinationPool,
   coordinationPool,
+  normalizePostgresConnectionString,
   withCoordinationTransaction,
 } from './postgres.js';
 
@@ -20,6 +21,19 @@ before(async () => {
 
 after(async () => {
   await closeCoordinationPool();
+});
+
+test('PostgreSQL connection normalization preserves local URLs and pins weak TLS aliases to verify-full', () => {
+  assert.equal(
+    normalizePostgresConnectionString('postgresql://postgres@127.0.0.1:55432/postgres'),
+    'postgresql://postgres@127.0.0.1:55432/postgres',
+  );
+  const neon = normalizePostgresConnectionString(
+    'postgresql://user:pass@example.neon.tech/db?sslmode=require&channel_binding=require',
+  );
+  const parsed = new URL(neon);
+  assert.equal(parsed.searchParams.get('sslmode'), 'verify-full');
+  assert.equal(parsed.searchParams.get('channel_binding'), 'require');
 });
 
 test('coordination migration is repeatable through the migration runner', {

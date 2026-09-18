@@ -10,10 +10,24 @@ export class CoordinationDatabaseUnavailableError extends Error {
 
 let sharedPool: Pool | null = null;
 
+export function normalizePostgresConnectionString(value: string): string {
+  try {
+    const url = new URL(value);
+    const sslmode = url.searchParams.get('sslmode')?.toLowerCase();
+    if (sslmode === 'prefer' || sslmode === 'require' || sslmode === 'verify-ca') {
+      url.searchParams.set('sslmode', 'verify-full');
+      return url.toString();
+    }
+  } catch {
+    // Let node-postgres report malformed connection strings with its native error.
+  }
+  return value;
+}
+
 function databaseUrl(): string {
   const value = process.env.DATABASE_URL?.trim();
   if (!value) throw new CoordinationDatabaseUnavailableError();
-  return value;
+  return normalizePostgresConnectionString(value);
 }
 
 export function coordinationPool(): Pool {
