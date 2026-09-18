@@ -7,6 +7,17 @@ import type { SorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
 import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
 import type { StellarNetwork } from '../../../../src/stellar/types.js';
 
+export type SorobanIntentStoreConflictCode =
+  | 'authorization_plan_changed'
+  | 'intent_already_executed';
+
+export class SorobanIntentStoreConflictError extends Error {
+  constructor(readonly code: SorobanIntentStoreConflictCode) {
+    super(code);
+    this.name = 'SorobanIntentStoreConflictError';
+  }
+}
+
 export interface SorobanIntentPrivateContext {
   externalReference?: string;
   initialPrivateNote?: PrivateNoteRevision;

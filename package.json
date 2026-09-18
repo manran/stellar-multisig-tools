@@ -15,7 +15,9 @@
     "lint": "tsc --noEmit",
     "test": "tsx --test src/stellar/*.test.ts apps/api/stellar/server/*.test.ts",
     "integration:credential": "tsx scripts/createIntegrationCredential.ts",
-    "integration:admin-secret": "tsx scripts/createIntegrationAdminSecret.ts"
+    "integration:admin-secret": "tsx scripts/createIntegrationAdminSecret.ts",
+    "db:migrate": "tsx scripts/applyPostgresMigrations.ts",
+    "test:postgres": "tsx --test --test-concurrency=1 apps/api/stellar/db/*.test.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
@@ -23,6 +25,7 @@
     "@tailwindcss/vite": "^4.1.14",
     "@vercel/blob": "^2.8.0",
     "@vercel/firewall": "1.2.5",
+    "@vercel/functions": "^3.9.8",
     "@vitejs/plugin-react": "^5.0.4",
     "buffer": "^6.0.3",
     "lucide-react": "^0.546.0",
@@ -32,11 +35,13 @@
     "express": "^4.21.2",
     "dotenv": "^17.2.3",
     "motion": "^12.23.24",
+    "pg": "^8.23.0",
     "qrcode": "1.5.3",
     "@creit.tech/stellar-wallets-kit": "2.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@types/pg": "^8.23.1",
     "autoprefixer": "^10.4.21",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",

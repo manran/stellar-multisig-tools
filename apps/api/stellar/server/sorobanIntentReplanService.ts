@@ -1,7 +1,11 @@
 import { getSorobanIntentAuthorization, type SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
 import { compareSorobanEffects } from '../../../../src/stellar/sorobanEffects.js';
 import { planSorobanIntentForStorage } from './sorobanIntentPlanningService.js';
-import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';
+import {
+  SorobanIntentStoreConflictError,
+  type SorobanIntentStore,
+  type StoredSorobanIntent,
+} from './sorobanIntentStore.js';
 
 export class SorobanIntentReplanServiceError extends Error {
   constructor(message: string, readonly status: number, readonly code: string) {
@@ -116,13 +120,35 @@ export async function replanExpiredSorobanIntent(
       ...planned.discoverySignerKeys,
     ])].sort(),
   };
-  await store.updateIntent(updated);
+  try {
+    await store.updateIntent(updated);
+  } catch (cause) {
+    if (cause instanceof SorobanIntentStoreConflictError && cause.code === 'authorization_plan_changed') {
+      throw new SorobanIntentReplanServiceError(
+        'The Soroban authorization plan changed while re-planning. Reload the Intent and try again.',
+        409,
+        'authorization_plan_changed',
+      );
+    }
+    throw cause;
+  }
   const afterWrite = await store.getIntent(id);
   if (afterWrite?.cancellation) {
     throw new SorobanIntentReplanServiceError(
       'This Soroban Intent was cancelled before the refreshed AuthorizationPlan was released.',
       409,
       'intent_cancelled',
+    );
+  }
+  if (
+    !afterWrite
+    || currentRevision(afterWrite) !== revision + 1
+    || afterWrite.authorizationPlan.authorizationPlanDigest !== planned.authorizationPlan.authorizationPlanDigest
+  ) {
+    throw new SorobanIntentReplanServiceError(
+      'The Soroban authorization plan changed while re-planning. Reload the Intent and try again.',
+      409,
+      'authorization_plan_changed',
     );
   }
   return {

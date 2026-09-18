@@ -1,4 +1,5 @@
 import type { MachineCallerProvenance } from '../../../../src/stellar/coordinationActorTypes.js';
+import { SorobanIntentStoreConflictError } from './sorobanIntentStore.js';
 import type {
   SorobanIntentStore,
   StoredSorobanIntent,
@@ -72,7 +73,19 @@ export async function cancelSorobanIntent(
     ...(actor.cancelledByAddress ? { cancelledByAddress: actor.cancelledByAddress } : {}),
     ...(actor.cancelledBy ? { cancelledBy: actor.cancelledBy } : {}),
   };
-  const persisted = await store.cancelIntent(id, cancellation);
+  let persisted;
+  try {
+    persisted = await store.cancelIntent(id, cancellation);
+  } catch (cause) {
+    if (cause instanceof SorobanIntentStoreConflictError && cause.code === 'intent_already_executed') {
+      throw new SorobanIntentCancellationServiceError(
+        'This Soroban Intent has already executed successfully and cannot be cancelled.',
+        409,
+        'intent_already_executed',
+      );
+    }
+    throw cause;
+  }
   const latest = await store.getIntent(id);
   return {
     intent: latest ?? { ...stored, cancellation: persisted.cancellation },

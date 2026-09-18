@@ -17,6 +17,7 @@ import { createSorobanIntent, materializeSorobanIntent } from '../../../../src/s
 import { contributeSorobanIntentAuthorization } from './sorobanIntentAuthorizationService.js';
 import { replanExpiredSorobanIntent, SorobanIntentReplanServiceError } from './sorobanIntentReplanService.js';
 import { createStoredSorobanIntent } from './sorobanIntentService.js';
+import { SorobanIntentStoreConflictError } from './sorobanIntentStore.js';
 import type {
   SorobanIntentStore,
   StoredSorobanIntent,
@@ -264,6 +265,25 @@ test('cancelled Intent cannot create a fresh AuthorizationPlan', async () => {
     ),
     (cause: unknown) => cause instanceof SorobanIntentReplanServiceError
       && cause.code === 'intent_cancelled',
+  );
+});
+
+test('store-level replan race is translated to the stable authorization_plan_changed error', async () => {
+  const f = await fixture();
+  f.store.updateIntent = async () => { throw new SorobanIntentStoreConflictError('authorization_plan_changed'); };
+  await assert.rejects(
+    () => replanExpiredSorobanIntent(
+      f.store,
+      f.stored.id,
+      f.planningSource.publicKey(),
+      {
+        authorizationDependencies: f.expiredAuthorizationDependencies,
+        planningDependencies: f.planningDependencies,
+      },
+    ),
+    (cause: unknown) => cause instanceof SorobanIntentReplanServiceError
+      && cause.code === 'authorization_plan_changed'
+      && cause.status === 409,
   );
 });
 

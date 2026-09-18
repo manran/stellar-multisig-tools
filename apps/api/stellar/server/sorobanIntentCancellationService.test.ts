@@ -5,6 +5,7 @@ import {
   cancelSorobanIntent,
   SorobanIntentCancellationServiceError,
 } from './sorobanIntentCancellationService.js';
+import { SorobanIntentStoreConflictError } from './sorobanIntentStore.js';
 import type {
   SorobanIntentStore,
   StoredSorobanIntent,
@@ -90,6 +91,17 @@ test('only the creator or owning Integration Service can cancel an Intent', () =
     () => assertSorobanIntentCancellationOwner(integration, { serviceId: 'other-service' }),
     (cause: unknown) => cause instanceof SorobanIntentCancellationServiceError
       && cause.code === 'intent_cancel_not_owner',
+  );
+});
+
+test('store-level executed race is translated to the stable cancellation service error', async () => {
+  const store = new MemoryStore();
+  store.cancelIntent = async () => { throw new SorobanIntentStoreConflictError('intent_already_executed'); };
+  await assert.rejects(
+    () => cancelSorobanIntent(store, store.value.id, { cancelledByAddress: 'GCREATOR' }),
+    (cause: unknown) => cause instanceof SorobanIntentCancellationServiceError
+      && cause.code === 'intent_already_executed'
+      && cause.status === 409,
   );
 });
 
