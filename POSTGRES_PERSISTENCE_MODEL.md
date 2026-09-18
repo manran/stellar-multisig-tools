@@ -70,7 +70,7 @@ PostgreSQL owns immutable Integration outbox events. The database outbox is an *
 
 Outbox payloads contain only business-safe identifiers and minimal change metadata; never raw signatures, AUTH XDR, private notes, capability tokens, credential secrets, or private-commitment openings.
 
-Webhook endpoint configuration and delivery history are a later webhook slice; do not invent them in the coordination migration.
+Webhook endpoint configuration and delivery history are a later webhook slice; do not invent them in the coordination migration. Queue/worker transport is specified separately in `WEBHOOK_DELIVERY_MODEL.md`; the outbox remains the durable authority.
 
 ## 4. Blob-owned data that stays out of this migration
 
@@ -144,7 +144,7 @@ For one Request/Intent, load contributions, preparations, observations, cancella
 
 ### Q7 — outbox
 
-Claim due unpublished outbox events in creation order with PostgreSQL row locking. Delivery implementation comes later.
+List due unpublished outbox event ids and claim one event with a short renewable/recoverable lease. The lease is committed before external HTTPS begins; no database row lock is held across network delivery. Migration `0003_outbox_leases` adds lease/attempt metadata to the existing outbox. See `WEBHOOK_DELIVERY_MODEL.md` for the Vercel Queue + Cron dispatcher boundary.
 
 ## 7. Transaction boundaries
 
