@@ -8,6 +8,12 @@ import {
 } from './integrationCredentialService.js';
 import { RequestStorageUnavailableError } from './blobRequestStore.js';
 import type { IntegrationCredentialStore, StoredIntegrationCredential } from './integrationCredentialStore.js';
+import {
+  integrationWebhookConfigFromInput,
+  IntegrationWebhookConfigError,
+  type IntegrationWebhookConfig,
+} from './integrationWebhookConfig.js';
+import { deriveIntegrationWebhookSecret } from './integrationWebhookSigning.js';
 
 const ADMIN_KEY_PREFIX = 'mia';
 const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
@@ -23,6 +29,7 @@ export interface IntegrationAdminSummary {
   sorobanContracts: ConfiguredIntegrationCredential['sorobanContracts'];
   sorobanExecutionAccounts: string[];
   sorobanDefaultExecutor?: string;
+  webhook?: IntegrationWebhookConfig;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -78,6 +85,7 @@ function summary(record: StoredIntegrationCredential | ConfiguredIntegrationCred
     sorobanContracts: credential.sorobanContracts,
     sorobanExecutionAccounts: credential.sorobanExecutionAccounts,
     ...(credential.sorobanDefaultExecutor ? { sorobanDefaultExecutor: credential.sorobanDefaultExecutor } : {}),
+    ...(stored?.webhook ? { webhook: stored.webhook } : {}),
     ...(stored ? { createdAt: stored.createdAt, updatedAt: stored.updatedAt } : {}),
   };
 }
@@ -121,7 +129,8 @@ export async function createIntegrationAdminService(
   store: IntegrationCredentialStore,
   input: Record<string, unknown>,
   now = new Date(),
-): Promise<{ service: IntegrationAdminSummary; apiKey: string }> {
+  webhookMasterSecret?: string,
+): Promise<{ service: IntegrationAdminSummary; apiKey: string; webhookSecret?: string }> {
   const serviceId = typeof input.serviceId === 'string' ? input.serviceId.trim().toLowerCase() : '';
   if (!serviceId) throw new IntegrationAdminServiceError('Service id is required.', 400, 'integration_service_id_required');
   if (await currentRecord(store, serviceId)) {
@@ -131,11 +140,28 @@ export async function createIntegrationAdminService(
   const credential = normalizeInput(input, generated.secretHash);
   const timestamp = now.toISOString();
   const enabled = typeof input.enabled === 'boolean' ? input.enabled : true;
+  let webhook: IntegrationWebhookConfig | undefined;
+  try {
+    webhook = integrationWebhookConfigFromInput(input.webhook);
+  } catch (cause) {
+    if (cause instanceof IntegrationWebhookConfigError) {
+      throw new IntegrationAdminServiceError(cause.message, 400, 'invalid_integration_webhook_configuration');
+    }
+    throw cause;
+  }
   const record: StoredIntegrationCredential = {
-    version: 1, credential, enabled, createdAt: timestamp, updatedAt: timestamp,
+    version: 1, credential, enabled,
+    ...(webhook ? { webhook } : {}),
+    createdAt: timestamp, updatedAt: timestamp,
   };
   await store.putCredential(record);
-  return { service: summary(record, 'durable'), apiKey: generated.apiKey };
+  return {
+    service: summary(record, 'durable'),
+    apiKey: generated.apiKey,
+    ...(webhook ? {
+      webhookSecret: deriveIntegrationWebhookSecret(serviceId, webhook.secretVersion, webhookMasterSecret),
+    } : {}),
+  };
 }
 
 export async function updateIntegrationAdminService(
@@ -153,11 +179,71 @@ export async function updateIntegrationAdminService(
     version: 1,
     credential,
     enabled,
+    ...(current.webhook ? { webhook: current.webhook } : {}),
     createdAt: current.createdAt,
     updatedAt: now.toISOString(),
   };
   await store.putCredential(updated);
   return summary(updated, 'durable');
+}
+
+export async function configureIntegrationAdminWebhook(
+  store: IntegrationCredentialStore,
+  serviceIdValue: string,
+  webhookInput: unknown,
+  now = new Date(),
+  webhookMasterSecret?: string,
+): Promise<{ service: IntegrationAdminSummary; webhookSecret?: string }> {
+  const serviceId = serviceIdValue.trim().toLowerCase();
+  const current = await currentRecord(store, serviceId);
+  if (!current) throw new IntegrationAdminServiceError('Integration Service was not found.', 404, 'integration_service_not_found');
+  let webhook: IntegrationWebhookConfig | undefined;
+  try {
+    webhook = integrationWebhookConfigFromInput(webhookInput, current.webhook);
+  } catch (cause) {
+    if (cause instanceof IntegrationWebhookConfigError) {
+      throw new IntegrationAdminServiceError(cause.message, 400, 'invalid_integration_webhook_configuration');
+    }
+    throw cause;
+  }
+  const updated: StoredIntegrationCredential = {
+    ...current,
+    ...(webhook ? { webhook } : {}),
+    updatedAt: now.toISOString(),
+  };
+  if (!webhook) delete updated.webhook;
+  await store.putCredential(updated);
+  return {
+    service: summary(updated, 'durable'),
+    ...(webhook ? {
+      webhookSecret: deriveIntegrationWebhookSecret(serviceId, webhook.secretVersion, webhookMasterSecret),
+    } : {}),
+  };
+}
+
+export async function rotateIntegrationAdminWebhookSecret(
+  store: IntegrationCredentialStore,
+  serviceIdValue: string,
+  now = new Date(),
+  webhookMasterSecret?: string,
+): Promise<{ service: IntegrationAdminSummary; webhookSecret: string }> {
+  const serviceId = serviceIdValue.trim().toLowerCase();
+  const current = await currentRecord(store, serviceId);
+  if (!current) throw new IntegrationAdminServiceError('Integration Service was not found.', 404, 'integration_service_not_found');
+  if (!current.webhook) {
+    throw new IntegrationAdminServiceError('Integration Service webhook is not configured.', 409, 'integration_webhook_not_configured');
+  }
+  const webhook = { ...current.webhook, secretVersion: current.webhook.secretVersion + 1 };
+  const updated: StoredIntegrationCredential = {
+    ...current,
+    webhook,
+    updatedAt: now.toISOString(),
+  };
+  await store.putCredential(updated);
+  return {
+    service: summary(updated, 'durable'),
+    webhookSecret: deriveIntegrationWebhookSecret(serviceId, webhook.secretVersion, webhookMasterSecret),
+  };
 }
 
 export async function rotateIntegrationAdminCredential(

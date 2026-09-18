@@ -3,10 +3,12 @@ import test from 'node:test';
 import { Keypair } from '@stellar/stellar-sdk/base';
 import {
   authenticateIntegrationAdminSecret,
+  configureIntegrationAdminWebhook,
   createIntegrationAdminSecret,
   createIntegrationAdminService,
   listIntegrationAdminServices,
   rotateIntegrationAdminCredential,
+  rotateIntegrationAdminWebhookSecret,
   updateIntegrationAdminService,
 } from './integrationAdminService.js';
 import { authenticateIntegrationCredentialWithResolver } from './integrationCredentialService.js';
@@ -62,6 +64,49 @@ test('durable Integration administration creates, updates, disables, and rotates
   const disabled = await updateIntegrationAdminService(store, 'fednetwork', { ...current, enabled: false });
   assert.equal(disabled.enabled, false);
   assert.equal(await resolveIntegrationCredential(store, 'fednetwork'), null);
+});
+
+test('operator-managed webhook config stores only URL/generation and rotates derived Standard Webhooks secret', async () => {
+  const store = new MemoryStore();
+  const master = 'mwh_' + Buffer.alloc(32, 7).toString('base64url');
+  const created = await createIntegrationAdminService(store, {
+    ...input(),
+    webhook: { url: 'https://hooks.example.com/mst' },
+  }, new Date('2026-09-16T10:00:00Z'), master);
+  assert.equal(created.service.webhook?.secretVersion, 1);
+  assert.equal(created.service.webhook?.url, 'https://hooks.example.com/mst');
+  assert.match(created.webhookSecret ?? '', /^whsec_/);
+  assert.equal(JSON.stringify(store.values.get('fednetwork')).includes(created.webhookSecret ?? 'missing'), false);
+
+  const configured = await configureIntegrationAdminWebhook(
+    store,
+    'fednetwork',
+    { url: 'https://hooks.example.com/mst-v2', enabled: false },
+    new Date('2026-09-16T10:01:00Z'),
+    master,
+  );
+  assert.equal(configured.service.webhook?.secretVersion, 1);
+  assert.equal(configured.webhookSecret, created.webhookSecret);
+  assert.equal(configured.service.webhook?.enabled, false);
+
+  const rotated = await rotateIntegrationAdminWebhookSecret(
+    store,
+    'fednetwork',
+    new Date('2026-09-16T10:02:00Z'),
+    master,
+  );
+  assert.equal(rotated.service.webhook?.secretVersion, 2);
+  assert.notEqual(rotated.webhookSecret, created.webhookSecret);
+
+  const removed = await configureIntegrationAdminWebhook(
+    store,
+    'fednetwork',
+    null,
+    new Date('2026-09-16T10:03:00Z'),
+    master,
+  );
+  assert.equal(removed.service.webhook, undefined);
+  assert.equal(removed.webhookSecret, undefined);
 });
 
 test('durable disabled record suppresses bootstrap env credential with the same service id', async () => {

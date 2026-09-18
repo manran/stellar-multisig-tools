@@ -1,10 +1,12 @@
 import { blobIntegrationCredentialStore } from '../server/blobIntegrationCredentialStore.js';
 import {
   authenticateIntegrationAdminSecret,
+  configureIntegrationAdminWebhook,
   createIntegrationAdminService,
   IntegrationAdminServiceError,
   listIntegrationAdminServices,
   rotateIntegrationAdminCredential,
+  rotateIntegrationAdminWebhookSecret,
   updateIntegrationAdminService,
 } from '../server/integrationAdminService.js';
 import { RequestBodyError, readJsonObjectBody } from '../server/requestBody.js';
@@ -58,6 +60,19 @@ export async function PATCH(request: Request): Promise<Response> {
     const serviceId = typeof body.serviceId === 'string' ? body.serviceId : '';
     if (body.action === 'rotate') {
       return noStoreJson(await rotateIntegrationAdminCredential(blobIntegrationCredentialStore, serviceId));
+    }
+    if (body.action === 'configure_webhook') {
+      return noStoreJson(await configureIntegrationAdminWebhook(
+        blobIntegrationCredentialStore,
+        serviceId,
+        body.webhook,
+      ));
+    }
+    if (body.action === 'rotate_webhook_secret') {
+      return noStoreJson(await rotateIntegrationAdminWebhookSecret(
+        blobIntegrationCredentialStore,
+        serviceId,
+      ));
     }
     if (body.action !== undefined) {
       throw new IntegrationAdminServiceError('Unsupported Integration administration action.', 400, 'invalid_integration_admin_action');

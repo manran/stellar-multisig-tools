@@ -84,7 +84,46 @@ Dispatcher primitives:
 
 This gives at-least-once delivery without long database locks.
 
-## 5. Vercel execution plan
+## 5. Portability boundary
+
+Vercel is a runtime adapter, not part of the webhook business contract.
+
+Portable/core pieces:
+
+- PostgreSQL schema, outbox, lease and delivery-history semantics;
+- Standard Webhooks payload signing;
+- callback configuration and per-Service secret derivation;
+- retry classification/backoff;
+- SSRF URL/DNS policy;
+- dispatcher lifecycle;
+- `IntegrationWebhookWakePublisher` interface.
+
+Vercel-specific pieces must remain thin adapters only:
+
+- publish one outbox `eventId` to a Queue topic;
+- invoke the generic dispatcher from a Queue-triggered Function;
+- invoke the generic due-event sweeper from Cron;
+- ordinary Function deployment/configuration.
+
+A migration to SQS + Lambda, Cloud Tasks, Redis/BullMQ, Fly.io workers, or a long-lived process should replace only the wake publisher/subscriber and scheduler deployment adapter. PostgreSQL `available_at` + lease remains retry authority, so queue-provider retry semantics do not become part of product behavior.
+
+The Node HTTPS transport is also behind `IntegrationWebhookHttpTransport`; a non-Node runtime may replace that adapter without changing dispatcher/signing/persistence contracts.
+
+## 6. Public signing/configuration contract
+
+Webhook callbacks are operator-owned durable Integration configuration, separate from the Integration API credential scope. Stored configuration contains callback URL, enabled flag and `secretVersion`; it never stores the derived `whsec_` secret.
+
+`MULTISIG_WEBHOOK_MASTER_SECRET` is one 32-byte deployment master secret (`mwh_<base64url>`). Per-Service Standard Webhooks secrets are HKDF-SHA256 derived from master + Service id + secret generation. Rotation increments only the Service generation. Moving platforms therefore requires transferring one deployment master secret rather than exporting every callback secret.
+
+Outbound signing uses the maintained `standardwebhooks` TypeScript implementation and the Standard Webhooks headers:
+
+- `webhook-id`
+- `webhook-timestamp`
+- `webhook-signature`
+
+Registration rejects non-HTTPS/private literal destinations. Delivery resolves DNS again and rejects the whole resolution set if any address is non-public; the Node transport pins the selected public address while preserving TLS SNI/Host, so DNS rebinding cannot redirect the request to a private address after policy validation.
+
+## 7. Vercel execution plan
 
 Use Vercel Queues for immediate dispatch and retry execution once the public callback contract exists.
 
@@ -116,33 +155,31 @@ api/integration-webhook-sweep.ts
 
 The sweeper reads due outbox event ids and sends Queue wake-up messages. It does not deliver customer webhooks directly.
 
-## 6. What is intentionally not implemented yet
+## 8. What is intentionally not implemented yet
 
 Before enabling Queue triggers or customer delivery, freeze and implement these contracts separately:
 
-- operator-authorized HTTPS callback registration;
-- SSRF-safe endpoint validation/delivery;
-- public event schema/version;
-- signing format, key rotation and timestamp/replay protection;
-- durable per-attempt delivery history/status;
+- public event schema/version and protocol-specific projection payload;
+- Vercel Queue publisher/subscriber adapters;
+- Cron sweeper deployment adapter;
 - retry classification (2xx success, permanent 4xx policy, transient network/5xx/429);
 - redaction tests proving no API credential, capability token, private note, raw signature/AUTH or private-commitment opening can enter a webhook.
 
 Do not add `@vercel/queue` until that consumer can perform a real, safe delivery. A Queue dependency without a valid dispatcher would be a half-built operational path.
 
-## 7. Database table impact
+## 9. Database table impact
 
-The current coordination model remains 15 business tables:
+The coordination model now has 16 business tables:
 
 - 6 Classic;
 - 7 Soroban;
-- 2 cross-protocol (`agent_idempotency_claims`, `integration_outbox`).
+- 3 cross-protocol (`agent_idempotency_claims`, `integration_outbox`, `integration_webhook_deliveries`).
 
 There is additionally one technical `schema_migrations` table and one derived `integration_work` view.
 
-Webhook endpoint configuration and durable delivery-attempt history may add storage later. Do not overload `integration_outbox` with endpoint secrets or raw callback bodies merely to preserve the current table count.
+`integration_webhook_deliveries` exists because per-attempt audit history is a real requirement. It stores only bounded metadata: endpoint hash, attempt, timing, outcome, HTTP status/error code. It does not store callback URL, response body, Standard Webhooks secret, API credential, raw signature/AUTH, or private note.
 
-## 8. Success criteria before enabling webhook delivery
+## 10. Success criteria before enabling webhook delivery
 
 - Testnet runs on the PostgreSQL coordination path.
 - FedNetwork polling E2E still passes.

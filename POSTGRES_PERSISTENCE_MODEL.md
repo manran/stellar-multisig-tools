@@ -70,7 +70,7 @@ PostgreSQL owns immutable Integration outbox events. The database outbox is an *
 
 Outbox payloads contain only business-safe identifiers and minimal change metadata; never raw signatures, AUTH XDR, private notes, capability tokens, credential secrets, or private-commitment openings.
 
-Webhook endpoint configuration and delivery history are a later webhook slice; do not invent them in the coordination migration. Queue/worker transport is specified separately in `WEBHOOK_DELIVERY_MODEL.md`; the outbox remains the durable authority.
+Webhook endpoint configuration remains in the existing Integration durable configuration store. Delivery history is now relational in `integration_webhook_deliveries` because per-attempt audit/query is a concrete requirement. Queue/worker transport is specified separately in `WEBHOOK_DELIVERY_MODEL.md`; the outbox remains the durable authority.
 
 ## 4. Blob-owned data that stays out of this migration
 
@@ -241,6 +241,7 @@ Before webhook is called reliable:
 - Blob discovery/activity rebuild machinery is no longer used by the PG path;
 - Service Activity query is indexed and paginated; the PostgreSQL query is implemented, while public Integration routing remains deferred until Testnet cutover;
 - resource mutation + outbox insertion is proven atomic;
-- no private context or credential secret appears in SQL/outbox fixtures;
+- webhook delivery history contains only bounded metadata and endpoint hashes;
+- no private context or credential/webhook secret appears in SQL/outbox fixtures;
 - FedNetwork E2E passes against the Testnet PG path;
 - polling remains a supported fallback.
