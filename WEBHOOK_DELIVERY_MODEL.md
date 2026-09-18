@@ -123,7 +123,40 @@ Outbound signing uses the maintained `standardwebhooks` TypeScript implementatio
 
 Registration rejects non-HTTPS/private literal destinations. Delivery resolves DNS again and rejects the whole resolution set if any address is non-public; the Node transport pins the selected public address while preserving TLS SNI/Host, so DNS rebinding cannot redirect the request to a private address after policy validation.
 
-## 7. Vercel execution plan
+## 7. Public payload v1
+
+The public event envelope is protocol-neutral, while the projection remains protocol-specific:
+
+```json
+{
+  "schema": "multisigtools-integration-webhook-v1",
+  "id": "<outbox event id>",
+  "type": "work.changed",
+  "createdAt": "<timestamp>",
+  "serviceId": "fednetwork",
+  "data": {
+    "work": {
+      "kind": "classic_request | soroban_intent",
+      "id": "<resource id>",
+      "network": "testnet",
+      "externalReference": "<optional service correlation id>"
+    },
+    "projection": {}
+  }
+}
+```
+
+Do not add a universal `work.state` merely for webhook symmetry.
+
+Classic projection is `type: "classic_request"` and reuses the existing Request business projection: id/network/transaction hash/timestamps, contribution/signature counts, `status`, `statusReason`, execution mode, external reference and confirmed result when present. It deliberately omits base/merged XDR and private context.
+
+Soroban projection is `type: "soroban_job"` and reuses the existing `IntegrationSorobanJobProjection`. It deliberately omits Intent host-function XDR, AuthorizationPlan entries, detached AUTH XDR/signatures and private notes.
+
+The dispatcher always rebuilds this payload from current canonical Request/Intent facts at delivery time. Internal outbox `payload` is never forwarded to the customer as the webhook body.
+
+Redaction is a contract: callback payload tests contain sentinel XDR/AUTH/private-note/capability values and fail if any sentinel or private field name leaks into JSON.
+
+## 8. Vercel execution plan
 
 Use Vercel Queues for immediate dispatch and retry execution once the public callback contract exists.
 
@@ -155,11 +188,10 @@ api/integration-webhook-sweep.ts
 
 The sweeper reads due outbox event ids and sends Queue wake-up messages. It does not deliver customer webhooks directly.
 
-## 8. What is intentionally not implemented yet
+## 9. What is intentionally not implemented yet
 
 Before enabling Queue triggers or customer delivery, freeze and implement these contracts separately:
 
-- public event schema/version and protocol-specific projection payload;
 - Vercel Queue publisher/subscriber adapters;
 - Cron sweeper deployment adapter;
 - retry classification (2xx success, permanent 4xx policy, transient network/5xx/429);
@@ -167,7 +199,7 @@ Before enabling Queue triggers or customer delivery, freeze and implement these 
 
 Do not add `@vercel/queue` until that consumer can perform a real, safe delivery. A Queue dependency without a valid dispatcher would be a half-built operational path.
 
-## 9. Database table impact
+## 10. Database table impact
 
 The coordination model now has 16 business tables:
 
@@ -179,7 +211,7 @@ There is additionally one technical `schema_migrations` table and one derived `i
 
 `integration_webhook_deliveries` exists because per-attempt audit history is a real requirement. It stores only bounded metadata: endpoint hash, attempt, timing, outcome, HTTP status/error code. It does not store callback URL, response body, Standard Webhooks secret, API credential, raw signature/AUTH, or private note.
 
-## 10. Success criteria before enabling webhook delivery
+## 11. Success criteria before enabling webhook delivery
 
 - Testnet runs on the PostgreSQL coordination path.
 - FedNetwork polling E2E still passes.
