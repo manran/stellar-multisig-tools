@@ -58,6 +58,63 @@ function assertEquivalent(resource: string, source: unknown, target: unknown): v
   }
 }
 
+function normalizedTimestamp(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) throw new Error('Invalid coordination timestamp.');
+  return parsed.toISOString();
+}
+
+function normalizedClassicRequest(value: StoredSigningRequest): StoredSigningRequest {
+  return {
+    ...value,
+    createdAt: normalizedTimestamp(value.createdAt),
+    expiresAt: normalizedTimestamp(value.expiresAt),
+    ...(value.initialPrivateNote ? {
+      initialPrivateNote: {
+        ...value.initialPrivateNote,
+        createdAt: normalizedTimestamp(value.initialPrivateNote.createdAt),
+      },
+    } : {}),
+    ...(value.privateCommitment ? {
+      privateCommitment: {
+        ...value.privateCommitment,
+        createdAt: normalizedTimestamp(value.privateCommitment.createdAt),
+      },
+    } : {}),
+  };
+}
+
+function normalizedSorobanIntent(value: StoredSorobanIntent): StoredSorobanIntent {
+  const privateContext = value.privateContext
+    ? {
+        ...value.privateContext,
+        ...(value.privateContext.initialPrivateNote ? {
+          initialPrivateNote: {
+            ...value.privateContext.initialPrivateNote,
+            createdAt: normalizedTimestamp(value.privateContext.initialPrivateNote.createdAt),
+          },
+        } : {}),
+      }
+    : undefined;
+  return {
+    ...value,
+    createdAt: normalizedTimestamp(value.createdAt),
+    ...(value.authorizationPlanHistory ? {
+      authorizationPlanHistory: value.authorizationPlanHistory.map((revision) => ({
+        ...revision,
+        supersededAt: normalizedTimestamp(revision.supersededAt),
+      })),
+    } : {}),
+    ...(privateContext ? { privateContext } : {}),
+    ...(value.cancellation ? {
+      cancellation: {
+        ...value.cancellation,
+        cancelledAt: normalizedTimestamp(value.cancellation.cancelledAt),
+      },
+    } : {}),
+  };
+}
+
 function intentWithoutCancellation(value: StoredSorobanIntent): StoredSorobanIntent {
   const { cancellation: _cancellation, ...rest } = value;
   return rest;
@@ -67,26 +124,49 @@ async function classicSnapshot(
   store: SigningRequestStore,
   request: StoredSigningRequest,
 ) {
-  const [contributions, submission, participants, storedActivityEvents, privateNoteRevisions] = await Promise.all([
+  const [contributions, storedSubmission, participants, storedActivityEvents, privateNoteRevisions] = await Promise.all([
     store.listContributions(request.id),
     store.getSubmission(request.id, request.transactionHash),
     store.listRequestParticipants?.(request.id) ?? Promise.resolve([]),
     store.listActivityEvents?.(request.id) ?? Promise.resolve([]),
     store.listPrivateNoteRevisions?.(request.id) ?? Promise.resolve([]),
   ]);
+  const normalizedContributions = contributions
+    .map((contribution) => ({
+      ...contribution,
+      receivedAt: normalizedTimestamp(contribution.receivedAt),
+    }))
+    .sort((left, right) => left.receivedAt.localeCompare(right.receivedAt) || left.digest.localeCompare(right.digest));
+  const submission = storedSubmission
+    ? { ...storedSubmission, submittedAt: normalizedTimestamp(storedSubmission.submittedAt) }
+    : null;
+  const normalizedParticipants = participants
+    .map((participant) => ({
+      ...participant,
+      joinedAt: normalizedTimestamp(participant.joinedAt),
+    }))
+    .sort((left, right) => left.joinedAt.localeCompare(right.joinedAt) || left.address.localeCompare(right.address));
   // request_created / approval_added / transaction_confirmed and private-note/
   // commitment events are deterministically derivable from the resource facts.
   // Preserve only explicit collaboration/submission facts here; legacy projection
   // rows are intentionally not promoted into PostgreSQL authority.
-  const activityEvents = storedActivityEvents.filter((event) =>
-    event.type === 'approval_declined' || event.type === 'transaction_submitted');
+  const activityEvents = storedActivityEvents
+    .filter((event) => event.type === 'approval_declined' || event.type === 'transaction_submitted')
+    .map((event) => ({ ...event, occurredAt: normalizedTimestamp(event.occurredAt) }))
+    .sort((left, right) => left.occurredAt.localeCompare(right.occurredAt) || left.eventId.localeCompare(right.eventId));
+  const normalizedPrivateNoteRevisions = privateNoteRevisions
+    .map((revision) => ({
+      ...revision,
+      createdAt: normalizedTimestamp(revision.createdAt),
+    }))
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.revisionId.localeCompare(right.revisionId));
   return {
-    request,
-    contributions,
+    request: normalizedClassicRequest(request),
+    contributions: normalizedContributions,
     submission,
-    participants,
+    participants: normalizedParticipants,
     activityEvents,
-    privateNoteRevisions,
+    privateNoteRevisions: normalizedPrivateNoteRevisions,
   };
 }
 
@@ -99,7 +179,34 @@ async function sorobanSnapshot(
     store.listExecutionPreparations?.(intent.id) ?? Promise.resolve([]),
     store.listExecutionObservations?.(intent.id) ?? Promise.resolve([]),
   ]);
-  return { intent, contributions, preparations, observations };
+  const normalizedContributions = contributions
+    .map((contribution) => ({
+      ...contribution,
+      receivedAt: normalizedTimestamp(contribution.receivedAt),
+    }))
+    .sort((left, right) => left.receivedAt.localeCompare(right.receivedAt) || left.digest.localeCompare(right.digest));
+  const normalizedPreparations = preparations
+    .map((preparation) => ({
+      ...preparation,
+      validUntil: preparation.validUntil ? normalizedTimestamp(preparation.validUntil) : null,
+      preparedAt: normalizedTimestamp(preparation.preparedAt),
+    }))
+    .sort((left, right) => left.preparedAt.localeCompare(right.preparedAt) || left.transactionHash.localeCompare(right.transactionHash));
+  const normalizedObservations = observations
+    .map((observation) => ({
+      ...observation,
+      observedAt: normalizedTimestamp(observation.observedAt),
+      ...(observation.networkCreatedAt ? {
+        networkCreatedAt: normalizedTimestamp(observation.networkCreatedAt),
+      } : {}),
+    }))
+    .sort((left, right) => left.observedAt.localeCompare(right.observedAt) || left.transactionHash.localeCompare(right.transactionHash));
+  return {
+    intent: normalizedSorobanIntent(intent),
+    contributions: normalizedContributions,
+    preparations: normalizedPreparations,
+    observations: normalizedObservations,
+  };
 }
 
 function addClassicCounts(counts: ClassicCounts, snapshot: Awaited<ReturnType<typeof classicSnapshot>>): void {
@@ -150,7 +257,11 @@ export async function backfillCoordinationData(input: {
     if (!existing) {
       await input.targetRequests.createRequest(request);
     } else {
-      assertEquivalent(`classic:${request.id}:root`, request, existing);
+      assertEquivalent(
+        `classic:${request.id}:root`,
+        normalizedClassicRequest(request),
+        normalizedClassicRequest(existing),
+      );
     }
 
     const source = await classicSnapshot(input.sourceRequests, request);
@@ -184,8 +295,8 @@ export async function backfillCoordinationData(input: {
     } else {
       assertEquivalent(
         `soroban:${intent.id}:root`,
-        intentWithoutCancellation(intent),
-        intentWithoutCancellation(existing),
+        normalizedSorobanIntent(intentWithoutCancellation(intent)),
+        normalizedSorobanIntent(intentWithoutCancellation(existing)),
       );
     }
     if (intent.executionPolicy?.executor) {

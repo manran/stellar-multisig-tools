@@ -175,7 +175,9 @@ function fixtures() {
     version: 1,
     transactionHash: request.transactionHash,
     ledger: 123,
-    submittedAt: '2026-09-18T01:02:00.000Z',
+    // Horizon created_at historically arrived without milliseconds; PostgreSQL
+    // timestamptz reads the same instant back as canonical ISO with .000Z.
+    submittedAt: '2026-09-18T01:02:00Z',
   };
   const participant: StoredRequestParticipant = {
     version: 1,
