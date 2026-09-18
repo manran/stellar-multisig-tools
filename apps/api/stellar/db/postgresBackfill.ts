@@ -98,6 +98,7 @@ function normalizedSorobanIntent(value: StoredSorobanIntent): StoredSorobanInten
     : undefined;
   return {
     ...value,
+    authorizationPlanRevision: value.authorizationPlanRevision ?? 1,
     createdAt: normalizedTimestamp(value.createdAt),
     ...(value.authorizationPlanHistory ? {
       authorizationPlanHistory: value.authorizationPlanHistory.map((revision) => ({

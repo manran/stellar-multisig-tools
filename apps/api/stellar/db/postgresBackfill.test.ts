@@ -219,7 +219,7 @@ function fixtures() {
       effects,
       executionBinding: 'detached',
     },
-    authorizationPlanRevision: 1,
+    // Legacy Intent records may omit this field; absence means revision 1.
     createdAt: '2026-09-18T01:00:30.000Z',
     creatorActor: { type: 'service', id: 'fednetwork', label: 'FedNetwork' },
     discoverySignerKeys: [signer.publicKey()],
