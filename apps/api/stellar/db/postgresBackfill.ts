@@ -99,6 +99,7 @@ function normalizedSorobanIntent(value: StoredSorobanIntent): StoredSorobanInten
   return {
     ...value,
     authorizationPlanRevision: value.authorizationPlanRevision ?? 1,
+    discoverySignerKeys: value.discoverySignerKeys ?? [],
     createdAt: normalizedTimestamp(value.createdAt),
     ...(value.authorizationPlanHistory ? {
       authorizationPlanHistory: value.authorizationPlanHistory.map((revision) => ({
@@ -292,7 +293,9 @@ export async function backfillCoordinationData(input: {
   for (const intent of [...input.intents].sort((a, b) => a.id.localeCompare(b.id))) {
     const existing = await input.targetIntents.getIntent(intent.id);
     if (!existing) {
-      await input.targetIntents.createIntent(intentWithoutCancellation(intent));
+      await input.targetIntents.createIntent(
+        normalizedSorobanIntent(intentWithoutCancellation(intent)),
+      );
     } else {
       assertEquivalent(
         `soroban:${intent.id}:root`,

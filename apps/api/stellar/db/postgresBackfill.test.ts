@@ -245,6 +245,9 @@ function fixtures() {
       cancelledBy: { type: 'service', id: 'fednetwork', label: 'FedNetwork' },
     },
   };
+  // Some legacy Blob Intent records predate persisted discovery signer candidates.
+  delete (intent as { discoverySignerKeys?: string[] }).discoverySignerKeys;
+
   const auth: StoredSorobanIntentAuthorizationContribution = {
     version: 1,
     digest: 'auth-bf',
