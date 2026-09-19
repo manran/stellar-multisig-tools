@@ -8,6 +8,7 @@ import {
   Operation,
   TransactionBuilder,
 } from '@stellar/stellar-sdk/base';
+import { AccountNotFoundError } from '../../../../src/stellar/horizon.js';
 import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
 import type {
   ClassicManagedChannelLeaseStore,
@@ -149,6 +150,55 @@ test('expired channel lease can be reclaimed without sequence pipelining', async
   });
   assert.equal(reclaimed.accountId, channel.publicKey());
   assert.equal((await store.getLeaseForRequest('B'.repeat(16)))?.channelAccount, channel.publicKey());
+});
+
+test('missing Testnet channel is provisioned once before Horizon is reloaded', async () => {
+  const store = new MemoryStore();
+  const channel = Keypair.random();
+  let provisioned = 0;
+  let loads = 0;
+  const reserved = await reserveClassicManagedChannel(store, {
+    network: 'testnet',
+    requestId: 'P'.repeat(16),
+    leaseExpiresAt: '2026-09-20T10:00:00.000Z',
+  }, {
+    now: new Date('2026-09-19T10:00:00.000Z'),
+    channels: [channel],
+    accountLoader: async (accountId) => {
+      loads += 1;
+      if (loads === 1) throw new AccountNotFoundError(accountId);
+      return snapshot(accountId, '0');
+    },
+    channelProvisioner: async (accountId, network) => {
+      assert.equal(accountId, channel.publicKey());
+      assert.equal(network, 'testnet');
+      provisioned += 1;
+    },
+  });
+  assert.equal(reserved.accountId, channel.publicKey());
+  assert.equal(provisioned, 1);
+  assert.equal(loads, 2);
+});
+
+test('missing Mainnet channel is never auto-provisioned', async () => {
+  const store = new MemoryStore();
+  const channel = Keypair.random();
+  let provisioned = 0;
+  await assert.rejects(
+    () => reserveClassicManagedChannel(store, {
+      network: 'public',
+      requestId: 'M'.repeat(16),
+      leaseExpiresAt: '2026-09-20T10:00:00.000Z',
+    }, {
+      now: new Date('2026-09-19T10:00:00.000Z'),
+      channels: [channel],
+      accountLoader: async (accountId) => { throw new AccountNotFoundError(accountId); },
+      channelProvisioner: async () => { provisioned += 1; },
+    }),
+    (cause: unknown) => cause instanceof ClassicManagedChannelServiceError
+      && cause.code === 'managed_classic_channel_unavailable',
+  );
+  assert.equal(provisioned, 0);
 });
 
 test('managed channel signer adds only the transaction-source signature', () => {

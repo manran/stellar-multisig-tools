@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Networks, TransactionBuilder, type Keypair } from '@stellar/stellar-sdk/base';
-import { loadAccount } from '../../../../src/stellar/horizon.js';
+import { AccountNotFoundError, loadAccount } from '../../../../src/stellar/horizon.js';
 import type { StellarAccountSnapshot, StellarNetwork } from '../../../../src/stellar/types.js';
 import { configuredClassicManagedChannels } from './classicManagedChannelConfig.js';
 import type { ClassicManagedChannelLeaseStore } from './classicManagedChannelStore.js';
@@ -28,6 +28,44 @@ type AccountLoader = (
   network: StellarNetwork,
 ) => Promise<StellarAccountSnapshot>;
 
+type ChannelProvisioner = (
+  accountId: string,
+  network: StellarNetwork,
+) => Promise<void>;
+
+async function provisionTestnetChannel(accountId: string, network: StellarNetwork): Promise<void> {
+  if (network !== 'testnet') {
+    throw new ClassicManagedChannelServiceError(
+      'Automatic managed Classic channel provisioning is available only on Testnet.',
+      503,
+      'managed_classic_channel_unavailable',
+    );
+  }
+  const response = await fetch(`https://friendbot.stellar.org/?addr=${encodeURIComponent(accountId)}`);
+  if (!response.ok) {
+    throw new ClassicManagedChannelServiceError(
+      `Unable to provision managed Classic Testnet channel ${accountId}: Friendbot returned HTTP ${response.status}.`,
+      503,
+      'managed_classic_channel_unavailable',
+    );
+  }
+}
+
+async function loadManagedChannelAccount(
+  accountId: string,
+  network: StellarNetwork,
+  accountLoader: AccountLoader,
+  provisioner: ChannelProvisioner,
+): Promise<StellarAccountSnapshot> {
+  try {
+    return await accountLoader(accountId, network);
+  } catch (cause) {
+    if (!(cause instanceof AccountNotFoundError) || network !== 'testnet') throw cause;
+    await provisioner(accountId, network);
+    return accountLoader(accountId, network);
+  }
+}
+
 function orderedChannels(requestId: string, channels: Keypair[]): Keypair[] {
   if (channels.length < 2) return channels;
   const digest = createHash('sha256').update(requestId).digest();
@@ -46,6 +84,7 @@ export async function reserveClassicManagedChannel(
     now?: Date;
     accountLoader?: AccountLoader;
     channels?: Keypair[];
+    channelProvisioner?: ChannelProvisioner;
   } = {},
 ): Promise<ReservedClassicManagedChannel> {
   const channels = options.channels ?? configuredClassicManagedChannels(input.network);
@@ -74,13 +113,19 @@ export async function reserveClassicManagedChannel(
         'managed_classic_channel_unavailable',
       );
     }
-    const account = await (options.accountLoader ?? loadAccount)(existing.channelAccount, input.network);
+    const account = await loadManagedChannelAccount(
+      existing.channelAccount,
+      input.network,
+      options.accountLoader ?? loadAccount,
+      options.channelProvisioner ?? provisionTestnetChannel,
+    );
     return { accountId: existing.channelAccount, sequence: account.sequence, account, keypair };
   }
 
   const now = options.now ?? new Date();
   const leasedAt = now.toISOString();
   const accountLoader = options.accountLoader ?? loadAccount;
+  const channelProvisioner = options.channelProvisioner ?? provisionTestnetChannel;
   for (const keypair of orderedChannels(input.requestId, channels)) {
     const channelAccount = keypair.publicKey();
     const claimed = await store.claimLease({
@@ -92,7 +137,12 @@ export async function reserveClassicManagedChannel(
     });
     if (!claimed) continue;
     try {
-      const account = await accountLoader(channelAccount, input.network);
+      const account = await loadManagedChannelAccount(
+        channelAccount,
+        input.network,
+        accountLoader,
+        channelProvisioner,
+      );
       return { accountId: channelAccount, sequence: account.sequence, account, keypair };
     } catch (cause) {
       await store.releaseRequest(input.requestId).catch(() => undefined);

@@ -417,6 +417,8 @@ Managed Classic v1 intentionally uses a simple Channel Account Pool:
 - one channel carries at most one active Request at a time;
 - concurrency scales by adding channels, not by speculative sequence pipelining;
 - a lease is released after confirmed submission or may be reclaimed after Request expiry;
+- on Testnet, a derived channel that Horizon reports as missing is provisioned once through Friendbot and then reloaded before use;
+- Mainnet never auto-provisions or auto-funds channel accounts; production funding remains an explicit operator responsibility;
 - semantic creation can safely reconstruct transaction source; raw XDR is never silently rewritten.
 
 If an Integration explicitly chooses **Manage execution myself**, an allowed Treasury is also listed in `classicExternalExecutionSourceAccounts` and the Integration owns transaction source/sequence/submission for that work.
