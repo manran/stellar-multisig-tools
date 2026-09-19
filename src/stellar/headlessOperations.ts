@@ -119,6 +119,10 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'principal:write', effect: 'private-state', summary: 'Remove a contract from one signer workspace.',
   },
   {
+    id: 'integration.execution.inspect', version: 1, method: 'GET', path: '/api/integration-execution',
+    access: 'integration:read', effect: 'none', summary: 'Inspect this Integration execution capability and the public Classic transaction-source channel identities for the selected network.',
+  },
+  {
     id: 'classic.payment.prepare', version: 1, method: 'POST', path: '/api/payment-prepare',
     access: 'principal:write', effect: 'none', summary: 'Prepare one exact unsigned Classic payment transaction from business payment inputs and fresh Stellar state.',
   },

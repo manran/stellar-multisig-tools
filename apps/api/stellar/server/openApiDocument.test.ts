@@ -69,6 +69,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   const intentExecution = paths['/api/intent'].put as JsonObject;
   const build = paths['/api/contract-call'].post as JsonObject;
   const prepare = paths['/api/contract-prepare'].post as JsonObject;
+  const integrationExecution = paths['/api/integration-execution'].get as JsonObject;
   const paymentPrepare = paths['/api/payment-prepare'].post as JsonObject;
   const requestCreate = paths['/api/request'].post as JsonObject;
   const requestSubmit = paths['/api/request'].put as JsonObject;
@@ -97,6 +98,9 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(intentExecution.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }]);
   assert.equal(build.operationId, 'contract.call.build');
   assert.equal(prepare.operationId, 'contract.call.prepare');
+  assert.equal(integrationExecution.operationId, 'integration.execution.inspect');
+  assert.deepEqual(integrationExecution.security, [{ integrationBearer: [] }]);
+  assert.deepEqual(integrationExecution['x-multisig-operation-ids'], ['integration.execution.inspect']);
   assert.equal(paymentPrepare.operationId, 'classic.payment.prepare.integration.classic.payment.prepare');
   assert.deepEqual(paymentPrepare.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }]);
   assert.equal(requestCreate.operationId, 'proposal.create.integration.request.create');
@@ -197,6 +201,8 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual((schemas.ContractPrepareInput.properties as JsonObject).mode, { type: 'string', enum: ['record', 'enforce'], default: 'record' });
   assert.deepEqual(schemas.ContractPrepareResult.required, ['operation', 'version', 'mode', 'simulation']);
   assert.deepEqual(schemas.ContractEnforceResult.required, ['operation', 'version', 'mode', 'verification']);
+  assert.deepEqual(schemas.IntegrationExecutionInspectResult.required, ['operation', 'version', 'serviceId', 'network', 'classic']);
+  assert.deepEqual(((schemas.IntegrationExecutionInspectResult.properties as JsonObject).classic as JsonObject).required, ['managedAvailable', 'channelCount', 'channelAccounts']);
   assert.deepEqual(schemas.ClassicPaymentPrepareInput.required, ['network', 'sourceAccount', 'payments']);
   assert.ok((schemas.ClassicPaymentPrepareResult.properties as JsonObject).transactionSourceAccount);
   assert.ok((schemas.ClassicPaymentPrepareResult.properties as JsonObject).transactionSourceSequence);

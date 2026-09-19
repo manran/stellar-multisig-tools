@@ -28,6 +28,9 @@ const parameter = (
 
 function operationParameters(path: string, method: string): OpenApiObject[] {
   const values: OpenApiObject[] = [];
+  if (path === '/api/integration-execution') {
+    values.push(parameter('network', 'query', true, schema('StellarNetwork'), 'Must match both this deployment and the Integration credential scope.'));
+  }
   if (path === '/api/contract-interface') {
     values.push(
       parameter('network', 'query', true, schema('StellarNetwork'), 'Must match this deployment.'),
@@ -77,6 +80,7 @@ function requestBody(path: string, method: string): OpenApiObject | undefined {
 
 function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/api/runtime-config') return schema('RuntimeConfigResult');
+  if (path === '/api/integration-execution') return schema('IntegrationExecutionInspectResult');
   if (path === '/api/contract-interface') return schema('ContractInterfaceResult');
   if (path === '/api/intent' && method === 'post') return schema('ContractIntentCreateResult');
   if (path === '/api/intent' && method === 'get') return { oneOf: [schema('ContractIntentInspectResult'), schema('BrowserAuthorizationInspectResult')] };
@@ -100,6 +104,7 @@ function security(path: string, method: string, access: HeadlessOperationAccess)
     if (method === 'get') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }, { intentCapability: [] }];
     return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
   }
+  if (path === '/api/integration-execution') return [{ integrationBearer: [] }];
   if (path === '/api/contracts') return [{ agentBearer: [] }, { humanSession: [] }];
   if (path === '/api/payment-prepare' || path === '/api/account-create-prepare') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
   if (path === '/api/request' && method === 'put') return [{ integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
@@ -199,6 +204,27 @@ const components: OpenApiObject = {
         version: operationVersion,
         stellarNetwork: { type: 'string', enum: ['public', 'testnet', 'dual'] },
         fixedNetwork: { oneOf: [stellarNetwork, { type: 'null' }] },
+      },
+      additionalProperties: false,
+    },
+    IntegrationExecutionInspectResult: {
+      type: 'object',
+      required: ['operation', 'version', 'serviceId', 'network', 'classic'],
+      properties: {
+        operation: { type: 'string', const: 'integration.execution.inspect' },
+        version: operationVersion,
+        serviceId: { type: 'string' },
+        network: stellarNetwork,
+        classic: {
+          type: 'object',
+          required: ['managedAvailable', 'channelCount', 'channelAccounts'],
+          properties: {
+            managedAvailable: { type: 'boolean' },
+            channelCount: { type: 'integer', minimum: 0, maximum: 64 },
+            channelAccounts: { type: 'array', items: accountId },
+          },
+          additionalProperties: false,
+        },
       },
       additionalProperties: false,
     },
