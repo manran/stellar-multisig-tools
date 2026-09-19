@@ -64,6 +64,46 @@ test('classic.payment.prepare builds one exact unsigned Payment transaction from
   assert.equal(parsed.operations[0].type, 'payment');
 });
 
+test('classic.payment.prepare can separate Treasury operation source from a managed transaction source', async () => {
+  const channel = Keypair.random().publicKey();
+  const result = await prepareClassicPayment({
+    network: 'testnet',
+    sourceAccount: SOURCE,
+    payments: [{ destination: A, amount: '2.5', asset: { type: 'native' } }],
+    lifetimeSeconds: 3600,
+  }, {
+    ...dependencies(),
+    transactionSource: { accountId: channel, sequence: '20', snapshot: account(channel) },
+  });
+
+  const parsed = TransactionBuilder.fromXdr(result.xdr, Networks.TESTNET);
+  if (parsed instanceof FeeBumpTransaction) assert.fail('Expected a classic transaction.');
+  assert.equal(result.sourceAccount, SOURCE);
+  assert.equal(result.sourceSequence, '7');
+  assert.equal(result.transactionSourceAccount, channel);
+  assert.equal(result.transactionSourceSequence, '20');
+  assert.equal(parsed.source, channel);
+  assert.equal(parsed.sequence, '21');
+  assert.equal(parsed.operations[0].source, SOURCE);
+  assert.equal(parsed.signatures.length, 0);
+});
+
+test('classic.payment.prepare rejects a managed transaction source that cannot cover the network fee', async () => {
+  const channel = Keypair.random().publicKey();
+  await assert.rejects(
+    () => prepareClassicPayment({
+      network: 'testnet',
+      sourceAccount: SOURCE,
+      payments: [{ destination: A, amount: '2.5', asset: { type: 'native' } }],
+    }, {
+      ...dependencies(),
+      transactionSource: { accountId: channel, sequence: '20', snapshot: account(channel, '1') },
+    }),
+    (cause: unknown) => cause instanceof ClassicPaymentPrepareError
+      && cause.code === 'classic_managed_transaction_source_unavailable',
+  );
+});
+
 test('classic.payment.prepare preserves a hash memo for Private Note proof', async () => {
   const memoHashHex = 'ab'.repeat(32);
   const result = await prepareClassicPayment({

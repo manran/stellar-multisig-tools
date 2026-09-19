@@ -7,6 +7,7 @@ import {
 } from './horizon.js';
 import { isValidStellarTextMemo } from './memo.js';
 import { paymentAssetChoices, paymentDestinationIssue } from './paymentAsset.js';
+import { assessPaymentSpendability } from './paymentPreflight.js';
 import { stellarAmountToStroops } from './reserve.js';
 import { transactionHashHex } from './signatureMerge.js';
 import { DEFAULT_TRANSACTION_LIFETIME_SECONDS, isTransactionLifetimeSeconds } from './transactionPreferences.js';
@@ -37,6 +38,8 @@ export interface ClassicPaymentPreparation {
   network: StellarNetwork;
   sourceAccount: string;
   sourceSequence: string;
+  transactionSourceAccount?: string;
+  transactionSourceSequence?: string;
   paymentCount: number;
   feeStroops: string;
   validUntil: string;
@@ -47,6 +50,7 @@ export interface ClassicPaymentPreparation {
 export interface ClassicPaymentPrepareDependencies {
   accountLoader?: (accountId: string, network: StellarNetwork) => Promise<StellarAccountSnapshot>;
   networkParametersLoader?: (network: StellarNetwork) => Promise<StellarNetworkParameters>;
+  transactionSource?: { accountId: string; sequence: string; snapshot: StellarAccountSnapshot };
 }
 
 export class ClassicPaymentPrepareError extends Error {
@@ -221,7 +225,34 @@ export async function prepareClassicPayment(
     rows.push({ line: index, source: sourceAccount, destination: payment.destination, amount: payment.amount, asset });
   }
 
-  const fundingIssues = transferFundingIssues(rows, new Map([[sourceAccount, source]]), sourceAccount, parameters);
+  const transactionSourceAccount = dependencies.transactionSource?.accountId ?? sourceAccount;
+  const transactionSourceSequence = dependencies.transactionSource?.sequence ?? source.sequence;
+  if (dependencies.transactionSource && transactionSourceAccount !== sourceAccount) {
+    const native = paymentAssetChoices(dependencies.transactionSource.snapshot).find((choice) => choice.key === 'native');
+    if (!native) {
+      throw new ClassicPaymentPrepareError(
+        'Managed transaction source has no native XLM balance information for fee preflight.',
+        503,
+        'classic_managed_transaction_source_unavailable',
+      );
+    }
+    const spendability = assessPaymentSpendability(
+      dependencies.transactionSource.snapshot,
+      native,
+      parameters,
+      rows.length,
+      0,
+      true,
+    );
+    if (!spendability.feeCovered) {
+      throw new ClassicPaymentPrepareError(
+        'Managed transaction source does not have enough spendable XLM to pay the network fee while preserving Stellar minimum reserve.',
+        503,
+        'classic_managed_transaction_source_unavailable',
+      );
+    }
+  }
+  const fundingIssues = transferFundingIssues(rows, new Map([[sourceAccount, source]]), transactionSourceAccount, parameters);
   if (fundingIssues.length > 0) {
     throw new ClassicPaymentPrepareError(fundingIssues.map((item) => item.message).join('\n'), 409, 'classic_payment_source_unavailable');
   }
@@ -249,12 +280,12 @@ export async function prepareClassicPayment(
 
   const transaction = buildTransferTransaction({
     rows,
-    transactionSource: sourceAccount,
-    transactionSourceSequence: source.sequence,
+    transactionSource: transactionSourceAccount,
+    transactionSourceSequence,
     parameters,
     network,
     lifetimeSeconds,
-    explicitOperationSources: false,
+    explicitOperationSources: transactionSourceAccount !== sourceAccount,
     memo,
     memoHashHex,
   });
@@ -271,6 +302,10 @@ export async function prepareClassicPayment(
     network,
     sourceAccount,
     sourceSequence: source.sequence,
+    ...(transactionSourceAccount !== sourceAccount ? {
+      transactionSourceAccount,
+      transactionSourceSequence,
+    } : {}),
     paymentCount: rows.length,
     feeStroops: String(parameters.baseFeeInStroops * rows.length),
     validUntil: new Date(Number(maxTime) * 1000).toISOString(),

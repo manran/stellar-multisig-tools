@@ -10,7 +10,7 @@ import { isValidSigningRequestId } from '../server/requestLocator.js';
 import type { StoredSorobanIntent } from '../server/sorobanIntentStore.js';
 import type { StellarNetwork } from '../../../../src/stellar/types.js';
 
-const REQUIRED_MIGRATION = '0005_browser_authorization_capabilities';
+const REQUIRED_MIGRATION = '0006_classic_managed_channel_leases';
 
 export interface RuntimeCoordinationBackfillReport extends CoordinationBackfillReport {
   network: StellarNetwork;

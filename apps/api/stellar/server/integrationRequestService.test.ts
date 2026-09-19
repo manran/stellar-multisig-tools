@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   Account,
   Asset,
+  FeeBumpTransaction,
   Keypair,
   Networks,
   Operation,
@@ -10,7 +11,12 @@ import {
   TransactionBuilder,
 } from '@stellar/stellar-sdk/base';
 import type { ConfiguredIntegrationCredential } from './integrationCredentialService.js';
+import type {
+  ClassicManagedChannelLeaseStore,
+  StoredClassicManagedChannelLease,
+} from './classicManagedChannelStore.js';
 import { createIntegrationPaymentSigningRequest, createIntegrationSigningRequest } from './integrationRequestService.js';
+import { contributeSigningRequest, submitSigningRequest } from './requestService.js';
 import type {
   SigningRequestStore,
   StoredSignatureContribution,
@@ -18,6 +24,23 @@ import type {
   StoredSubmissionResult,
 } from './requestStore.js';
 import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
+
+class MemoryChannelStore implements ClassicManagedChannelLeaseStore {
+  leases = new Map<string, StoredClassicManagedChannelLease>();
+  async getLeaseForRequest(requestId: string) {
+    return [...this.leases.values()].find((item) => item.requestId === requestId) ?? null;
+  }
+  async claimLease(record: StoredClassicManagedChannelLease) {
+    const key = `${record.network}:${record.channelAccount}`;
+    const current = this.leases.get(key);
+    if (current && current.requestId !== record.requestId && Date.parse(current.expiresAt) > Date.parse(record.leasedAt)) return false;
+    this.leases.set(key, record);
+    return true;
+  }
+  async releaseRequest(requestId: string) {
+    for (const [key, value] of this.leases) if (value.requestId === requestId) this.leases.delete(key);
+  }
+}
 
 class MemoryRequestStore implements SigningRequestStore {
   requests = new Map<string, StoredSigningRequest>();
@@ -232,6 +255,7 @@ test('Integration can create a Classic Request from semantic payment input witho
   const store = new MemoryRequestStore();
   const source = Keypair.random();
   const signer = Keypair.random();
+  const channel = Keypair.random();
   const destination = Keypair.random().publicKey();
   const sourceSnapshot: StellarAccountSnapshot = {
     accountId: source.publicKey(), sequence: '7', subentryCount: 0, numSponsoring: 0, numSponsored: 0,
@@ -250,9 +274,17 @@ test('Integration can create a Classic Request from semantic payment input witho
     thresholds: { low: 1, medium: 1, high: 1 },
     signers: [{ key: destination, type: 'ed25519_public_key', weight: 1 }],
   };
+  const channelSnapshot: StellarAccountSnapshot = {
+    ...sourceSnapshot,
+    accountId: channel.publicKey(),
+    sequence: '41',
+    thresholds: { low: 1, medium: 1, high: 1 },
+    signers: [{ key: channel.publicKey(), type: 'ed25519_public_key', weight: 1 }],
+  };
   const accountLoader = async (accountId: string) => {
     if (accountId === source.publicKey()) return sourceSnapshot;
     if (accountId === destination) return destinationSnapshot;
+    if (accountId === channel.publicKey()) return channelSnapshot;
     throw new Error('unexpected account');
   };
   const networkParametersLoader = async () => ({
@@ -271,20 +303,67 @@ test('Integration can create a Classic Request from semantic payment input witho
     idempotencyKey: 'semantic-payment-42',
     externalReference: 'invoice-42',
   };
+  const channelStore = new MemoryChannelStore();
   const first = await createIntegrationPaymentSigningRequest(
     store,
     integrationFor(source.publicKey()),
     input,
-    { accountLoader, networkParametersLoader },
+    {
+      accountLoader,
+      networkParametersLoader,
+      managedChannelStoreFactory: () => channelStore,
+      managedChannels: [channel],
+      now: new Date('2026-09-15T09:00:00Z'),
+    },
   );
   assert.equal(first.replayed, false);
   assert.equal(first.request.status, 'awaiting_signatures');
   const stored = store.requests.get(first.request.id);
   assert.match(stored?.instructionDigest ?? '', /^[0-9a-f]{64}$/);
   const parsed = TransactionBuilder.fromXdr(first.request.baseXdr, Networks.TESTNET);
+  if (parsed instanceof FeeBumpTransaction) assert.fail('Managed semantic payment must be a classic transaction.');
   assert.equal(parsed.operations.length, 1);
   assert.equal(parsed.operations[0].type, 'payment');
-  assert.equal(parsed.signatures.length, 0);
+  assert.equal(parsed.source, channel.publicKey());
+  assert.equal(parsed.sequence, '42');
+  assert.equal(parsed.operations[0].source, source.publicKey());
+  assert.equal(parsed.signatures.length, 1);
+  assert.equal(first.request.execution?.mode, 'multisigtools');
+  assert.equal((await channelStore.getLeaseForRequest(first.request.id))?.channelAccount, channel.publicKey());
+
+  const firstSignerXdr = TransactionBuilder.fromXdr(first.request.baseXdr, Networks.TESTNET);
+  if (firstSignerXdr instanceof FeeBumpTransaction) assert.fail('Expected managed Classic transaction.');
+  firstSignerXdr.sign(source);
+  const afterFirstSigner = await contributeSigningRequest(store, first.request.id, firstSignerXdr.toXDR(), {
+    accountLoader,
+    networkParametersLoader,
+  });
+  assert.equal(afterFirstSigner.request.status, 'awaiting_signatures');
+
+  const secondSignerXdr = TransactionBuilder.fromXdr(first.request.baseXdr, Networks.TESTNET);
+  if (secondSignerXdr instanceof FeeBumpTransaction) assert.fail('Expected managed Classic transaction.');
+  secondSignerXdr.sign(signer);
+  const afterSecondSigner = await contributeSigningRequest(store, first.request.id, secondSignerXdr.toXDR(), {
+    accountLoader,
+    networkParametersLoader,
+  });
+  assert.equal(afterSecondSigner.request.status, 'ready');
+
+  const submitted = await submitSigningRequest(store, first.request.id, {
+    accountLoader,
+    networkParametersLoader,
+    transactionLoader: async () => null,
+    transactionSubmitter: async (xdr, network) => {
+      assert.equal(network, 'testnet');
+      const envelope = TransactionBuilder.fromXdr(xdr, Networks.TESTNET);
+      if (envelope instanceof FeeBumpTransaction) assert.fail('Expected managed Classic transaction.');
+      assert.equal(envelope.source, channel.publicKey());
+      assert.equal(envelope.signatures.length, 3);
+      return { successful: true, hash: first.request.transactionHash, ledger: 123 };
+    },
+  });
+  assert.equal(submitted.status, 'submitted');
+  assert.equal(submitted.submission?.ledger, 123);
 
   const replay = await createIntegrationPaymentSigningRequest(
     store,
@@ -293,6 +372,7 @@ test('Integration can create a Classic Request from semantic payment input witho
     {
       accountLoader: async (accountId) => {
         if (accountId === source.publicKey()) return sourceSnapshot;
+        if (accountId === channel.publicKey()) return channelSnapshot;
         throw new Error('semantic replay must not rebuild destinations');
       },
     },

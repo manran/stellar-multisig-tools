@@ -70,6 +70,8 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   const build = paths['/api/contract-call'].post as JsonObject;
   const prepare = paths['/api/contract-prepare'].post as JsonObject;
   const paymentPrepare = paths['/api/payment-prepare'].post as JsonObject;
+  const requestCreate = paths['/api/request'].post as JsonObject;
+  const requestSubmit = paths['/api/request'].put as JsonObject;
 
   assert.deepEqual(inspect.security, []);
   assert.equal(inspect.operationId, 'contract.interface.inspect');
@@ -97,6 +99,9 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.equal(prepare.operationId, 'contract.call.prepare');
   assert.equal(paymentPrepare.operationId, 'classic.payment.prepare.integration.classic.payment.prepare');
   assert.deepEqual(paymentPrepare.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }]);
+  assert.equal(requestCreate.operationId, 'proposal.create.integration.request.create');
+  assert.equal(requestSubmit.operationId, 'proposal.submit.integration.request.submit');
+  assert.deepEqual(requestSubmit.security, [{ integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }]);
   assert.equal(paths['/api/preparation'], undefined);
 
   const components = document.components as JsonObject;
@@ -193,11 +198,13 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(schemas.ContractPrepareResult.required, ['operation', 'version', 'mode', 'simulation']);
   assert.deepEqual(schemas.ContractEnforceResult.required, ['operation', 'version', 'mode', 'verification']);
   assert.deepEqual(schemas.ClassicPaymentPrepareInput.required, ['network', 'sourceAccount', 'payments']);
+  assert.ok((schemas.ClassicPaymentPrepareResult.properties as JsonObject).transactionSourceAccount);
+  assert.ok((schemas.ClassicPaymentPrepareResult.properties as JsonObject).transactionSourceSequence);
   assert.deepEqual(schemas.ClassicPaymentInstructionInput.required, ['sourceAccount', 'payments']);
   assert.deepEqual(schemas.ProposalCreateInput.required, ['network']);
   assert.deepEqual(schemas.ProposalCreateInput.oneOf, [
     { required: ['xdr'] },
-    { required: ['payment'], description: 'Semantic Classic payment creation is currently available to Integration Service callers.' },
+    { required: ['payment'], description: 'Semantic Classic payment creation is available to Integration Service callers. When the Treasury uses MultiSigTools-managed execution, MST supplies the transaction source, sequence, fee and submission while the Treasury remains the Payment operation source and authorization authority.' },
   ]);
 });
 

@@ -39,12 +39,12 @@ test('PostgreSQL connection normalization preserves local URLs and pins weak TLS
 test('coordination migration is repeatable through the migration runner', {
   skip: !TEST_URL || !RESET_ALLOWED,
 }, async () => {
-  assert.deepEqual(await applyCoordinationMigrations(), ['0001_coordination', '0002_private_context_flags', '0003_outbox_leases', '0004_webhook_delivery_history', '0005_browser_authorization_capabilities']);
+  assert.deepEqual(await applyCoordinationMigrations(), ['0001_coordination', '0002_private_context_flags', '0003_outbox_leases', '0004_webhook_delivery_history', '0005_browser_authorization_capabilities', '0006_classic_managed_channel_leases']);
   assert.deepEqual(await applyCoordinationMigrations(), []);
   const rows = await coordinationPool().query<{ version: string }>(
     'SELECT version FROM mst_stellar.schema_migrations ORDER BY version',
   );
-  assert.deepEqual(rows.rows.map((row) => row.version), ['0001_coordination', '0002_private_context_flags', '0003_outbox_leases', '0004_webhook_delivery_history', '0005_browser_authorization_capabilities']);
+  assert.deepEqual(rows.rows.map((row) => row.version), ['0001_coordination', '0002_private_context_flags', '0003_outbox_leases', '0004_webhook_delivery_history', '0005_browser_authorization_capabilities', '0006_classic_managed_channel_leases']);
 });
 
 test('business mutation and outbox insertion share one rollback boundary', {

@@ -98,6 +98,7 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
   const [executorPool, setExecutorPool] = useState<string[]>([]);
 
   const [authorizationExperience, setAuthorizationExperience] = useState<AuthorizationExperience>('hosted');
+  const [manageExecution, setManageExecution] = useState(false);
   const [webhookEnabled, setWebhookEnabled] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState('');
 
@@ -123,7 +124,7 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
   );
 
   const hasBusinessScope = treasuries.length > 0 || selectedMethodCount > 0;
-  const contractExecutionValid = contracts.every((item) => (
+  const contractExecutionValid = !manageExecution || contracts.every((item) => (
     item.executionOwner === 'multisigtools'
     || Boolean(item.executor && executorPool.includes(item.executor) && isValidStellarAccountId(item.executor))
   ));
@@ -137,6 +138,7 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
     setTreasuries([]);
     setContracts([]);
     setExecutorPool([]);
+    setManageExecution(false);
     setTreasuryInput('');
     setContractInput('');
     setExecutorInput('');
@@ -203,6 +205,20 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
     }
   }
 
+  function setExecutionManagement(enabled: boolean) {
+    setManageExecution(enabled);
+    if (enabled) return;
+    setTreasuries((current) => current.map((item) => ({ ...item, executionOwner: 'multisigtools' })));
+    setContracts((current) => current.map((item) => ({
+      ...item,
+      executionOwner: 'multisigtools',
+      executor: undefined,
+    })));
+    setExecutorPool([]);
+    setExecutorInput('');
+    setError('');
+  }
+
   function setTreasuryExecution(accountId: string, executionOwner: ExecutionOwner) {
     setTreasuries((current) => current.map((item) => (
       item.accountId === accountId ? { ...item, executionOwner } : item
@@ -261,8 +277,8 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
       setError('Add a Classic Treasury or select at least one contract method.');
       return;
     }
-    if (step === 2 && !contractExecutionValid) {
-      setError('Each contract must use MultiSigTools or one executor from the global pool.');
+    if (step === 3 && !contractExecutionValid) {
+      setError('Each externally executed contract must use one executor from the global pool.');
       return;
     }
     if (step === 3 && !webhookValid) {
@@ -281,14 +297,17 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
         serviceId,
         label,
         network,
-        treasuries: treasuries.map((item) => ({ accountId: item.accountId, executionOwner: item.executionOwner })),
+        treasuries: treasuries.map((item) => ({
+          accountId: item.accountId,
+          executionOwner: manageExecution ? item.executionOwner : 'multisigtools',
+        })),
         contracts: contracts.map((item) => ({
           contractId: item.contractId,
           methods: item.selectedMethods,
-          executionOwner: item.executionOwner,
-          ...(item.executor ? { executor: item.executor } : {}),
+          executionOwner: manageExecution ? item.executionOwner : 'multisigtools',
+          ...(manageExecution && item.executor ? { executor: item.executor } : {}),
         })),
-        executorPool,
+        executorPool: manageExecution ? executorPool : [],
         authorizationExperience,
         ...(webhookEnabled ? { webhook: { url: webhookUrl, enabled: true } } : {}),
       });
@@ -393,22 +412,13 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
                 </button>
               </div>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_280px]">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500">Current signers</div>
-                  <div className="mt-2 divide-y divide-black/5 rounded-xl border border-black/10 dark:divide-white/5 dark:border-white/10">
-                    {item.snapshot.signers.filter((signer) => signer.weight > 0).map((signer) => <div key={signer.key} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                      <span className="min-w-0 truncate font-mono" title={signer.key}>{compactAddress(signer.key)}</span>
-                      <span className="whitespace-nowrap text-neutral-500">weight {signer.weight}</span>
-                    </div>)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500">When ready</div>
-                  <div className="mt-2 space-y-2">
-                    <SmallChoice selected={item.executionOwner === 'multisigtools'} onClick={() => setTreasuryExecution(item.accountId, 'multisigtools')} title="MultiSigTools submits" />
-                    <SmallChoice selected={item.executionOwner === 'integration'} onClick={() => setTreasuryExecution(item.accountId, 'integration')} title="My service submits" />
-                  </div>
+              <div className="mt-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500">Current signers</div>
+                <div className="mt-2 divide-y divide-black/5 rounded-xl border border-black/10 dark:divide-white/5 dark:border-white/10">
+                  {item.snapshot.signers.filter((signer) => signer.weight > 0).map((signer) => <div key={signer.key} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                    <span className="min-w-0 truncate font-mono" title={signer.key}>{compactAddress(signer.key)}</span>
+                    <span className="whitespace-nowrap text-neutral-500">weight {signer.weight}</span>
+                  </div>)}
                 </div>
               </div>
             </article>)}</div>}
@@ -416,28 +426,9 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
 
       {step === 2 && <div className="space-y-5">
         <div>
-          <h3 className="text-lg font-bold">Contracts and execution</h3>
-          <p className="mt-1 text-sm text-neutral-500">Add reusable executor accounts once, then bind each contract to MultiSigTools or one executor from that pool.</p>
+          <h3 className="text-lg font-bold">Soroban contracts</h3>
+          <p className="mt-1 text-sm text-neutral-500">Inspect deployed ABI and choose the methods this Integration may use. MultiSigTools handles execution by default.</p>
         </div>
-
-        <section className="ia-subframe">
-          <div className="font-bold">Executor pool</div>
-          <p className="mt-1 text-sm text-neutral-500">Server-side G... accounts that this Integration is allowed to use for Soroban execution.</p>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <input value={executorInput} onChange={(event) => setExecutorInput(event.target.value)} placeholder="G..." className="ia-input min-w-0 flex-1 font-mono text-sm" />
-            <button type="button" disabled={!executorInput.trim()} onClick={addExecutor} className="ia-action">
-              <Plus className="h-4 w-4" />Add executor
-            </button>
-          </div>
-          {executorPool.length === 0
-            ? <p className="mt-3 text-sm text-neutral-500">No external executor. Contracts can still use MultiSigTools-managed execution.</p>
-            : <div className="mt-3 divide-y divide-black/5 rounded-xl border border-black/10 dark:divide-white/5 dark:border-white/10">
-                {executorPool.map((executor) => <div key={executor} className="flex min-w-0 items-center justify-between gap-3 px-3 py-2">
-                  <span className="min-w-0 truncate font-mono text-xs" title={executor}>{executor}</span>
-                  <button type="button" onClick={() => removeExecutor(executor)} className="ia-action ia-action--danger text-xs">Remove</button>
-                </div>)}
-              </div>}
-        </section>
 
         <div className="flex flex-col gap-2 sm:flex-row">
           <input value={contractInput} onChange={(event) => setContractInput(event.target.value)} placeholder="C..." className="ia-input min-w-0 flex-1 font-mono text-sm" />
@@ -458,17 +449,6 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
                   <Trash2 className="h-3.5 w-3.5" />Remove
                 </button>
               </div>
-
-              <label className="mt-4 block text-sm font-semibold">Execution
-                <select
-                  value={item.executionOwner === 'multisigtools' ? 'multisigtools' : item.executor ?? ''}
-                  onChange={(event) => setContractExecutor(item.contractId, event.target.value)}
-                  className="ia-select mt-2 text-sm"
-                >
-                  <option value="multisigtools">MultiSigTools managed</option>
-                  {executorPool.map((executor) => <option key={executor} value={executor}>{compactAddress(executor)}</option>)}
-                </select>
-              </label>
 
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 {item.methods.map((method) => <label key={method.name} className="flex min-w-0 cursor-pointer items-start gap-3 rounded-xl border border-black/10 p-3 dark:border-white/10">
@@ -491,6 +471,79 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
           <ChoiceCard selected={authorizationExperience === 'hosted'} onClick={() => setAuthorizationExperience('hosted')} title="MST-hosted" description="MultiSigTools handles signer interaction. Lowest integration effort." />
           <ChoiceCard selected={authorizationExperience === 'native'} onClick={() => setAuthorizationExperience('native')} title="On my site" description="Use your own wallet and signing UI while MultiSigTools coordinates and verifies authorization." />
           <ChoiceCard selected={authorizationExperience === 'headless'} onClick={() => setAuthorizationExperience('headless')} title="Full Headless" description="Expose the full supported orchestration, execution and automation surface." />
+        </div>
+
+        <div className="border-t border-black/10 pt-5 dark:border-white/10">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="font-bold">Execution</div>
+              <p className="mt-1 max-w-2xl text-sm text-neutral-500">
+                MultiSigTools manages transaction sources, sequence, fees and submission by default.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setExecutionManagement(!manageExecution)}
+              className="ia-action"
+            >
+              {manageExecution ? 'Use MultiSigTools managed' : 'Manage execution myself'}
+            </button>
+          </div>
+
+          {!manageExecution && <div className="mt-4 flex items-center gap-2 text-sm font-semibold">
+            <Check className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
+            Managed by MultiSigTools
+          </div>}
+
+          {manageExecution && <div className="mt-5 space-y-6">
+            {treasuries.length > 0 && <section className="ia-subframe">
+              <div className="font-bold">Classic routing</div>
+              <p className="mt-1 text-sm text-neutral-500">Choose which Treasury transactions your service will submit itself.</p>
+              <div className="mt-3 divide-y divide-black/5 dark:divide-white/5">
+                {treasuries.map((item) => <div key={item.accountId} className="grid gap-3 py-3 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
+                  <div className="min-w-0">
+                    <div className="break-all font-mono text-xs font-semibold">{item.accountId}</div>
+                    <div className="mt-1 text-xs text-neutral-500">Signer authority remains the live Stellar account policy.</div>
+                  </div>
+                  <div>
+                    <SmallChoice selected={item.executionOwner === 'multisigtools'} onClick={() => setTreasuryExecution(item.accountId, 'multisigtools')} title="MultiSigTools managed" />
+                    <SmallChoice selected={item.executionOwner === 'integration'} onClick={() => setTreasuryExecution(item.accountId, 'integration')} title="My service submits" />
+                  </div>
+                </div>)}
+              </div>
+            </section>}
+
+            {contracts.length > 0 && <section className="ia-subframe">
+              <div className="font-bold">Soroban executors</div>
+              <p className="mt-1 text-sm text-neutral-500">Add reusable server-side execution accounts, then bind only the contracts you want to execute yourself.</p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <input value={executorInput} onChange={(event) => setExecutorInput(event.target.value)} placeholder="G..." className="ia-input min-w-0 flex-1 font-mono text-sm" />
+                <button type="button" disabled={!executorInput.trim()} onClick={addExecutor} className="ia-action">
+                  <Plus className="h-4 w-4" />Add executor
+                </button>
+              </div>
+              {executorPool.length > 0 && <div className="ia-pool">
+                {executorPool.map((executor) => <div key={executor} className="ia-pool__row">
+                  <span className="ia-code" title={executor}>{executor}</span>
+                  <button type="button" onClick={() => removeExecutor(executor)} className="ia-action ia-action--danger text-xs">Remove</button>
+                </div>)}
+              </div>}
+
+              <div className="mt-5 divide-y divide-black/5 dark:divide-white/5">
+                {contracts.map((item) => <label key={item.contractId} className="block py-3 text-sm font-semibold">
+                  <span className="ia-code block">{item.contractId}</span>
+                  <select
+                    value={item.executionOwner === 'multisigtools' ? 'multisigtools' : item.executor ?? ''}
+                    onChange={(event) => setContractExecutor(item.contractId, event.target.value)}
+                    className="ia-select mt-2 text-sm"
+                  >
+                    <option value="multisigtools">MultiSigTools managed</option>
+                    {executorPool.map((executor) => <option key={executor} value={executor}>{compactAddress(executor)}</option>)}
+                  </select>
+                </label>)}
+              </div>
+            </section>}
+          </div>}
         </div>
 
         <div className="border-t border-black/10 pt-5 dark:border-white/10">
@@ -522,11 +575,19 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
             <ReviewRow label="Network" value={network === 'public' ? 'Mainnet' : 'Testnet'} />
           </ReviewBlock>
           <ReviewBlock title="Integration">
-            <ReviewRow label="Authorization" value={authorizationExperience === 'hosted' ? 'MST-hosted' : authorizationExperience === 'native' ? 'Keep users on my site' : 'Full Headless'} />
+            <ReviewRow label="Authorization" value={authorizationExperience === 'hosted' ? 'MST-hosted' : authorizationExperience === 'native' ? 'On my site' : 'Full Headless'} />
+            <ReviewRow label="Execution" value={manageExecution ? 'Custom routing' : 'Managed by MultiSigTools'} />
             <ReviewRow label="Webhook" value={webhookEnabled ? webhookUrl.trim() : 'Off'} mono={webhookEnabled} />
           </ReviewBlock>
           <ReviewBlock title="Classic">
-            {treasuries.length === 0 ? <p className="text-sm text-neutral-500">No Treasury scope.</p> : treasuries.map((item) => <ReviewRow key={item.accountId} label={compactAddress(item.accountId)} value={ownerLabel(item.executionOwner)} mono />)}
+            {treasuries.length === 0
+              ? <p className="text-sm text-neutral-500">No Treasury scope.</p>
+              : treasuries.map((item) => <ReviewRow
+                  key={item.accountId}
+                  label={compactAddress(item.accountId)}
+                  value={manageExecution ? ownerLabel(item.executionOwner) : 'Allowed'}
+                  mono
+                />)}
           </ReviewBlock>
           <ReviewBlock title="Soroban">
             {contracts.filter((item) => item.selectedMethods.length > 0).length === 0
@@ -534,11 +595,11 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
               : contracts.filter((item) => item.selectedMethods.length > 0).map((item) => <div key={item.contractId} className="border-b border-black/5 py-2 last:border-0 dark:border-white/5">
                   <div className="font-mono text-xs break-all">{item.contractId}</div>
                   <div className="mt-1 text-sm">{item.selectedMethods.join(', ')}</div>
-                  <div className="mt-1 text-xs text-neutral-500">
+                  {manageExecution && <div className="mt-1 text-xs text-neutral-500">
                     Execution: {item.executionOwner === 'multisigtools' ? 'MultiSigTools managed' : compactAddress(item.executor ?? '')}
-                  </div>
+                  </div>}
                 </div>)}
-            {executorPool.length > 0 && <div className="mt-3 text-xs text-neutral-500">{executorPool.length} executor{executorPool.length === 1 ? '' : 's'} in global pool.</div>}
+            {manageExecution && executorPool.length > 0 && <div className="mt-3 text-xs text-neutral-500">{executorPool.length} executor{executorPool.length === 1 ? '' : 's'} in global pool.</div>}
           </ReviewBlock>
         </div>
 

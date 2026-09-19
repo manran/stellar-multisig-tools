@@ -333,17 +333,22 @@ export default function IntegrationAdminApp() {
 
 function IntegrationProfileDetail({ service, onRotate, busy }: { service: ServiceSummary; onRotate: () => void; busy: boolean }) {
   const experience = service.profile.authorizationExperience === 'hosted'
-    ? 'MultiSigTools handles authorization'
+    ? 'MST-hosted'
     : service.profile.authorizationExperience === 'native'
-      ? 'Keep users on my site'
-      : 'Full Headless control';
+      ? 'On my site'
+      : 'Full Headless';
   const externalClassic = new Set(service.classicExternalExecutionSourceAccounts);
+  const hasCustomExecution = externalClassic.size > 0
+    || service.sorobanExecutionAccounts.length > 0
+    || Boolean(service.sorobanDefaultExecutor)
+    || service.sorobanContracts.some((contract) => contract.execution?.mode === 'external');
 
   return <div className="ia-profile-grid">
     <div className="grid gap-4 md:grid-cols-2">
       <ProfileBlock title="Identity">
         <ProfileRow label="Networks" value={service.networks.map((network) => network === 'public' ? 'Mainnet' : 'Testnet').join(', ')} />
         <ProfileRow label="Authorization" value={experience} />
+        <ProfileRow label="Execution" value={hasCustomExecution ? 'Custom routing' : 'Managed by MultiSigTools'} />
         <ProfileRow label="Source" value={service.source === 'durable' ? 'Durable profile' : 'Deployment bootstrap'} />
       </ProfileBlock>
 
@@ -362,7 +367,7 @@ function IntegrationProfileDetail({ service, onRotate, busy }: { service: Servic
         : <div className="divide-y divide-black/5 dark:divide-white/5">
             {service.classicSourceAccounts.map((accountId) => <div key={accountId} className="grid gap-1 py-3 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-4">
               <span className="min-w-0 break-all font-mono text-xs">{accountId}</span>
-              <span className="text-sm font-medium">{externalClassic.has(accountId) ? 'My service submits' : 'MultiSigTools submits'}</span>
+              <span className="text-sm font-medium">{hasCustomExecution ? (externalClassic.has(accountId) ? 'My service submits' : 'MST managed') : 'Allowed'}</span>
             </div>)}
           </div>}
     </ProfileBlock>
@@ -380,18 +385,18 @@ function IntegrationProfileDetail({ service, onRotate, busy }: { service: Servic
               return <div key={contract.contractId} className="ia-contract-row">
                 <div className="ia-code font-semibold">{contract.contractId}</div>
                 <div className="ia-methods">{contract.methods.map((method) => <span key={method} className="ia-method">{method}</span>)}</div>
-                <div className="ia-muted mt-3 text-xs">
+                {hasCustomExecution && <div className="ia-muted mt-3 text-xs">
                   Execution · <span className="break-all font-mono">{execution}</span>
-                </div>
+                </div>}
               </div>;
             })}
-            <div className="border-t border-black/10 pt-3 text-sm dark:border-white/10">
+            {hasCustomExecution && service.sorobanExecutionAccounts.length > 0 && <div className="border-t border-black/10 pt-3 text-sm dark:border-white/10">
               <span className="text-neutral-500">Executor pool: </span>
               <span className="font-medium">{service.sorobanExecutionAccounts.length}</span>
-              {service.sorobanExecutionAccounts.length > 0 && <div className="mt-2 space-y-1">
+              <div className="mt-2 space-y-1">
                 {service.sorobanExecutionAccounts.map((executor) => <div key={executor} className="break-all font-mono text-xs">{executor}</div>)}
-              </div>}
-            </div>
+              </div>
+            </div>}
           </div>}
     </ProfileBlock>
 

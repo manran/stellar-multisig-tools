@@ -356,9 +356,11 @@ Classic Treasury scope
         ↓
 Soroban Contract scope
         ↓
-Execution ownership
-        ↓
 Integration depth
+        ↓
+Execution: MultiSigTools managed by default
+        ↓
+Optional advanced execution routing
         ↓
 Optional status delivery
         ↓
@@ -382,8 +384,7 @@ The operator/integrator provides a Stellar `G...` Treasury address. MST resolves
 - current low / medium / high thresholds;
 - active signer addresses and weights;
 - authorization-policy summaries;
-- whether this Integration permits coordination for that Treasury;
-- execution ownership for work sourced from that Treasury.
+- whether this Integration permits coordination for that Treasury.
 
 Execution ownership is separate from signer authority:
 
@@ -394,10 +395,27 @@ Execution ownership       -> MultiSigTools or external Integration
 
 The Integration Profile never invents or overrides account signers.
 
-For the current runtime model, Classic execution maps directly to:
+For ordinary Integration users, execution is not another setup decision. MultiSigTools manages it by default.
 
-- MST submits -> account is allowed in `classicSourceAccounts` but not in `classicExternalExecutionSourceAccounts`;
-- Integration submits -> account appears in both arrays.
+For **semantic Classic payment Requests**, managed execution separates transaction mechanics from business authority:
+
+```text
+Treasury G...        -> Payment operation source + live signer authority
+MST channel G...     -> transaction source + sequence + fee + submission
+```
+
+The channel is pre-signed only for transaction-source authority. Treasury signers still authorize the Payment operation under the Treasury's current Stellar thresholds. MST therefore does not become a Treasury signer and cannot change the business operation after signatures begin.
+
+Managed Classic v1 intentionally uses a simple Channel Account Pool:
+
+- channel seeds exist only in deployment secret configuration;
+- PostgreSQL stores only public channel/request leases;
+- one channel carries at most one active Request at a time;
+- concurrency scales by adding channels, not by speculative sequence pipelining;
+- a lease is released after confirmed submission or may be reclaimed after Request expiry;
+- semantic creation can safely reconstruct transaction source; raw XDR is never silently rewritten.
+
+If an Integration explicitly chooses **Manage execution myself**, an allowed Treasury is also listed in `classicExternalExecutionSourceAccounts` and the Integration owns transaction source/sequence/submission for that work.
 
 ### Soroban Contract onboarding
 
@@ -405,7 +423,7 @@ The operator/integrator provides a Stellar `C...` contract address. MST resolves
 
 The user selects the methods this Integration may invoke. The profile stores an explicit allowlist; empty means no access, never wildcard access.
 
-Execution configuration is shown after method scope because execution is a consequence of allowed work, not the source of contract authority.
+Execution configuration is hidden from the ordinary path. Every new Guided contract defaults to MultiSigTools-managed execution. Only **Manage execution myself** reveals the global Executor Pool and per-contract routing, because execution is a consequence of allowed work rather than the source of contract authority.
 
 For the current runtime model:
 
@@ -437,6 +455,36 @@ Suggested product copy:
 - **Full Headless control** — expose the complete supported orchestration, execution and automation surface.
 
 The profile stores this as product preference / disclosure state. It does not weaken the underlying API authority checks.
+
+### Progressive execution disclosure
+
+Authorization experience and execution ownership are orthogonal.
+
+The normal product surface says only:
+
+```text
+Execution
+Managed by MultiSigTools
+
+[ Manage execution myself ]
+```
+
+Leaving the default selected means:
+
+- Classic semantic workflows use MST-managed transaction-source channels;
+- Soroban uses MST-managed execution;
+- the integrator does not configure source accounts, sequence handling, fee payment, Executor Pool or per-contract execution routing.
+
+Opening **Manage execution myself** reveals the existing advanced capabilities without creating a second execution engine:
+
+- Classic Treasury routing: MST managed / Integration submits;
+- Soroban global Executor Pool;
+- per-contract executor binding;
+- Expert raw fields for legacy/default execution policies.
+
+Turning advanced execution back off clears hidden custom routing before saving, so invisible stale authority cannot survive the disclosure change.
+
+Raw Classic XDR remains an Expert boundary. MST will coordinate exact XDR according to its declared sources but will not silently replace its transaction source with a managed channel. Managed transaction-source execution is guaranteed only for semantic operations MST can safely reconstruct.
 
 ### Status delivery
 
@@ -476,7 +524,7 @@ It should answer:
 
 ```text
 What can this Integration operate?
-Who owns execution?
+Is execution managed by MST, or has this Integration explicitly taken it over?
 How do users authorize?
 How are status updates delivered?
 What credential lifecycle actions exist?
@@ -491,15 +539,16 @@ Networks / enabled state
 Classic Treasuries
   G...
   live signer policy summary
-  execution: MST / Integration
 
 Soroban Contracts
   C...
   allowed methods
-  execution: MST managed / bound global executor
 
-Executor Pool
-  allowed G... execution accounts
+Execution
+  Managed by MultiSigTools              <- default summary
+  OR custom routing                     <- expand only when configured
+    Classic Treasury routing
+    Soroban Executor Pool / contract binding
 
 Authorization experience
   Hosted / Keep users on my site / Full Headless
@@ -521,14 +570,18 @@ The first production slice keeps existing authority semantics and changes the pr
 1. Create Wizard replaces the raw multiline scope editor for new Integrations.
 2. Treasury analysis reuses Horizon account loading + existing authorization analysis.
 3. Contract analysis reuses the existing Contract Interface endpoint.
-4. Classic execution maps to the existing per-account external-execution allowlist.
-5. Soroban execution reuses the existing Service-wide executor allowlist as a global Executor Pool and adds an enforced per-contract execution policy (`multisigtools` or one pool member).
-6. Legacy records without per-contract execution metadata retain the previous Service-default/Intent-override semantics; new Guided Profiles emit explicit contract policies.
-7. Integration depth is persisted as profile metadata for product disclosure; it does not create a second authorization policy engine.
-8. Webhook remains optional and orthogonal.
-9. Existing `MSI_*` creation/rotation semantics remain unchanged.
-10. Existing durable Integration records remain readable; missing profile metadata defaults to the most permissive disclosure view for operators, not to weaker runtime authority.
-11. Partner self-service login is a later delivery concern. This first slice validates the provisioning model on the existing protected Integration administration surface.
+4. MultiSigTools-managed execution is the Guided default and is not presented as a mandatory setup decision.
+5. Managed semantic Classic Payment uses an MST Channel Account as transaction source while retaining the Treasury as explicit operation source; channel seeds never enter PostgreSQL.
+6. PostgreSQL coordinates one-active-Request-per-channel leases; v1 deliberately avoids sequence pipelining.
+7. Classic external execution continues to use the existing per-Treasury external-execution allowlist when advanced execution is enabled.
+8. Soroban external execution reuses the Service-wide executor allowlist as a global Executor Pool plus enforced per-contract policy (`multisigtools` or one pool member).
+9. Raw Classic XDR stays Expert-managed and is never silently rewritten into the channel model.
+10. Legacy records without per-contract execution metadata retain the previous Service-default/Intent-override semantics; new Guided Profiles emit explicit contract policies.
+11. Integration depth is persisted as profile metadata for product disclosure; it does not create a second authorization policy engine.
+12. Webhook remains optional and orthogonal.
+13. Existing `MSI_*` creation/rotation semantics remain unchanged.
+14. Existing durable Integration records remain readable; missing profile metadata defaults to the most permissive disclosure view for operators, not to weaker runtime authority.
+15. Partner self-service login is a later delivery concern. This first slice validates the provisioning model on the existing protected Integration administration surface.
 
 ## 11. Delivery phases
 

@@ -102,7 +102,7 @@ function security(path: string, method: string, access: HeadlessOperationAccess)
   }
   if (path === '/api/contracts') return [{ agentBearer: [] }, { humanSession: [] }];
   if (path === '/api/payment-prepare' || path === '/api/account-create-prepare') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
-  if (path === '/api/request' && method === 'put') return [{ humanSession: [] }, { requestCapability: [] }];
+  if (path === '/api/request' && method === 'put') return [{ integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
   if (path === '/api/request' && (method === 'post' || method === 'get')) {
     return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
   }
@@ -1041,6 +1041,8 @@ const components: OpenApiObject = {
         network: stellarNetwork,
         sourceAccount: accountId,
         sourceSequence: { type: 'string' },
+        transactionSourceAccount: { ...accountId, description: 'Present when transaction-source execution is separated from the business Treasury source.' },
+        transactionSourceSequence: { type: 'string', description: 'Current sequence used to prepare the separate transaction-source account.' },
         paymentCount: { type: 'integer', minimum: 1, maximum: 100 },
         feeStroops: { type: 'string', pattern: '^\\d+$' },
         validUntil: timestamp,
@@ -1086,7 +1088,7 @@ const components: OpenApiObject = {
       required: ['network'],
       oneOf: [
         { required: ['xdr'] },
-        { required: ['payment'], description: 'Semantic Classic payment creation is currently available to Integration Service callers.' },
+        { required: ['payment'], description: 'Semantic Classic payment creation is available to Integration Service callers. When the Treasury uses MultiSigTools-managed execution, MST supplies the transaction source, sequence, fee and submission while the Treasury remains the Payment operation source and authorization authority.' },
       ],
       properties: {
         network: stellarNetwork,

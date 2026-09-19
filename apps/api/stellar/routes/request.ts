@@ -2,6 +2,8 @@ import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js'
 import { blobAuthStore } from '../server/blobAuthStore.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
 import {
+  ClassicManagedExecutionStorageUnavailableError,
+  runtimeClassicManagedChannelStore,
   runtimeSigningRequestStore,
   runtimeSorobanIntentStore,
   withSigningRequestCreate,
@@ -21,6 +23,8 @@ import {
 import type { ConfiguredIntegrationCredential } from '../server/integrationCredentialService.js';
 import { CallerAuthenticationError, machineCallerFromRequest, verifiedSignerSessionFromRequest } from '../server/callerAuthentication.js';
 import { createIntegrationPaymentSigningRequest, createIntegrationSigningRequest } from '../server/integrationRequestService.js';
+import { ClassicManagedChannelServiceError } from '../server/classicManagedChannelService.js';
+import { ClassicManagedChannelConfigurationError } from '../server/classicManagedChannelConfig.js';
 import { ClassicPaymentPrepareError, type ClassicPaymentInstruction } from '../../../../src/stellar/classicPaymentPrepare.js';
 import { BoxServiceError } from '../server/boxService.js';
 import {
@@ -132,7 +136,17 @@ function errorResponse(cause: unknown): Response {
   if (cause instanceof RequestBodyError) {
     return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
   }
-  if (cause instanceof CallerAuthenticationError || cause instanceof AgentCredentialServiceError || cause instanceof IntegrationCredentialServiceError || cause instanceof BoxServiceError || cause instanceof ClassicPaymentPrepareError || cause instanceof SorobanRequestOriginError) {
+  if (
+    cause instanceof CallerAuthenticationError
+    || cause instanceof AgentCredentialServiceError
+    || cause instanceof IntegrationCredentialServiceError
+    || cause instanceof BoxServiceError
+    || cause instanceof ClassicPaymentPrepareError
+    || cause instanceof SorobanRequestOriginError
+    || cause instanceof ClassicManagedChannelServiceError
+    || cause instanceof ClassicManagedChannelConfigurationError
+    || cause instanceof ClassicManagedExecutionStorageUnavailableError
+  ) {
     return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
   }
   if (cause instanceof SigningRequestServiceError) {
@@ -186,6 +200,40 @@ async function recordActivityBestEffort(action: () => Promise<void>): Promise<vo
     // Signing/request state is authoritative. Activity can be reconstructed from
     // those hard facts and must not turn a successful user action into a failure.
     console.error('Signing request activity write failed', cause);
+  }
+}
+
+async function releaseManagedClassicLeaseBestEffort(requestId: string): Promise<void> {
+  try {
+    await runtimeClassicManagedChannelStore().releaseRequest(requestId);
+  } catch (cause) {
+    if (!(cause instanceof ClassicManagedExecutionStorageUnavailableError)) {
+      console.error('Managed Classic channel release failed', { requestId, cause });
+    }
+  }
+}
+
+async function autoSubmitManagedIntegrationRequest(
+  access: AuthorizedRequest,
+  snapshot: Awaited<ReturnType<typeof getSigningRequest>>,
+): Promise<typeof snapshot> {
+  if (
+    !access.stored.integration
+    || access.stored.executionPolicy?.mode !== 'multisigtools'
+    || snapshot.status !== 'ready'
+  ) return snapshot;
+  try {
+    const submitted = await submitSigningRequest(signingRequestStore, access.id, {
+      ...serviceOptions,
+      submittedByAddress: access.actorAddress,
+    });
+    await releaseManagedClassicLeaseBestEffort(access.id);
+    return submitted;
+  } catch (cause) {
+    // The signature contribution is already durable. Submission is deliberately
+    // retriable and must not turn accepted authorization into a failed PATCH.
+    console.error('Managed Integration Classic auto-submit failed', { requestId: access.id, cause });
+    return snapshot;
   }
 }
 
@@ -745,7 +793,11 @@ export async function POST(request: Request): Promise<Response> {
             idempotencyKey,
             externalReference: body.externalReference,
           },
-          { ...serviceOptions, accountLoader: loadAccount },
+          {
+            ...serviceOptions,
+            accountLoader: loadAccount,
+            managedChannelStoreFactory: runtimeClassicManagedChannelStore,
+          },
         );
         return noStoreJson({
           request: result.request,
@@ -1049,12 +1101,14 @@ export async function PATCH(request: Request): Promise<Response> {
     for (const signerAddress of result.acceptedSignerAddresses) {
       await bindRequestParticipantBestEffort(access.id, signerAddress);
     }
+    const responseRequest = await autoSubmitManagedIntegrationRequest(access, result.request);
 
     if (
       access.mode !== 'agent'
       && result.addedSignatureCount === 1
       && result.contributionDigest
       && result.acceptedSignerAddresses.length === 1
+      && responseRequest.status !== 'submitted'
     ) {
       try {
         const signerAddress = result.acceptedSignerAddresses[0];
@@ -1066,7 +1120,7 @@ export async function PATCH(request: Request): Promise<Response> {
         }, authConfigForRequest(request));
         return noStoreJson(
           {
-            request: result.request,
+            request: responseRequest,
             addedSignatureCount: result.addedSignatureCount,
             duplicateSignatureCount: result.duplicateSignatureCount,
             access: { contributionGrantExpiresAt: issued.grant.expiresAt },
@@ -1082,13 +1136,13 @@ export async function PATCH(request: Request): Promise<Response> {
     }
 
     return noStoreJson({
-      request: result.request,
+      request: responseRequest,
       addedSignatureCount: result.addedSignatureCount,
       duplicateSignatureCount: result.duplicateSignatureCount,
       ...(access.contributionGrantExpiresAt
         ? { access: { contributionGrantExpiresAt: access.contributionGrantExpiresAt } }
         : {}),
-      ...(access.mode === 'agent' ? { task: agentRequestTask(access, result.request) } : {}),
+      ...(access.mode === 'agent' ? { task: agentRequestTask(access, responseRequest) } : {}),
     });
   } catch (cause) {
     return errorResponse(cause);
@@ -1106,9 +1160,9 @@ export async function PUT(request: Request): Promise<Response> {
         'external_executor_required',
       );
     }
-    if (access.mode === 'service') {
+    if (access.mode === 'service' && access.stored.executionPolicy?.mode !== 'multisigtools') {
       throw new SigningRequestServiceError(
-        'Integration credentials can coordinate and inspect Classic Requests but cannot trigger MultiSigTools network submission.',
+        'Integration credentials cannot submit externally executed Classic Requests.',
         403,
         'integration_submit_denied',
       );
@@ -1144,6 +1198,9 @@ export async function PUT(request: Request): Promise<Response> {
     });
     if (access.mode === 'session' && access.actorAddress && !access.activityBound) {
       await bindRequestParticipantBestEffort(snapshot.id, access.actorAddress);
+    }
+    if (snapshot.status === 'submitted' && access.stored.integration) {
+      await releaseManagedClassicLeaseBestEffort(snapshot.id);
     }
     return noStoreJson({ request: snapshot });
   } catch (cause) {

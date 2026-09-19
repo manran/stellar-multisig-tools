@@ -140,7 +140,7 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
   },
   {
     id: 'integration.request.create', version: 1, method: 'POST', path: '/api/request',
-    access: 'integration:write', effect: 'coordination-state', summary: 'Create a scoped external-service Classic multisig Request for configured authorization accounts.',
+    access: 'integration:write', effect: 'coordination-state', summary: 'Create a scoped external-service Classic Request; semantic managed execution can use MultiSigTools transaction-source channels.',
   },
   {
     id: 'proposal.inspect', version: 1, method: 'GET', path: '/api/request',
@@ -157,5 +157,9 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
   {
     id: 'proposal.submit', version: 1, method: 'PUT', path: '/api/request',
     access: 'human', effect: 'network-submit', summary: 'Submit an authorized transaction to Stellar after final review.',
+  },
+  {
+    id: 'integration.request.submit', version: 1, method: 'PUT', path: '/api/request',
+    access: 'integration:write', effect: 'network-submit', summary: 'Retry submission of an already-authorized MultiSigTools-managed Classic Request owned by this Integration.',
   },
 ] as const;

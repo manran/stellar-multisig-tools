@@ -43,4 +43,7 @@ test('runtime policy and contract vertical slice are available to every transpor
   assert.equal(byId.get('classic.payment.prepare')?.path, '/api/payment-prepare');
   assert.equal(byId.get('classic.account.create.prepare')?.path, '/api/account-create-prepare');
   assert.equal(byId.get('integration.classic.account.create.prepare')?.access, 'integration:write');
+  assert.equal(byId.get('integration.request.create')?.access, 'integration:write');
+  assert.equal(byId.get('integration.request.submit')?.access, 'integration:write');
+  assert.equal(byId.get('integration.request.submit')?.effect, 'network-submit');
 });

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { Keypair } from '@stellar/stellar-sdk/base';
 import type { PrivateCommitmentRecord } from '../../../../src/stellar/privateCommitment.js';
 import { normalizeClassicPaymentInstruction, prepareClassicPayment, type ClassicPaymentInstruction } from '../../../../src/stellar/classicPaymentPrepare.js';
 import type { SigningRequestSnapshot } from '../../../../src/stellar/requestTypes.js';
@@ -19,12 +20,20 @@ import {
   type NetworkParametersLoader,
 } from './requestService.js';
 import type { SigningRequestStore, StoredSigningRequest } from './requestStore.js';
+import type { ClassicManagedChannelLeaseStore } from './classicManagedChannelStore.js';
+import {
+  ClassicManagedChannelServiceError,
+  reserveClassicManagedChannel,
+  signClassicManagedTransaction,
+} from './classicManagedChannelService.js';
 
 interface IntegrationRequestOptions {
   now?: Date;
   accountLoader?: AccountLoader;
   networkParametersLoader?: NetworkParametersLoader;
   requestIdFactory?: (serviceId: string, idempotencyKey: string) => string;
+  managedChannelStoreFactory?: () => ClassicManagedChannelLeaseStore;
+  managedChannels?: Keypair[];
 }
 
 export interface IntegrationRequestCreationResult {
@@ -47,6 +56,7 @@ function integrationClassicExecutionMode(
   credential: ConfiguredIntegrationCredential,
   network: StellarNetwork,
   xdr: string,
+  managedTransactionSource?: string,
 ): 'multisigtools' | 'external' {
   let inspection;
   try { inspection = inspectTransactionXdr(xdr, network); } catch (cause) {
@@ -59,7 +69,20 @@ function integrationClassicExecutionMode(
       'integration_network_not_allowed',
     );
   }
-  if (inspection.innerSignatureCount > 0 || inspection.outerSignatureCount > 0) {
+  if (managedTransactionSource) {
+    if (
+      inspection.envelopeType !== 'transaction'
+      || inspection.transactionSourceAccount !== managedTransactionSource
+      || inspection.innerSignatureCount !== 1
+      || inspection.outerSignatureCount !== 0
+    ) {
+      throw new BoxServiceError(
+        'Managed Classic semantic input must contain exactly the reserved MultiSigTools transaction-source signature.',
+        500,
+        'managed_classic_signature_invalid',
+      );
+    }
+  } else if (inspection.innerSignatureCount > 0 || inspection.outerSignatureCount > 0) {
     throw new BoxServiceError(
       'Integration-created Requests must start from unsigned transaction XDR.',
       400,
@@ -74,7 +97,9 @@ function integrationClassicExecutionMode(
     );
   }
   const allowedAccounts = new Set(credential.classicSourceAccounts);
-  const requiredAccounts = [...new Set<string>(inspection.sourceRequirements.map((item) => String(item.accountId)))];
+  const requiredAccounts = [...new Set<string>(inspection.sourceRequirements
+    .map((item) => String(item.accountId))
+    .filter((accountId) => accountId !== managedTransactionSource))];
   const deniedAccounts = requiredAccounts.filter((accountId) => !allowedAccounts.has(accountId));
   if (deniedAccounts.length > 0) {
     throw new BoxServiceError(
@@ -92,6 +117,7 @@ function integrationClassicExecutionMode(
       'integration_classic_execution_policy_conflict',
     );
   }
+  if (managedTransactionSource) return 'multisigtools';
   return externalCount === requiredAccounts.length ? 'external' : 'multisigtools';
 }
 
@@ -146,12 +172,18 @@ export async function createIntegrationSigningRequest(
     externalReference?: unknown;
     privateCommitment?: PrivateCommitmentRecord;
     instructionDigest?: string;
+    managedTransactionSource?: string;
   },
   options: IntegrationRequestOptions = {},
 ): Promise<IntegrationRequestCreationResult> {
   const now = options.now ?? new Date();
   const normalizedXdr = input.xdr.trim();
-  const executionMode = integrationClassicExecutionMode(credential, input.network, normalizedXdr);
+  const executionMode = integrationClassicExecutionMode(
+    credential,
+    input.network,
+    normalizedXdr,
+    input.managedTransactionSource,
+  );
   const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
   const externalReference = normalizeExternalReference(input.externalReference);
   const requestId = options.requestIdFactory?.(credential.serviceId, idempotencyKey)
@@ -280,18 +312,72 @@ export async function createIntegrationPaymentSigningRequest(
     };
   }
 
-  const prepared = await prepareClassicPayment(normalized, {
-    accountLoader: options.accountLoader,
-    networkParametersLoader: options.networkParametersLoader,
-  });
-  return createIntegrationSigningRequest(requestStore, credential, {
+  if (executionMode === 'external') {
+    const prepared = await prepareClassicPayment(normalized, {
+      accountLoader: options.accountLoader,
+      networkParametersLoader: options.networkParametersLoader,
+    });
+    return createIntegrationSigningRequest(requestStore, credential, {
+      network: normalized.network,
+      xdr: prepared.xdr,
+      idempotencyKey,
+      instructionDigest,
+      ...(externalReference ? { externalReference } : {}),
+    }, {
+      ...options,
+      requestIdFactory: () => requestId,
+    });
+  }
+
+  const channelStore = options.managedChannelStoreFactory?.();
+  if (!channelStore) {
+    throw new ClassicManagedChannelServiceError(
+      'MultiSigTools-managed Classic execution requires managed channel storage.',
+      503,
+      'managed_classic_execution_unavailable',
+    );
+  }
+
+  const now = options.now ?? new Date();
+  const leaseExpiresAt = new Date(
+    now.getTime() + (normalized.lifetimeSeconds * 1000) + 60_000,
+  ).toISOString();
+  const channel = await reserveClassicManagedChannel(channelStore, {
     network: normalized.network,
-    xdr: prepared.xdr,
-    idempotencyKey,
-    instructionDigest,
-    ...(externalReference ? { externalReference } : {}),
+    requestId,
+    leaseExpiresAt,
   }, {
-    ...options,
-    requestIdFactory: () => requestId,
+    now,
+    accountLoader: options.accountLoader,
+    channels: options.managedChannels,
   });
+
+  try {
+    const prepared = await prepareClassicPayment(normalized, {
+      accountLoader: options.accountLoader,
+      networkParametersLoader: options.networkParametersLoader,
+      transactionSource: {
+        accountId: channel.accountId,
+        sequence: channel.sequence,
+        snapshot: channel.account,
+      },
+    });
+    const signedXdr = signClassicManagedTransaction(prepared.xdr, normalized.network, channel);
+    return await createIntegrationSigningRequest(requestStore, credential, {
+      network: normalized.network,
+      xdr: signedXdr,
+      idempotencyKey,
+      instructionDigest,
+      managedTransactionSource: channel.accountId,
+      ...(externalReference ? { externalReference } : {}),
+    }, {
+      ...options,
+      now,
+      requestIdFactory: () => requestId,
+    });
+  } catch (cause) {
+    const durable = await requestStore.getRequest(requestId).catch(() => null);
+    if (!durable) await channelStore.releaseRequest(requestId).catch(() => undefined);
+    throw cause;
+  }
 }

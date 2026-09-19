@@ -1,11 +1,13 @@
 import type { SigningRequestStore } from './requestStore.js';
 import type { SorobanIntentStore } from './sorobanIntentStore.js';
 import type { SorobanBrowserAuthorizationStore } from './sorobanBrowserAuthorizationStore.js';
+import type { ClassicManagedChannelLeaseStore } from './classicManagedChannelStore.js';
 import { blobSigningRequestStore } from './blobRequestStore.js';
 import { blobSorobanIntentStore } from './blobSorobanIntentStore.js';
 import { createPostgresSigningRequestStore } from '../db/postgresSigningRequestStore.js';
 import { createPostgresSorobanIntentStore } from '../db/postgresSorobanIntentStore.js';
 import { createPostgresSorobanBrowserAuthorizationStore } from '../db/postgresSorobanBrowserAuthorizationStore.js';
+import { createPostgresClassicManagedChannelStore } from '../db/postgresClassicManagedChannelStore.js';
 
 export type CoordinationStorageMode = 'blob' | 'postgres';
 
@@ -30,6 +32,7 @@ export function coordinationStorageMode(
 let postgresRequestStore: SigningRequestStore | null = null;
 let postgresIntentStore: SorobanIntentStore | null = null;
 let postgresBrowserAuthorizationStore: SorobanBrowserAuthorizationStore | null = null;
+let postgresClassicManagedChannelStore: ClassicManagedChannelLeaseStore | null = null;
 
 function overrideBoundMethod<T extends object>(
   target: T,
@@ -90,4 +93,21 @@ export function runtimeSorobanBrowserAuthorizationStore(
   if (mode !== 'postgres') throw new BrowserAuthorizationStorageUnavailableError();
   postgresBrowserAuthorizationStore ??= createPostgresSorobanBrowserAuthorizationStore();
   return postgresBrowserAuthorizationStore;
+}
+
+export class ClassicManagedExecutionStorageUnavailableError extends Error {
+  readonly status = 503;
+  readonly code = 'managed_classic_execution_storage_unavailable';
+  constructor() {
+    super('MultiSigTools-managed Classic execution requires PostgreSQL coordination storage.');
+    this.name = 'ClassicManagedExecutionStorageUnavailableError';
+  }
+}
+
+export function runtimeClassicManagedChannelStore(
+  mode: CoordinationStorageMode = coordinationStorageMode(),
+): ClassicManagedChannelLeaseStore {
+  if (mode !== 'postgres') throw new ClassicManagedExecutionStorageUnavailableError();
+  postgresClassicManagedChannelStore ??= createPostgresClassicManagedChannelStore();
+  return postgresClassicManagedChannelStore;
 }
