@@ -407,14 +407,16 @@ The user selects the methods this Integration may invoke. The profile stores an 
 
 Execution configuration is shown after method scope because execution is a consequence of allowed work, not the source of contract authority.
 
-For the current v1 runtime model:
+For the current runtime model:
 
 - selected methods map to `sorobanContracts`;
-- external executor accounts map to `sorobanExecutionAccounts`;
-- an optional default maps to `sorobanDefaultExecutor`;
-- no external executor selected leaves MST-managed execution as the fallback.
+- `sorobanExecutionAccounts` is the Integration-wide **Executor Pool**: the set of external `G...` accounts that may execute Soroban work for this Service;
+- each contract scope may carry an explicit execution policy: `multisigtools` or one exact executor from that pool;
+- a contract-bound external executor cannot be replaced by an Intent-level executor;
+- a contract marked `multisigtools` cannot be rebound to a Service executor during preparation;
+- legacy contract scopes without an explicit execution policy retain the previous Intent override -> Service default -> managed fallback precedence for compatibility.
 
-Do not present per-contract executor isolation in the UI until the runtime authority model can enforce it. A UI-only restriction would be false security.
+This keeps configuration simple without making the association cosmetic: the same contract/executor relation shown by the UI is enforced by the Integration runtime authority model.
 
 ### Integration depth
 
@@ -494,7 +496,10 @@ Classic Treasuries
 Soroban Contracts
   C...
   allowed methods
-  execution policy / allowed executors
+  execution: MST managed / bound global executor
+
+Executor Pool
+  allowed G... execution accounts
 
 Authorization experience
   Hosted / Keep users on my site / Full Headless
@@ -517,12 +522,13 @@ The first production slice keeps existing authority semantics and changes the pr
 2. Treasury analysis reuses Horizon account loading + existing authorization analysis.
 3. Contract analysis reuses the existing Contract Interface endpoint.
 4. Classic execution maps to the existing per-account external-execution allowlist.
-5. Soroban execution maps to the existing service-wide executor allowlist/default. The UI explicitly avoids pretending this is per-contract isolation.
-6. Integration depth is persisted as profile metadata for product disclosure; it does not create a second authorization policy engine.
-7. Webhook remains optional and orthogonal.
-8. Existing `MSI_*` creation/rotation semantics remain unchanged.
-9. Existing durable Integration records remain readable; missing profile metadata defaults to the most permissive disclosure view for operators, not to weaker runtime authority.
-10. Partner self-service login is a later delivery concern. This first slice validates the provisioning model on the existing protected Integration administration surface.
+5. Soroban execution reuses the existing Service-wide executor allowlist as a global Executor Pool and adds an enforced per-contract execution policy (`multisigtools` or one pool member).
+6. Legacy records without per-contract execution metadata retain the previous Service-default/Intent-override semantics; new Guided Profiles emit explicit contract policies.
+7. Integration depth is persisted as profile metadata for product disclosure; it does not create a second authorization policy engine.
+8. Webhook remains optional and orthogonal.
+9. Existing `MSI_*` creation/rotation semantics remain unchanged.
+10. Existing durable Integration records remain readable; missing profile metadata defaults to the most permissive disclosure view for operators, not to weaker runtime authority.
+11. Partner self-service login is a later delivery concern. This first slice validates the provisioning model on the existing protected Integration administration surface.
 
 ## 11. Delivery phases
 

@@ -1,9 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Check, ClipboardCopy, KeyRound, LoaderCircle, Plus, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import IntegrationProfileWizard, { type IntegrationProfileWizardResult } from './IntegrationProfileWizard';
-import { PageHeader } from './MultiSigUi';
+import './integration-admin.css';
 
-interface ContractScope { contractId: string; methods: string[]; }
+interface ContractScope {
+  contractId: string;
+  methods: string[];
+  execution?: { mode: 'multisigtools' } | { mode: 'external'; executor: string };
+}
 interface WebhookSummary { version: 1; url: string; enabled: boolean; secretVersion: number; }
 interface ServiceSummary {
   serviceId: string; label: string; enabled: boolean; source: 'bootstrap' | 'durable';
@@ -41,8 +45,17 @@ function lines(value: string): string[] {
 
 function contracts(value: string): ContractScope[] {
   return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
-    const separator = line.indexOf(':');
-    return { contractId: separator < 0 ? line : line.slice(0, separator).trim(), methods: separator < 0 ? [] : lines(line.slice(separator + 1)) };
+    const [scopePart, executionPart] = line.split(/\s*->\s*/, 2);
+    const separator = scopePart.indexOf(':');
+    const contractId = separator < 0 ? scopePart : scopePart.slice(0, separator).trim();
+    const methods = separator < 0 ? [] : lines(scopePart.slice(separator + 1));
+    const executionValue = executionPart?.trim();
+    const execution = !executionValue
+      ? undefined
+      : /^(mst|multisigtools)$/i.test(executionValue)
+        ? { mode: 'multisigtools' as const }
+        : { mode: 'external' as const, executor: executionValue };
+    return { contractId, methods, ...(execution ? { execution } : {}) };
   });
 }
 
@@ -51,7 +64,14 @@ function draftFrom(service: ServiceSummary): Draft {
     serviceId: service.serviceId, label: service.label, enabled: service.enabled, networks: service.networks,
     classicSourceAccounts: service.classicSourceAccounts.join('\n'),
     classicExternalExecutionSourceAccounts: service.classicExternalExecutionSourceAccounts.join('\n'),
-    sorobanContracts: service.sorobanContracts.map((item) => `${item.contractId}:${item.methods.join(',')}`).join('\n'),
+    sorobanContracts: service.sorobanContracts.map((item) => {
+      const execution = item.execution?.mode === 'multisigtools'
+        ? ' -> MST'
+        : item.execution?.mode === 'external'
+          ? ` -> ${item.execution.executor}`
+          : '';
+      return `${item.contractId}:${item.methods.join(',')}${execution}`;
+    }).join('\n'),
     sorobanExecutionAccounts: service.sorobanExecutionAccounts.join('\n'),
     sorobanDefaultExecutor: service.sorobanDefaultExecutor ?? '',
     authorizationExperience: service.profile.authorizationExperience,
@@ -198,25 +218,35 @@ export default function IntegrationAdminApp() {
     await navigator.clipboard.writeText(generatedWebhookSecret); setWebhookCopied(true); window.setTimeout(() => setWebhookCopied(false), 1500);
   }
 
-  return <main className="min-h-screen bg-[#f6f6f2] px-4 py-10 text-[#171717] dark:bg-[#090909] dark:text-[#f5f5f0] sm:px-6 lg:px-8">
-    <div className="mx-auto max-w-6xl space-y-7">
-      <PageHeader eyebrow="Operator" title="Integration administration" description="Provision non-signer Service identities, scope what they may coordinate, and rotate credentials. This surface is deployment-operator only." />
+  return <main className="integration-admin-shell px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl">
+      <header className="pb-5">
+        <p className="ia-kicker">Operator</p>
+        <h1 className="ia-workspace__title">Integration administration</h1>
+        <p className="ia-muted mt-2 max-w-3xl text-sm leading-6">Provision non-signer Service identities, scope what they may coordinate, and rotate credentials. This surface is deployment-operator only.</p>
+      </header>
 
-      <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]">
-        <div className="flex items-center gap-2 font-bold"><ShieldCheck className="h-5 w-5" />Operator access</div>
-        <p className="mt-2 text-sm text-neutral-500">Enter the deployment <code>mia_...</code> secret. It remains only in this page's memory and is not saved by the browser.</p>
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row"><input type="password" autoComplete="off" value={adminSecret} onChange={(event) => setAdminSecret(event.target.value)} placeholder="mia_..." className="min-w-0 flex-1 rounded-xl border border-black/10 bg-transparent px-4 py-3 font-mono text-sm dark:border-white/10" /><button type="button" disabled={busy || !adminSecret.trim()} onClick={() => void load(false)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-semibold text-white disabled:opacity-40">{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}Load services</button></div>
+      <section className="ia-access">
+        <div className="ia-access__copy">
+          <div className="flex items-center gap-2 font-bold"><ShieldCheck className="h-5 w-5" />Operator access</div>
+          <p className="ia-muted mt-2 text-sm">Enter the deployment <code>mia_...</code> secret. It stays only in this page's memory.</p>
+        </div>
+        <div className="ia-inline-form">
+          <input type="password" autoComplete="off" value={adminSecret} onChange={(event) => setAdminSecret(event.target.value)} placeholder="mia_..." className="ia-input font-mono text-sm" />
+          <button type="button" disabled={busy || !adminSecret.trim()} onClick={() => void load(false)} className="ia-action ia-action--primary">{busy ? <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <KeyRound className="h-4 w-4" />}Load services</button>
+        </div>
       </section>
 
-      {error && <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">{error}</div>}
-      {generatedKey && <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5"><div className="font-bold">API credential — shown once</div><p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">Store this value in your server-side secret store. The Integration Profile can be viewed later, but this credential cannot.</p><p className="mt-3 break-all font-mono text-sm">{generatedKey}</p><button type="button" onClick={() => void copyKey()} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-black/10 px-3 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-white/10">{copied ? <Check className="h-4 w-4" /> : <ClipboardCopy className="h-4 w-4" />}{copied ? 'Copied' : 'Copy credential'}</button></section>}
-      {generatedWebhookSecret && <section className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5"><div className="font-bold">Webhook signing secret</div><p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">Store this value in the webhook receiver and use it to verify Standard Webhooks signatures.</p><p className="mt-3 break-all font-mono text-sm">{generatedWebhookSecret}</p><button type="button" onClick={() => void copyWebhookSecret()} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-black/10 px-3 py-2 text-sm font-semibold dark:border-white/10">{webhookCopied ? <Check className="h-4 w-4" /> : <ClipboardCopy className="h-4 w-4" />}{webhookCopied ? 'Copied' : 'Copy webhook secret'}</button></section>}
+      {error && <div className="mt-4 border-y border-red-500/30 bg-red-500/[0.06] px-1 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
+      {generatedKey && <section className="ia-secret mt-4"><div className="font-bold">API credential — shown once</div><p className="ia-muted mt-1 text-sm">Store this value in your server-side secret store. The Integration Profile can be viewed later, but this credential cannot.</p><p className="ia-code mt-3">{generatedKey}</p><button type="button" onClick={() => void copyKey()} className="ia-action mt-3">{copied ? <Check className="h-4 w-4" /> : <ClipboardCopy className="h-4 w-4" />}{copied ? 'Copied' : 'Copy credential'}</button></section>}
+      {generatedWebhookSecret && <section className="ia-secret mt-4"><div className="font-bold">Webhook signing secret</div><p className="ia-muted mt-1 text-sm">Store this value in the webhook receiver and use it to verify Standard Webhooks signatures.</p><p className="ia-code mt-3">{generatedWebhookSecret}</p><button type="button" onClick={() => void copyWebhookSecret()} className="ia-action mt-3">{webhookCopied ? <Check className="h-4 w-4" /> : <ClipboardCopy className="h-4 w-4" />}{webhookCopied ? 'Copied' : 'Copy webhook secret'}</button></section>}
 
-      {loaded && <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
-        <section className="rounded-2xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
-          <div className="flex items-center justify-between gap-2"><h2 className="font-bold">Services</h2><button type="button" onClick={createNew} className="inline-flex items-center gap-1 rounded-lg border border-black/10 px-2.5 py-2 text-xs font-semibold dark:border-white/10"><Plus className="h-3.5 w-3.5" />New</button></div>
-          <div className="mt-3 space-y-2">{services.map((service) => <button key={service.serviceId} type="button" onClick={() => select(service)} className={`w-full rounded-xl border p-3 text-left ${editingId === service.serviceId ? 'border-emerald-500/50 bg-emerald-500/[0.06]' : 'border-black/10 dark:border-white/10'}`}><div className="flex items-center justify-between gap-2"><span className="font-semibold">{service.label}</span><span className={`text-xs ${service.enabled ? 'text-emerald-700 dark:text-emerald-300' : 'text-neutral-400'}`}>{service.enabled ? 'Enabled' : 'Disabled'}</span></div><div className="mt-1 font-mono text-xs text-neutral-500">{service.serviceId}</div><div className="mt-1 text-xs text-neutral-400">{service.source}</div></button>)}</div>
-        </section>
+      {loaded && <div className="ia-workbench mt-6">
+        <aside className="ia-service-rail">
+          <div className="ia-service-rail__head"><h2 className="m-0 font-bold">Integrations</h2><button type="button" onClick={createNew} className="ia-action px-3 text-xs"><Plus className="h-3.5 w-3.5" />New</button></div>
+          <div className="ia-service-list">{services.map((service) => <button key={service.serviceId} type="button" data-selected={editingId === service.serviceId && !creatingNew} onClick={() => select(service)} className="ia-service-item"><div className="ia-service-item__top"><span className="min-w-0 truncate font-semibold">{service.label}</span><span className={service.enabled ? 'text-xs text-emerald-700 dark:text-emerald-300' : 'ia-muted text-xs'}>{service.enabled ? 'Enabled' : 'Disabled'}</span></div><span className="ia-service-item__id">{service.serviceId}</span><div className="ia-muted mt-1 text-xs">{service.source}</div></button>)}</div>
+        </aside>
+        <div className="ia-workspace">
 
         {creatingNew
           ? <IntegrationProfileWizard
@@ -225,17 +255,17 @@ export default function IntegrationAdminApp() {
               onCancel={() => setCreatingNew(false)}
             />
           : editing
-            ? <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]">
-                <div className="flex flex-wrap items-start justify-between gap-4">
+            ? <section className="min-w-0">
+                <div className="ia-workspace__head">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-2xl font-bold">{editing.label}</h2>
+                      <h2 className="ia-workspace__title">{editing.label}</h2>
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${editing.enabled ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-neutral-500/10 text-neutral-500'}`}>{editing.enabled ? 'Enabled' : 'Disabled'}</span>
                     </div>
                     <p className="mt-1 font-mono text-xs text-neutral-500">{editing.serviceId}</p>
                     <p className="mt-2 text-sm text-neutral-500">{editing.source === 'bootstrap' ? 'Bootstrap profile · saving creates a durable override.' : 'Durable Integration Profile'}</p>
                   </div>
-                  <button type="button" onClick={() => setAdvancedOpen((value) => !value)} className="whitespace-nowrap rounded-xl border border-black/10 px-3 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-white/10">
+                  <button type="button" onClick={() => setAdvancedOpen((value) => !value)} className="ia-action">
                     {advancedOpen ? 'Close advanced' : 'Advanced configuration'}
                   </button>
                 </div>
@@ -248,12 +278,12 @@ export default function IntegrationAdminApp() {
                       <h3 className="font-bold">Advanced configuration</h3>
                       <p className="mt-1 text-sm text-neutral-500">Raw authority fields. Prefer the guided flow for new profiles.</p>
                     </div>
-                    <button type="button" disabled={busy} onClick={() => void rotate()} className="inline-flex whitespace-nowrap items-center gap-2 rounded-xl border border-black/10 px-3 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40 dark:border-white/10"><RefreshCw className="h-4 w-4" />Rotate MSI credential</button>
+                    <button type="button" disabled={busy} onClick={() => void rotate()} className="ia-action"><RefreshCw className="h-4 w-4" />Rotate MSI credential</button>
                   </div>
 
                   <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                    <label className="text-sm font-semibold">Service id<input disabled value={draft.serviceId} className="mt-2 w-full rounded-xl border border-black/10 bg-transparent px-3 py-3 font-mono text-sm opacity-60 dark:border-white/10" /></label>
-                    <label className="text-sm font-semibold">Label<input value={draft.label} onChange={(event) => setDraft({ ...draft, label: event.target.value })} className="mt-2 w-full rounded-xl border border-black/10 bg-transparent px-3 py-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-white/10" /></label>
+                    <label className="text-sm font-semibold">Service id<input disabled value={draft.serviceId} className="ia-input mt-2 font-mono text-sm" /></label>
+                    <label className="text-sm font-semibold">Label<input value={draft.label} onChange={(event) => setDraft({ ...draft, label: event.target.value })} className="ia-input mt-2 text-sm" /></label>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-4 text-sm">
                     <label className="flex items-center gap-2"><input type="checkbox" checked={draft.networks.includes('testnet')} onChange={(event) => setDraft({ ...draft, networks: event.target.checked ? [...new Set([...draft.networks, 'testnet' as const])] : draft.networks.filter((n) => n !== 'testnet') })} />Testnet</label>
@@ -262,7 +292,7 @@ export default function IntegrationAdminApp() {
                   </div>
 
                   <label className="mt-4 block text-sm font-semibold">Authorization experience
-                    <select value={draft.authorizationExperience} onChange={(event) => setDraft({ ...draft, authorizationExperience: event.target.value as Draft['authorizationExperience'] })} className="mt-2 w-full rounded-xl border border-black/10 bg-transparent px-3 py-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-white/10">
+                    <select value={draft.authorizationExperience} onChange={(event) => setDraft({ ...draft, authorizationExperience: event.target.value as Draft['authorizationExperience'] })} className="ia-select mt-2 text-sm">
                       <option value="hosted">MultiSigTools handles authorization</option>
                       <option value="native">Keep users on my site</option>
                       <option value="headless">Full Headless control</option>
@@ -272,29 +302,30 @@ export default function IntegrationAdminApp() {
                   <div className="mt-6 grid gap-4 sm:grid-cols-2">
                     <ScopeField title="Classic source accounts" value={draft.classicSourceAccounts} onChange={(value) => setDraft({ ...draft, classicSourceAccounts: value })} placeholder={'G...\nG...'} />
                     <ScopeField title="Classic external execution accounts" value={draft.classicExternalExecutionSourceAccounts} onChange={(value) => setDraft({ ...draft, classicExternalExecutionSourceAccounts: value })} placeholder={'G...'} />
-                    <ScopeField title="Soroban contracts" value={draft.sorobanContracts} onChange={(value) => setDraft({ ...draft, sorobanContracts: value })} placeholder={'C...:transfer,reserve\nC...:claim'} />
+                    <ScopeField title="Soroban contracts" value={draft.sorobanContracts} onChange={(value) => setDraft({ ...draft, sorobanContracts: value })} placeholder={'C...:transfer,reserve -> MST\nC...:claim -> G...'} />
                     <ScopeField title="Allowed Soroban executors" value={draft.sorobanExecutionAccounts} onChange={(value) => setDraft({ ...draft, sorobanExecutionAccounts: value })} placeholder={'G...A\nG...B'} />
                   </div>
-                  <label className="mt-4 block text-sm font-semibold">Default Soroban executor<input value={draft.sorobanDefaultExecutor} onChange={(event) => setDraft({ ...draft, sorobanDefaultExecutor: event.target.value })} placeholder="Optional G...; must also be allowed above" className="mt-2 w-full rounded-xl border border-black/10 bg-transparent px-3 py-3 font-mono text-sm focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-white/10" /></label>
+                  <label className="mt-4 block text-sm font-semibold">Default Soroban executor<input value={draft.sorobanDefaultExecutor} onChange={(event) => setDraft({ ...draft, sorobanDefaultExecutor: event.target.value })} placeholder="Legacy only; must also be in the executor pool" className="ia-input mt-2 font-mono text-sm" /></label>
 
                   <div className="mt-6 border-t border-black/10 pt-6 dark:border-white/10">
                     <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold">Webhook delivery</h3><p className="mt-1 text-sm text-neutral-500">Optional status delivery. It is independent from authorization experience.</p></div>{editing.webhook && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${editing.webhook.enabled ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-neutral-500/10 text-neutral-500'}`}>{editing.webhook.enabled ? 'Enabled' : 'Disabled'} · secret v{editing.webhook.secretVersion}</span>}</div>
-                    <label className="mt-4 block text-sm font-semibold">Webhook URL<input value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://fed.network/api/webhooks/multisig-tools" className="mt-2 w-full rounded-xl border border-black/10 bg-transparent px-3 py-3 font-mono text-sm focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-white/10" /></label>
+                    <label className="mt-4 block text-sm font-semibold">Webhook URL<input value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://fed.network/api/webhooks/multisig-tools" className="ia-input mt-2 font-mono text-sm" /></label>
                     <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={webhookEnabled} onChange={(event) => setWebhookEnabled(event.target.checked)} />Delivery enabled</label>
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <button type="button" disabled={busy || !webhookUrl.trim()} onClick={() => void configureWebhook({ url: webhookUrl.trim(), enabled: webhookEnabled })} className="whitespace-nowrap rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40">{editing.webhook ? 'Save webhook' : 'Configure webhook'}</button>
-                      {editing.webhook && <button type="button" disabled={busy} onClick={() => void rotateWebhookSecret()} className="inline-flex whitespace-nowrap items-center gap-2 rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-white/10"><RefreshCw className="h-4 w-4" />Rotate webhook secret</button>}
-                      {editing.webhook && <button type="button" disabled={busy} onClick={() => void configureWebhook(null)} className="whitespace-nowrap rounded-xl border border-red-500/20 px-4 py-2.5 text-sm font-semibold text-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 dark:text-red-300">Remove webhook</button>}
+                      <button type="button" disabled={busy || !webhookUrl.trim()} onClick={() => void configureWebhook({ url: webhookUrl.trim(), enabled: webhookEnabled })} className="ia-action ia-action--primary">{editing.webhook ? 'Save webhook' : 'Configure webhook'}</button>
+                      {editing.webhook && <button type="button" disabled={busy} onClick={() => void rotateWebhookSecret()} className="ia-action"><RefreshCw className="h-4 w-4" />Rotate webhook secret</button>}
+                      {editing.webhook && <button type="button" disabled={busy} onClick={() => void configureWebhook(null)} className="ia-action ia-action--danger">Remove webhook</button>}
                     </div>
                   </div>
 
-                  <div className="mt-6 flex justify-end"><button type="button" disabled={busy || !draft.label.trim()} onClick={() => void save()} className="inline-flex whitespace-nowrap items-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40"><Save className="h-4 w-4" />Save advanced configuration</button></div>
+                  <div className="mt-6 flex justify-end"><button type="button" disabled={busy || !draft.label.trim()} onClick={() => void save()} className="ia-action ia-action--primary"><Save className="h-4 w-4" />Save advanced configuration</button></div>
                 </div>}
               </section>
-            : <section className="rounded-2xl border border-dashed border-black/15 bg-white p-8 text-center dark:border-white/15 dark:bg-white/[0.03]">
+            : <section className="py-16 text-center">
                 <h2 className="text-lg font-bold">Select an Integration Profile</h2>
                 <p className="mt-2 text-sm text-neutral-500">Choose an existing profile, or create a new MSI through the guided setup.</p>
               </section>}
+        </div>
       </div>}
     </div>
   </main>;
@@ -308,7 +339,7 @@ function IntegrationProfileDetail({ service, onRotate, busy }: { service: Servic
       : 'Full Headless control';
   const externalClassic = new Set(service.classicExternalExecutionSourceAccounts);
 
-  return <div className="mt-6 space-y-5">
+  return <div className="ia-profile-grid">
     <div className="grid gap-4 md:grid-cols-2">
       <ProfileBlock title="Identity">
         <ProfileRow label="Networks" value={service.networks.map((network) => network === 'public' ? 'Mainnet' : 'Testnet').join(', ')} />
@@ -319,7 +350,7 @@ function IntegrationProfileDetail({ service, onRotate, busy }: { service: Servic
       <ProfileBlock title="Credential">
         <ProfileRow label="API identity" value="MSI credential active" />
         <p className="mt-2 text-xs text-neutral-500">Plaintext is never shown again after issuance. Rotate to replace it.</p>
-        <button type="button" disabled={busy} onClick={onRotate} className="mt-3 inline-flex whitespace-nowrap items-center gap-2 rounded-xl border border-black/10 px-3 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40 dark:border-white/10">
+        <button type="button" disabled={busy} onClick={onRotate} className="ia-action mt-3">
           <RefreshCw className="h-4 w-4" />Rotate MSI credential
         </button>
       </ProfileBlock>
@@ -340,15 +371,26 @@ function IntegrationProfileDetail({ service, onRotate, busy }: { service: Servic
       {service.sorobanContracts.length === 0
         ? <p className="text-sm text-neutral-500">No Soroban contract scope.</p>
         : <div className="space-y-4">
-            {service.sorobanContracts.map((contract) => <div key={contract.contractId} className="rounded-xl border border-black/10 p-3 dark:border-white/10">
-              <div className="break-all font-mono text-xs font-semibold">{contract.contractId}</div>
-              <div className="mt-2 flex flex-wrap gap-2">{contract.methods.map((method) => <span key={method} className="rounded-full border border-black/10 px-2.5 py-1 font-mono text-xs dark:border-white/10">{method}</span>)}</div>
-            </div>)}
+            {service.sorobanContracts.map((contract) => {
+              const execution = contract.execution?.mode === 'multisigtools'
+                ? 'MultiSigTools managed'
+                : contract.execution?.mode === 'external'
+                  ? contract.execution.executor
+                  : service.sorobanDefaultExecutor ?? 'Legacy managed fallback';
+              return <div key={contract.contractId} className="ia-contract-row">
+                <div className="ia-code font-semibold">{contract.contractId}</div>
+                <div className="ia-methods">{contract.methods.map((method) => <span key={method} className="ia-method">{method}</span>)}</div>
+                <div className="ia-muted mt-3 text-xs">
+                  Execution · <span className="break-all font-mono">{execution}</span>
+                </div>
+              </div>;
+            })}
             <div className="border-t border-black/10 pt-3 text-sm dark:border-white/10">
-              <span className="text-neutral-500">Execution: </span>
-              {service.sorobanDefaultExecutor
-                ? <><span className="font-medium">My service</span><span className="ml-2 break-all font-mono text-xs">{service.sorobanDefaultExecutor}</span></>
-                : <span className="font-medium">MultiSigTools managed fallback</span>}
+              <span className="text-neutral-500">Executor pool: </span>
+              <span className="font-medium">{service.sorobanExecutionAccounts.length}</span>
+              {service.sorobanExecutionAccounts.length > 0 && <div className="mt-2 space-y-1">
+                {service.sorobanExecutionAccounts.map((executor) => <div key={executor} className="break-all font-mono text-xs">{executor}</div>)}
+              </div>}
             </div>
           </div>}
     </ProfileBlock>
@@ -366,9 +408,9 @@ function IntegrationProfileDetail({ service, onRotate, busy }: { service: Servic
 }
 
 function ProfileBlock({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
-    <h3 className="font-bold">{title}</h3>
-    <div className="mt-3">{children}</div>
+  return <section className="ia-profile-section">
+    <h3 className="ia-profile-section__title">{title}</h3>
+    <div>{children}</div>
   </section>;
 }
 
@@ -380,5 +422,5 @@ function ProfileRow({ label, value }: { label: string; value: string }) {
 }
 
 function ScopeField({ title, value, onChange, placeholder }: { title: string; value: string; onChange: (value: string) => void; placeholder: string }) {
-  return <label className="text-sm font-semibold">{title}<textarea rows={5} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} spellCheck={false} className="mt-2 w-full rounded-xl border border-black/10 bg-transparent px-3 py-3 font-mono text-xs leading-5 dark:border-white/10" /></label>;
+  return <label className="text-sm font-semibold">{title}<textarea rows={5} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} spellCheck={false} className="ia-textarea mt-2 font-mono text-xs leading-5" /></label>;
 }

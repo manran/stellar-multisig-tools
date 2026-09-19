@@ -11,6 +11,8 @@ export interface IntegrationProvisioningTreasury {
 export interface IntegrationProvisioningContract {
   contractId: string;
   methods: string[];
+  executionOwner: IntegrationExecutionOwner;
+  executor?: string;
 }
 
 export interface IntegrationProvisioningInput {
@@ -19,8 +21,7 @@ export interface IntegrationProvisioningInput {
   network: StellarNetwork;
   treasuries: IntegrationProvisioningTreasury[];
   contracts: IntegrationProvisioningContract[];
-  sorobanExecutionOwner: IntegrationExecutionOwner;
-  sorobanExecutor?: string;
+  executorPool: string[];
   authorizationExperience: IntegrationAuthorizationExperience;
   webhook?: { url: string; enabled: boolean };
 }
@@ -32,7 +33,11 @@ export interface IntegrationAdminConfiguration {
   networks: StellarNetwork[];
   classicSourceAccounts: string[];
   classicExternalExecutionSourceAccounts: string[];
-  sorobanContracts: IntegrationProvisioningContract[];
+  sorobanContracts: Array<{
+    contractId: string;
+    methods: string[];
+    execution: { mode: 'multisigtools' } | { mode: 'external'; executor: string };
+  }>;
   sorobanExecutionAccounts: string[];
   sorobanDefaultExecutor?: string;
   profile: { authorizationExperience: IntegrationAuthorizationExperience };
@@ -50,13 +55,18 @@ export function buildIntegrationAdminConfiguration(
     .map((item) => item.accountId.trim())
     .filter(Boolean))];
   const sorobanContracts = input.contracts
-    .map((item) => ({
-      contractId: item.contractId.trim(),
-      methods: [...new Set(item.methods.map((method) => method.trim()).filter(Boolean))],
-    }))
+    .map((item) => {
+      const executor = item.executor?.trim() ?? '';
+      return {
+        contractId: item.contractId.trim(),
+        methods: [...new Set(item.methods.map((method) => method.trim()).filter(Boolean))],
+        execution: item.executionOwner === 'integration'
+          ? { mode: 'external' as const, executor }
+          : { mode: 'multisigtools' as const },
+      };
+    })
     .filter((item) => item.contractId && item.methods.length > 0);
-  const executor = input.sorobanExecutor?.trim() ?? '';
-  const externalSorobanExecution = input.sorobanExecutionOwner === 'integration' && sorobanContracts.length > 0;
+  const sorobanExecutionAccounts = [...new Set(input.executorPool.map((item) => item.trim()).filter(Boolean))];
   const webhook = input.webhook?.url.trim()
     ? { url: input.webhook.url.trim(), enabled: input.webhook.enabled }
     : undefined;
@@ -69,8 +79,7 @@ export function buildIntegrationAdminConfiguration(
     classicSourceAccounts,
     classicExternalExecutionSourceAccounts,
     sorobanContracts,
-    sorobanExecutionAccounts: externalSorobanExecution && executor ? [executor] : [],
-    ...(externalSorobanExecution && executor ? { sorobanDefaultExecutor: executor } : {}),
+    sorobanExecutionAccounts,
     profile: { authorizationExperience: input.authorizationExperience },
     ...(webhook ? { webhook } : {}),
   };

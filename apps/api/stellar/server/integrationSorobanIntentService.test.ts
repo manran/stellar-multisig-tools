@@ -250,6 +250,77 @@ test('Integration executor precedence is Intent override, then snapshotted Servi
   });
 });
 
+test('contract executor policy selects its bound global executor and rejects an Intent override', async () => {
+  const f = await fixture();
+  const contractExecutor = f.executor.publicKey();
+  const otherExecutor = Keypair.random().publicKey();
+  const credential = {
+    ...f.credential,
+    sorobanContracts: [{
+      contractId: CONTRACT_ID,
+      methods: ['transfer'],
+      execution: { mode: 'external' as const, executor: contractExecutor },
+    }],
+    sorobanExecutionAccounts: [contractExecutor, otherExecutor],
+  };
+
+  const created = await createIntegrationSorobanIntent(
+    new MemoryIntentStore(),
+    credential,
+    { ...f.input, idempotencyKey: 'contract-executor-policy' },
+    { ...f.options, intentIdFactory: () => 'D'.repeat(16) },
+  );
+  assert.deepEqual(created.intent.executionPolicy, {
+    mode: 'external',
+    executor: { address: contractExecutor, source: 'contract_policy' },
+  });
+
+  await assert.rejects(
+    () => createIntegrationSorobanIntent(
+      new MemoryIntentStore(),
+      credential,
+      { ...f.input, idempotencyKey: 'contract-executor-override', executor: otherExecutor },
+      { ...f.options, intentIdFactory: () => 'E'.repeat(16) },
+    ),
+    (cause: unknown) => cause instanceof Error
+      && 'code' in cause
+      && cause.code === 'integration_contract_executor_policy_conflict',
+  );
+});
+
+test('contract can require MultiSigTools-managed execution and cannot be rebound to a Service executor', async () => {
+  const f = await fixture();
+  const credential = {
+    ...f.credential,
+    sorobanContracts: [{
+      contractId: CONTRACT_ID,
+      methods: ['transfer'],
+      execution: { mode: 'multisigtools' as const },
+    }],
+  };
+  const store = new MemoryIntentStore();
+  const created = await createIntegrationSorobanIntent(
+    store,
+    credential,
+    { ...f.input, idempotencyKey: 'contract-managed-policy' },
+    { ...f.options, intentIdFactory: () => 'G'.repeat(16) },
+  );
+  assert.deepEqual(created.intent.executionPolicy, { mode: 'multisigtools' });
+
+  await assert.rejects(
+    () => resolveAndBindIntegrationSorobanExecutor(
+      store,
+      created.intent,
+      credential,
+      f.executor.publicKey(),
+      null,
+    ),
+    (cause: unknown) => cause instanceof Error
+      && 'code' in cause
+      && cause.code === 'integration_contract_executor_policy_conflict',
+  );
+});
+
 test('Integration binds a late Service executor once and refresh cannot replace it', async () => {
   const f = await fixture();
   const store = new MemoryIntentStore();

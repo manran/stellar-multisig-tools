@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-09-19",
+    "macrostructure": "Workbench",
+    "theme": "existing-system",
+    "enrichment": "none",
+    "brief": "Integration Control Plane redesign with global Executor Pool and contract execution binding"
+  },
+  {
+    "date": "2026-09-19",
     "macrostructure": "Narrative Workflow",
     "theme": "existing-system",
     "enrichment": "none",

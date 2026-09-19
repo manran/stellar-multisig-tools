@@ -1,3 +1,4 @@
+@import "../tokens.css";
 @import "tailwindcss";
 
 @theme {
@@ -68,9 +69,13 @@ html.stellar-ui #root {
   background: #f6f6f2;
 }
 
+html.stellar-ui,
+html.stellar-ui body {
+  overflow-x: clip;
+}
+
 html.stellar-ui body {
   margin: 0;
-  overflow-x: hidden;
   line-height: 1.55;
 }
 

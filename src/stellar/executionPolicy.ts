@@ -5,6 +5,7 @@ export interface ExecutionPolicy {
 export type SorobanExecutorBindingSource =
   | 'intent'
   | 'service_default'
+  | 'contract_policy'
   | 'service_prepare'
   | 'multisigtools_managed';
 

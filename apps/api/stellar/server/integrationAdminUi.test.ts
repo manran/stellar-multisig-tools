@@ -27,11 +27,15 @@ test('Integration admin is an unlinked operator-only runtime surface', () => {
   assert.match(ui, /IntegrationProfileDetail/);
   assert.match(wizard, /Define the profile before issuing a credential/);
   assert.match(wizard, /Classic Treasuries/);
+  assert.match(wizard, /Executor pool/);
+  assert.match(wizard, /Contracts and execution/);
+  assert.match(wizard, /setContractExecutor/);
+  assert.doesNotMatch(wizard, /Current runtime executor scope is Integration-wide/);
   assert.match(wizard, /analyzeAccountAuthorization/);
   assert.match(wizard, /\/api\/contract-interface/);
   assert.match(wizard, /\/api\/runtime-config/);
   assert.match(wizard, /Keep users on my site/);
-  assert.match(wizard, /Full Headless control/);
+  assert.match(wizard, /Full Headless/);
   assert.match(wizard, /Create profile & issue MSI/);
   assert.match(wizard, /buildIntegrationAdminConfiguration/);
   assert.doesNotMatch(wizard, /mic_/);

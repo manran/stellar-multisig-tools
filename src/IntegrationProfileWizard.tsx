@@ -38,6 +38,8 @@ interface ContractEntry {
   contractId: string;
   methods: ContractMethod[];
   selectedMethods: string[];
+  executionOwner: ExecutionOwner;
+  executor?: string;
 }
 
 interface ApiError {
@@ -92,8 +94,8 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
   const [contractInput, setContractInput] = useState('');
   const [contracts, setContracts] = useState<ContractEntry[]>([]);
   const [contractBusy, setContractBusy] = useState(false);
-  const [sorobanExecutionOwner, setSorobanExecutionOwner] = useState<ExecutionOwner>('multisigtools');
-  const [sorobanExecutor, setSorobanExecutor] = useState('');
+  const [executorInput, setExecutorInput] = useState('');
+  const [executorPool, setExecutorPool] = useState<string[]>([]);
 
   const [authorizationExperience, setAuthorizationExperience] = useState<AuthorizationExperience>('hosted');
   const [webhookEnabled, setWebhookEnabled] = useState(false);
@@ -121,18 +123,23 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
   );
 
   const hasBusinessScope = treasuries.length > 0 || selectedMethodCount > 0;
-  const sorobanExecutionValid = sorobanExecutionOwner === 'multisigtools' || isValidStellarAccountId(sorobanExecutor);
+  const contractExecutionValid = contracts.every((item) => (
+    item.executionOwner === 'multisigtools'
+    || Boolean(item.executor && executorPool.includes(item.executor) && isValidStellarAccountId(item.executor))
+  ));
   const webhookValid = !webhookEnabled || /^https:\/\//i.test(webhookUrl.trim());
   const basicsValid = Boolean(serviceId.trim() && label.trim());
-  const readyToCreate = basicsValid && hasBusinessScope && sorobanExecutionValid && webhookValid;
+  const readyToCreate = basicsValid && hasBusinessScope && contractExecutionValid && webhookValid;
 
   function resetNetwork(next: StellarNetwork) {
     if (next === network) return;
     setNetwork(next);
     setTreasuries([]);
     setContracts([]);
+    setExecutorPool([]);
     setTreasuryInput('');
     setContractInput('');
+    setExecutorInput('');
     setError('');
   }
 
@@ -186,6 +193,7 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
         contractId: body.contractId,
         methods: body.methods,
         selectedMethods: [],
+        executionOwner: 'multisigtools',
       }]);
       setContractInput('');
     } catch (cause) {
@@ -199,6 +207,38 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
     setTreasuries((current) => current.map((item) => (
       item.accountId === accountId ? { ...item, executionOwner } : item
     )));
+  }
+
+  function addExecutor() {
+    const executor = executorInput.trim();
+    if (!isValidStellarAccountId(executor)) {
+      setError('Enter a valid Stellar G... executor account.');
+      return;
+    }
+    if (executorPool.includes(executor)) {
+      setError('This executor is already in the pool.');
+      return;
+    }
+    setExecutorPool((current) => [...current, executor]);
+    setExecutorInput('');
+    setError('');
+  }
+
+  function removeExecutor(executor: string) {
+    if (contracts.some((item) => item.executionOwner === 'integration' && item.executor === executor)) {
+      setError('This executor is still assigned to a contract. Reassign that contract first.');
+      return;
+    }
+    setExecutorPool((current) => current.filter((item) => item !== executor));
+    setError('');
+  }
+
+  function setContractExecutor(contractId: string, value: string) {
+    setContracts((current) => current.map((item) => {
+      if (item.contractId !== contractId) return item;
+      if (value === 'multisigtools') return { ...item, executionOwner: 'multisigtools', executor: undefined };
+      return { ...item, executionOwner: 'integration', executor: value };
+    }));
   }
 
   function toggleMethod(contractId: string, method: string) {
@@ -221,8 +261,8 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
       setError('Add a Classic Treasury or select at least one contract method.');
       return;
     }
-    if (step === 2 && !sorobanExecutionValid) {
-      setError('Enter a valid Stellar G... executor, or let MultiSigTools submit.');
+    if (step === 2 && !contractExecutionValid) {
+      setError('Each contract must use MultiSigTools or one executor from the global pool.');
       return;
     }
     if (step === 3 && !webhookValid) {
@@ -242,9 +282,13 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
         label,
         network,
         treasuries: treasuries.map((item) => ({ accountId: item.accountId, executionOwner: item.executionOwner })),
-        contracts: contracts.map((item) => ({ contractId: item.contractId, methods: item.selectedMethods })),
-        sorobanExecutionOwner,
-        sorobanExecutor,
+        contracts: contracts.map((item) => ({
+          contractId: item.contractId,
+          methods: item.selectedMethods,
+          executionOwner: item.executionOwner,
+          ...(item.executor ? { executor: item.executor } : {}),
+        })),
+        executorPool,
         authorizationExperience,
         ...(webhookEnabled ? { webhook: { url: webhookUrl, enabled: true } } : {}),
       });
@@ -268,37 +312,38 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
     }
   }
 
-  return <section className="rounded-2xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.03]">
-    <div className="border-b border-black/10 p-5 dark:border-white/10">
+  return <section className="ia-wizard">
+    <div className="ia-wizard__header">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">New Integration</div>
-          <h2 className="mt-1 text-2xl font-bold">Define the profile before issuing a credential</h2>
-          <p className="mt-2 max-w-3xl text-sm text-neutral-500">
+          <div className="ia-kicker">New Integration</div>
+          <h2 className="ia-workspace__title">Define the profile before issuing a credential</h2>
+          <p className="ia-muted mt-2 max-w-3xl text-sm">
             Scope the accounts and contracts first. The MSI credential is generated only after review.
           </p>
         </div>
-        <button type="button" onClick={onCancel} className="whitespace-nowrap rounded-xl border border-black/10 px-3 py-2 text-sm font-semibold hover:bg-black/[0.03] active:bg-black/[0.05] hover:border-black/20 focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-white/10 dark:hover:border-white/20 dark:hover:bg-white/[0.04] dark:active:bg-white/[0.07]">
+        <button type="button" onClick={onCancel} className="ia-action">
           Cancel
         </button>
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-2" aria-label="Integration setup steps">
+      <div className="ia-wizard__steps" aria-label="Integration setup steps">
         {STEPS.map((item, index) => <button
           key={item}
           type="button"
           onClick={() => index <= step && setStep(index)}
           disabled={index > step}
-          className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-40 ${index === step ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200' : 'border-black/10 text-neutral-500 dark:border-white/10'}`}
+          data-active={index === step}
+          className="ia-step"
         >
           {index + 1}. {item}
         </button>)}
       </div>
     </div>
 
-    {error && <div className="mx-5 mt-5 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
+    {error && <div className="mt-4 border-y border-red-500/30 bg-red-500/[0.06] px-1 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
 
-    <div className="p-5">
+    <div className="ia-wizard__stage">
       {step === 0 && <div className="max-w-3xl space-y-5">
         <div>
           <h3 className="text-lg font-bold">Identity and network</h3>
@@ -306,10 +351,10 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-semibold">Service id
-            <input value={serviceId} onChange={(event) => setServiceId(event.target.value)} placeholder="fednetwork" className="mt-2 w-full rounded-xl border border-black/10 bg-transparent px-3 py-3 font-mono text-sm hover:border-black/20 focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-white/10 dark:hover:border-white/20" />
+            <input value={serviceId} onChange={(event) => setServiceId(event.target.value)} placeholder="fednetwork" className="ia-input mt-2 font-mono text-sm" />
           </label>
           <label className="text-sm font-semibold">Display name
-            <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="FedNetwork" className="mt-2 w-full rounded-xl border border-black/10 bg-transparent px-3 py-3 text-sm hover:border-black/20 focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-white/10 dark:hover:border-white/20" />
+            <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="FedNetwork" className="ia-input mt-2 text-sm" />
           </label>
         </div>
         <div>
@@ -327,15 +372,15 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
           <p className="mt-1 text-sm text-neutral-500">Add the accounts this Integration may coordinate. MST reads the live signer policy; it does not redefine it.</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <input value={treasuryInput} onChange={(event) => setTreasuryInput(event.target.value)} placeholder="G..." className="min-w-0 flex-1 rounded-xl border border-black/10 bg-transparent px-3 py-3 font-mono text-sm hover:border-black/20 focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-white/10 dark:hover:border-white/20" />
-          <button type="button" disabled={treasuryBusy || !treasuryInput.trim()} onClick={() => void addTreasury()} className="inline-flex whitespace-nowrap items-center justify-center gap-2 rounded-xl border border-black/10 px-4 py-3 text-sm font-semibold hover:bg-black/[0.03] active:bg-black/[0.05] focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/[0.04] dark:active:bg-white/[0.07]">
+          <input value={treasuryInput} onChange={(event) => setTreasuryInput(event.target.value)} placeholder="G..." className="ia-input min-w-0 flex-1 font-mono text-sm" />
+          <button type="button" disabled={treasuryBusy || !treasuryInput.trim()} onClick={() => void addTreasury()} className="ia-action">
             {treasuryBusy ? <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Plus className="h-4 w-4" />}Inspect Treasury
           </button>
         </div>
 
         {treasuries.length === 0
           ? <EmptyState icon={<WalletCards className="h-5 w-5" />} text="No Classic Treasury added. You can create a Soroban-only Integration." />
-          : <div className="space-y-4">{treasuries.map((item) => <article key={item.accountId} className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
+          : <div>{treasuries.map((item) => <article key={item.accountId} className="ia-subframe">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="font-mono text-sm font-semibold break-all">{item.accountId}</div>
@@ -343,7 +388,7 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
                     Low {item.analysis.thresholds.low.policyLabel} · Medium {item.analysis.thresholds.medium.policyLabel} · High {item.analysis.thresholds.high.policyLabel}
                   </div>
                 </div>
-                <button type="button" onClick={() => setTreasuries((current) => current.filter((entry) => entry.accountId !== item.accountId))} className="inline-flex whitespace-nowrap items-center gap-1 rounded-lg border border-red-500/20 px-2.5 py-2 text-xs font-semibold text-red-700 hover:bg-red-500/5 active:bg-red-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 dark:text-red-300">
+                <button type="button" onClick={() => setTreasuries((current) => current.filter((entry) => entry.accountId !== item.accountId))} className="ia-action ia-action--danger text-xs">
                   <Trash2 className="h-3.5 w-3.5" />Remove
                 </button>
               </div>
@@ -371,28 +416,60 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
 
       {step === 2 && <div className="space-y-5">
         <div>
-          <h3 className="text-lg font-bold">Soroban contracts</h3>
-          <p className="mt-1 text-sm text-neutral-500">Inspect deployed ABI and explicitly select the methods this Integration may create Intents for.</p>
+          <h3 className="text-lg font-bold">Contracts and execution</h3>
+          <p className="mt-1 text-sm text-neutral-500">Add reusable executor accounts once, then bind each contract to MultiSigTools or one executor from that pool.</p>
         </div>
+
+        <section className="ia-subframe">
+          <div className="font-bold">Executor pool</div>
+          <p className="mt-1 text-sm text-neutral-500">Server-side G... accounts that this Integration is allowed to use for Soroban execution.</p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <input value={executorInput} onChange={(event) => setExecutorInput(event.target.value)} placeholder="G..." className="ia-input min-w-0 flex-1 font-mono text-sm" />
+            <button type="button" disabled={!executorInput.trim()} onClick={addExecutor} className="ia-action">
+              <Plus className="h-4 w-4" />Add executor
+            </button>
+          </div>
+          {executorPool.length === 0
+            ? <p className="mt-3 text-sm text-neutral-500">No external executor. Contracts can still use MultiSigTools-managed execution.</p>
+            : <div className="mt-3 divide-y divide-black/5 rounded-xl border border-black/10 dark:divide-white/5 dark:border-white/10">
+                {executorPool.map((executor) => <div key={executor} className="flex min-w-0 items-center justify-between gap-3 px-3 py-2">
+                  <span className="min-w-0 truncate font-mono text-xs" title={executor}>{executor}</span>
+                  <button type="button" onClick={() => removeExecutor(executor)} className="ia-action ia-action--danger text-xs">Remove</button>
+                </div>)}
+              </div>}
+        </section>
+
         <div className="flex flex-col gap-2 sm:flex-row">
-          <input value={contractInput} onChange={(event) => setContractInput(event.target.value)} placeholder="C..." className="min-w-0 flex-1 rounded-xl border border-black/10 bg-transparent px-3 py-3 font-mono text-sm hover:border-black/20 focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-white/10 dark:hover:border-white/20" />
-          <button type="button" disabled={contractBusy || !contractInput.trim()} onClick={() => void addContract()} className="inline-flex whitespace-nowrap items-center justify-center gap-2 rounded-xl border border-black/10 px-4 py-3 text-sm font-semibold hover:bg-black/[0.03] active:bg-black/[0.05] focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/[0.04] dark:active:bg-white/[0.07]">
+          <input value={contractInput} onChange={(event) => setContractInput(event.target.value)} placeholder="C..." className="ia-input min-w-0 flex-1 font-mono text-sm" />
+          <button type="button" disabled={contractBusy || !contractInput.trim()} onClick={() => void addContract()} className="ia-action">
             {contractBusy ? <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Plus className="h-4 w-4" />}Inspect contract
           </button>
         </div>
 
         {contracts.length === 0
           ? <EmptyState icon={<Server className="h-5 w-5" />} text="No Soroban contract added. You can create a Classic-only Integration." />
-          : <div className="space-y-4">{contracts.map((item) => <article key={item.contractId} className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
+          : <div>{contracts.map((item) => <article key={item.contractId} className="ia-subframe">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="font-mono text-sm font-semibold break-all">{item.contractId}</div>
                   <div className="mt-1 text-sm text-neutral-500">{item.methods.length} methods discovered · {item.selectedMethods.length} allowed</div>
                 </div>
-                <button type="button" onClick={() => setContracts((current) => current.filter((entry) => entry.contractId !== item.contractId))} className="inline-flex whitespace-nowrap items-center gap-1 rounded-lg border border-red-500/20 px-2.5 py-2 text-xs font-semibold text-red-700 hover:bg-red-500/5 active:bg-red-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 dark:text-red-300">
+                <button type="button" onClick={() => setContracts((current) => current.filter((entry) => entry.contractId !== item.contractId))} className="ia-action ia-action--danger text-xs">
                   <Trash2 className="h-3.5 w-3.5" />Remove
                 </button>
               </div>
+
+              <label className="mt-4 block text-sm font-semibold">Execution
+                <select
+                  value={item.executionOwner === 'multisigtools' ? 'multisigtools' : item.executor ?? ''}
+                  onChange={(event) => setContractExecutor(item.contractId, event.target.value)}
+                  className="ia-select mt-2 text-sm"
+                >
+                  <option value="multisigtools">MultiSigTools managed</option>
+                  {executorPool.map((executor) => <option key={executor} value={executor}>{compactAddress(executor)}</option>)}
+                </select>
+              </label>
+
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 {item.methods.map((method) => <label key={method.name} className="flex min-w-0 cursor-pointer items-start gap-3 rounded-xl border border-black/10 p-3 dark:border-white/10">
                   <input type="checkbox" className="mt-1" checked={item.selectedMethods.includes(method.name)} onChange={() => toggleMethod(item.contractId, method.name)} />
@@ -403,18 +480,6 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
                 </label>)}
               </div>
             </article>)}</div>}
-
-        {contracts.length > 0 && <div className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
-          <div className="font-bold">Soroban execution</div>
-          <p className="mt-1 text-sm text-neutral-500">Current runtime executor scope is Integration-wide. MST does not pretend this setting is isolated per contract.</p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <ChoiceCard selected={sorobanExecutionOwner === 'multisigtools'} onClick={() => setSorobanExecutionOwner('multisigtools')} title="MultiSigTools submits" description="Use the deployment-managed executor when execution is prepared." />
-            <ChoiceCard selected={sorobanExecutionOwner === 'integration'} onClick={() => setSorobanExecutionOwner('integration')} title="My service submits" description="Bind a server-side Stellar execution account." />
-          </div>
-          {sorobanExecutionOwner === 'integration' && <label className="mt-4 block text-sm font-semibold">Execution account
-            <input value={sorobanExecutor} onChange={(event) => setSorobanExecutor(event.target.value)} placeholder="G..." className="mt-2 w-full rounded-xl border border-black/10 bg-transparent px-3 py-3 font-mono text-sm hover:border-black/20 focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-white/10 dark:hover:border-white/20" />
-          </label>}
-        </div>}
       </div>}
 
       {step === 3 && <div className="max-w-4xl space-y-6">
@@ -423,9 +488,9 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
           <p className="mt-1 text-sm text-neutral-500">The Headless Core is the same. This choice controls how much product complexity MST exposes by default.</p>
         </div>
         <div className="grid gap-3">
-          <ChoiceCard selected={authorizationExperience === 'hosted'} onClick={() => setAuthorizationExperience('hosted')} title="MultiSigTools handles authorization" description="Lowest integration effort. Send signers to the hosted authorization experience when needed." />
-          <ChoiceCard selected={authorizationExperience === 'native'} onClick={() => setAuthorizationExperience('native')} title="Keep users on my site" description="Use your own wallet and signing UI while MultiSigTools coordinates and verifies authorization." />
-          <ChoiceCard selected={authorizationExperience === 'headless'} onClick={() => setAuthorizationExperience('headless')} title="Full Headless control" description="Expose the full supported orchestration, execution and automation surface." />
+          <ChoiceCard selected={authorizationExperience === 'hosted'} onClick={() => setAuthorizationExperience('hosted')} title="MST-hosted" description="MultiSigTools handles signer interaction. Lowest integration effort." />
+          <ChoiceCard selected={authorizationExperience === 'native'} onClick={() => setAuthorizationExperience('native')} title="On my site" description="Use your own wallet and signing UI while MultiSigTools coordinates and verifies authorization." />
+          <ChoiceCard selected={authorizationExperience === 'headless'} onClick={() => setAuthorizationExperience('headless')} title="Full Headless" description="Expose the full supported orchestration, execution and automation surface." />
         </div>
 
         <div className="border-t border-black/10 pt-5 dark:border-white/10">
@@ -439,7 +504,7 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
             </label>
           </div>
           {webhookEnabled && <label className="mt-4 block text-sm font-semibold">Webhook URL
-            <input value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://example.com/webhooks/multisig-tools" className="mt-2 w-full rounded-xl border border-black/10 bg-transparent px-3 py-3 font-mono text-sm hover:border-black/20 focus-visible:outline-2 focus-visible:outline-offset-2 dark:border-white/10 dark:hover:border-white/20" />
+            <input value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://example.com/webhooks/multisig-tools" className="ia-input mt-2 font-mono text-sm" />
           </label>}
         </div>
       </div>}
@@ -469,26 +534,27 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
               : contracts.filter((item) => item.selectedMethods.length > 0).map((item) => <div key={item.contractId} className="border-b border-black/5 py-2 last:border-0 dark:border-white/5">
                   <div className="font-mono text-xs break-all">{item.contractId}</div>
                   <div className="mt-1 text-sm">{item.selectedMethods.join(', ')}</div>
+                  <div className="mt-1 text-xs text-neutral-500">
+                    Execution: {item.executionOwner === 'multisigtools' ? 'MultiSigTools managed' : compactAddress(item.executor ?? '')}
+                  </div>
                 </div>)}
-            {contracts.length > 0 && <div className="mt-3 text-sm text-neutral-500">
-              Execution: {sorobanExecutionOwner === 'multisigtools' ? 'MultiSigTools' : compactAddress(sorobanExecutor)}
-            </div>}
+            {executorPool.length > 0 && <div className="mt-3 text-xs text-neutral-500">{executorPool.length} executor{executorPool.length === 1 ? '' : 's'} in global pool.</div>}
           </ReviewBlock>
         </div>
 
         {!hasBusinessScope && <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">Add at least one Classic Treasury or one allowed contract method.</div>}
 
-        <button type="button" disabled={!readyToCreate || creating} onClick={() => void create()} className="inline-flex whitespace-nowrap items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-800 active:bg-emerald-900 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-40">
+        <button type="button" disabled={!readyToCreate || creating} onClick={() => void create()} className="ia-action ia-action--primary">
           {creating ? <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <ShieldCheck className="h-4 w-4" />}Create profile & issue MSI
         </button>
       </div>}
     </div>
 
-    <div className="flex items-center justify-between border-t border-black/10 p-5 dark:border-white/10">
-      <button type="button" disabled={step === 0 || creating} onClick={() => { setError(''); setStep((current) => Math.max(0, current - 1)); }} className="inline-flex whitespace-nowrap items-center gap-2 rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold hover:bg-black/[0.03] active:bg-black/[0.05] focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/[0.04] dark:active:bg-white/[0.07]">
+    <div className="ia-wizard__footer">
+      <button type="button" disabled={step === 0 || creating} onClick={() => { setError(''); setStep((current) => Math.max(0, current - 1)); }} className="ia-action">
         <ArrowLeft className="h-4 w-4" />Back
       </button>
-      {step < STEPS.length - 1 && <button type="button" disabled={creating} onClick={next} className="inline-flex whitespace-nowrap items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 active:bg-emerald-900 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-40">
+      {step < STEPS.length - 1 && <button type="button" disabled={creating} onClick={next} className="ia-action ia-action--primary">
         Continue<ArrowRight className="h-4 w-4" />
       </button>}
     </div>
@@ -502,21 +568,19 @@ function ChoiceCard({ selected, disabled = false, onClick, title, description }:
   title: string;
   description: string;
 }) {
-  return <button type="button" disabled={disabled} onClick={onClick} className={`min-w-0 rounded-2xl border p-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 hover:bg-black/[0.03] active:bg-black/[0.05] disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/[0.04] dark:active:bg-white/[0.07] ${selected ? 'border-emerald-500/60 bg-emerald-500/[0.07]' : 'border-black/10 dark:border-white/10'}`}>
-    <div className="flex items-start gap-3">
-      {selected ? <Check className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700 dark:text-emerald-300" /> : <CircleDot className="mt-0.5 h-5 w-5 shrink-0 text-neutral-400" />}
-      <span className="min-w-0">
-        <span className="block font-semibold">{title}</span>
-        <span className="mt-1 block text-sm text-neutral-500">{description}</span>
-      </span>
-    </div>
-  </button>;
+  return <div className="ia-choice-wrap">
+    <button type="button" disabled={disabled} data-selected={selected} onClick={onClick} className="ia-choice">
+      {selected ? <Check className="ia-choice__mark h-5 w-5 shrink-0" /> : <CircleDot className="ia-choice__mark h-5 w-5 shrink-0" />}
+      <span className="ia-choice__title min-w-0">{title}</span>
+    </button>
+    <span className="ia-choice__description">{description}</span>
+  </div>;
 }
 
 function SmallChoice({ selected, onClick, title }: { selected: boolean; onClick: () => void; title: string }) {
-  return <button type="button" onClick={onClick} className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-semibold hover:bg-black/[0.03] active:bg-black/[0.05] focus-visible:outline-2 focus-visible:outline-offset-2 dark:hover:bg-white/[0.04] dark:active:bg-white/[0.07] ${selected ? 'border-emerald-500/60 bg-emerald-500/[0.07]' : 'border-black/10 dark:border-white/10'}`}>
-    {selected ? <Check className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" /> : <CircleDot className="h-4 w-4 shrink-0 text-neutral-400" />}
-    <span>{title}</span>
+  return <button type="button" data-selected={selected} onClick={onClick} className="ia-choice py-2 text-sm">
+    {selected ? <Check className="ia-choice__mark h-4 w-4 shrink-0" /> : <CircleDot className="ia-choice__mark h-4 w-4 shrink-0" />}
+    <span className="font-semibold">{title}</span>
   </button>;
 }
 
@@ -527,9 +591,9 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
 }
 
 function ReviewBlock({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
-    <h4 className="font-bold">{title}</h4>
-    <div className="mt-3">{children}</div>
+  return <section className="ia-profile-section">
+    <h4 className="ia-profile-section__title">{title}</h4>
+    <div>{children}</div>
   </section>;
 }
 

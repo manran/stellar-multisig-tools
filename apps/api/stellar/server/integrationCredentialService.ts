@@ -10,9 +10,14 @@ const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
 const METHOD_PATTERN = /^[A-Za-z0-9_]{1,64}$/;
 const MAX_LABEL_CHARS = 80;
 
+export type ConfiguredIntegrationContractExecution =
+  | { mode: 'multisigtools' }
+  | { mode: 'external'; executor: string };
+
 export interface ConfiguredIntegrationContractScope {
   contractId: string;
   methods: string[];
+  execution?: ConfiguredIntegrationContractExecution;
 }
 
 export interface ConfiguredIntegrationCredential {
@@ -50,23 +55,45 @@ function stringArray(value: unknown, validate: (item: string) => boolean): strin
   return [...new Set(items)].sort();
 }
 
+function normalizeContractExecution(value: unknown): ConfiguredIntegrationContractExecution | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object') configError();
+  const record = value as Record<string, unknown>;
+  if (record.mode === 'multisigtools') return { mode: 'multisigtools' };
+  if (record.mode === 'external') {
+    const executor = typeof record.executor === 'string' ? record.executor.trim() : '';
+    if (!StrKey.isValidEd25519PublicKey(executor)) configError('Contract executor must be a valid Stellar G... account.');
+    return { mode: 'external', executor };
+  }
+  configError('Contract execution mode must be multisigtools or external.');
+}
+
 function normalizeContracts(value: unknown): ConfiguredIntegrationContractScope[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) configError();
-  const byContract = new Map<string, Set<string>>();
+  const byContract = new Map<string, { methods: Set<string>; execution?: ConfiguredIntegrationContractExecution }>();
   for (const item of value) {
     if (!item || typeof item !== 'object') configError();
     const record = item as Record<string, unknown>;
     const contractId = typeof record.contractId === 'string' ? record.contractId.trim() : '';
     const methods = stringArray(record.methods, (method) => METHOD_PATTERN.test(method));
+    const execution = normalizeContractExecution(record.execution);
     if (!StrKey.isValidContract(contractId) || methods.length === 0) configError();
-    const existing = byContract.get(contractId) ?? new Set<string>();
-    for (const method of methods) existing.add(method);
+    const existing = byContract.get(contractId) ?? { methods: new Set<string>(), ...(execution ? { execution } : {}) };
+    if (existing.execution && execution && JSON.stringify(existing.execution) !== JSON.stringify(execution)) {
+      configError('One Soroban contract cannot have conflicting execution policies.');
+    }
+    if (!existing.execution && execution) existing.execution = execution;
+    for (const method of methods) existing.methods.add(method);
     byContract.set(contractId, existing);
   }
   return [...byContract.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([contractId, methods]) => ({ contractId, methods: [...methods].sort() }));
+    .map(([contractId, value]) => ({
+      contractId,
+      methods: [...value.methods].sort(),
+      ...(value.execution ? { execution: value.execution } : {}),
+    }));
 }
 
 export function normalizeConfiguredIntegrationCredential(value: unknown): ConfiguredIntegrationCredential {
@@ -92,6 +119,11 @@ export function normalizeConfiguredIntegrationCredential(value: unknown): Config
   if (sorobanExecutionAccounts.length > 0 && sorobanContracts.length === 0) configError();
   if (sorobanDefaultExecutor && !sorobanExecutionAccounts.includes(sorobanDefaultExecutor)) {
     configError('Soroban default executor must also be present in sorobanExecutionAccounts.');
+  }
+  for (const contract of sorobanContracts) {
+    if (contract.execution?.mode === 'external' && !sorobanExecutionAccounts.includes(contract.execution.executor)) {
+      configError('Contract executor must also be present in sorobanExecutionAccounts.');
+    }
   }
   return {
     serviceId,

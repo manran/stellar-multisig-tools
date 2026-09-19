@@ -90,6 +90,42 @@ test('deployment operator can generate a one-time msi credential and retain only
   assert.equal(generated.secretHash, sha256(generated.apiKey));
 });
 
+test('Soroban contract execution can bind one contract to an executor from the global pool', () => {
+  const executor = configured[0].sorobanExecutionAccounts[0];
+  const parsed = configuredIntegrationCredentials(JSON.stringify([{
+    ...configured[0],
+    sorobanContracts: [{
+      ...configured[0].sorobanContracts[0],
+      execution: { mode: 'external', executor },
+    }],
+  }]));
+  assert.deepEqual(parsed[0]?.sorobanContracts[0]?.execution, { mode: 'external', executor });
+
+  assert.throws(
+    () => configuredIntegrationCredentials(JSON.stringify([{
+      ...configured[0],
+      sorobanContracts: [{
+        ...configured[0].sorobanContracts[0],
+        execution: { mode: 'external', executor: Keypair.random().publicKey() },
+      }],
+    }])),
+    (cause: unknown) => cause instanceof IntegrationCredentialServiceError
+      && cause.code === 'integration_credential_config_invalid'
+      && /Contract executor/.test(cause.message),
+  );
+});
+
+test('Soroban contract can explicitly require MultiSigTools-managed execution', () => {
+  const parsed = configuredIntegrationCredentials(JSON.stringify([{
+    ...configured[0],
+    sorobanContracts: [{
+      ...configured[0].sorobanContracts[0],
+      execution: { mode: 'multisigtools' },
+    }],
+  }]));
+  assert.deepEqual(parsed[0]?.sorobanContracts[0]?.execution, { mode: 'multisigtools' });
+});
+
 test('Soroban default executor must be inside the Service execution allowlist', () => {
   const defaultExecutor = configured[0].sorobanExecutionAccounts[0];
   const parsed = configuredIntegrationCredentials(JSON.stringify([{

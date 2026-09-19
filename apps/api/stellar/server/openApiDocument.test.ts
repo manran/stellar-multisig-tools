@@ -169,6 +169,9 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.ok(executionInput.acceptedEffectsDigest);
   assert.deepEqual((schemas.ExecutionPolicy.properties as JsonObject).fallback, { type: 'string', const: 'multisigtools_managed' });
   assert.deepEqual(schemas.SorobanExecutorBinding.required, ['address', 'source']);
+  assert.deepEqual((schemas.SorobanExecutorBinding.properties as JsonObject).source, {
+    type: 'string', enum: ['intent', 'service_default', 'contract_policy', 'service_prepare', 'multisigtools_managed'],
+  });
   assert.ok((schemas.ContractIntentCreateInput.properties as JsonObject).executor);
   assert.ok((schemas.SorobanIntentExecutionPreparation.properties as JsonObject).effects);
   assert.ok((schemas.SorobanIntentExecutionPreparation.properties as JsonObject).preparedAt);

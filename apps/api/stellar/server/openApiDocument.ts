@@ -907,7 +907,7 @@ const components: OpenApiObject = {
       required: ['address', 'source'],
       properties: {
         address: accountId,
-        source: { type: 'string', enum: ['intent', 'service_default', 'service_prepare', 'multisigtools_managed'] },
+        source: { type: 'string', enum: ['intent', 'service_default', 'contract_policy', 'service_prepare', 'multisigtools_managed'] },
       },
       additionalProperties: false,
     },

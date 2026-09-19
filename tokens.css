@@ -1,0 +1,64 @@
+/* Hallmark · tokens · genre: modern-minimal · tone: operational · anchor hue: emerald */
+:root {
+  --color-paper: oklch(0.975 0.007 150);
+  --color-paper-2: oklch(0.955 0.010 150);
+  --color-paper-3: oklch(0.925 0.014 150);
+  --color-ink: oklch(0.225 0.012 155);
+  --color-ink-2: oklch(0.42 0.014 155);
+  --color-muted: oklch(0.45 0.012 155);
+  --color-rule: oklch(0.84 0.015 155);
+  --color-accent: oklch(0.51 0.118 166);
+  --color-accent-hover: oklch(0.45 0.105 166);
+  --color-accent-ink: oklch(0.99 0.004 150);
+  --color-focus: oklch(0.61 0.145 166);
+  --color-danger: oklch(0.53 0.19 27);
+  --color-warning: oklch(0.69 0.12 75);
+
+  --font-display: "Bitstream Charter", "Iowan Old Style", Georgia, serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-sm: 1rem;
+  --space-md: 1.5rem;
+  --space-lg: 2rem;
+  --space-xl: 3rem;
+  --space-2xl: 4.5rem;
+  --space-3xl: 7rem;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.75rem;
+  --text-2xl: 2.25rem;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-short: 140ms;
+  --dur-medium: 220ms;
+
+  --rule-hairline: 1px;
+  --radius-input: 0.625rem;
+  --radius-panel: 0.875rem;
+  --radius-pill: 999px;
+}
+
+.dark {
+  --color-paper: oklch(0.17 0.007 155);
+  --color-paper-2: oklch(0.205 0.009 155);
+  --color-paper-3: oklch(0.25 0.012 155);
+  --color-ink: oklch(0.94 0.008 150);
+  --color-ink-2: oklch(0.76 0.010 150);
+  --color-muted: oklch(0.72 0.010 150);
+  --color-rule: oklch(0.34 0.014 155);
+  --color-accent: oklch(0.69 0.17 162);
+  --color-accent-hover: oklch(0.75 0.15 162);
+  --color-accent-ink: oklch(0.17 0.007 155);
+  --color-focus: oklch(0.75 0.17 162);
+  --color-danger: oklch(0.68 0.17 25);
+  --color-warning: oklch(0.78 0.11 75);
+}

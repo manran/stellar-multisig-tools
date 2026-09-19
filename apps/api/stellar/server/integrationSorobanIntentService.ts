@@ -52,7 +52,7 @@ function assertContractAllowed(
   credential: ConfiguredIntegrationCredential,
   contractId: string,
   method: string,
-): void {
+) {
   const contract = credential.sorobanContracts.find((item) => item.contractId === contractId);
   if (!contract || !contract.methods.includes(method)) {
     throw new BoxServiceError(
@@ -61,6 +61,7 @@ function assertContractAllowed(
       'integration_contract_call_not_allowed',
     );
   }
+  return contract;
 }
 
 export function assertIntegrationSorobanExecutionAccount(
@@ -90,9 +91,33 @@ function optionalExecutor(value: unknown): string | undefined {
 export function integrationSorobanExecutionPolicyForCreation(
   credential: ConfiguredIntegrationCredential,
   network: StellarNetwork,
+  contractId: string,
   requestedExecutor: unknown,
 ): SorobanExecutionPolicy {
   const executor = optionalExecutor(requestedExecutor);
+  const contract = credential.sorobanContracts.find((item) => item.contractId === contractId);
+  if (contract?.execution?.mode === 'multisigtools') {
+    if (executor) {
+      throw new BoxServiceError(
+        'This contract is configured for MultiSigTools-managed execution.',
+        403,
+        'integration_contract_executor_policy_conflict',
+      );
+    }
+    return { mode: 'multisigtools' };
+  }
+  if (contract?.execution?.mode === 'external') {
+    const configuredExecutor = contract.execution.executor;
+    assertIntegrationSorobanExecutionAccount(credential, network, configuredExecutor);
+    if (executor && executor !== configuredExecutor) {
+      throw new BoxServiceError(
+        'This contract is bound to a different Integration executor.',
+        403,
+        'integration_contract_executor_policy_conflict',
+      );
+    }
+    return { mode: 'external', executor: { address: configuredExecutor, source: 'contract_policy' } };
+  }
   if (executor) {
     assertIntegrationSorobanExecutionAccount(credential, network, executor);
     return { mode: 'external', executor: { address: executor, source: 'intent' } };
@@ -152,6 +177,13 @@ export async function resolveAndBindIntegrationSorobanExecutor(
 
   let executor: SorobanExecutorBinding;
   let executionPolicy: SorobanExecutionPolicy;
+  if (stored.executionPolicy?.mode === 'multisigtools' && requested) {
+    throw new BoxServiceError(
+      'This contract is configured for MultiSigTools-managed execution.',
+      403,
+      'integration_contract_executor_policy_conflict',
+    );
+  }
   if (requested) {
     assertIntegrationSorobanExecutionAccount(credential, stored.network, requested);
     executor = { address: requested, source: 'service_prepare' };
@@ -233,7 +265,7 @@ export async function createIntegrationSorobanIntent(
     return { replayed: true, intent: existing, ...(externalReference ? { externalReference } : {}) };
   }
 
-  const executionPolicy = integrationSorobanExecutionPolicyForCreation(credential, input.network, requestedExecutor);
+  const executionPolicy = integrationSorobanExecutionPolicyForCreation(credential, input.network, built.contractId, requestedExecutor);
   const planned = await planSorobanIntentForStorage(
     built.intent,
     options.planningSource,
