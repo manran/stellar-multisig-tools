@@ -86,6 +86,7 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
   const [label, setLabel] = useState('');
   const [network, setNetwork] = useState<StellarNetwork>('testnet');
   const [fixedNetwork, setFixedNetwork] = useState<StellarNetwork | null>(null);
+  const [classicManagedCapabilities, setClassicManagedCapabilities] = useState<{ testnet: boolean; public: boolean } | null>(null);
 
   const [treasuryInput, setTreasuryInput] = useState('');
   const [treasuries, setTreasuries] = useState<TreasuryEntry[]>([]);
@@ -108,13 +109,20 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
   useEffect(() => {
     let active = true;
     void fetch('/api/runtime-config', { cache: 'no-store' })
-      .then((response) => apiJson<{ fixedNetwork: StellarNetwork | null }>(response))
+      .then((response) => apiJson<{
+        fixedNetwork: StellarNetwork | null;
+        capabilities?: { classicManagedExecution?: { testnet?: boolean; public?: boolean } };
+      }>(response))
       .then((body) => {
         if (!active) return;
         setFixedNetwork(body.fixedNetwork);
+        setClassicManagedCapabilities({
+          testnet: Boolean(body.capabilities?.classicManagedExecution?.testnet),
+          public: Boolean(body.capabilities?.classicManagedExecution?.public),
+        });
         if (body.fixedNetwork) resetNetwork(body.fixedNetwork);
       })
-      .catch(() => undefined);
+      .catch(() => { if (active) setClassicManagedCapabilities({ testnet: false, public: false }); });
     return () => { active = false; };
   }, []);
 
@@ -128,9 +136,13 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
     item.executionOwner === 'multisigtools'
     || Boolean(item.executor && executorPool.includes(item.executor) && isValidStellarAccountId(item.executor))
   ));
+  const classicManagedAvailable = classicManagedCapabilities?.[network] ?? null;
+  const classicExecutionValid = treasuries.length === 0
+    || classicManagedAvailable !== false
+    || (manageExecution && treasuries.every((item) => item.executionOwner === 'integration'));
   const webhookValid = !webhookEnabled || /^https:\/\//i.test(webhookUrl.trim());
   const basicsValid = Boolean(serviceId.trim() && label.trim());
-  const readyToCreate = basicsValid && hasBusinessScope && contractExecutionValid && webhookValid;
+  const readyToCreate = basicsValid && hasBusinessScope && contractExecutionValid && classicExecutionValid && webhookValid;
 
   function resetNetwork(next: StellarNetwork) {
     if (next === network) return;
@@ -275,6 +287,10 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
     }
     if (step === 2 && !hasBusinessScope) {
       setError('Add a Classic Treasury or select at least one contract method.');
+      return;
+    }
+    if (step === 3 && !classicExecutionValid) {
+      setError('Managed Classic execution is unavailable on this deployment. Route every Treasury to your service or enable a managed channel pool.');
       return;
     }
     if (step === 3 && !contractExecutionValid) {
@@ -490,10 +506,14 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
             </button>
           </div>
 
-          {!manageExecution && <div className="mt-4 flex items-center gap-2 text-sm font-semibold">
-            <Check className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
-            Managed by MultiSigTools
-          </div>}
+          {!manageExecution && (classicManagedAvailable === false && treasuries.length > 0
+            ? <div className="mt-4 border-y border-amber-500/30 bg-amber-500/[0.06] px-1 py-3 text-sm text-amber-800 dark:text-amber-200">
+                Managed Classic execution is not configured on this deployment. Choose “Manage execution myself” for every Treasury, or enable a managed channel pool.
+              </div>
+            : <div className="mt-4 flex items-center gap-2 text-sm font-semibold">
+                <Check className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
+                Managed by MultiSigTools
+              </div>)}
 
           {manageExecution && <div className="mt-5 space-y-6">
             {treasuries.length > 0 && <section className="ia-subframe">

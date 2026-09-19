@@ -377,6 +377,8 @@ Every wizard step is a client of a stable Headless operation or persisted Integr
 
 The same profile must be creatable and inspectable by future CLI/Agent/operator tooling without reproducing UI logic.
 
+The public `runtime.config.inspect` surface (`GET /api/runtime-config`) exposes only deployment-level capability booleans such as whether Managed Classic execution is available on Testnet/Mainnet. The Integration Wizard uses this before promising a managed default; a deployment without a configured pool must require external Classic routing instead of failing later at Request creation.
+
 An Integration can inspect its effective execution capability through the Headless operation `integration.execution.inspect` (`GET /api/integration-execution?network=...`, authenticated by `msi_*`). The response exposes only public execution facts: whether Classic scope exists, managed/external Treasury counts, and the public identities of the deployment's managed Classic channel pool. It never exposes the channel master secret or derived private seeds.
 
 ### Classic Treasury onboarding

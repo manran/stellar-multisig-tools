@@ -198,12 +198,28 @@ const components: OpenApiObject = {
     },
     RuntimeConfigResult: {
       type: 'object',
-      required: ['operation', 'version', 'stellarNetwork', 'fixedNetwork'],
+      required: ['operation', 'version', 'stellarNetwork', 'fixedNetwork', 'capabilities'],
       properties: {
         operation: { type: 'string', const: 'runtime.config.inspect' },
         version: operationVersion,
         stellarNetwork: { type: 'string', enum: ['public', 'testnet', 'dual'] },
         fixedNetwork: { oneOf: [stellarNetwork, { type: 'null' }] },
+        capabilities: {
+          type: 'object',
+          required: ['classicManagedExecution'],
+          properties: {
+            classicManagedExecution: {
+              type: 'object',
+              required: ['testnet', 'public'],
+              properties: {
+                testnet: { type: 'boolean' },
+                public: { type: 'boolean' },
+              },
+              additionalProperties: false,
+            },
+          },
+          additionalProperties: false,
+        },
       },
       additionalProperties: false,
     },

@@ -6,14 +6,23 @@ import { GET as inspectRuntimeConfig } from '../routes/runtime-config.js';
 
 const variable = 'VITE_STELLAR_DEPLOYMENT_NETWORK';
 const original = process.env[variable];
+const classicChannelsVariable = 'MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET';
+const classicChannelPoolSizeVariable = 'MULTISIG_CLASSIC_CHANNEL_POOL_SIZE';
+const originalClassicChannels = process.env[classicChannelsVariable];
+const originalClassicChannelPoolSize = process.env[classicChannelPoolSizeVariable];
 
 test.afterEach(() => {
   if (original === undefined) delete process.env[variable];
   else process.env[variable] = original;
+  if (originalClassicChannels === undefined) delete process.env[classicChannelsVariable];
+  else process.env[classicChannelsVariable] = originalClassicChannels;
+  if (originalClassicChannelPoolSize === undefined) delete process.env[classicChannelPoolSizeVariable];
+  else process.env[classicChannelPoolSizeVariable] = originalClassicChannelPoolSize;
 });
 
 test('runtime config exposes the fixed Testnet deployment contract', async () => {
   process.env[variable] = 'testnet';
+  delete process.env[classicChannelsVariable];
   const response = await inspectRuntimeConfig();
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
@@ -21,7 +30,23 @@ test('runtime config exposes the fixed Testnet deployment contract', async () =>
     version: 1,
     stellarNetwork: 'testnet',
     fixedNetwork: 'testnet',
+    capabilities: {
+      classicManagedExecution: { testnet: false, public: false },
+    },
   });
+});
+
+test('runtime config exposes managed Classic capability without exposing channel secrets', async () => {
+  process.env[variable] = 'testnet';
+  process.env[classicChannelsVariable] = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+  process.env[classicChannelPoolSizeVariable] = '4';
+  const response = await inspectRuntimeConfig();
+  assert.equal(response.status, 200);
+  const body = await response.json() as Record<string, unknown>;
+  assert.deepEqual(body.capabilities, {
+    classicManagedExecution: { testnet: true, public: false },
+  });
+  assert.doesNotMatch(JSON.stringify(body), /S[A-Z2-7]{55}/);
 });
 
 test('public Headless operations reject Mainnet input on a Testnet deployment before upstream work', async () => {

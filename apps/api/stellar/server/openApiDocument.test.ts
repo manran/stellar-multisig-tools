@@ -115,6 +115,16 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.ok(securitySchemes.intentCapability);
   assert.match(String(securitySchemes.integrationBearer.description), /non-signer external service credential/i);
   assert.match(String(securitySchemes.intentCapability.description), /mic_/);
+  assert.deepEqual(schemas.RuntimeConfigResult.required, ['operation', 'version', 'stellarNetwork', 'fixedNetwork', 'capabilities']);
+  assert.deepEqual(
+    (((schemas.RuntimeConfigResult.properties as JsonObject).capabilities as JsonObject).properties as JsonObject).classicManagedExecution,
+    {
+      type: 'object',
+      required: ['testnet', 'public'],
+      properties: { testnet: { type: 'boolean' }, public: { type: 'boolean' } },
+      additionalProperties: false,
+    },
+  );
   assert.deepEqual(schemas.ContractIntentCreateInput.required, ['network']);
   assert.deepEqual(schemas.ContractInterfaceResult.required, ['operation', 'version', 'network', 'contractId', 'methods', 'abi']);
   assert.deepEqual(schemas.ContractAbi.required, ['schema', 'functions', 'types']);
