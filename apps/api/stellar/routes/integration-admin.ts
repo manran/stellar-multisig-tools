@@ -12,6 +12,15 @@ import {
 import { RequestBodyError, readJsonObjectBody } from '../server/requestBody.js';
 import { noStoreJson } from '../server/httpResponse.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
+import {
+  ClassicManagedChannelConfigurationError,
+  configuredClassicManagedChannels,
+} from '../server/classicManagedChannelConfig.js';
+import {
+  assertDeploymentNetwork,
+  DeploymentNetworkPolicyError,
+} from '../server/deploymentNetworkPolicy.js';
+import type { StellarNetwork } from '../../../../src/stellar/types.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -27,7 +36,12 @@ function authorize(request: Request): void {
 }
 
 function errorResponse(cause: unknown): Response {
-  if (cause instanceof IntegrationAdminServiceError || cause instanceof RequestBodyError) {
+  if (
+    cause instanceof IntegrationAdminServiceError
+    || cause instanceof RequestBodyError
+    || cause instanceof ClassicManagedChannelConfigurationError
+    || cause instanceof DeploymentNetworkPolicyError
+  ) {
     return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
   }
   if (cause instanceof RequestStorageUnavailableError) {
@@ -40,6 +54,27 @@ function errorResponse(cause: unknown): Response {
 export async function GET(request: Request): Promise<Response> {
   try {
     authorize(request);
+    const url = new URL(request.url);
+    if (url.searchParams.get('view') === 'managed_classic_execution') {
+      const rawNetwork = url.searchParams.get('network');
+      if (rawNetwork !== 'testnet' && rawNetwork !== 'public') {
+        throw new IntegrationAdminServiceError(
+          'A valid Stellar network is required for managed Classic execution status.',
+          400,
+          'invalid_managed_classic_network',
+        );
+      }
+      const network = rawNetwork as StellarNetwork;
+      assertDeploymentNetwork(network);
+      const channels = configuredClassicManagedChannels(network);
+      return noStoreJson({
+        managedClassicExecution: {
+          network,
+          configured: channels.length > 0,
+          channelAccounts: channels.map((channel) => channel.publicKey()),
+        },
+      });
+    }
     return noStoreJson({ services: await listIntegrationAdminServices(blobIntegrationCredentialStore) });
   } catch (cause) { return errorResponse(cause); }
 }
