@@ -1,0 +1,9 @@
+{
+  "date": "2026-09-19",
+  "framework": "Vite + React + Tailwind v4",
+  "font": "Inter",
+  "palette": "existing Firefly/Emerald semantic palette with Testnet Sky remap",
+  "motion": "motion-on",
+  "spacing": "existing Tailwind spacing scale",
+  "preserve": ["font stack", "network semantic palette", "existing admin/workbench component language"]
+}

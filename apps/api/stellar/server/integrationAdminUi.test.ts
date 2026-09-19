@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const ui = readFileSync(new URL('../../../../src/IntegrationAdminApp.tsx', import.meta.url), 'utf8');
+const wizard = readFileSync(new URL('../../../../src/IntegrationProfileWizard.tsx', import.meta.url), 'utf8');
 const main = readFileSync(new URL('../../../../src/main.tsx', import.meta.url), 'utf8');
 const shell = readFileSync(new URL('../../../../src/StellarWorkspaceShell.tsx', import.meta.url), 'utf8');
 const api = readFileSync(new URL('../routes/integration-admin.ts', import.meta.url), 'utf8');
@@ -13,14 +14,27 @@ test('Integration admin is an unlinked operator-only runtime surface', () => {
   assert.doesNotMatch(shell, /admin\/integrations|Integration administration/);
   assert.doesNotMatch(ui, /localStorage|sessionStorage/);
   assert.match(ui, /shown once/);
-  assert.match(ui, /Rotate msi key/);
+  assert.match(ui, /Rotate MSI credential/);
   assert.match(ui, /Default Soroban executor/);
   assert.match(ui, /Webhook delivery/);
   assert.match(ui, /Webhook URL/);
   assert.match(ui, /configure_webhook/);
   assert.match(ui, /Rotate webhook secret/);
-  assert.match(ui, /whsec_\*/);
+  assert.doesNotMatch(ui, /whsec_\*/);
+  assert.match(ui, /API credential — shown once/);
   assert.match(ui, /Copy webhook secret/);
+  assert.match(ui, /Advanced configuration/);
+  assert.match(ui, /IntegrationProfileDetail/);
+  assert.match(wizard, /Define the profile before issuing a credential/);
+  assert.match(wizard, /Classic Treasuries/);
+  assert.match(wizard, /analyzeAccountAuthorization/);
+  assert.match(wizard, /\/api\/contract-interface/);
+  assert.match(wizard, /\/api\/runtime-config/);
+  assert.match(wizard, /Keep users on my site/);
+  assert.match(wizard, /Full Headless control/);
+  assert.match(wizard, /Create profile & issue MSI/);
+  assert.match(wizard, /buildIntegrationAdminConfiguration/);
+  assert.doesNotMatch(wizard, /mic_/);
 });
 
 test('Integration admin API requires the independent operator bearer secret', () => {

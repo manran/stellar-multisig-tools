@@ -17,6 +17,12 @@ import {
   deriveIntegrationWebhookSecret,
   IntegrationWebhookSigningError,
 } from './integrationWebhookSigning.js';
+import {
+  DEFAULT_INTEGRATION_PROFILE,
+  IntegrationProfileError,
+  integrationProfileFromInput,
+  type IntegrationProfilePreferences,
+} from './integrationProfile.js';
 
 const ADMIN_KEY_PREFIX = 'mia';
 const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
@@ -33,6 +39,7 @@ export interface IntegrationAdminSummary {
   sorobanExecutionAccounts: string[];
   sorobanDefaultExecutor?: string;
   webhook?: IntegrationWebhookConfig;
+  profile: IntegrationProfilePreferences;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -89,6 +96,7 @@ function summary(record: StoredIntegrationCredential | ConfiguredIntegrationCred
     sorobanExecutionAccounts: credential.sorobanExecutionAccounts,
     ...(credential.sorobanDefaultExecutor ? { sorobanDefaultExecutor: credential.sorobanDefaultExecutor } : {}),
     ...(stored?.webhook ? { webhook: stored.webhook } : {}),
+    profile: stored?.profile ?? DEFAULT_INTEGRATION_PROFILE,
     ...(stored ? { createdAt: stored.createdAt, updatedAt: stored.updatedAt } : {}),
   };
 }
@@ -122,6 +130,17 @@ function integrationWebhookSecret(
         503,
         'integration_webhook_signing_not_configured',
       );
+    }
+    throw cause;
+  }
+}
+
+function normalizeProfile(input: unknown, fallback = DEFAULT_INTEGRATION_PROFILE): IntegrationProfilePreferences {
+  try {
+    return integrationProfileFromInput(input, fallback);
+  } catch (cause) {
+    if (cause instanceof IntegrationProfileError) {
+      throw new IntegrationAdminServiceError(cause.message, 400, 'invalid_integration_profile');
     }
     throw cause;
   }
@@ -174,9 +193,11 @@ export async function createIntegrationAdminService(
   const webhookSecret = webhook
     ? integrationWebhookSecret(serviceId, webhook, webhookMasterSecret)
     : undefined;
+  const profile = normalizeProfile(input.profile, { version: 1, authorizationExperience: 'hosted' });
   const record: StoredIntegrationCredential = {
     version: 1, credential, enabled,
     ...(webhook ? { webhook } : {}),
+    profile,
     createdAt: timestamp, updatedAt: timestamp,
   };
   await store.putCredential(record);
@@ -198,11 +219,13 @@ export async function updateIntegrationAdminService(
   if (!current) throw new IntegrationAdminServiceError('Integration Service was not found.', 404, 'integration_service_not_found');
   const credential = normalizeInput({ ...input, serviceId }, current.credential.secretHash);
   const enabled = typeof input.enabled === 'boolean' ? input.enabled : current.enabled;
+  const profile = normalizeProfile(input.profile, current.profile ?? DEFAULT_INTEGRATION_PROFILE);
   const updated: StoredIntegrationCredential = {
     version: 1,
     credential,
     enabled,
     ...(current.webhook ? { webhook: current.webhook } : {}),
+    profile,
     createdAt: current.createdAt,
     updatedAt: now.toISOString(),
   };

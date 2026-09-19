@@ -51,6 +51,7 @@ test('durable Integration administration creates, updates, disables, and rotates
   const created = await createIntegrationAdminService(store, input(), new Date('2026-09-16T10:00:00Z'));
   assert.match(created.apiKey, /^msi_fednetwork_/);
   assert.equal(created.service.enabled, true);
+  assert.equal(created.service.profile.authorizationExperience, 'hosted');
   assert.equal('secretHash' in created.service, false);
   assert.equal((await listIntegrationAdminServices(store))[0]?.source, 'durable');
 
@@ -64,6 +65,32 @@ test('durable Integration administration creates, updates, disables, and rotates
   const disabled = await updateIntegrationAdminService(store, 'fednetwork', { ...current, enabled: false });
   assert.equal(disabled.enabled, false);
   assert.equal(await resolveIntegrationCredential(store, 'fednetwork'), null);
+});
+
+test('Integration profile metadata persists progressive disclosure preference without changing credential authority', async () => {
+  const store = new MemoryStore();
+  const created = await createIntegrationAdminService(store, {
+    ...input('native-ui'),
+    profile: { authorizationExperience: 'native' },
+  });
+  assert.equal(created.service.profile.authorizationExperience, 'native');
+  assert.equal(store.values.get('native-ui')?.profile?.authorizationExperience, 'native');
+
+  const updated = await updateIntegrationAdminService(store, 'native-ui', {
+    ...created.service,
+    profile: { authorizationExperience: 'headless' },
+  });
+  assert.equal(updated.profile.authorizationExperience, 'headless');
+  assert.equal(store.values.get('native-ui')?.profile?.authorizationExperience, 'headless');
+
+  const legacy = store.values.get('native-ui')!;
+  store.values.set('legacy-profile', {
+    ...legacy,
+    credential: { ...legacy.credential, serviceId: 'legacy-profile' },
+    profile: undefined,
+  });
+  const listed = await listIntegrationAdminServices(store);
+  assert.equal(listed.find((item) => item.serviceId === 'legacy-profile')?.profile.authorizationExperience, 'headless');
 });
 
 test('operator-managed webhook config stores only URL/generation and rotates derived Standard Webhooks secret', async () => {

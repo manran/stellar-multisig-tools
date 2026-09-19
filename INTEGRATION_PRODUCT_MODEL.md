@@ -343,7 +343,188 @@ It implements:
 
 Public Integration Profiles and browser-created Intents are deferred until real market evidence shows they are needed.
 
-## 10. Delivery phases
+## 10. Integration Profile provisioning
+
+An Integration credential is the machine identity of one durable Integration Profile. The product must not begin with a secret or with raw scope fields. It begins with the business boundary the Integration is allowed to operate.
+
+The provisioning sequence is:
+
+```text
+Identity + network
+        ↓
+Classic Treasury scope
+        ↓
+Soroban Contract scope
+        ↓
+Execution ownership
+        ↓
+Integration depth
+        ↓
+Optional status delivery
+        ↓
+Review
+        ↓
+Create Integration Profile + issue MSI_*
+```
+
+The resulting `MSI_*` is only the API credential for that already-defined profile. It is not the profile itself.
+
+### Headless-first invariant
+
+Every wizard step is a client of a stable Headless operation or persisted Integration Profile field. The Web UI must not own policy that cannot be expressed by the underlying Integration administration model.
+
+The same profile must be creatable and inspectable by future CLI/Agent/operator tooling without reproducing UI logic.
+
+### Classic Treasury onboarding
+
+The operator/integrator provides a Stellar `G...` Treasury address. MST resolves current Horizon account state and presents:
+
+- current low / medium / high thresholds;
+- active signer addresses and weights;
+- authorization-policy summaries;
+- whether this Integration permits coordination for that Treasury;
+- execution ownership for work sourced from that Treasury.
+
+Execution ownership is separate from signer authority:
+
+```text
+Authorization authority -> current Stellar account signer policy
+Execution ownership       -> MultiSigTools or external Integration
+```
+
+The Integration Profile never invents or overrides account signers.
+
+For the current runtime model, Classic execution maps directly to:
+
+- MST submits -> account is allowed in `classicSourceAccounts` but not in `classicExternalExecutionSourceAccounts`;
+- Integration submits -> account appears in both arrays.
+
+### Soroban Contract onboarding
+
+The operator/integrator provides a Stellar `C...` contract address. MST resolves the deployed contract interface and presents the actual callable methods.
+
+The user selects the methods this Integration may invoke. The profile stores an explicit allowlist; empty means no access, never wildcard access.
+
+Execution configuration is shown after method scope because execution is a consequence of allowed work, not the source of contract authority.
+
+For the current v1 runtime model:
+
+- selected methods map to `sorobanContracts`;
+- external executor accounts map to `sorobanExecutionAccounts`;
+- an optional default maps to `sorobanDefaultExecutor`;
+- no external executor selected leaves MST-managed execution as the fallback.
+
+Do not present per-contract executor isolation in the UI until the runtime authority model can enforce it. A UI-only restriction would be false security.
+
+### Integration depth
+
+Only after the business scope is defined should the product ask how deeply the Integration wants to consume MST:
+
+```text
+MST-hosted authorization
+Keep users on my site
+Full Headless control
+```
+
+These choices are progressive disclosure over the same Headless Core, not different capability implementations.
+
+Suggested product copy:
+
+- **MST-hosted authorization** — MultiSigTools handles signer interaction. Lowest integration effort.
+- **Keep users on my site** — use the Integration's own page and wallet UX while MST coordinates and verifies authorization.
+- **Full Headless control** — expose the complete supported orchestration, execution and automation surface.
+
+The profile stores this as product preference / disclosure state. It does not weaken the underlying API authority checks.
+
+### Status delivery
+
+Webhook is orthogonal to authorization experience.
+
+It is therefore configured as an optional **Status updates** step, not as a consequence of choosing Native or Headless integration.
+
+When enabled:
+
+- the Integration provides one HTTPS callback URL;
+- MST returns the webhook signing secret once;
+- the secret is never part of normal profile display;
+- rotation is a profile maintenance action.
+
+### Credential issuance
+
+`MSI_*` is generated only after review succeeds.
+
+The creation result must present it once, separately from normal profile details:
+
+```text
+Integration Profile created
+
+API credential
+MSI_...
+
+Shown once. Store it in your server-side secret store.
+```
+
+The Integration detail page never re-renders the plaintext API credential. It displays that a credential exists and exposes rotation.
+
+### Integration Profile detail
+
+After creation, the default surface is a readable profile, not a raw edit form.
+
+It should answer:
+
+```text
+What can this Integration operate?
+Who owns execution?
+How do users authorize?
+How are status updates delivered?
+What credential lifecycle actions exist?
+```
+
+Suggested information hierarchy:
+
+```text
+Integration identity
+Networks / enabled state
+
+Classic Treasuries
+  G...
+  live signer policy summary
+  execution: MST / Integration
+
+Soroban Contracts
+  C...
+  allowed methods
+  execution policy / allowed executors
+
+Authorization experience
+  Hosted / Keep users on my site / Full Headless
+
+Status updates
+  Webhook on/off + endpoint + last-known config generation
+
+Credential
+  Active
+  Rotate
+```
+
+Edit actions should modify one section at a time. Raw authority fields remain available only in the Expert/Headless disclosure level.
+
+### First implementation boundary
+
+The first production slice keeps existing authority semantics and changes the provisioning/product surface:
+
+1. Create Wizard replaces the raw multiline scope editor for new Integrations.
+2. Treasury analysis reuses Horizon account loading + existing authorization analysis.
+3. Contract analysis reuses the existing Contract Interface endpoint.
+4. Classic execution maps to the existing per-account external-execution allowlist.
+5. Soroban execution maps to the existing service-wide executor allowlist/default. The UI explicitly avoids pretending this is per-contract isolation.
+6. Integration depth is persisted as profile metadata for product disclosure; it does not create a second authorization policy engine.
+7. Webhook remains optional and orthogonal.
+8. Existing `MSI_*` creation/rotation semantics remain unchanged.
+9. Existing durable Integration records remain readable; missing profile metadata defaults to the most permissive disclosure view for operators, not to weaker runtime authority.
+10. Partner self-service login is a later delivery concern. This first slice validates the provisioning model on the existing protected Integration administration surface.
+
+## 11. Delivery phases
 
 ### Phase 1 — business projection now
 
@@ -368,7 +549,7 @@ Public Integration Profiles and browser-created Intents are deferred until real 
 - operator/partner console for credentials, scopes, webhook configuration and Activity;
 - optional auto-replan/execution fallback only after concrete operational evidence.
 
-## 11. Non-goals
+## 12. Non-goals
 
 This product simplification must not cause:
 
