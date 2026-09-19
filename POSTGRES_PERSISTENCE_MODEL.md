@@ -40,7 +40,7 @@ PostgreSQL becomes authoritative for:
 - signature contributions;
 - submission result;
 - durable Activity facts;
-- managed Classic channel leases (`classic_managed_channel_leases`): public channel account + Request ownership + lease/expiry only. Channel secret seeds remain deployment secrets and never enter PostgreSQL.
+- managed Classic channel leases (`classic_managed_channel_leases`): public channel account + Request ownership + lease/expiry only. Channel keypairs are derived from one deployment master secret; neither that secret nor derived seeds enter PostgreSQL.
 
 Private text/opening material is excluded; see section 4.
 

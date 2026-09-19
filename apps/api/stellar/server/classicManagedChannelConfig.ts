@@ -1,7 +1,10 @@
+import { createHmac } from 'node:crypto';
 import { Keypair } from '@stellar/stellar-sdk/base';
 import type { StellarNetwork } from '../../../../src/stellar/types.js';
 
+const DEFAULT_CHANNEL_COUNT = 4;
 const MAX_CHANNELS_PER_NETWORK = 64;
+const MIN_MASTER_SECRET_LENGTH = 32;
 
 export class ClassicManagedChannelConfigurationError extends Error {
   readonly status = 503;
@@ -12,56 +15,40 @@ export class ClassicManagedChannelConfigurationError extends Error {
   }
 }
 
-function parseNetworkSecrets(value: unknown, network: StellarNetwork): Keypair[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value)) {
+function channelCount(raw = process.env.MULTISIG_CLASSIC_CHANNEL_POOL_SIZE): number {
+  if (!raw?.trim()) return DEFAULT_CHANNEL_COUNT;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1 || value > MAX_CHANNELS_PER_NETWORK) {
     throw new ClassicManagedChannelConfigurationError(
-      `Managed Classic channel config for ${network} must be an array of Stellar secret seeds.`,
+      `MULTISIG_CLASSIC_CHANNEL_POOL_SIZE must be an integer from 1 to ${MAX_CHANNELS_PER_NETWORK}.`,
     );
   }
-  if (value.length > MAX_CHANNELS_PER_NETWORK) {
-    throw new ClassicManagedChannelConfigurationError(
-      `Managed Classic channel config for ${network} exceeds ${MAX_CHANNELS_PER_NETWORK} accounts.`,
-    );
-  }
-  const byAccount = new Map<string, Keypair>();
-  for (const entry of value) {
-    if (typeof entry !== 'string' || !entry.trim()) {
-      throw new ClassicManagedChannelConfigurationError(
-        `Managed Classic channel config for ${network} contains an invalid secret seed.`,
-      );
-    }
-    let keypair: Keypair;
-    try {
-      keypair = Keypair.fromSecret(entry.trim());
-    } catch {
-      throw new ClassicManagedChannelConfigurationError(
-        `Managed Classic channel config for ${network} contains an invalid secret seed.`,
-      );
-    }
-    byAccount.set(keypair.publicKey(), keypair);
-  }
-  return [...byAccount.values()];
+  return value;
+}
+
+function derivedSeed(masterSecret: string, network: StellarNetwork, index: number): Buffer {
+  return createHmac('sha256', masterSecret)
+    .update('multisigtools/classic-managed-channel/v1\0')
+    .update(network)
+    .update('\0')
+    .update(String(index))
+    .digest();
 }
 
 export function configuredClassicManagedChannels(
   network: StellarNetwork,
-  raw = process.env.MULTISIG_CLASSIC_CHANNEL_SECRETS_JSON,
+  masterSecret = process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET,
+  poolSize = process.env.MULTISIG_CLASSIC_CHANNEL_POOL_SIZE,
 ): Keypair[] {
-  if (!raw?.trim()) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
+  if (!masterSecret?.trim()) return [];
+  const secret = masterSecret.trim();
+  if (secret.length < MIN_MASTER_SECRET_LENGTH) {
     throw new ClassicManagedChannelConfigurationError(
-      'MULTISIG_CLASSIC_CHANNEL_SECRETS_JSON must be valid JSON.',
+      `MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET must contain at least ${MIN_MASTER_SECRET_LENGTH} characters of high-entropy secret material.`,
     );
   }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new ClassicManagedChannelConfigurationError(
-      'MULTISIG_CLASSIC_CHANNEL_SECRETS_JSON must be an object keyed by testnet/public.',
-    );
-  }
-  const record = parsed as Record<string, unknown>;
-  return parseNetworkSecrets(record[network], network);
+  const count = channelCount(poolSize);
+  return Array.from({ length: count }, (_, index) => (
+    Keypair.fromRawEd25519Seed(derivedSeed(secret, network, index))
+  ));
 }

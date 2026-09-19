@@ -200,7 +200,7 @@ Before enabling live customer delivery:
 
 The coordination model now has 18 business tables:
 
-- 7 Classic (including `classic_managed_channel_leases` for public channel/Request lease coordination; never secret seeds);
+- 7 Classic (including `classic_managed_channel_leases` for public channel/Request lease coordination; never master secret or derived seeds);
 - 8 Soroban (including `soroban_browser_authorization_capabilities` for hashed short-lived Browser authorization grants);
 - 3 cross-protocol (`agent_idempotency_claims`, `integration_outbox`, `integration_webhook_deliveries`).
 

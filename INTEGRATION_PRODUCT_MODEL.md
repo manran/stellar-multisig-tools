@@ -408,7 +408,7 @@ The channel is pre-signed only for transaction-source authority. Treasury signer
 
 Managed Classic v1 intentionally uses a simple Channel Account Pool:
 
-- channel seeds exist only in deployment secret configuration;
+- one deployment-level master secret deterministically derives network-scoped channel keypairs; individual channel seeds are never stored as configuration;
 - PostgreSQL stores only public channel/request leases;
 - one channel carries at most one active Request at a time;
 - concurrency scales by adding channels, not by speculative sequence pipelining;
@@ -571,7 +571,7 @@ The first production slice keeps existing authority semantics and changes the pr
 2. Treasury analysis reuses Horizon account loading + existing authorization analysis.
 3. Contract analysis reuses the existing Contract Interface endpoint.
 4. MultiSigTools-managed execution is the Guided default and is not presented as a mandatory setup decision.
-5. Managed semantic Classic Payment uses an MST Channel Account as transaction source while retaining the Treasury as explicit operation source; channel seeds never enter PostgreSQL.
+5. Managed semantic Classic Payment uses an MST Channel Account as transaction source while retaining the Treasury as explicit operation source; channel keypairs are deterministically derived from one deployment master secret and no channel seed enters PostgreSQL.
 6. PostgreSQL coordinates one-active-Request-per-channel leases; v1 deliberately avoids sequence pipelining.
 7. Classic external execution continues to use the existing per-Treasury external-execution allowlist when advanced execution is enabled.
 8. Soroban external execution reuses the Service-wide executor allowlist as a global Executor Pool plus enforced per-contract policy (`multisigtools` or one pool member).
