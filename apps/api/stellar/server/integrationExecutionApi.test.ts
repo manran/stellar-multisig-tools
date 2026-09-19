@@ -55,7 +55,10 @@ test('Integration execution inspection requires msi and returns only public mana
     serviceId: string;
     network: string;
     classic: {
+      scopeConfigured: boolean;
       managedAvailable: boolean;
+      managedSourceAccountCount: number;
+      externalSourceAccountCount: number;
       channelCount: number;
       channelAccounts: string[];
     };
@@ -64,7 +67,10 @@ test('Integration execution inspection requires msi and returns only public mana
   assert.equal(body.version, 1);
   assert.equal(body.serviceId, 'execution-test');
   assert.equal(body.network, 'testnet');
+  assert.equal(body.classic.scopeConfigured, true);
   assert.equal(body.classic.managedAvailable, true);
+  assert.equal(body.classic.managedSourceAccountCount, 1);
+  assert.equal(body.classic.externalSourceAccountCount, 0);
   assert.equal(body.classic.channelCount, 4);
   assert.equal(body.classic.channelAccounts.length, 4);
   assert.equal(JSON.stringify(body).includes(MASTER), false);

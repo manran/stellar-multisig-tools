@@ -67,13 +67,19 @@ export async function GET(request: Request): Promise<Response> {
     }
 
     const channels = configuredClassicManagedChannels(network);
+    const externalSources = new Set(caller.credential.classicExternalExecutionSourceAccounts);
+    const managedSourceAccountCount = caller.credential.classicSourceAccounts
+      .filter((accountId) => !externalSources.has(accountId)).length;
     return noStoreJson({
       operation: 'integration.execution.inspect',
       version: 1,
       serviceId: caller.credential.serviceId,
       network,
       classic: {
-        managedAvailable: channels.length > 0,
+        scopeConfigured: caller.credential.classicSourceAccounts.length > 0,
+        managedAvailable: managedSourceAccountCount > 0 && channels.length > 0,
+        managedSourceAccountCount,
+        externalSourceAccountCount: externalSources.size,
         channelCount: channels.length,
         channelAccounts: channels.map((channel) => channel.publicKey()),
       },

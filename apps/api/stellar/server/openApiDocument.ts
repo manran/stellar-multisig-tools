@@ -217,9 +217,19 @@ const components: OpenApiObject = {
         network: stellarNetwork,
         classic: {
           type: 'object',
-          required: ['managedAvailable', 'channelCount', 'channelAccounts'],
+          required: [
+            'scopeConfigured',
+            'managedAvailable',
+            'managedSourceAccountCount',
+            'externalSourceAccountCount',
+            'channelCount',
+            'channelAccounts',
+          ],
           properties: {
+            scopeConfigured: { type: 'boolean' },
             managedAvailable: { type: 'boolean' },
+            managedSourceAccountCount: { type: 'integer', minimum: 0 },
+            externalSourceAccountCount: { type: 'integer', minimum: 0 },
             channelCount: { type: 'integer', minimum: 0, maximum: 64 },
             channelAccounts: { type: 'array', items: accountId },
           },

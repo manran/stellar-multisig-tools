@@ -377,6 +377,8 @@ Every wizard step is a client of a stable Headless operation or persisted Integr
 
 The same profile must be creatable and inspectable by future CLI/Agent/operator tooling without reproducing UI logic.
 
+An Integration can inspect its effective execution capability through the Headless operation `integration.execution.inspect` (`GET /api/integration-execution?network=...`, authenticated by `msi_*`). The response exposes only public execution facts: whether Classic scope exists, managed/external Treasury counts, and the public identities of the deployment's managed Classic channel pool. It never exposes the channel master secret or derived private seeds.
+
 ### Classic Treasury onboarding
 
 The operator/integrator provides a Stellar `G...` Treasury address. MST resolves current Horizon account state and presents:
