@@ -198,10 +198,10 @@ Before enabling live customer delivery:
 
 ## 10. Database table impact
 
-The coordination model now has 16 business tables:
+The coordination model now has 17 business tables:
 
 - 6 Classic;
-- 7 Soroban;
+- 8 Soroban (including `soroban_browser_authorization_capabilities` for hashed short-lived Browser authorization grants);
 - 3 cross-protocol (`agent_idempotency_claims`, `integration_outbox`, `integration_webhook_deliveries`).
 
 There is additionally one technical `schema_migrations` table and one derived `integration_work` view.

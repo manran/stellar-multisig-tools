@@ -10,7 +10,7 @@ import { isValidSigningRequestId } from '../server/requestLocator.js';
 import type { StoredSorobanIntent } from '../server/sorobanIntentStore.js';
 import type { StellarNetwork } from '../../../../src/stellar/types.js';
 
-const REQUIRED_MIGRATION = '0004_webhook_delivery_history';
+const REQUIRED_MIGRATION = '0005_browser_authorization_capabilities';
 
 export interface RuntimeCoordinationBackfillReport extends CoordinationBackfillReport {
   network: StellarNetwork;

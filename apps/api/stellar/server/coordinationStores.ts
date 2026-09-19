@@ -1,9 +1,11 @@
 import type { SigningRequestStore } from './requestStore.js';
 import type { SorobanIntentStore } from './sorobanIntentStore.js';
+import type { SorobanBrowserAuthorizationStore } from './sorobanBrowserAuthorizationStore.js';
 import { blobSigningRequestStore } from './blobRequestStore.js';
 import { blobSorobanIntentStore } from './blobSorobanIntentStore.js';
 import { createPostgresSigningRequestStore } from '../db/postgresSigningRequestStore.js';
 import { createPostgresSorobanIntentStore } from '../db/postgresSorobanIntentStore.js';
+import { createPostgresSorobanBrowserAuthorizationStore } from '../db/postgresSorobanBrowserAuthorizationStore.js';
 
 export type CoordinationStorageMode = 'blob' | 'postgres';
 
@@ -27,6 +29,7 @@ export function coordinationStorageMode(
 
 let postgresRequestStore: SigningRequestStore | null = null;
 let postgresIntentStore: SorobanIntentStore | null = null;
+let postgresBrowserAuthorizationStore: SorobanBrowserAuthorizationStore | null = null;
 
 function overrideBoundMethod<T extends object>(
   target: T,
@@ -70,4 +73,21 @@ export function runtimeSorobanIntentStore(
   if (mode === 'blob') return blobSorobanIntentStore;
   postgresIntentStore ??= createPostgresSorobanIntentStore();
   return postgresIntentStore;
+}
+
+export class BrowserAuthorizationStorageUnavailableError extends Error {
+  readonly status = 503;
+  readonly code = 'browser_authorization_storage_unavailable';
+  constructor() {
+    super('Browser authorization requires PostgreSQL coordination storage.');
+    this.name = 'BrowserAuthorizationStorageUnavailableError';
+  }
+}
+
+export function runtimeSorobanBrowserAuthorizationStore(
+  mode: CoordinationStorageMode = coordinationStorageMode(),
+): SorobanBrowserAuthorizationStore {
+  if (mode !== 'postgres') throw new BrowserAuthorizationStorageUnavailableError();
+  postgresBrowserAuthorizationStore ??= createPostgresSorobanBrowserAuthorizationStore();
+  return postgresBrowserAuthorizationStore;
 }

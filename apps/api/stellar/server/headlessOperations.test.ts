@@ -17,6 +17,10 @@ test('runtime policy and contract vertical slice are available to every transpor
   assert.equal(byId.get('contract.intent.create')?.access, 'principal:write');
   assert.equal(byId.get('contract.intent.inspect')?.access, 'principal:read');
   assert.equal(byId.get('contract.intent.contribute')?.access, 'principal:sign');
+  assert.equal(byId.get('integration.intent.browser.issue')?.access, 'integration:write');
+  assert.equal(byId.get('integration.intent.browser.issue')?.effect, 'private-state');
+  assert.equal(byId.get('integration.intent.browser.inspect')?.access, 'browser:read');
+  assert.equal(byId.get('integration.intent.browser.contribute')?.access, 'browser:sign');
   assert.equal(byId.get('contract.intent.execution.prepare')?.method, 'PUT');
   assert.equal(byId.get('contract.intent.execution.prepare')?.effect, 'none');
   assert.equal(byId.get('contract.intent.execution.reconcile')?.method, 'PUT');

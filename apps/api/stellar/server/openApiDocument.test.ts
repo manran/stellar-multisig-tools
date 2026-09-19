@@ -76,11 +76,11 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.equal(intent.operationId, 'contract.intent.create.integration.intent.create');
   assert.deepEqual(intent['x-multisig-operation-ids'], ['contract.intent.create', 'integration.intent.create']);
   assert.deepEqual(intent.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }]);
-  assert.equal(intentInspect.operationId, 'contract.intent.inspect.integration.intent.inspect');
-  assert.deepEqual(intentInspect.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }]);
-  assert.equal(intentContribute.operationId, 'contract.intent.contribute');
-  assert.deepEqual(intentContribute.security, [{ agentBearer: [] }, { humanSession: [] }]);
-  assert.equal(intentExecution.operationId, 'contract.intent.execution.prepare.integration.intent.execution.prepare.contract.intent.execution.reconcile.integration.intent.execution.reconcile.contract.intent.replan.integration.intent.replan.contract.intent.cancel.integration.intent.cancel');
+  assert.equal(intentInspect.operationId, 'contract.intent.inspect.integration.intent.inspect.integration.intent.browser.inspect');
+  assert.deepEqual(intentInspect.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }, { intentCapability: [] }]);
+  assert.equal(intentContribute.operationId, 'contract.intent.contribute.integration.intent.browser.contribute');
+  assert.deepEqual(intentContribute.security, [{ agentBearer: [] }, { humanSession: [] }, { intentCapability: [] }]);
+  assert.equal(intentExecution.operationId, 'contract.intent.execution.prepare.integration.intent.execution.prepare.contract.intent.execution.reconcile.integration.intent.execution.reconcile.contract.intent.replan.integration.intent.replan.contract.intent.cancel.integration.intent.cancel.integration.intent.browser.issue');
   assert.deepEqual(intentExecution['x-multisig-operation-ids'], [
     'contract.intent.execution.prepare',
     'integration.intent.execution.prepare',
@@ -90,6 +90,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
     'integration.intent.replan',
     'contract.intent.cancel',
     'integration.intent.cancel',
+    'integration.intent.browser.issue',
   ]);
   assert.deepEqual(intentExecution.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }]);
   assert.equal(build.operationId, 'contract.call.build');
@@ -102,7 +103,9 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   const schemas = (components.schemas as Record<string, JsonObject>);
   const securitySchemes = components.securitySchemes as Record<string, JsonObject>;
   assert.ok(securitySchemes.integrationBearer);
+  assert.ok(securitySchemes.intentCapability);
   assert.match(String(securitySchemes.integrationBearer.description), /non-signer external service credential/i);
+  assert.match(String(securitySchemes.intentCapability.description), /mic_/);
   assert.deepEqual(schemas.ContractIntentCreateInput.required, ['network']);
   assert.deepEqual(schemas.ContractInterfaceResult.required, ['operation', 'version', 'network', 'contractId', 'methods', 'abi']);
   assert.deepEqual(schemas.ContractAbi.required, ['schema', 'functions', 'types']);

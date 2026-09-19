@@ -48,6 +48,9 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
   }
   if (path === '/api/intent' && method !== 'post') {
     values.push(parameter('X-MultiSig-Intent-Id', 'header', true, { type: 'string' }, 'Soroban Intent id.'));
+    if (method === 'get' || method === 'patch') {
+      values.push(parameter('X-MultiSig-Intent-Capability', 'header', false, { type: 'string' }, 'Short-lived signer-scoped Browser authorization capability (mic_...).'));
+    }
   }
   if (path === '/api/intent' && method === 'post') {
     values.push(parameter('Idempotency-Key', 'header', false, { type: 'string' }, 'Required for Agent or Integration Intent creation; Human sessions do not need it.'));
@@ -61,7 +64,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
 function requestBody(path: string, method: string): OpenApiObject | undefined {
   if (path === '/api/intent' && method === 'post') return body(schema('ContractIntentCreateInput'));
   if (path === '/api/intent' && method === 'patch') return body(schema('ContractIntentContributionInput'));
-  if (path === '/api/intent' && method === 'put') return body({ oneOf: [schema('ContractIntentExecutionInput'), schema('ContractIntentExecutionReconcileInput'), schema('ContractIntentReplanInput'), schema('ContractIntentCancelInput')] });
+  if (path === '/api/intent' && method === 'put') return body({ oneOf: [schema('ContractIntentExecutionInput'), schema('ContractIntentExecutionReconcileInput'), schema('ContractIntentReplanInput'), schema('ContractIntentCancelInput'), schema('BrowserAuthorizationIssueInput')] });
   if (path === '/api/contract-call' && method === 'post') return body(schema('ContractCallBuildInput'));
   if (path === '/api/contract-prepare' && method === 'post') return body(schema('ContractPrepareInput'));
   if (path === '/api/contracts' && (method === 'put' || method === 'delete')) return body(schema('ContractWorkspaceInput'));
@@ -76,9 +79,9 @@ function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/api/runtime-config') return schema('RuntimeConfigResult');
   if (path === '/api/contract-interface') return schema('ContractInterfaceResult');
   if (path === '/api/intent' && method === 'post') return schema('ContractIntentCreateResult');
-  if (path === '/api/intent' && method === 'get') return schema('ContractIntentInspectResult');
-  if (path === '/api/intent' && method === 'patch') return schema('ContractIntentContributionResult');
-  if (path === '/api/intent' && method === 'put') return { oneOf: [schema('ContractIntentExecutionResult'), schema('ContractIntentExecutionReconcileResult'), schema('ContractIntentReplanResult'), schema('ContractIntentCancelResult')] };
+  if (path === '/api/intent' && method === 'get') return { oneOf: [schema('ContractIntentInspectResult'), schema('BrowserAuthorizationInspectResult')] };
+  if (path === '/api/intent' && method === 'patch') return { oneOf: [schema('ContractIntentContributionResult'), schema('BrowserAuthorizationContributionResult')] };
+  if (path === '/api/intent' && method === 'put') return { oneOf: [schema('ContractIntentExecutionResult'), schema('ContractIntentExecutionReconcileResult'), schema('ContractIntentReplanResult'), schema('ContractIntentCancelResult'), schema('BrowserAuthorizationIssueResult')] };
   if (path === '/api/contract-call') return schema('ContractCallBuildResult');
   if (path === '/api/contract-prepare') return { oneOf: [schema('ContractPrepareResult'), schema('ContractEnforceResult')] };
   if (path === '/api/contracts' && method === 'get') return schema('ContractWorkspaceListResult');
@@ -93,7 +96,8 @@ function successSchema(path: string, method: string): OpenApiObject {
 function security(path: string, method: string, access: HeadlessOperationAccess): OpenApiObject[] {
   if (access === 'public') return [];
   if (path === '/api/intent') {
-    if (method === 'patch') return [{ agentBearer: [] }, { humanSession: [] }];
+    if (method === 'patch') return [{ agentBearer: [] }, { humanSession: [] }, { intentCapability: [] }];
+    if (method === 'get') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }, { intentCapability: [] }];
     return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
   }
   if (path === '/api/contracts') return [{ agentBearer: [] }, { humanSession: [] }];
@@ -171,6 +175,7 @@ const components: OpenApiObject = {
     integrationBearer: { type: 'http', scheme: 'bearer', description: 'Non-signer external service credential (msi_...). Deployment scope restricts networks, Classic source accounts, Soroban contracts/methods, and Soroban execution source accounts.' },
     humanSession: { type: 'apiKey', in: 'cookie', name: 'mst_auth', description: 'Human SEP-10 session cookie.' },
     requestCapability: { type: 'apiKey', in: 'header', name: 'x-multisig-capability', description: 'Private share capability paired with x-multisig-request-id.' },
+    intentCapability: { type: 'apiKey', in: 'header', name: 'x-multisig-intent-capability', description: 'Short-lived signer/origin/current-plan Browser authorization capability (mic_...) paired with x-multisig-intent-id.' },
   },
   schemas: {
     StellarNetwork: stellarNetwork,
@@ -554,6 +559,78 @@ const components: OpenApiObject = {
         added: { type: 'boolean' },
         authorization: schema('SorobanIntentAuthorizationSnapshot'),
         task: schema('AgentTask'),
+      },
+      additionalProperties: false,
+    },
+    BrowserAuthorizationChallenge: {
+      type: 'object',
+      required: ['entryIndex', 'authorizer', 'preimageXdr', 'expiresAtLedger'],
+      properties: {
+        entryIndex: { type: 'integer', minimum: 0 },
+        authorizer: accountId,
+        preimageXdr: { type: 'string', minLength: 1, description: 'Signer-specific Soroban authorization preimage for wallet signAuthEntry().' },
+        expiresAtLedger: { type: 'integer', minimum: 1 },
+      },
+      additionalProperties: false,
+    },
+    BrowserAuthorization: {
+      type: 'object',
+      required: ['version', 'intentId', 'network', 'intentDigest', 'authorizationPlanDigest', 'authorizationPlanRevision', 'signerAddress', 'status', 'expiresAt', 'challenges', 'hostedReviewUrl'],
+      properties: {
+        version: operationVersion,
+        intentId: { type: 'string', minLength: 1 },
+        network: stellarNetwork,
+        intentDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+        authorizationPlanDigest: { type: 'string', minLength: 1 },
+        authorizationPlanRevision: { type: 'integer', minimum: 1 },
+        signerAddress: accountId,
+        status: { type: 'string', enum: ['awaiting_authorization', 'authorization_ready', 'expired', 'blocked', 'cancelled'] },
+        expiresAt: timestamp,
+        challenges: { type: 'array', items: schema('BrowserAuthorizationChallenge') },
+        hostedReviewUrl: { type: 'string', format: 'uri' },
+      },
+      additionalProperties: false,
+    },
+    BrowserAuthorizationIssueInput: {
+      type: 'object',
+      required: ['action', 'signerAddress', 'origin'],
+      properties: {
+        action: { type: 'string', const: 'issue_browser_authorization' },
+        signerAddress: accountId,
+        origin: { type: 'string', format: 'uri', description: 'Exact Browser origin bound to the short-lived capability.' },
+      },
+      additionalProperties: false,
+    },
+    BrowserAuthorizationIssueResult: {
+      type: 'object',
+      required: ['operation', 'version', 'capability', 'origin', 'browserAuthorization'],
+      properties: {
+        operation: { type: 'string', const: 'integration.intent.browser.issue' },
+        version: operationVersion,
+        capability: { type: 'string', pattern: '^mic_[A-Za-z0-9_-]+_[A-Za-z0-9_-]+$' },
+        origin: { type: 'string', format: 'uri' },
+        browserAuthorization: schema('BrowserAuthorization'),
+      },
+      additionalProperties: false,
+    },
+    BrowserAuthorizationInspectResult: {
+      type: 'object',
+      required: ['operation', 'version', 'browserAuthorization'],
+      properties: {
+        operation: { type: 'string', const: 'integration.intent.browser.inspect' },
+        version: operationVersion,
+        browserAuthorization: schema('BrowserAuthorization'),
+      },
+      additionalProperties: false,
+    },
+    BrowserAuthorizationContributionResult: {
+      type: 'object',
+      required: ['operation', 'version', 'added', 'browserAuthorization'],
+      properties: {
+        operation: { type: 'string', const: 'integration.intent.browser.contribute' },
+        version: operationVersion,
+        added: { type: 'boolean' },
+        browserAuthorization: schema('BrowserAuthorization'),
       },
       additionalProperties: false,
     },

@@ -54,7 +54,8 @@ PostgreSQL becomes authoritative for:
 - detached AUTH contributions;
 - execution preparations;
 - independently observed execution results;
-- immutable cancellation fact.
+- immutable cancellation fact;
+- short-lived signer/origin/current-plan Browser authorization capability hashes (`soroban_browser_authorization_capabilities`). Raw `mic_*` capability secrets are never persisted.
 
 The Job state is **not** stored. It continues to be projected from these facts.
 

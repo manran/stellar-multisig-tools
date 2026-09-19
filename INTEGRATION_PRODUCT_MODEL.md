@@ -214,7 +214,136 @@ multisigtools_fallback
 Fallback may happen only when pre-authorized by Service policy. It must never be invented dynamically because the external Service is unavailable.
 
 Executor pools may later replace repeated per-worker credential edits, but pool membership remains an operator-controlled execution scope, never `any executor`.
-## 9. Delivery phases
+## 9. Progressive Integration Levels
+
+MultiSigTools has one Headless capability surface. Integration levels describe how much interaction and orchestration the integrator chooses to own; they are not separate products or separate workflow engines.
+
+```text
+                         integrator ownership ->
+
+Direct MST
+  MultiSigTools owns business interaction and authorization UI
+        |
+Hosted Authorization
+  Integrator owns the business; MST renders the signing/review step
+        |
+Native Authorization
+  Integrator owns business UI and wallet UX; Browser talks directly to MST
+        |
+Full Headless
+  Integrator owns Browser / Server / Agent / executor orchestration
+```
+
+Each level is a progressive takeover of work MST performed at the previous level. Intent identity, AuthorizationPlan, signature validity, thresholds, expiry, effect drift, execution binding and audit facts remain authoritative in MST at every level.
+
+### Direct MST
+
+The simplest consumer uses MultiSigTools directly. No Integration credential, Browser capability or webhook is required.
+
+### Hosted Authorization
+
+The integrator creates and tracks work but delegates authorization interaction to MST through `reviewUrl`.
+
+Minimum integration:
+
+```text
+create Intent
+-> show/open hosted review
+-> poll Job or receive webhook
+-> continue business workflow
+```
+
+Redirect, popup, modal window or a future iframe are presentation choices over the same hosted authorization resource. They do not create different backend workflows.
+
+### Native Authorization
+
+A service such as FedNetwork already has its own product UI, wallet connection and backend. It should not need to send users to MST.
+
+Recommended first-party flow:
+
+```text
+Service Server --msi_*--> create Intent
+Service Server --msi_*--> issue signer-scoped Browser capability
+
+Signer Browser --mic_*--> inspect current challenge
+Signer Browser --wallet--> sign locally
+Signer Browser --mic_*--> contribute signature
+
+MST -> Job state / webhook -> Service
+Service executor -> final execution
+```
+
+No SDK is required. An SDK or UI component may later wrap the same Headless operations as a convenience layer only.
+
+The Browser capability is disclosure/transport authority, not signer authority. It allows one browser to inspect the signer-specific challenge and submit a contribution for one current Intent plan. A contribution remains valid only when the Authorization Core independently verifies the Stellar signature, signer membership, weight/threshold, current plan and expiry.
+
+Browser capability v1 is intentionally narrow:
+
+```text
+integration service
+intent id
+authorization plan digest + revision
+signer address
+exact browser origin
+expiry
+```
+
+It cannot create arbitrary Intents, replan, cancel, bind an executor, prepare execution, execute, change Integration configuration, or impersonate a Stellar signer.
+
+A replan changes AuthorizationPlan identity and therefore invalidates previously issued Browser capabilities automatically.
+
+### Full Headless
+
+Advanced integrators may own their entire UI, wallet adapters, invitation flow, server orchestration, webhook consumer, executor and Agents. They consume the raw stable operations directly.
+
+The governing rule is:
+
+> Integrators may take over orchestration; they do not duplicate authority.
+
+MST continues to decide whether an Intent, authorization contribution, effects snapshot and execution observation are valid.
+
+### Mixed-mode use is normal
+
+One Integration may combine levels for the same Intent:
+
+```text
+default signer -> Native Authorization
+unsupported wallet -> Hosted reviewUrl fallback
+backend -> msi_* + webhook
+automation -> Agent / Headless API
+```
+
+The contribution transport does not change Intent identity.
+
+### Product disclosure
+
+The partner/admin product should reveal complexity progressively:
+
+```text
+Use MultiSigTools UI
+Use hosted authorization
+Use your own interface
+Advanced / Headless
+```
+
+Only advanced surfaces should expose origins, Browser capabilities, executor policy, raw API operations and other implementation details.
+
+### First implementation boundary
+
+The first Browser Integration milestone deliberately does **not** allow anonymous/public Browser Intent creation.
+
+It implements:
+
+1. Integration Service creates the Intent with existing `msi_*`.
+2. Owning Service issues a short-lived signer-scoped Browser capability for the existing Intent.
+3. Browser inspects only that signer's current authorization challenge.
+4. Browser submits the wallet signature directly to the existing Authorization Core.
+5. Hosted `reviewUrl` remains a fallback.
+6. Execution remains owned by the existing Integration execution policy.
+
+Public Integration Profiles and browser-created Intents are deferred until real market evidence shows they are needed.
+
+## 10. Delivery phases
 
 ### Phase 1 — business projection now
 
@@ -234,11 +363,12 @@ Executor pools may later replace repeated per-worker credential edits, but pool 
 
 ### Phase 3 — partner ergonomics
 
-- thin TypeScript SDK over the stable API, without duplicating workflow logic;
+- signer-scoped Browser authorization over the stable Intent/Authorization Core;
+- optional thin SDK/components over the same API, never as an ability boundary;
 - operator/partner console for credentials, scopes, webhook configuration and Activity;
 - optional auto-replan/execution fallback only after concrete operational evidence.
 
-## 10. Non-goals
+## 11. Non-goals
 
 This product simplification must not cause:
 
@@ -249,6 +379,9 @@ This product simplification must not cause:
 - implicit signer authority for `msi_*`;
 - implicit executor authority from the planning source;
 - claiming that Intent cancellation revokes already disclosed detached AUTH or prepared XDR;
-- breaking replacement of existing `/api/intent` or `/api/request` contracts.
+- breaking replacement of existing `/api/intent` or `/api/request` contracts;
+- making Browser capability equivalent to Stellar signer authority;
+- requiring an SDK for Native Authorization;
+- building public/anonymous Browser Intent creation before real Integration demand exists.
 
 This document refines the Integration direction in `PLATFORM_EXTENSION_POINTS.md`; internal architecture remains governed by the existing Workflow, authority, privacy and evidence documents.

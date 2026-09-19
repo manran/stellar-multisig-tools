@@ -1,6 +1,8 @@
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
 import { blobAuthStore } from '../server/blobAuthStore.js';
 import {
+  BrowserAuthorizationStorageUnavailableError,
+  runtimeSorobanBrowserAuthorizationStore,
   runtimeSorobanIntentStore,
   withSorobanIntentCreate,
 } from '../server/coordinationStores.js';
@@ -61,6 +63,12 @@ import {
 } from '../server/sorobanIntentAuthorizationService.js';
 import { isValidSigningRequestId } from '../server/requestLocator.js';
 import {
+  authenticateSorobanBrowserAuthorizationCapability,
+  issueSorobanBrowserAuthorizationCapability,
+  projectSorobanBrowserAuthorization,
+  SorobanBrowserAuthorizationServiceError,
+} from '../server/sorobanBrowserAuthorizationService.js';
+import {
   beforeFirstDurableWrite,
   enforceSemanticRateLimit,
   SEMANTIC_RATE_LIMIT_IDS,
@@ -72,9 +80,10 @@ const MAX_BODY_BYTES = 64 * 1024;
 const METHODS = 'GET, POST, PATCH, PUT, OPTIONS';
 const sorobanIntentStore = runtimeSorobanIntentStore();
 const INTENT_ID_HEADER = 'x-multisig-intent-id';
+const INTENT_CAPABILITY_HEADER = 'x-multisig-intent-capability';
 const CORS_HEADERS = {
   ...publicCorsHeaders(METHODS),
-  'Access-Control-Allow-Headers': 'Authorization, Content-Type, Idempotency-Key, X-MultiSig-Intent-Id, X-MultiSig-Session-Address',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type, Idempotency-Key, X-MultiSig-Intent-Id, X-MultiSig-Intent-Capability, X-MultiSig-Session-Address',
 };
 
 function json(data: unknown, status = 200): Response {
@@ -102,6 +111,8 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof SorobanIntentCancellationServiceError
     || cause instanceof SorobanIntentReplanServiceError
     || cause instanceof CoordinationWriteFrozenError
+    || cause instanceof SorobanBrowserAuthorizationServiceError
+    || cause instanceof BrowserAuthorizationStorageUnavailableError
   ) {
     return json({ error: cause.message, code: cause.code }, cause.status);
   }
@@ -135,8 +146,40 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
   const machineCaller = await machineCallerFromRequest(blobAgentCredentialStore, request);
   const integrationCredential = machineCaller?.kind === 'service' ? machineCaller.credential : null;
   const agent = machineCaller?.kind === 'agent' ? machineCaller.credential : null;
-  const session = machineCaller ? null : await verifiedSignerSessionFromRequest(blobAuthStore, request, stored.network);
+  const browserCapabilityToken = request.headers.get(INTENT_CAPABILITY_HEADER)?.trim() ?? '';
+  const session = machineCaller || browserCapabilityToken
+    ? null
+    : await verifiedSignerSessionFromRequest(blobAuthStore, request, stored.network);
   const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, id);
+
+  if (browserCapabilityToken) {
+    if (required === 'write') {
+      throw new SorobanBrowserAuthorizationServiceError(
+        'Browser authorization cannot change Intent lifecycle or execution state.',
+        403,
+        'browser_capability_write_denied',
+      );
+    }
+    const browserCapability = await authenticateSorobanBrowserAuthorizationCapability(
+      runtimeSorobanBrowserAuthorizationStore(),
+      stored,
+      authorization,
+      {
+        capability: browserCapabilityToken,
+        origin: request.headers.get('origin'),
+      },
+    );
+    return {
+      id,
+      integrationCredential: null,
+      agent: null,
+      session: null,
+      browserCapability,
+      stored,
+      authorization,
+      address: browserCapability.signerAddress,
+    };
+  }
 
   if (integrationCredential) {
     if (stored.integration?.serviceId !== integrationCredential.serviceId) {
@@ -153,7 +196,7 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
         'integration_intent_sign_denied',
       );
     }
-    return { id, integrationCredential, agent: null, session: null, stored, authorization, address: undefined };
+    return { id, integrationCredential, agent: null, session: null, browserCapability: null, stored, authorization, address: undefined };
   }
 
   if (agent) {
@@ -181,12 +224,24 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
     );
   }
   if (agent) await blobAgentCredentialStore.touchCredential(agent.credentialId, new Date().toISOString());
-  return { id, integrationCredential: null, agent, session, stored, authorization, address };
+  return { id, integrationCredential: null, agent, session, browserCapability: null, stored, authorization, address };
 }
 
 export async function GET(request: Request): Promise<Response> {
   try {
     const access = await storedIntentAccess(request, 'read');
+    if (access.browserCapability) {
+      return json({
+        operation: 'integration.intent.browser.inspect',
+        version: 1,
+        browserAuthorization: projectSorobanBrowserAuthorization(
+          access.stored,
+          access.authorization,
+          access.browserCapability,
+          integrationReviewUrl(request, access.stored.id),
+        ),
+      });
+    }
     const [contributions, preparations, observations] = await Promise.all([
       sorobanIntentStore.listContributions(access.id),
       sorobanIntentStore.listExecutionPreparations?.(access.id) ?? Promise.resolve([]),
@@ -527,6 +582,19 @@ export async function PATCH(request: Request): Promise<Response> {
       },
       access.agent ? { contributionActor: agentActorForCredential(access.agent) } : {},
     );
+    if (access.browserCapability) {
+      return json({
+        operation: 'integration.intent.browser.contribute',
+        version: 1,
+        added: result.added,
+        browserAuthorization: projectSorobanBrowserAuthorization(
+          access.stored,
+          result.authorization,
+          access.browserCapability,
+          integrationReviewUrl(request, access.stored.id),
+        ),
+      });
+    }
     return json({
       operation: 'contract.intent.contribute',
       version: 1,
@@ -551,6 +619,37 @@ export async function PUT(request: Request): Promise<Response> {
     assertCoordinationWritesEnabled();
     const access = await storedIntentAccess(request, 'write');
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    if (body.action === 'issue_browser_authorization') {
+      if (!access.integrationCredential) {
+        throw new SorobanBrowserAuthorizationServiceError(
+          'Only the owning Integration Service can issue Browser authorization.',
+          403,
+          'browser_authorization_integration_only',
+        );
+      }
+      const issued = await issueSorobanBrowserAuthorizationCapability(
+        runtimeSorobanBrowserAuthorizationStore(),
+        access.stored,
+        access.authorization,
+        {
+          integrationServiceId: access.integrationCredential.serviceId,
+          signerAddress: body.signerAddress,
+          origin: body.origin,
+        },
+      );
+      return json({
+        operation: 'integration.intent.browser.issue',
+        version: 1,
+        capability: issued.capability,
+        origin: issued.record.origin,
+        browserAuthorization: projectSorobanBrowserAuthorization(
+          access.stored,
+          access.authorization,
+          issued.record,
+          integrationReviewUrl(request, access.stored.id),
+        ),
+      }, 201);
+    }
     if (body.action === 'reconcile_execution') {
       const result = await reconcileSorobanIntentExecution(
         sorobanIntentStore,

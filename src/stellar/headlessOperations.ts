@@ -5,6 +5,8 @@ export type HeadlessOperationAccess =
   | 'principal:sign'
   | 'integration:read'
   | 'integration:write'
+  | 'browser:read'
+  | 'browser:sign'
   | 'human';
 
 export type HeadlessOperationEffect =
@@ -49,8 +51,16 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'integration:read', effect: 'none', summary: "Inspect an external service's own Soroban Intent and live authorization state.",
   },
   {
+    id: 'integration.intent.browser.inspect', version: 1, method: 'GET', path: '/api/intent',
+    access: 'browser:read', effect: 'none', summary: 'Inspect one signer-scoped Browser authorization challenge for an Integration-owned Intent.',
+  },
+  {
     id: 'contract.intent.contribute', version: 1, method: 'PATCH', path: '/api/intent',
     access: 'principal:sign', effect: 'coordination-state', summary: 'Add one verified detached Soroban authorization signature.',
+  },
+  {
+    id: 'integration.intent.browser.contribute', version: 1, method: 'PATCH', path: '/api/intent',
+    access: 'browser:sign', effect: 'coordination-state', summary: 'Submit one signer-scoped Browser signature to the existing Soroban Authorization Core.',
   },
   {
     id: 'contract.intent.execution.prepare', version: 1, method: 'PUT', path: '/api/intent',
@@ -83,6 +93,10 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
   {
     id: 'integration.intent.cancel', version: 1, method: 'PUT', path: '/api/intent',
     access: 'integration:write', effect: 'coordination-state', summary: "Cancel an Integration's own Soroban Intent inside MultiSigTools coordination without claiming Stellar-level AUTH revocation.",
+  },
+  {
+    id: 'integration.intent.browser.issue', version: 1, method: 'PUT', path: '/api/intent',
+    access: 'integration:write', effect: 'private-state', summary: 'Issue a short-lived signer/origin/current-plan Browser capability for an Integration-owned Intent.',
   },
   {
     id: 'contract.call.build', version: 1, method: 'POST', path: '/api/contract-call',
