@@ -97,40 +97,41 @@ export default function ContractWorkspaceApp() {
         <div className="mx-auto max-w-5xl">
           <a href={stellarHref('/contracts')} className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black dark:text-neutral-300 dark:hover:text-white"><ArrowLeft className="h-4 w-4" />Contracts</a>
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Braces className="h-6 w-6 text-violet-600 dark:text-violet-300" />
+            <Braces className="mst-contract-accent h-6 w-6" />
             <h1 className="text-3xl font-bold tracking-tight">Contract Workspace</h1>
             <NetworkBadge network={network} />
-            {saved && <span className="rounded-full bg-violet-500/10 px-2.5 py-1 text-xs font-semibold text-violet-700 dark:text-violet-300">Saved</span>}
+            {saved && <span className="mst-contract-saved">Saved</span>}
           </div>
           <p className="mt-2 break-all font-mono text-sm text-neutral-500 dark:text-neutral-400">{contractId}</p>
 
           {error && <div className="mt-5 flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div>}
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
-            <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:p-6">
+          <div className="mst-contract-workspace mt-6">
+            <section className="mst-contract-methods">
               <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-bold">Callable methods</h2>{loading && <LoaderCircle className="h-4 w-4 animate-spin text-neutral-400" />}</div>
               {loading && <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">Loading callable methods from the on-chain contract spec…</p>}
               {!loading && !error && (
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <div className="mst-contract-method-list">
                   {methods.length ? methods.map((method) => (
-                    <a key={method.name} href={callHref(method.name)} className="group rounded-xl border border-black/10 bg-black/[0.018] p-4 transition hover:border-violet-500/35 dark:border-white/10 dark:bg-white/[0.025]">
-                      <div className="flex items-center justify-between gap-3"><span className="font-mono text-sm font-semibold">{method.name}</span><ArrowRight className="h-4 w-4 text-violet-600 transition group-hover:translate-x-0.5 dark:text-violet-300" /></div>
-                      <div className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">{method.inputs.length ? method.inputs.map((input) => `${input.name}: ${input.typeLabel}`).join(', ') : 'No arguments'}</div>
+                    <a key={method.name} href={callHref(method.name)} className="mst-contract-method-row">
+                      <span className="font-mono text-sm font-semibold">{method.name}</span>
+                      <span className="mst-contract-method-row__args">{method.inputs.length ? method.inputs.map((input) => `${input.name}: ${input.typeLabel}`).join(', ') : 'No arguments'}</span>
+                      <ArrowRight className="h-4 w-4" />
                     </a>
-                  )) : <span className="text-sm text-neutral-500 dark:text-neutral-400">No callable methods found.</span>}
+                  )) : <span className="block py-4 text-sm text-neutral-500 dark:text-neutral-400">No callable methods found.</span>}
                 </div>
               )}
-              <a href={callHref()} className="mt-6 inline-flex items-center rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-violet-800">New contract call</a>
+              <a href={callHref()} className="mst-action-primary mt-6">New contract call</a>
             </section>
 
-            <div className="space-y-4">
-              <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5">
+            <div className="mst-contract-facts">
+              <section className="mst-contract-fact">
                 <h2 className="text-sm font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Authorization</h2>
                 <div className="mt-3 text-lg font-bold">Resolved at action time</div>
                 <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Saving this contract grants no permission. Current Stellar and contract authorization is checked before signing or submission.</p>
               </section>
 
-              <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5">
+              <section className="mst-contract-fact">
                 <h2 className="font-bold">Workspace</h2>
                 {saved ? (
                   <>
@@ -140,7 +141,7 @@ export default function ContractWorkspaceApp() {
                 ) : (
                   <>
                     <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Save this reusable work object to your signer workspace.</p>
-                    <button type="button" disabled={saving || authBusy} onClick={() => void keepContract()} className="mt-4 rounded-xl border border-violet-500/30 px-4 py-2.5 text-sm font-semibold text-violet-700 disabled:opacity-40 dark:text-violet-300">{saving || authBusy ? 'Saving…' : 'Save to Contracts'}</button>
+                    <button type="button" disabled={saving || authBusy} onClick={() => void keepContract()} className="mst-action-secondary mt-4 disabled:opacity-40">{saving || authBusy ? 'Saving…' : 'Save to Contracts'}</button>
                   </>
                 )}
               </section>

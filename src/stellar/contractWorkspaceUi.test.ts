@@ -52,6 +52,25 @@ test('Contracts is a first-class workspace route and navigation destination', ()
   assert.match(contracts, /PrivateWorkspaceUnlock/);
 });
 
+test('Contracts and Contract Workspace use one continuous workbench instead of card grids', () => {
+  const contracts = source('../ContractsApp.tsx');
+  const workspace = source('../ContractWorkspaceApp.tsx');
+
+  assert.match(contracts, /mst-contract-list/);
+  assert.match(contracts, /mst-contract-row/);
+  assert.match(contracts, /mst-contract-toolbar/);
+  assert.doesNotMatch(contracts, /md:grid-cols-2/);
+  assert.doesNotMatch(contracts, /bg-violet|text-violet/);
+
+  assert.match(workspace, /mst-contract-workspace/);
+  assert.match(workspace, /mst-contract-method-list/);
+  assert.match(workspace, /mst-contract-method-row/);
+  assert.match(workspace, /mst-contract-facts/);
+  assert.match(workspace, /mst-contract-fact/);
+  assert.doesNotMatch(workspace, /rounded-2xl border border-black\/10 bg-white/);
+  assert.doesNotMatch(workspace, /bg-violet|text-violet/);
+});
+
 test('Contract Workspace methods deep-link into the exact call', () => {
   const workspace = source('../ContractWorkspaceApp.tsx');
   const composer = source('../ContractCallComposer.tsx');
