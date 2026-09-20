@@ -11,6 +11,7 @@ import {
   Vault,
 } from 'lucide-react';
 import PrivateWorkspaceUnlock from './PrivateWorkspaceUnlock';
+import { PageHeader } from './MultiSigUi';
 import { analyzeAccountAuthorization } from './stellar/authorization';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
@@ -323,9 +324,12 @@ export default function TreasuryBoxSettingsApp() {
             </a>
           )}
 
-          <div className={`${accountId ? 'mt-5 ' : ''}border-b border-black/10 pb-5 dark:border-white/10`}>
-            <div className="flex items-center gap-3"><Vault className="h-6 w-6 text-neutral-400" /><h1 className="text-3xl font-bold tracking-tight">Treasury settings</h1></div>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-600 dark:text-neutral-300">Review the public signing policy, then unlock only when you need private Treasury settings, Audit access, or administration history.</p>
+          <div className={accountId ? 'mt-5' : ''}>
+            <PageHeader
+              icon={<Vault className="h-6 w-6" />}
+              title="Treasury settings"
+              description="Review the public signing policy, then unlock only when you need private Treasury settings, Audit access, or administration history."
+            />
           </div>
 
           {!address && (
@@ -333,15 +337,15 @@ export default function TreasuryBoxSettingsApp() {
               <Vault className="h-8 w-8 text-neutral-400" />
               <h2 className="mt-5 text-3xl font-bold">Connect a Treasury signer</h2>
               <p className="mt-2 text-base leading-7 text-neutral-600 dark:text-neutral-300">A current active signer can manage this Treasury.</p>
-              <button type="button" disabled={busy} onClick={() => void connect()} className="mt-6 rounded-xl bg-emerald-700 px-5 py-3 font-semibold text-white disabled:opacity-50">{busy ? 'Opening wallets…' : 'Connect wallet'}</button>
+              <button type="button" disabled={busy} onClick={() => void connect()} className="mst-action-primary mt-6 disabled:opacity-50">{busy ? 'Opening wallets…' : 'Connect wallet'}</button>
             </section>
           )}
 
           {address && !accountId && (
-            <section className="mt-5 rounded-2xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03] sm:p-5">
+            <section className="mst-settings-picker mt-5">
               <label className="block max-w-2xl">
                 <span className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Treasury</span>
-                <select value={accountId} onChange={(event) => chooseAccount(event.target.value)} disabled={accountsLoading} className="mt-2 w-full rounded-xl border border-black/10 bg-transparent px-3 py-3 text-sm font-semibold dark:border-white/10">
+                <select value={accountId} onChange={(event) => chooseAccount(event.target.value)} disabled={accountsLoading} className="mst-settings-control mt-2 w-full font-semibold">
                   <option value="">Choose a treasury</option>
                   {accounts.map((account) => <option key={account.accountId} value={account.accountId}>{shortAddress(account.accountId)} · {account.thresholds.medium} approval threshold</option>)}
                 </select>
@@ -356,18 +360,18 @@ export default function TreasuryBoxSettingsApp() {
           {address && accountId && accountLoading && !accountSnapshot && <div className="mt-5 flex items-center gap-2 py-4 text-sm text-neutral-500"><LoaderCircle className="h-4 w-4 animate-spin" />Loading signing policy…</div>}
 
           {address && accountId && accountSnapshot && policy && (
-            <section className="mt-5 rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03] sm:p-6">
+            <section className="mst-settings-section mt-5">
               <div className="flex items-start gap-3">
                 <Settings2 className="mt-0.5 h-5 w-5 text-neutral-400" />
                 <div className="min-w-0 flex-1">
                   <h2 className="text-xl font-bold">Signing policy</h2>
                   <p className="mt-1 max-w-3xl text-sm leading-6 text-neutral-500 dark:text-neutral-400">This is public Stellar account state. Unlocking MultiSig Tools is not required to review it.</p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl bg-black/[0.035] p-3 dark:bg-white/[0.04]"><div className="text-xs text-neutral-500">Active signers</div><div className="mt-1 text-lg font-bold">{accountSnapshot.signers.filter((signer) => signer.type === 'ed25519_public_key' && signer.weight > 0).length}</div></div>
-                    <div className="rounded-xl bg-black/[0.035] p-3 dark:bg-white/[0.04]"><div className="text-xs text-neutral-500">Payment approvals</div><div className="mt-1 text-lg font-bold">{accountSnapshot.thresholds.medium} / {policy.totalActiveWeight}</div></div>
-                    <div className="rounded-xl bg-black/[0.035] p-3 dark:bg-white/[0.04]"><div className="text-xs text-neutral-500">Account-control approvals</div><div className="mt-1 text-lg font-bold">{accountSnapshot.thresholds.high} / {policy.totalActiveWeight}</div></div>
+                  <div className="mst-settings-fact-grid">
+                    <div className="mst-settings-fact-cell"><div className="mst-settings-fact-label">Active signers</div><div className="mst-settings-fact-value">{accountSnapshot.signers.filter((signer) => signer.type === 'ed25519_public_key' && signer.weight > 0).length}</div></div>
+                    <div className="mst-settings-fact-cell"><div className="mst-settings-fact-label">Payment approvals</div><div className="mst-settings-fact-value">{accountSnapshot.thresholds.medium} / {policy.totalActiveWeight}</div></div>
+                    <div className="mst-settings-fact-cell"><div className="mst-settings-fact-label">Account-control approvals</div><div className="mst-settings-fact-value">{accountSnapshot.thresholds.high} / {policy.totalActiveWeight}</div></div>
                   </div>
-                  {resourceNetwork && <a href={treasurySigningHref(accountId, resourceNetwork)} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10">Review or change signing policy</a>}
+                  {resourceNetwork && <a href={treasurySigningHref(accountId, resourceNetwork)} className="mst-action-secondary mt-4">Review or change signing policy</a>}
                 </div>
               </div>
             </section>
@@ -380,21 +384,21 @@ export default function TreasuryBoxSettingsApp() {
           {error && <div className="mt-5 flex gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
 
           {privateReady && accountId && (
-            <div className="mt-5 space-y-5">
+            <div className="mst-settings-private mt-5">
               {loading && !metadata && <div className="flex items-center gap-2 py-4 text-sm text-neutral-500"><LoaderCircle className="h-4 w-4 animate-spin" />Loading Treasury settings…</div>}
 
-              <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03] sm:p-6">
+              <section className="mst-settings-section">
                 <h2 className="text-xl font-bold">Treasury name</h2>
                 <p className="mt-1 max-w-3xl text-sm leading-6 text-neutral-500 dark:text-neutral-400">Shared with current Treasury signers. Personal Address Book names never become a Treasury name.</p>
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <input value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} maxLength={80} placeholder="Treasury name" className="min-w-0 flex-1 rounded-xl border border-black/10 bg-transparent px-4 py-3 text-sm outline-none focus:border-emerald-500 dark:border-white/10" />
-                  <button type="button" disabled={nameSaving || !nameDraft.trim() || nameDraft.trim() === (metadata?.name ?? '')} onClick={() => void saveTreasuryName()} className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40">{nameSaving ? 'Saving…' : 'Save name'}</button>
+                  <input value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} maxLength={80} placeholder="Treasury name" className="mst-settings-control min-w-0 flex-1" />
+                  <button type="button" disabled={nameSaving || !nameDraft.trim() || nameDraft.trim() === (metadata?.name ?? '')} onClick={() => void saveTreasuryName()} className="mst-action-primary disabled:opacity-40">{nameSaving ? 'Saving…' : 'Save name'}</button>
                 </div>
               </section>
 
               <details
                 onToggle={(event) => { if (event.currentTarget.open && !keysLoaded && !keysLoading) void loadKeys(); }}
-                className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03] sm:p-6"
+                className="mst-settings-disclosure"
               >
                 <summary className="cursor-pointer list-none">
                   <div className="flex items-center justify-between gap-4">
@@ -430,8 +434,8 @@ export default function TreasuryBoxSettingsApp() {
                     <label className="block text-sm font-semibold" htmlFor="api-key-label">Audit credential label</label>
                     <p className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Name the accounting, monitoring, compliance, or audit system that uses this read-only credential.</p>
                     <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                      <input id="api-key-label" value={keyLabel} onChange={(event) => setKeyLabel(event.target.value)} maxLength={80} placeholder="External auditor" className="min-w-0 flex-1 rounded-xl border border-black/10 bg-transparent px-4 py-3 text-sm outline-none focus:border-emerald-500 dark:border-white/10" />
-                      <button type="button" disabled={keysLoading || !keysLoaded || !keyLabel.trim() || activeKeyCount >= MAX_ACTIVE_TREASURY_AUDIT_KEYS} onClick={() => void createKey()} className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40">Create Audit credential</button>
+                      <input id="api-key-label" value={keyLabel} onChange={(event) => setKeyLabel(event.target.value)} maxLength={80} placeholder="External auditor" className="mst-settings-control min-w-0 flex-1" />
+                      <button type="button" disabled={keysLoading || !keysLoaded || !keyLabel.trim() || activeKeyCount >= MAX_ACTIVE_TREASURY_AUDIT_KEYS} onClick={() => void createKey()} className="mst-action-primary disabled:opacity-40">Create Audit credential</button>
                     </div>
                     {keysLoaded && <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">{activeKeyCount} of {MAX_ACTIVE_TREASURY_AUDIT_KEYS} active Audit credentials. Revoke an unused credential before creating another when the limit is reached.</p>}
                   </div>
@@ -457,7 +461,7 @@ export default function TreasuryBoxSettingsApp() {
 
               <details
                 onToggle={(event) => { if (event.currentTarget.open && !auditLoaded && !auditLoading) void loadAudit(); }}
-                className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03] sm:p-6"
+                className="mst-settings-disclosure"
               >
                 <summary className="cursor-pointer list-none">
                   <div className="font-bold">Administration history</div>

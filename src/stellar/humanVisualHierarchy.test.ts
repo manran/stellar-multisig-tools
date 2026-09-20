@@ -12,6 +12,7 @@ const inbox = source('../InboxApp.tsx');
 const request = source('../RequestApp.tsx');
 const intent = source('../SorobanIntentApp.tsx');
 const treasury = source('../TreasuryApp.tsx');
+const treasurySettings = source('../TreasuryBoxSettingsApp.tsx');
 const activity = source('../ActivityApp.tsx');
 const sorobanActivity = source('../SorobanIntentActivityCard.tsx');
 const review = source('../ReviewTransactionSummary.tsx');
@@ -27,6 +28,7 @@ test('primary Human surfaces share one page-header grammar', () => {
   assert.match(request, /<PageHeader/);
   assert.match(intent, /<PageHeader/);
   assert.match(treasury, /<PageHeader/);
+  assert.match(treasurySettings, /<PageHeader/);
 });
 
 
@@ -83,6 +85,18 @@ test('Treasury uses one continuous workbench instead of nested policy and accoun
   assert.match(treasury, /mst-treasury-detail/);
   assert.doesNotMatch(treasury, /lg:grid-cols-4/);
   assert.doesNotMatch(treasury, /rounded-3xl border border-black\/10 bg-white/);
+});
+
+test('Treasury settings separates public facts from private disclosures without card grids', () => {
+  assert.match(treasurySettings, /mst-settings-picker/);
+  assert.match(treasurySettings, /mst-settings-section/);
+  assert.match(treasurySettings, /mst-settings-fact-grid/);
+  assert.match(treasurySettings, /mst-settings-fact-cell/);
+  assert.match(treasurySettings, /mst-settings-private/);
+  assert.match(treasurySettings, /mst-settings-disclosure/);
+  assert.match(treasurySettings, /mst-settings-control/);
+  assert.doesNotMatch(treasurySettings, /rounded-2xl border border-black\/10 bg-white/);
+  assert.doesNotMatch(treasurySettings, /sm:grid-cols-3/);
 });
 
 test('Activity uses one continuous timeline grammar for Classic and Soroban work', () => {
