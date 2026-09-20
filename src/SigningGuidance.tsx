@@ -164,9 +164,9 @@ export default function SigningGuidance({
 
   if (sourceAnalyses.length === 0 && !knownComplete) {
     return (
-      <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:p-6">
+      <section className="mst-signing-guidance">
         <div className="text-xs font-semibold uppercase tracking-[0.18em] opacity-40">Signatures</div>
-        <div className="mt-4 flex items-start gap-3 rounded-xl bg-black/[0.035] p-4 dark:bg-white/[0.04]">
+        <div className="mst-signing-loading mt-4">
           <LoaderCircle className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-neutral-500" />
           <div>
             <div className="font-semibold">Checking signing requirements…</div>
@@ -178,7 +178,7 @@ export default function SigningGuidance({
   }
 
   return (
-    <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:p-6">
+    <section className="mst-signing-guidance">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] opacity-40">Signatures</div>
@@ -213,7 +213,7 @@ export default function SigningGuidance({
       )}
 
       {!authorizationComplete && !hasAuthorizationError && (
-        <div className="mt-5 space-y-4">
+        <div className="mst-signing-requirements mt-5">
           {incomplete.map((entry) => {
             const { requirement, auth, policy, eligibleSignerKeys, matchedSignerKeys, remainingSignerKeys, signaturesRemaining, error } = entry;
             const accountAlias = labelFor(requirement.accountId, 'account');
@@ -223,23 +223,23 @@ export default function SigningGuidance({
               && policy?.exactNOfM?.required === 1;
 
             return (
-              <div key={`${requirement.scope}:${requirement.accountId}`} className="rounded-xl bg-black/[0.035] p-4 dark:bg-white/[0.04]">
+              <div key={`${requirement.scope}:${requirement.accountId}`} className="mst-signing-requirement">
                 {isSigningSetup && requirement.threshold === 'high' && policy && <div className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Current account-control authorization · Core account control · {humanAuthorizationRequirement(policy)}</div>}
                 {!error && !auth?.error && policy?.exactNOfM && !currentAccountKeyOnly && (
-                  <div className="overflow-hidden rounded-xl border border-neutral-200/80 dark:border-white/[0.08]">
-                    <div className="flex items-center justify-between gap-3 bg-neutral-50 px-3 py-2 dark:bg-white/[0.035]">
+                  <div className="mst-signer-ledger">
+                    <div className="mst-signer-ledger__header">
                       <div className="min-w-0">
                         <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500 dark:text-neutral-400">Signing progress</div>
                         {accountDisplay && <div className="mt-0.5 truncate text-xs font-semibold text-neutral-700 dark:text-neutral-200">{accountDisplay}</div>}
                       </div>
                       <span className="font-mono text-xs font-semibold tabular-nums text-neutral-600 dark:text-neutral-300">{matchedSignerKeys.length} / {policy.exactNOfM.required} required</span>
                     </div>
-                    <div className="grid gap-px bg-neutral-200/80 dark:bg-white/[0.08] sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="mst-signer-ledger__list">
                       {eligibleSignerKeys.map((key) => {
                         const signed = matchedSignerKeys.includes(key);
                         const currentSigner = !signed && key === walletAddress;
                         return (
-                          <div key={key} className="flex min-w-0 items-center gap-3 bg-white px-3 py-3 dark:bg-white/[0.04]">
+                          <div key={key} className="mst-signer-ledger__row">
                             {signed
                               ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
                               : <span className={`h-3 w-3 shrink-0 rounded-sm border ${currentSigner ? 'border-amber-500 bg-amber-500/15' : 'border-neutral-300 dark:border-neutral-600'}`} aria-hidden="true" />}
@@ -272,9 +272,9 @@ export default function SigningGuidance({
                   <>
                     <div className="font-semibold">Need {signaturesRemaining} more signature{signaturesRemaining === 1 ? '' : 's'}{accountDisplay ? ` for ${accountDisplay}` : ''}</div>
                     <p className="mt-1 text-sm opacity-60">Any {signaturesRemaining} of these signers can sign this transaction:</p>
-                    <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                    <div className="mst-signer-candidates mt-3">
                       {remainingSignerKeys.map((key) => (
-                        <div key={key} className="rounded-lg border border-black/5 bg-white/50 p-3 dark:border-white/10 dark:bg-black/10">
+                        <div key={key} className="mst-signer-candidate-row">
                           <AddressIdentity address={key} subjectType="signer" allowNaming={allowNaming} />
                         </div>
                       ))}
@@ -284,9 +284,9 @@ export default function SigningGuidance({
                   <>
                     <div className="font-semibold">Another signature is needed{accountDisplay ? ` for ${accountDisplay}` : ''}</div>
                     <p className="mt-1 text-sm opacity-60">One or more of these signers can sign:</p>
-                    <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                    <div className="mst-signer-candidates mt-3">
                       {remainingSignerKeys.map((key) => (
-                        <div key={key} className="rounded-lg border border-black/5 bg-white/50 p-3 dark:border-white/10 dark:bg-black/10">
+                        <div key={key} className="mst-signer-candidate-row">
                           <AddressIdentity address={key} subjectType="signer" allowNaming={allowNaming} />
                         </div>
                       ))}
@@ -300,7 +300,7 @@ export default function SigningGuidance({
       )}
 
       {!authorizationComplete && !hasAuthorizationError && (
-        <div className="mt-5 border-t border-black/10 pt-5 dark:border-white/10">
+        <div className="mst-signing-action-strip mt-5">
           <div className="text-sm">
             <div className="font-semibold">Sign proposal</div>
             <div className="mt-2">
@@ -309,7 +309,7 @@ export default function SigningGuidance({
                 : <div className="text-neutral-500 dark:text-neutral-400">No signer connected.</div>}
             </div>
 
-            <div className={`mt-4 grid gap-3 ${shouldShowShare && onShare ? 'sm:grid-cols-2' : ''}`}>
+            <div className={`mst-signing-action-grid mt-4 ${shouldShowShare && onShare ? 'mst-signing-action-grid--split' : ''}`}>
               {walletAddress ? (
                 walletCanSign || walletAlreadySigned ? (
                   <button type="button" disabled={!walletCanSign || walletBusy} onClick={onSignWithWallet} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100 dark:disabled:bg-white/10 dark:disabled:text-neutral-500">
@@ -343,7 +343,7 @@ export default function SigningGuidance({
 
       {shareCreatesLink && shareModalOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Private link">
-          <div className="w-full max-w-md rounded-3xl border border-black/10 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#151515] sm:p-7">
+          <div className="mst-share-dialog">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-xl font-bold">{shareBusy ? 'Preparing private link' : shareError ? 'Could not prepare link' : 'Private link ready'}</h3>
@@ -356,7 +356,7 @@ export default function SigningGuidance({
             </div>
 
             {shareBusy ? (
-              <div className="mt-7 flex items-center gap-3 rounded-2xl bg-black/[0.035] p-4 text-sm dark:bg-white/[0.04]"><LoaderCircle className="h-5 w-5 animate-spin" />Preparing…</div>
+              <div className="mst-share-dialog__state mt-7"><LoaderCircle className="h-5 w-5 animate-spin" />Preparing…</div>
             ) : shareError ? (
               <div className="mt-6 flex gap-2">
                 <button type="button" onClick={() => void createShareLink()} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white">Try again</button>

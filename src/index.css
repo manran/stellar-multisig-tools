@@ -2349,3 +2349,108 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
     gap: var(--space-2xs);
   }
 }
+
+/* Hallmark · signing guidance · continuous signer ledger */
+@layer components {
+  .mst-signing-guidance {
+    padding-block: var(--space-lg);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-signing-loading {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-xs);
+    padding-block: var(--space-md);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+    background: var(--color-paper-2);
+  }
+
+  .mst-signing-requirements {
+    border-top: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-signing-requirement {
+    padding-block: var(--space-lg);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-signer-ledger {
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-signer-ledger__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding-block: var(--space-xs);
+    background: var(--color-paper-2);
+  }
+
+  .mst-signer-ledger__list {
+    border-top: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-signer-ledger__row {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-sm);
+    padding-block: var(--space-sm);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-signer-ledger__row:last-child {
+    border-bottom: 0;
+  }
+
+  .mst-signer-candidates {
+    border-top: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-signer-candidate-row {
+    padding-block: var(--space-sm);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-signing-action-strip {
+    padding-top: var(--space-lg);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-signing-action-grid {
+    display: grid;
+    gap: var(--space-sm);
+  }
+
+  .mst-share-dialog {
+    width: 100%;
+    max-width: 28rem;
+    border: var(--rule-hairline) solid var(--color-rule);
+    border-radius: var(--radius-panel);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    padding: var(--space-lg);
+  }
+
+  .mst-share-dialog__state {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding-block: var(--space-md);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+    background: var(--color-paper-2);
+    font-size: var(--text-sm);
+  }
+}
+
+@media (min-width: 40rem) {
+  .mst-signing-action-grid--split {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

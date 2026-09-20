@@ -108,10 +108,18 @@ test('shared visual hierarchy does not introduce a new workflow or status vocabu
   assert.doesNotMatch(treasury, /Sign mode|Manage mode/);
 });
 
-test('new precision grids use neutral light hairlines without adding a bespoke dark surface color', () => {
+test('signer guidance uses a continuous ledger without a bespoke dark surface color', () => {
   const signing = source('../SigningGuidance.tsx');
-  assert.match(signing, /bg-neutral-200\/80 dark:bg-white\/\[0\.08\]/);
-  assert.doesNotMatch(signing, /dark:bg-\[#111215\]/);
+  assert.match(signing, /mst-signing-guidance/);
+  assert.match(signing, /mst-signing-requirements/);
+  assert.match(signing, /mst-signing-requirement/);
+  assert.match(signing, /mst-signer-ledger/);
+  assert.match(signing, /mst-signer-ledger__row/);
+  assert.match(signing, /mst-signer-candidates/);
+  assert.match(signing, /mst-signing-action-strip/);
+  assert.match(signing, /mst-share-dialog/);
+  assert.doesNotMatch(signing, /sm:grid-cols-2 xl:grid-cols-3/);
+  assert.doesNotMatch(signing, /dark:bg-\[#/);
   assert.match(treasury, /border-neutral-200\/80/);
 });
 
