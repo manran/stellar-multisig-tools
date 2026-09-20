@@ -57,7 +57,7 @@ const vercelConfig = readFileSync(new URL('../../vercel.json', import.meta.url),
 
 test('interactive Demo is a separate non-authorizing composition root', () => {
   assert.match(landing, /Try live demo/);
-  assert.match(landing, /Try this flow yourself/);
+  assert.match(landing, /See the full flow/);
   assert.match(main, /route\.kind === 'demo'\) return <DemoTreasuryApp \/>/);
   assert.ok(main.indexOf("route.kind === 'demo'") < main.indexOf('<StellarWalletProvider>'));
   assert.doesNotMatch(demoApp, /useStellarWallet|\/api\/|fetch\(|sessionStorage|localStorage/);

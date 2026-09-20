@@ -1,5 +1,13 @@
 [
   {
+    "date": "2026-09-20",
+    "scope": "app",
+    "macrostructure": "Asymmetric Product Proof / Workbench / Long Document",
+    "theme": "design.md",
+    "enrichment": "existing workflow demo",
+    "brief": "Freeze the product design system and redesign Stellar entry surfaces"
+  },
+  {
     "date": "2026-09-19",
     "macrostructure": "Workbench",
     "theme": "existing-system",

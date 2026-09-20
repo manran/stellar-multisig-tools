@@ -104,9 +104,11 @@ test('footer closes the trust story without duplicating workspace task navigatio
   assert.match(footer, /: 'Email support'}\s*<\/a>/);
   assert.doesNotMatch(footer, />\s*support@multisig\.tools\s*</);
   assert.doesNotMatch(footer, /group.label === 'Trust' && <SupportLink/);
-  assert.match(footer, /Product/);
-  assert.match(footer, /Resources/);
-  assert.match(footer, /Trust/);
+  assert.match(footer, /MultiSig Tools directory/);
+  assert.match(footer, /Docs/);
+  assert.match(footer, /Privacy/);
+  assert.match(footer, /Terms/);
+  assert.doesNotMatch(footer, /FOOTER_GROUPS/);
   assert.match(footer, /Beta · non-custodial/);
   assert.match(footer, /Set up multisig offline/);
   assert.match(footer, /aria-label={compact \? 'Email support' : undefined}/);

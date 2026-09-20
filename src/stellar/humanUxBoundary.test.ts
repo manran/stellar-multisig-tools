@@ -204,7 +204,7 @@ test('Testnet is a network-bound runtime rather than a duplicate content site', 
   assert.match(main, /window\.location\.replace\(canonicalContentRedirect\)/);
   assert.match(testnetLanding, /Testnet runtime/);
   assert.match(testnetLanding, /Network stays fixed/);
-  assert.match(testnetLanding, /Product content lives once/);
+  assert.match(testnetLanding, /Product content stays canonical/);
   assert.match(testnetLanding, /canonicalStellarContentHref\('\/docs'\)/);
   assert.match(footer, /isCanonicalStellarContentPath\(path\) \? canonicalStellarContentHref\(path\) : stellarHref\(path\)/);
   assert.match(docs, /\$\{STELLAR_MAINNET_ORIGIN\}\/api\/request/);
