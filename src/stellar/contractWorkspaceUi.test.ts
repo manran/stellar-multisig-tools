@@ -97,6 +97,21 @@ test('Web contract flows consume headless Intent operations instead of rebuildin
   assert.doesNotMatch(composer, /contractArgumentsToScVals/);
 });
 
+test('Guided Contract Call uses the shared continuous form grammar instead of a Soroban card theme', () => {
+  const composer = source('../ContractCallComposer.tsx');
+
+  assert.match(composer, /mst-contract-composer/);
+  assert.match(composer, /mst-testnet-page/);
+  assert.match(composer, /mst-contract-form/);
+  assert.match(composer, /mst-contract-control/);
+  assert.match(composer, /mst-contract-context/);
+  assert.match(composer, /mst-contract-method-fact/);
+  assert.match(composer, /mst-contract-intent-note/);
+  assert.doesNotMatch(composer, /bg-violet|text-violet/);
+  assert.doesNotMatch(composer, /dark:bg-\[#/);
+  assert.doesNotMatch(composer, /rounded-2xl border border-black\/10 bg-white/);
+});
+
 test('Guided Contract Call is Intent-first and defers transaction execution choices', () => {
   const composer = source('../ContractCallComposer.tsx');
 

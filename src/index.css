@@ -2145,3 +2145,80 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
     grid-column: 1 / -1;
   }
 }
+
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · design-system: design.md · designed-as-app
+ * pre-emit critique: P5 H5 E5 S5 R5 V5
+ */
+@layer components {
+  .mst-contract-context {
+    padding-block: var(--space-md);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+    background: var(--color-paper-2);
+    color: var(--color-ink-2);
+    font-size: var(--text-sm);
+    line-height: 1.65;
+  }
+
+  .mst-contract-link {
+    color: var(--color-accent);
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .mst-contract-link:hover {
+    color: var(--color-accent-hover);
+  }
+
+  .mst-contract-link:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 3px;
+  }
+
+  .mst-contract-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    padding-block: var(--space-lg);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-contract-method-fact {
+    padding-block: var(--space-md);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+    background: var(--color-paper-2);
+  }
+
+  .mst-contract-control {
+    min-height: 2.875rem;
+    border: var(--rule-hairline) solid var(--color-rule);
+    border-radius: var(--radius-input);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--text-sm);
+    outline: none;
+  }
+
+  .mst-contract-control:focus-visible {
+    border-color: var(--color-focus);
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .mst-contract-control::placeholder {
+    color: var(--color-muted);
+  }
+
+  .mst-contract-intent-note {
+    padding-block: var(--space-md);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+    color: var(--color-ink-2);
+    font-size: var(--text-xs);
+    line-height: 1.6;
+  }
+}

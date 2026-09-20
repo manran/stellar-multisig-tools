@@ -32,7 +32,7 @@ function fieldPlaceholder(input: ContractInputDescriptor): string {
 
 function MethodFact({ method }: { method: ContractMethodDescriptor }) {
   return (
-    <section className="rounded-xl border border-black/10 bg-black/[0.018] p-4 dark:border-white/10 dark:bg-white/[0.025]">
+    <section className="mst-contract-method-fact">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="font-mono text-sm font-semibold">{method.name}</div>
         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${method.guided ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
@@ -82,8 +82,6 @@ export default function ContractCallComposer({ network }: Props) {
   const privateNoteBytes = privateNoteByteLength(privateNote.trim());
   const privateNoteValid = privateNoteBytes <= MAX_PRIVATE_NOTE_BYTES;
   const testnet = network === 'testnet';
-  const focusClass = testnet ? 'focus:border-sky-500' : 'focus:border-emerald-500';
-  const primaryClass = testnet ? 'bg-sky-700 hover:bg-sky-800' : 'bg-emerald-700 hover:bg-emerald-800';
   const autoLoadContractRef = useRef('');
 
   // Auto-load the interface once a complete C-address is valid.
@@ -190,42 +188,42 @@ export default function ContractCallComposer({ network }: Props) {
   const backHref = fromWorkspace && contractValid ? workspaceHref : stellarHref('/new');
 
   return (
-    <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
+    <main className={`mst-contract-composer px-4 py-7 sm:px-6 lg:px-8 lg:py-8 ${testnet ? 'mst-testnet-page' : ''}`}>
       <div className="mx-auto max-w-4xl">
         <div className="mb-6"><WorkflowProgress current="prepare" /></div>
         <a href={backHref} className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black dark:text-neutral-300 dark:hover:text-white"><ArrowLeft className="h-4 w-4" />{fromWorkspace ? 'Contract Workspace' : 'New'}</a>
-        <div className="mt-4 flex flex-wrap items-center gap-3"><Braces className="h-6 w-6 text-violet-600 dark:text-violet-300" /><h1 className="text-3xl font-bold tracking-tight">Call a contract</h1><NetworkBadge network={network} /></div>
+        <div className="mt-4 flex flex-wrap items-center gap-3"><Braces className="mst-contract-accent h-6 w-6" /><h1 className="text-3xl font-bold tracking-tight">Call a contract</h1><NetworkBadge network={network} /></div>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-600 dark:text-neutral-300">Load the contract's on-chain spec, choose a callable method, and define the contract Intent. Transaction construction happens only after the required Soroban authorization is complete.</p>
         {loaded && fromWorkspace && (
-          <div className="mt-4 rounded-xl border border-violet-500/20 bg-violet-500/[0.04] p-4 text-sm leading-6 text-neutral-600 dark:border-violet-400/20 dark:text-neutral-300">
+          <div className="mst-contract-context mt-4">
             <div className="font-semibold text-neutral-900 dark:text-white">Contract Workspace call</div>
             <p className="mt-1">The contract and requested method came from its workspace. Review returns here with this context preserved.</p>
-            <a href={workspaceHref} className="mt-3 inline-flex font-semibold text-violet-700 dark:text-violet-300">Back to Contract Workspace</a>
+            <a href={workspaceHref} className="mst-contract-link mt-3 inline-flex">Back to Contract Workspace</a>
           </div>
         )}
         {loaded && !fromWorkspace && (
-          <div className="mt-4 rounded-xl border border-violet-500/20 bg-violet-500/[0.04] p-4 text-sm leading-6 text-neutral-600 dark:border-violet-400/20 dark:text-neutral-300">
+          <div className="mst-contract-context mt-4">
             <div className="font-semibold text-neutral-900 dark:text-white">{workspaceSaved ? 'Saved contract' : 'Save contract workspace'}</div>
             <p className="mt-1">{workspaceSaved ? 'This reusable contract is already available from Contracts.' : 'Save this contract only if you expect to use or manage it again. One-time calls need no workspace.'}</p>
             <div className="mt-3 flex flex-wrap gap-3">
               <a href="#contract-method" className="font-semibold text-neutral-700 dark:text-neutral-200">Continue call</a>
               {workspaceSaved
-                ? <a href={workspaceHref} className="font-semibold text-violet-700 dark:text-violet-300">Open Contract Workspace</a>
-                : <button type="button" disabled={savingContract || authBusy} onClick={() => void saveContract()} className="font-semibold text-violet-700 disabled:opacity-40 dark:text-violet-300">{savingContract || authBusy ? 'Saving…' : 'Save to Contracts'}</button>}
+                ? <a href={workspaceHref} className="mst-contract-link">Open Contract Workspace</a>
+                : <button type="button" disabled={savingContract || authBusy} onClick={() => void saveContract()} className="mst-contract-link disabled:opacity-40">{savingContract || authBusy ? 'Saving…' : 'Save to Contracts'}</button>}
             </div>
           </div>
         )}
 
-        <form onSubmit={reviewContractCall} className="mt-6 space-y-5 rounded-2xl border border-black/10 bg-white p-5 shadow-sm shadow-black/[0.02] dark:border-white/10 dark:bg-white/5 sm:p-6">
+        <form onSubmit={reviewContractCall} className="mst-contract-form mt-6">
           <div>
             <label htmlFor="contract-id" className="text-sm font-semibold">Contract</label>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-              <input id="contract-id" value={contractId} disabled={loadingSpec || building} onChange={(event) => resetInterface(event.target.value)} placeholder="C... contract address" spellCheck={false} className={`min-w-0 flex-1 rounded-xl border border-black/10 bg-transparent px-4 py-3 font-mono text-sm outline-none disabled:opacity-50 dark:border-white/10 ${focusClass}`} />
+              <input id="contract-id" value={contractId} disabled={loadingSpec || building} onChange={(event) => resetInterface(event.target.value)} placeholder="C... contract address" spellCheck={false} className="mst-contract-control min-w-0 flex-1 font-mono disabled:opacity-50" />
               <button
                 type="button"
                 disabled={!contractValid || loadingSpec || building}
                 onClick={() => void loadInterface()}
-                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-black/10 px-4 py-3 text-sm font-semibold hover:bg-black/5 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/10"
+                className="mst-action-secondary shrink-0 disabled:opacity-40"
               >
                 {loadingSpec && <LoaderCircle className="h-4 w-4 animate-spin" />}
                 {loadingSpec ? 'Loading interface…' : loaded ? 'Reload interface' : contractValid && error ? 'Retry interface' : 'Load interface'}
@@ -238,7 +236,7 @@ export default function ContractCallComposer({ network }: Props) {
             <>
               <div>
                 <label htmlFor="contract-method" className="text-sm font-semibold">Method</label>
-                <select id="contract-method" value={methodName} disabled={building || loaded.methods.length === 0} onChange={(event) => selectMethod(event.target.value)} className={`mt-2 w-full rounded-xl border border-black/10 bg-white px-4 py-3 font-mono text-sm outline-none disabled:opacity-50 dark:border-white/10 dark:bg-[#141414] ${focusClass}`}>
+                <select id="contract-method" value={methodName} disabled={building || loaded.methods.length === 0} onChange={(event) => selectMethod(event.target.value)} className="mst-contract-control mt-2 w-full font-mono disabled:opacity-50">
                   {loaded.methods.length === 0 && <option value="">No callable methods</option>}
                   {loaded.methods.map((method) => <option key={method.name} value={method.name}>{method.name}{method.guided ? '' : ' — Import XDR required'}</option>)}
                 </select>
@@ -253,11 +251,11 @@ export default function ContractCallComposer({ network }: Props) {
                     <div key={input.name}>
                       <div className="flex flex-wrap items-center justify-between gap-2"><label htmlFor={`contract-arg-${input.name}`} className="text-sm font-semibold">{input.name}</label><span className="font-mono text-xs text-neutral-500 dark:text-neutral-400">{input.typeLabel}</span></div>
                       {input.kind === 'bool' ? (
-                        <select id={`contract-arg-${input.name}`} value={rawArgs[input.name] ?? ''} disabled={building} onChange={(event) => setRawArgs((current) => ({ ...current, [input.name]: event.target.value }))} className={`mt-2 w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-sm outline-none dark:border-white/10 dark:bg-[#141414] ${focusClass}`}><option value="">Choose…</option><option value="true">true</option><option value="false">false</option></select>
+                        <select id={`contract-arg-${input.name}`} value={rawArgs[input.name] ?? ''} disabled={building} onChange={(event) => setRawArgs((current) => ({ ...current, [input.name]: event.target.value }))} className="mst-contract-control mt-2 w-full"><option value="">Choose…</option><option value="true">true</option><option value="false">false</option></select>
                       ) : input.kind === 'json' ? (
-                        <textarea id={`contract-arg-${input.name}`} value={rawArgs[input.name] ?? ''} disabled={building} rows={5} onChange={(event) => setRawArgs((current) => ({ ...current, [input.name]: event.target.value }))} placeholder={fieldPlaceholder(input)} spellCheck={false} className={`mt-2 w-full resize-y rounded-xl border border-black/10 bg-transparent px-4 py-3 font-mono text-sm leading-6 outline-none disabled:opacity-50 dark:border-white/10 ${focusClass}`} />
+                        <textarea id={`contract-arg-${input.name}`} value={rawArgs[input.name] ?? ''} disabled={building} rows={5} onChange={(event) => setRawArgs((current) => ({ ...current, [input.name]: event.target.value }))} placeholder={fieldPlaceholder(input)} spellCheck={false} className="mst-contract-control mt-2 w-full resize-y font-mono leading-6 disabled:opacity-50" />
                       ) : (
-                        <input id={`contract-arg-${input.name}`} value={rawArgs[input.name] ?? ''} disabled={building} onChange={(event) => setRawArgs((current) => ({ ...current, [input.name]: event.target.value }))} placeholder={fieldPlaceholder(input)} spellCheck={false} className={`mt-2 w-full rounded-xl border border-black/10 bg-transparent px-4 py-3 font-mono text-sm outline-none disabled:opacity-50 dark:border-white/10 ${focusClass}`} />
+                        <input id={`contract-arg-${input.name}`} value={rawArgs[input.name] ?? ''} disabled={building} onChange={(event) => setRawArgs((current) => ({ ...current, [input.name]: event.target.value }))} placeholder={fieldPlaceholder(input)} spellCheck={false} className="mst-contract-control mt-2 w-full font-mono disabled:opacity-50" />
                       )}
                       {input.doc && <p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-neutral-500 dark:text-neutral-400">Contract spec: {input.doc}</p>}
                       {input.kind === 'json' && <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">Enter structured JSON. MultiSigTools validates the complete value against the loaded Contract Spec before encoding it.</p>}
@@ -271,14 +269,14 @@ export default function ContractCallComposer({ network }: Props) {
 
           <div className="border-t border-black/10 pt-5 dark:border-white/10">
             <label htmlFor="contract-private-note" className="text-sm font-semibold">Private Note <span className="font-normal text-neutral-400">optional</span></label>
-            <textarea id="contract-private-note" value={privateNote} disabled={building} onChange={(event) => setPrivateNote(event.target.value)} rows={3} placeholder="Context for people reviewing this contract Intent." className={`mt-2 w-full resize-y rounded-xl border border-black/10 bg-transparent px-4 py-3 text-sm leading-6 outline-none disabled:opacity-50 dark:border-white/10 ${focusClass}`} />
+            <textarea id="contract-private-note" value={privateNote} disabled={building} onChange={(event) => setPrivateNote(event.target.value)} rows={3} placeholder="Context for people reviewing this contract Intent." className="mst-contract-control mt-2 w-full resize-y leading-6 disabled:opacity-50" />
             <div className={`mt-1 text-xs ${privateNoteValid ? 'text-neutral-400' : 'text-red-600 dark:text-red-300'}`}>{privateNoteBytes}/{MAX_PRIVATE_NOTE_BYTES} UTF-8 bytes</div>
           </div>
 
-          <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.06] px-4 py-3 text-xs leading-5 text-neutral-600 dark:text-neutral-300">MultiSig Tools first creates a source-free Soroban Intent and discovers detached AUTH requirements. No transaction source, sequence, fee, lifetime or envelope signature is chosen at this stage.</div>
+          <div className="mst-contract-intent-note">MultiSig Tools first creates a source-free Soroban Intent and discovers detached AUTH requirements. No transaction source, sequence, fee, lifetime or envelope signature is chosen at this stage.</div>
 
           <div className="flex justify-end border-t border-black/10 pt-5 dark:border-white/10">
-            <button type="submit" disabled={building || loadingSpec || !contractValid || !selectedMethod?.guided || !privateNoteValid || authBusy} className={`inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-40 ${primaryClass}`}>{building && <LoaderCircle className="h-4 w-4 animate-spin" />}{building ? 'Creating Intent…' : 'Continue to authorization'} <ArrowRight className="h-4 w-4" /></button>
+            <button type="submit" disabled={building || loadingSpec || !contractValid || !selectedMethod?.guided || !privateNoteValid || authBusy} className="mst-action-primary disabled:opacity-40">{building && <LoaderCircle className="h-4 w-4 animate-spin" />}{building ? 'Creating Intent…' : 'Continue to authorization'} <ArrowRight className="h-4 w-4" /></button>
           </div>
         </form>
 
