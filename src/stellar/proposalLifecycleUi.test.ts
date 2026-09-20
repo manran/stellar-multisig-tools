@@ -570,7 +570,9 @@ test('Treasury onboarding can be dismissed while keeping Create and generic offl
 
 test('known Request creator and submitter actors are persisted only when provenance is available', () => {
   assert.match(requestApi, /creatorAddress: creatorSession\.address/);
-  assert.match(signingRoom, /privateSessionAddressHeaders\(wallet\.address\)/);
+  assert.match(signingRoom, /verifiedAddress = await wallet\.unlock\(undefined, network\)/);
+  assert.match(signingRoom, /privateSessionAddressHeaders\(verifiedAddress\)/);
+  assert.doesNotMatch(signingRoom, /privateSessionAddressHeaders\(wallet\.address\)/);
   assert.match(requestApi, /submittedByAddress: access\.actorAddress/);
   assert.match(requestService, /recordSubmittedActivity\(store, snapshot, options\.submittedByAddress\)/);
 });

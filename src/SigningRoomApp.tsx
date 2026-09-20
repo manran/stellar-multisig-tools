@@ -314,13 +314,14 @@ export default function SigningRoomApp() {
   }, []);
 
   async function createStoredRequest(xdr: string): Promise<CreatedRequest> {
+    let verifiedAddress = wallet.address;
     if (!wallet.privateUnlocked || wallet.unlockedAddress !== wallet.address || wallet.unlockedNetwork !== network) {
-      await wallet.unlock(undefined, network);
+      verifiedAddress = await wallet.unlock(undefined, network);
     }
     const response = await fetch('/api/request', {
       method: 'POST',
       headers: {
-        ...privateSessionAddressHeaders(wallet.address),
+        ...privateSessionAddressHeaders(verifiedAddress),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
