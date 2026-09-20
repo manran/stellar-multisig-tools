@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CircleAlert, ClipboardCopy, KeyRound, LoaderCircle, ShieldCheck, Trash2 } from 'lucide-react';
 import PrivateWorkspaceUnlock from './PrivateWorkspaceUnlock';
+import { PageHeader } from './MultiSigUi';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
 import {
@@ -152,17 +153,18 @@ export default function AgentAccessApp() {
     <StellarWorkspaceShell active="inbox" networkContext={network}>
       <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto max-w-4xl">
-          <div className="border-b border-black/10 pb-5 dark:border-white/10">
-            <div className="flex items-center gap-3"><KeyRound className="h-6 w-6 text-neutral-400" /><h1 className="text-3xl font-bold tracking-tight">Agent access</h1></div>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-600 dark:text-neutral-300">Create credentials for agents that act on behalf of this Stellar signer. The signer is the Principal; each credential identifies a separate Agent actor.</p>
-          </div>
+          <PageHeader
+            icon={<KeyRound className="h-6 w-6" />}
+            title="Agent access"
+            description="Create credentials for agents that act on behalf of this Stellar signer. The signer is the Principal; each credential identifies a separate Agent actor."
+          />
 
           {!address && (
             <section className="mx-auto max-w-xl py-14 sm:py-20">
               <KeyRound className="h-8 w-8 text-neutral-400" />
               <h2 className="mt-5 text-3xl font-bold">Connect the signer</h2>
               <p className="mt-2 text-base leading-7 text-neutral-600 dark:text-neutral-300">Agent credentials belong to a signer identity, not to a Treasury.</p>
-              <button type="button" disabled={busy} onClick={() => void connect()} className="mt-6 rounded-xl bg-emerald-700 px-5 py-3 font-semibold text-white disabled:opacity-50">{busy ? 'Opening wallets…' : 'Connect wallet'}</button>
+              <button type="button" disabled={busy} onClick={() => void connect()} className="mst-action-primary mt-6 disabled:opacity-50">{busy ? 'Opening wallets…' : 'Connect wallet'}</button>
             </section>
           )}
 
@@ -173,20 +175,20 @@ export default function AgentAccessApp() {
           {error && <div className="mt-5 flex gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
 
           {privateReady && address && network && (
-            <div className="mt-5 space-y-5">
-              <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03] sm:p-6">
+            <div className="mst-agent-stack mt-5">
+              <section className="mst-agent-principal">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Principal</div>
                 <div className="mt-2 font-mono text-sm">{address}</div>
                 <div className="mt-1 text-xs text-neutral-500">{network === 'testnet' && <><span className="text-sky-700 dark:text-sky-300">Testnet</span><span> · </span></>}{activeCount} of {MAX_ACTIVE_SIGNER_AGENT_CREDENTIALS} active credentials</div>
               </section>
 
-              <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03] sm:p-6">
+              <section className="mst-agent-section">
                 <h2 className="text-xl font-bold">Create Agent credential</h2>
                 <p className="mt-1 text-sm leading-6 text-neutral-500 dark:text-neutral-400">Access levels are cumulative: Write includes Read; Sign includes Write. Use a separate credential for each agent so Activity can retain the actual actor.</p>
 
-                <div className="mt-5 grid gap-3 md:grid-cols-3">
+                <div className="mst-agent-access-grid mt-5">
                   {ACCESS_OPTIONS.map((option) => (
-                    <button key={option.value} type="button" onClick={() => setAccess(option.value)} aria-pressed={access === option.value} className={`rounded-2xl border p-4 text-left ${access === option.value ? 'border-emerald-600 bg-emerald-500/[0.07]' : 'border-black/10 hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/[0.04]'}`}>
+                    <button key={option.value} type="button" onClick={() => setAccess(option.value)} aria-pressed={access === option.value} className={`mst-agent-access-option ${access === option.value ? 'mst-agent-access-option--selected' : ''}`}>
                       <div className="font-bold">{option.title}</div>
                       <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">{option.detail}</p>
                     </button>
@@ -194,8 +196,8 @@ export default function AgentAccessApp() {
                 </div>
 
                 <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                  <input value={label} onChange={(event) => setLabel(event.target.value)} maxLength={80} placeholder="My ChatGPT" className="min-w-0 flex-1 rounded-xl border border-black/10 bg-transparent px-4 py-3 text-sm outline-none focus:border-emerald-500 dark:border-white/10" />
-                  <button type="button" disabled={loading || !label.trim() || activeCount >= MAX_ACTIVE_SIGNER_AGENT_CREDENTIALS} onClick={() => void createCredential()} className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40">Create credential</button>
+                  <input value={label} onChange={(event) => setLabel(event.target.value)} maxLength={80} placeholder="My ChatGPT" className="mst-agent-control min-w-0 flex-1" />
+                  <button type="button" disabled={loading || !label.trim() || activeCount >= MAX_ACTIVE_SIGNER_AGENT_CREDENTIALS} onClick={() => void createCredential()} className="mst-action-primary disabled:opacity-40">Create credential</button>
                 </div>
 
                 {access === 'sign' && (
@@ -215,7 +217,7 @@ export default function AgentAccessApp() {
                 )}
               </section>
 
-              <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03] sm:p-6">
+              <section className="mst-agent-section">
                 <h2 className="text-xl font-bold">Agent credentials</h2>
                 {loading && !loaded && <div className="mt-4 flex items-center gap-2 text-sm text-neutral-500"><LoaderCircle className="h-4 w-4 animate-spin" />Loading Agent access…</div>}
                 {!loading && loaded && credentials.length === 0 && <p className="mt-4 text-sm text-neutral-500">No Agent credentials yet.</p>}

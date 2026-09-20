@@ -3074,3 +3074,90 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
     color: var(--color-muted);
   }
 }
+/* Hallmark · Agent access · continuous credential workspace */
+@layer components {
+  .mst-agent-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xl);
+  }
+
+  .mst-agent-principal,
+  .mst-agent-section {
+    padding-block: var(--space-lg);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-agent-principal {
+    padding-block: var(--space-md);
+    background: var(--color-paper-2);
+  }
+
+  .mst-agent-access-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-agent-access-option {
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-ink);
+    padding: var(--space-md);
+    text-align: left;
+    outline: none;
+  }
+
+  .mst-agent-access-option + .mst-agent-access-option {
+    border-left: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-agent-access-option:hover,
+  .mst-agent-access-option--selected {
+    background: var(--color-paper-2);
+  }
+
+  .mst-agent-access-option--selected {
+    box-shadow: inset 0 2px 0 var(--color-accent);
+  }
+
+  .mst-agent-access-option:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .mst-agent-control {
+    min-height: 2.875rem;
+    border: var(--rule-hairline) solid var(--color-rule);
+    border-radius: var(--radius-input);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--text-sm);
+    outline: none;
+  }
+
+  .mst-agent-control:focus-visible {
+    border-color: var(--color-focus);
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .mst-agent-control::placeholder {
+    color: var(--color-muted);
+  }
+}
+
+@media (max-width: 40rem) {
+  .mst-agent-access-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mst-agent-access-option + .mst-agent-access-option {
+    border-left: 0;
+    border-top: var(--rule-hairline) solid var(--color-rule);
+  }
+}

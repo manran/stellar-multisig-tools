@@ -14,6 +14,7 @@ const intent = source('../SorobanIntentApp.tsx');
 const treasury = source('../TreasuryApp.tsx');
 const treasurySettings = source('../TreasuryBoxSettingsApp.tsx');
 const addressBook = source('../AddressBookApp.tsx');
+const agentAccess = source('../AgentAccessApp.tsx');
 const payment = source('../PaymentComposer.tsx');
 const transfer = source('../TransferComposer.tsx');
 const claimablePayment = source('../ClaimablePaymentComposer.tsx');
@@ -38,6 +39,7 @@ test('primary Human surfaces share one page-header grammar', () => {
   assert.match(treasury, /<PageHeader/);
   assert.match(treasurySettings, /<PageHeader/);
   assert.match(addressBook, /<PageHeader/);
+  assert.match(agentAccess, /<PageHeader/);
 });
 
 
@@ -142,6 +144,19 @@ test('Address Book uses shared relationship rows instead of repeated list cards'
   assert.match(addressBook, /mst-address-row/);
   assert.doesNotMatch(addressBook, /rounded-2xl border border-black\/10 bg-white/);
   assert.equal((addressBook.match(/mst-address-list/g) ?? []).length, 3);
+});
+
+test('Agent access uses one credential workspace while retaining permission and secret warnings', () => {
+  assert.match(agentAccess, /mst-agent-stack/);
+  assert.match(agentAccess, /mst-agent-principal/);
+  assert.match(agentAccess, /mst-agent-section/);
+  assert.match(agentAccess, /mst-agent-access-grid/);
+  assert.match(agentAccess, /mst-agent-access-option/);
+  assert.match(agentAccess, /mst-agent-control/);
+  assert.match(agentAccess, /Sign is an API permission, not key custody/);
+  assert.match(agentAccess, /Copy this credential now/);
+  assert.doesNotMatch(agentAccess, /rounded-2xl border border-black\/10 bg-white/);
+  assert.doesNotMatch(agentAccess, /md:grid-cols-3/);
 });
 
 test('Classic transaction composers share one continuous preparation workbench', () => {
