@@ -1,85 +1,145 @@
 # Documentation Information Architecture
 
-Status: product contract
+**Status:** canonical public documentation contract
 
-This file defines the public documentation structure for the Stellar product at `stellar.multisig.tools`. It is the documentation counterpart to `PRODUCT_SEMANTICS.md` and `UX_DESIGN_SYSTEM.md`.
+**Updated:** 2026-09-20
+
+This file defines the public documentation structure for MultiSig Tools on the Stellar product site. It is the documentation counterpart to `PRODUCT_SEMANTICS.md`, `UX_DESIGN_SYSTEM.md`, `INTEGRATION_PRODUCT_MODEL.md`, and the running Headless API.
 
 ## 1. Purpose
 
-Public documentation is a task-oriented product surface, not a mirror of Stellar protocol primitives and not a dump of internal architecture documents.
+Public documentation is a task-oriented product surface. It is not a mirror of Stellar protocol primitives and it is not a dump of internal architecture files.
 
-The documentation must help a reader answer one of four questions:
+A reader should be able to answer one of four questions immediately:
 
-1. How do I start?
-2. How do I perform a transaction task?
-3. How does the MultiSigTools model work?
-4. How does software automate a Treasury workflow?
+1. What do I need to do as a signer or Treasury operator?
+2. How do I perform a Human transaction task?
+3. Why does MultiSig Tools behave this way?
+4. How should my software integrate with MultiSig Tools?
 
-Protocol details remain available when they explain a task or security boundary, but they are progressive disclosure rather than the top-level navigation.
+The first three lanes use Human product language. The Developer lane may use exact API/protocol vocabulary because those details are the developer's task.
 
 ## 2. Canonical information architecture
 
-The public documentation has exactly four top-level sections:
+The public documentation has four top-level sections:
 
 ```text
 Start
 Transactions
 Concepts
-Automation
+Developers
 ```
 
 ### Start
 
-Short task pages for the highest-value first actions:
+Highest-value Human first actions:
 
 - Sign a Proposal
 - Create a Treasury
 
-The Docs home also points directly to the current primary transaction task, Payment.
+The Docs home begins with three task choices rather than three product categories:
+
+- Review and sign a Proposal
+- Create or manage a Treasury
+- Integrate MultiSig Tools
 
 ### Transactions
 
-One page per shipped Human transaction template. Pages are named by the user intent, not the underlying Stellar operation type.
+One page per shipped Human transaction template, named by user intent rather than Stellar operation type.
 
-Current shipped pages:
+Current pages:
 
 - Send a payment
-- Send a batch payment
+- Send to multiple recipients
 - Send a claimable payment
 - Create a multi-party transaction
 
-The three lower-frequency templates remain secondary to ordinary Payment in the product picker. Transaction pages enter this section only after the corresponding Human flow ships; do not create placeholder pages for speculative or planned transaction types.
+A transaction page exists only after the corresponding Human flow ships.
 
 ### Concepts
 
-Pages that explain stable product/security concepts shared by multiple tasks:
+Stable Human/security concepts shared by multiple tasks:
 
 - Proposal and Transaction
 - Multi-party transactions
 - Sign and Unlock
 - Activity, History and privacy
 
-Concept pages must explain the Human model first. Exact terms such as Request, XDR, source account, SEP-53 or Contribution Grant belong in clearly secondary technical detail where needed.
+Concept pages explain the Human model first. Request, XDR, SEP-53, Contribution Grant, source-account mechanics, and other protocol terms are secondary unless the concept specifically depends on them.
 
-### Automation
+### Developers
 
-Machine-facing documentation may use exact API/protocol vocabulary because the reader is building an integration.
+Developer documentation begins with an ownership decision, not an endpoint catalog.
 
-Current page:
+Canonical order:
 
-- Agent API
+1. **Choose your integration**
+   - Hosted
+   - On my site
+   - Full Headless
+2. **Testnet quickstart**
+3. **Classic integration**
+4. **Soroban integration**
+5. **API and webhooks**
+6. **Security model**
+7. **Agent API**
 
-The existing `/developers` URL remains a compatibility alias for the canonical Automation documentation. New links must use `/docs/automation`.
+The integration depth pages describe one Headless authorization core with progressively more orchestration owned by the integrator. They must not imply that Hosted, Native, and Headless are separate workflow engines.
 
-## 3. Route contract
+## 3. Developer integration chooser
 
-Canonical public Docs root:
+The first developer question is:
+
+> How much signer interaction and orchestration does my product want to own?
+
+### Hosted
+
+The Integration creates/tracks work. MultiSig Tools renders the signer review/signing experience through the returned review URL.
+
+Use when:
+
+- the integrator wants the shortest path;
+- signer wallet UX does not need to be embedded in the integrator's product;
+- Hosted can also serve as a fallback for a more native integration.
+
+### On my site
+
+The integrator owns its business UI and signer wallet UX.
+
+Current shipped Native Browser authorization is Soroban Intent scoped:
+
+```text
+Service --msi_*--> create Intent
+Service --msi_*--> issue signer/origin/current-plan browser capability
+
+Browser --mic_*--> inspect current signer challenge
+Browser --wallet--> sign locally
+Browser --mic_*--> contribute AUTH
+```
+
+The Browser capability is disclosure/transport authority, not signer authority. It cannot create arbitrary Intents, replan, cancel, change execution policy, or impersonate a signer.
+
+Do not imply a Classic `mic_*` flow exists until one actually ships. Hosted is the universal Human fallback.
+
+### Full Headless
+
+The integrator may own Browser, Server, Agent, webhook consumer, wallet adapters, and executor orchestration.
+
+The invariant is:
+
+> Integrators may take over orchestration; they do not duplicate authority.
+
+MultiSig Tools continues to validate signer membership, threshold/plan identity, signatures, effects, expiry, execution binding, and observed ledger evidence.
+
+## 4. Route contract
+
+Canonical Docs root:
 
 ```text
 /docs
 ```
 
-Canonical first-batch pages:
+Human pages:
 
 ```text
 /docs/sign-a-proposal
@@ -92,39 +152,58 @@ Canonical first-batch pages:
 /docs/concepts/multi-party-transactions
 /docs/concepts/sign-and-unlock
 /docs/concepts/history-and-privacy
+```
+
+Developer pages:
+
+```text
+/docs/developers
+/docs/developers/testnet-quickstart
+/docs/developers/classic
+/docs/developers/soroban
+/docs/developers/api
+/docs/developers/security
 /docs/automation
 ```
 
+Compatibility route:
+
+```text
+/developers -> /docs/developers
+```
+
+`/docs/automation` remains the canonical Agent API page. It is no longer the destination of `/developers`.
+
 Both the Stellar subdomain and `/stellar/...` directory-host form must resolve the same Docs routes.
 
-Unknown `/docs/...` paths render an explicit Docs not-found state. They must not silently become Inbox or another workspace.
+Unknown `/docs/...` paths render an explicit Docs not-found state.
 
-## 4. Page types
+## 5. Page types
 
 Every public documentation page is one of three types.
 
 ### Task
 
-Explains how to accomplish a concrete product action.
+Explains a concrete product action.
 
 Required order:
 
 1. what the task does;
-2. the shortest successful path;
-3. important decision or safety boundary;
+2. shortest successful path;
+3. important decision/security boundary;
 4. optional technical detail.
 
 ### Concept
 
-Explains one stable product model or boundary. It must answer "why does the product behave this way?" without becoming an implementation history.
+Explains one stable product model or boundary. It answers “why does the product behave this way?” without becoming implementation history.
 
 ### Reference
 
-Exact machine/API contract. Reference pages may lead with HTTP, XDR, idempotency and status values because this is the user's task vocabulary in that context.
+Exact machine/API contract. Reference pages may lead with HTTP, Request, Intent, XDR, AUTH, idempotency, status, and headers because those are the reader's working vocabulary.
 
-## 5. Vocabulary contract
+## 6. Vocabulary contract
 
-Human task and concept pages use the Human vocabulary from `PRODUCT_SEMANTICS.md`:
+Human task/concept pages use Human terminology:
 
 - Proposal
 - Sign / Signed / signature
@@ -133,95 +212,148 @@ Human task and concept pages use the Human vocabulary from `PRODUCT_SEMANTICS.md
 - Activity
 - Transaction Receipt
 - Unlock
+- Prepare / Review / Sign / Submit / Done
 
 Do not lead Human pages with:
 
 - Request
+- Intent
 - XDR
 - SetOptions
 - CreateClaimableBalance
 - source-account authorization internals
 - SEP/CAP identifiers
 
-Those terms may appear in a `Technical details` disclosure when they materially explain behavior.
+Those terms may appear under Technical details when materially useful.
 
-Automation documentation is the explicit exception: exact protocol and API terms are first-class there.
+Developer pages are the explicit exception. Exact terms are first-class when required to implement the integration.
 
-## 6. Progressive-disclosure contract
+Human and Developer vocabulary must still refer to the same underlying objects. Developer exactness must not create a second product model.
 
-A non-developer must be able to complete a task without opening `Technical details`.
+## 7. Developer authority contract
 
-Technical disclosures may explain:
-
-- the underlying Stellar operation;
-- exact XDR/signature semantics;
-- source-account authorization;
-- Request/capability/session distinctions;
-- SEP-53/SEP-10 implementation details;
-- machine/API fields.
-
-Security boundaries that affect the user's decision must not be hidden only inside a disclosure. For example, `Sign != Submit` and Private Note privacy characteristics are Human-facing facts.
-
-## 7. Transaction documentation contract
-
-MultiSigTools is not a generic Stellar operation builder. A transaction page is justified when the Human task is common enough that a user or team reasonably wants MultiSigTools to construct the transaction instead of hand-building XDR.
-
-A new transaction type requires all of:
-
-1. a shipped product composer or equivalent Human flow;
-2. a stable Human name and Review representation;
-3. deterministic validation before XDR construction;
-4. a clear signing/authorization model;
-5. a public Docs task page.
-
-Do not expose a protocol operation merely to increase feature count.
-
-## 8. Multi-party documentation invariant
-
-Documentation must preserve the v127 model:
-
-> A Proposal belongs to the exact Stellar Transaction, not to one Treasury.
-
-When one transaction contains operations sourced by independent accounts, each source account remains its own cryptographic authorization domain. The same Proposal may therefore be relevant to more than one Treasury/account view.
-
-A future organizational `Party` concept may label or group those domains, but documentation must never imply that business labels replace source-account/signer authorization truth.
-
-## 9. Automation boundary
-
-Automation is a separate documentation lane, not a separate product model.
-
-Automation pages may explain:
-
-- Signer Agent credentials and Treasury Audit credentials;
-- prepared XDR;
-- idempotency;
-- API status values;
-- Request identifiers;
-- exact HTTP examples.
-
-They must preserve the same authority boundary as the Human product: an API key can propose within its documented scope but is not a Stellar signer and does not gain Human signing custody.
-
-## 10. Navigation and growth rules
-
-- Footer navigation uses `Docs`, not `Developers`, as the public documentation entry.
-- Product-context links may deep-link directly to the relevant Docs page.
-- Keep the public Docs surface small. Add pages because a repeated user task or stable concept needs one, not because an internal Markdown file exists.
-- Do not add search until the public page count makes navigation materially difficult.
-- Do not add documentation versioning until a public compatibility contract actually requires multiple simultaneously supported versions.
-- Internal architecture/audit/privacy design files remain repository contracts; they are sources for public documentation, not automatically public pages.
-
-## 11. Source-of-truth and freshness
-
-Public documentation must describe shipped product behavior.
-
-Truth order for documentation changes:
+Developer pages must preserve these separations:
 
 ```text
-runtime/source + executable tests
-  -> PRODUCT_SEMANTICS / focused contracts
-  -> public Docs copy
+Integration Service identity != Stellar signer authority
+Browser disclosure capability != signer authority
+Agent credential            != private key
+Execution ownership          != authorization ownership
 ```
 
-If public copy and runtime disagree, fix or remove the public claim. Do not preserve stale wording for narrative continuity.
+### Integration credential
 
-Any product change that modifies a documented task, authority boundary, route, terminology, privacy behavior or public API must update the relevant public Docs page in the same bounded batch.
+`msi_*` identifies one scoped Integration Profile. It may create/read/manage work only inside that business scope. It never supplies a Stellar signer signature.
+
+### Browser capability
+
+`mic_*` is short-lived and bound to one Integration, Intent, current AuthorizationPlan, signer, origin, and expiry. It transports one signer's current authorization interaction; the Authorization Core still verifies the wallet signature.
+
+### Agent credential
+
+An Agent credential delegates one signer Principal's Read/Write/Sign API access. Sign scope does not contain a private key; newly contributed cryptographic evidence is independently verified.
+
+### Execution
+
+Managed/external execution determines who prepares/submits/reconciles work. It does not redefine Treasury signer authority or Soroban AUTH authority.
+
+## 8. Classic documentation contract
+
+For semantic Classic payment Requests:
+
+```text
+Treasury G...    -> Payment operation source + live signer authority
+MST channel G... -> transaction source + sequence + fee + submission
+```
+
+when managed execution is configured.
+
+Developer docs must make clear:
+
+- the Integration Profile never invents Treasury signers;
+- managed channel authority is transaction-source authority only;
+- Treasury signers still authorize the Payment operation;
+- raw XDR is not silently rewritten;
+- external execution is an explicit advanced configuration;
+- managed Classic availability is deployment/network capability, not a universal promise;
+- Mainnet channel provisioning/funding remains an explicit operator concern.
+
+## 9. Soroban documentation contract
+
+Soroban Integration is Intent first:
+
+```text
+semantic contract Intent
+-> AuthorizationPlan
+-> detached AUTH collection
+-> authorization_ready
+-> enforcing preparation
+-> execution
+-> reconciliation
+```
+
+Developer docs must preserve:
+
+- SOURCE_ACCOUNT authorization is not silently converted into detached AUTH;
+- replan changes plan identity and invalidates old Browser capabilities;
+- structural effects drift requires re-authorization;
+- significant numeric drift requires explicit review;
+- managed/external execution is bound by Integration configuration;
+- a signer cannot replace Integration-owned execution.
+
+## 10. Webhook contract
+
+Webhook is a notification channel, never canonical state.
+
+Consumer rule:
+
+```text
+receive signed event
+-> deduplicate event id
+-> GET canonical Request / Intent / Job
+-> act from current state
+```
+
+Public docs should describe the shipped durable PostgreSQL outbox/delivery behavior, including bounded retry and signed delivery, without implying that event receipt replaces a canonical read.
+
+Polling remains a compatibility/fallback mechanism where appropriate, not the preferred way to understand internal authorization state.
+
+## 11. Progressive disclosure contract
+
+A non-developer must complete a Human task without opening Technical details.
+
+A developer must be able to choose integration depth before learning:
+
+- Browser capability headers;
+- executor pools;
+- channel accounts;
+- raw XDR;
+- internal evidence fields;
+- exact webhook delivery machinery.
+
+Security facts that change a user's decision must never be hidden only under a disclosure.
+
+## 12. Navigation and growth rules
+
+- Footer exposes both `Docs` and `Developers`.
+- `Docs` leads Human/task discovery.
+- `Developers` leads the integration chooser.
+- Product-context links may deep-link to the relevant task/reference page.
+- Do not add one page per internal Markdown file.
+- Do not add search until page count/navigation evidence justifies it.
+- Do not add documentation versioning until simultaneous public compatibility versions actually exist.
+- Internal architecture files remain source contracts, not public pages by default.
+
+## 13. Source of truth and freshness
+
+Truth order:
+
+```text
+running source + executable tests + deployed contract
+-> focused product/security contracts
+-> public Docs copy
+```
+
+If a prose architecture document conflicts with current source/tests, resolve the conflict before publishing a claim.
+
+Any product change that modifies a documented task, authority boundary, route, terminology, privacy behavior, or public API must update the corresponding public Docs in the same bounded batch.

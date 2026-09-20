@@ -197,7 +197,7 @@ test('Testnet is a network-bound runtime rather than a duplicate content site', 
   const main = source('../main.tsx');
   const footer = source('../StellarFooter.tsx');
   const testnetLanding = source('../StellarTestnetLandingApp.tsx');
-  const docs = source('../DocsApp.tsx');
+  const developerDocs = source('../DeveloperDocs.tsx');
 
   assert.match(main, /fixedClientStellarDeploymentNetwork\(\) === 'testnet'/);
   assert.match(main, /isCanonicalStellarContentPath\(window\.location\.pathname\)/);
@@ -207,13 +207,12 @@ test('Testnet is a network-bound runtime rather than a duplicate content site', 
   assert.match(testnetLanding, /Product content stays canonical/);
   assert.match(testnetLanding, /canonicalStellarContentHref\('\/docs'\)/);
   assert.match(footer, /isCanonicalStellarContentPath\(path\) \? canonicalStellarContentHref\(path\) : stellarHref\(path\)/);
-  assert.match(docs, /\$\{STELLAR_MAINNET_ORIGIN\}\/api\/request/);
-  assert.match(docs, /\$\{STELLAR_TESTNET_ORIGIN\}\/api\/contract-interface\?network=testnet/);
-  assert.doesNotMatch(docs, /https:\/\/stellar\.multisig\.tools\/api\/contract-interface\?network=testnet/);
-  assert.match(docs, /Integration Service executor shortcut/);
-  assert.match(docs, /prepare_execution/);
-  assert.match(docs, /refresh_execution/);
-  assert.match(docs, /serviceIntentCreateExample/);
-  assert.match(docs, /serviceIntentCancelExample/);
-  assert.match(docs, /Cancellation is coordination-level, not cryptographic revocation/);
+  assert.match(developerDocs, /STELLAR_TESTNET_ORIGIN \+ '\/api\/request/);
+  assert.match(developerDocs, /STELLAR_TESTNET_ORIGIN \+ '\/api\/intent/);
+  assert.match(developerDocs, /STELLAR_MAINNET_ORIGIN \+ '\/openapi\.json'/);
+  assert.doesNotMatch(developerDocs, /https:\/\/stellar\.multisig\.tools\/api\/[^'\"]*network=testnet/);
+  assert.match(developerDocs, /Managed by default when the deployment can support it/);
+  assert.match(developerDocs, /issue_browser_authorization/);
+  assert.match(developerDocs, /X-MultiSig-Intent-Capability/);
+  assert.match(developerDocs, /Webhook is a notification, not the source of truth/);
 });

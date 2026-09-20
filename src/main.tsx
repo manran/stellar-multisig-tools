@@ -133,7 +133,7 @@ function RoutedApp() {
 
   useEffect(() => {
     document.documentElement.classList.toggle('stellar-ui', route.isStellar);
-    document.title = titleFor(route.kind);
+    if (route.kind !== 'docs') document.title = titleFor(route.kind);
   }, [locationKey, route.isStellar, route.kind]);
 
   useEffect(() => {

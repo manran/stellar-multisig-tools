@@ -1233,7 +1233,7 @@ export function createOpenApiDocument(
     paths: openApiPaths(),
     components,
     externalDocs: {
-      description: 'MultiSigTools Agent API and authority model',
+      description: 'MultiSig Tools developer integration and authority guide',
       url: `${origin === '/' ? '' : origin}/developers`,
     },
   };

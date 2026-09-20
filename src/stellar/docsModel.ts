@@ -1,6 +1,6 @@
 import { normalizedStellarWorkspacePath } from '../workspaceRoutes.js';
 
-export type DocsSectionId = 'start' | 'transactions' | 'concepts' | 'automation';
+export type DocsSectionId = 'start' | 'transactions' | 'concepts' | 'developers';
 
 export interface DocsPageDefinition {
   path: string;
@@ -16,6 +16,12 @@ export interface DocsSectionDefinition {
 }
 
 export const DOCS_HOME_PATH = '/docs';
+export const DOCS_DEVELOPERS_PATH = '/docs/developers';
+export const DOCS_DEVELOPER_QUICKSTART_PATH = '/docs/developers/testnet-quickstart';
+export const DOCS_DEVELOPER_CLASSIC_PATH = '/docs/developers/classic';
+export const DOCS_DEVELOPER_SOROBAN_PATH = '/docs/developers/soroban';
+export const DOCS_DEVELOPER_API_PATH = '/docs/developers/api';
+export const DOCS_DEVELOPER_SECURITY_PATH = '/docs/developers/security';
 export const DOCS_AUTOMATION_PATH = '/docs/automation';
 export const LEGACY_DEVELOPERS_PATH = '/developers';
 
@@ -51,7 +57,7 @@ export const DOCS_SECTIONS: readonly DocsSectionDefinition[] = [
       {
         path: '/docs/transactions/batch-payment',
         title: 'Send to multiple recipients',
-        summary: 'Paste a structured recipient list, validate every row and total, and prepare one atomic payment batch.',
+        summary: 'Validate every recipient and prepare one atomic multi-payment transaction.',
         section: 'transactions',
       },
       {
@@ -62,7 +68,7 @@ export const DOCS_SECTIONS: readonly DocsSectionDefinition[] = [
       },
       {
         path: '/docs/transactions/multi-party',
-        title: 'Create a multi-party transaction',
+        title: 'Multi-party transaction',
         summary: 'Prepare one atomic transaction whose payment operations are authorized by multiple source accounts.',
         section: 'transactions',
       },
@@ -93,20 +99,56 @@ export const DOCS_SECTIONS: readonly DocsSectionDefinition[] = [
       {
         path: '/docs/concepts/history-and-privacy',
         title: 'Activity, History and privacy',
-        summary: 'Know what is on-chain, what MultiSigTools retains, and which views are private.',
+        summary: 'Know what is on-chain, what MultiSig Tools retains, and which views are private.',
         section: 'concepts',
       },
     ],
   },
   {
-    id: 'automation',
-    label: 'Agents',
+    id: 'developers',
+    label: 'Developers',
     pages: [
+      {
+        path: DOCS_DEVELOPERS_PATH,
+        title: 'Choose your integration',
+        summary: 'Choose Hosted, On my site, or Full Headless based on how much signer interaction and orchestration your product owns.',
+        section: 'developers',
+      },
+      {
+        path: DOCS_DEVELOPER_QUICKSTART_PATH,
+        title: 'Testnet quickstart',
+        summary: 'Start from a scoped Integration Profile and exercise a real Testnet Request or Intent without Mainnet assets.',
+        section: 'developers',
+      },
+      {
+        path: DOCS_DEVELOPER_CLASSIC_PATH,
+        title: 'Classic integration',
+        summary: 'Create semantic Classic payment Requests while keeping Treasury signer authority on Stellar.',
+        section: 'developers',
+      },
+      {
+        path: DOCS_DEVELOPER_SOROBAN_PATH,
+        title: 'Soroban integration',
+        summary: 'Create semantic contract Intents, collect AUTH, and keep execution bound to the configured policy.',
+        section: 'developers',
+      },
+      {
+        path: DOCS_DEVELOPER_API_PATH,
+        title: 'API and webhooks',
+        summary: 'Use the OpenAPI contract, idempotency, Job projection, and signed webhook delivery correctly.',
+        section: 'developers',
+      },
+      {
+        path: DOCS_DEVELOPER_SECURITY_PATH,
+        title: 'Security model',
+        summary: 'Understand the separation between Service identity, signer authority, disclosure capability, and execution ownership.',
+        section: 'developers',
+      },
       {
         path: DOCS_AUTOMATION_PATH,
         title: 'Agent API',
-        summary: 'Delegate Read, Write, or Sign API access from a Stellar signer to a distinct Agent actor.',
-        section: 'automation',
+        summary: 'Delegate Read, Write, or Sign API access from one Stellar signer to a distinct Agent actor.',
+        section: 'developers',
       },
     ],
   },
@@ -116,7 +158,7 @@ export const DOCS_PAGES: readonly DocsPageDefinition[] = DOCS_SECTIONS.flatMap((
 
 export function normalizedDocsPath(pathname: string) {
   const path = normalizedStellarWorkspacePath(pathname);
-  return path === LEGACY_DEVELOPERS_PATH ? DOCS_AUTOMATION_PATH : path;
+  return path === LEGACY_DEVELOPERS_PATH ? DOCS_DEVELOPERS_PATH : path;
 }
 
 export function docsPageForPath(pathname: string) {

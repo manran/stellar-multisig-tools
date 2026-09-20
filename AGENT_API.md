@@ -2,7 +2,9 @@
 
 **Status:** beta integration contract  
 **Base origin:** `https://stellar.multisig.tools`  
-**Web quick start:** `https://stellar.multisig.tools/developers`
+**Developer hub:** `https://stellar.multisig.tools/developers`
+
+**Agent API guide:** `https://stellar.multisig.tools/docs/automation`
 
 MultiSigTools exposes one signer-oriented API shared by a Human and the Agents they explicitly delegate. A Treasury is a resource the signer may access; it is not the normal machine principal.
 

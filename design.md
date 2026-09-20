@@ -39,6 +39,8 @@ Light:
 - `--color-accent-ink` oklch(0.99 0.004 150)
 - `--color-focus` oklch(0.61 0.145 166)
 - `--color-success` oklch(0.51 0.118 166)
+- `--color-code-bg` oklch(0.18 0.008 155)
+- `--color-code-ink` oklch(0.94 0.008 150)
 
 Dark:
 
@@ -54,6 +56,8 @@ Dark:
 - `--color-accent-ink` oklch(0.17 0.007 155)
 - `--color-focus` oklch(0.75 0.17 162)
 - `--color-success` oklch(0.69 0.17 162)
+- `--color-code-bg` oklch(0.12 0.006 155)
+- `--color-code-ink` oklch(0.92 0.008 150)
 
 Network semantics:
 

@@ -13,11 +13,23 @@ import {
 } from 'lucide-react';
 import StellarFooter from './StellarFooter';
 import StellarHeader from './StellarHeader';
-import { MAX_ACTIVE_SIGNER_AGENT_CREDENTIALS } from './stellar/agentAccessTypes';
-import { MAX_ACTIVE_TREASURY_AUDIT_KEYS } from './stellar/boxTypes';
-import { STELLAR_MAINNET_ORIGIN, STELLAR_TESTNET_ORIGIN } from './stellar/deploymentOrigins';
+import {
+  AgentApiPage,
+  ApiWebhooksPage,
+  ClassicIntegrationPage,
+  DeveloperHubPage,
+  DeveloperQuickstartPage,
+  DeveloperSecurityPage,
+  SorobanIntegrationPage,
+} from './DeveloperDocs';
 import {
   DOCS_AUTOMATION_PATH,
+  DOCS_DEVELOPERS_PATH,
+  DOCS_DEVELOPER_API_PATH,
+  DOCS_DEVELOPER_CLASSIC_PATH,
+  DOCS_DEVELOPER_QUICKSTART_PATH,
+  DOCS_DEVELOPER_SECURITY_PATH,
+  DOCS_DEVELOPER_SOROBAN_PATH,
   DOCS_HOME_PATH,
   DOCS_SECTIONS,
   docsPageForPath,
@@ -25,93 +37,9 @@ import {
 } from './stellar/docsModel';
 import { stellarHref } from './workspaceNavigation';
 
-const createRequestExample = `curl -X POST ${STELLAR_MAINNET_ORIGIN}/api/request \\
-  -H "Authorization: Bearer $MULTISIG_AGENT_KEY" \\
-  -H "Content-Type: application/json" \\
-  -H "Idempotency-Key: payment-run-20260901-42" \\
-  -d '{
-    "network": "public",
-    "xdr": "AAAA...",
-    "externalReference": "payment-run-20260901-42",
-    "privateNote": "Prepared by the payment service."
-  }'`;
-
-const servicePaymentRequestExample = `curl -X POST ${STELLAR_MAINNET_ORIGIN}/api/request \
-  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: payroll-20260915-42" \
-  -d '{
-    "network": "public",
-    "payment": {
-      "sourceAccount": "G...TREASURY",
-      "payments": [
-        {"destination":"G...ALICE","amount":"1000","asset":{"type":"credit","code":"USDC","issuer":"G...ISSUER"}},
-        {"destination":"G...BOB","amount":"1500","asset":{"type":"credit","code":"USDC","issuer":"G...ISSUER"}}
-      ],
-      "memo": "Payroll 2026-09"
-    },
-    "externalReference": "payroll-20260915-42"
-  }'`;
-
-const statusExample = `curl "${STELLAR_MAINNET_ORIGIN}/api/request" \\
-  -H "Authorization: Bearer $MULTISIG_AGENT_KEY" \\
-  -H "x-multisig-request-id: 0123456789ABCDEF"`;
-
-const contractInterfaceExample = `curl "${STELLAR_TESTNET_ORIGIN}/api/contract-interface?network=testnet&contract=C..."`;
-
-const contractCallExample = `curl -X POST ${STELLAR_TESTNET_ORIGIN}/api/contract-call \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "network": "testnet",
-    "transactionSource": "G...",
-    "contractId": "C...",
-    "method": "reserve",
-    "arguments": {"wallet": "fresnica"},
-    "lifetimeSeconds": 3600
-  }'`;
-
-const contractPrepareExample = `curl -X POST ${STELLAR_TESTNET_ORIGIN}/api/contract-prepare \\
-  -H "Content-Type: application/json" \\
-  -d '{"network":"testnet","xdr":"AAAA..."}'`;
-
-const intentCreateExample = `curl -X POST ${STELLAR_TESTNET_ORIGIN}/api/intent \\
-  -H "Authorization: Bearer $MULTISIG_AGENT_KEY" \\
-  -H "Content-Type: application/json" \\
-  -H "Idempotency-Key: fresnica-intent-42" \\
-  -d '{"network":"testnet","contractId":"C...","method":"reserve","arguments":{"wallet":"G..."}}'`;
-
-
-const serviceIntentCreateExample = `curl -X POST ${STELLAR_TESTNET_ORIGIN}/api/intent \
-  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: fed-intent-42" \
-  -d '{"network":"testnet","contractId":"C...","method":"reserve","arguments":{"wallet":"G..."},"executor":"G...EXECUTOR"}'`;
-
-const serviceIntentPrepareExample = `curl -X PUT ${STELLAR_TESTNET_ORIGIN}/api/intent \
-  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
-  -H "Content-Type: application/json" \
-  -H "X-MultiSig-Intent-Id: 0123456789ABCDEF" \
-  -d '{"action":"prepare_execution"}'`;
-
-const serviceIntentRefreshExample = `curl -X PUT ${STELLAR_TESTNET_ORIGIN}/api/intent \
-  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
-  -H "Content-Type: application/json" \
-  -H "X-MultiSig-Intent-Id: 0123456789ABCDEF" \
-  -d '{"action":"refresh_execution"}'`;
-
-const serviceIntentCancelExample = `curl -X PUT ${STELLAR_TESTNET_ORIGIN}/api/intent \
-  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
-  -H "Content-Type: application/json" \
-  -H "X-MultiSig-Intent-Id: 0123456789ABCDEF" \
-  -d '{"action":"cancel"}'`;
-
-function CodeBlock({ children }: { children: string }) {
-  return <pre className="overflow-x-auto rounded-2xl bg-[#111] p-4 text-xs leading-6 text-neutral-100"><code>{children}</code></pre>;
-}
-
 function TechnicalDetails({ children }: { children: ReactNode }) {
   return (
-    <details className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]">
+    <details className="mst-advanced-panel">
       <summary className="cursor-pointer text-sm font-bold">Technical details</summary>
       <div className="mt-3 space-y-3 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{children}</div>
     </details>
@@ -120,22 +48,22 @@ function TechnicalDetails({ children }: { children: ReactNode }) {
 
 function Callout({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]">
-      <div className="flex items-center gap-2 font-bold">{icon}{title}</div>
-      <div className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{children}</div>
-    </div>
+    <aside className="mst-doc-callout">
+      <div className="mst-doc-callout__title">{icon}<span>{title}</span></div>
+      <div className="mst-doc-callout__body">{children}</div>
+    </aside>
   );
 }
 
 function StepList({ steps }: { steps: readonly [string, string][] }) {
   return (
-    <ol className="space-y-4">
+    <ol className="mst-doc-steps">
       {steps.map(([title, detail], index) => (
-        <li key={title} className="flex gap-4 rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-xs font-bold text-white">{index + 1}</div>
+        <li key={title} className="mst-doc-step">
+          <span className="mst-doc-step__number">{String(index + 1).padStart(2, '0')}</span>
           <div>
-            <div className="font-bold">{title}</div>
-            <p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{detail}</p>
+            <div className="mst-doc-step__title">{title}</div>
+            <p className="mst-doc-step__body">{detail}</p>
           </div>
         </li>
       ))}
@@ -145,10 +73,10 @@ function StepList({ steps }: { steps: readonly [string, string][] }) {
 
 function PageHeader({ eyebrow, title, summary }: { eyebrow: string; title: string; summary: string }) {
   return (
-    <header className="max-w-3xl">
-      <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{eyebrow}</div>
-      <h1 className="mt-3 text-4xl font-bold tracking-[-0.035em] sm:text-5xl">{title}</h1>
-      <p className="mt-5 text-lg leading-8 text-neutral-600 dark:text-neutral-300">{summary}</p>
+    <header className="mst-doc-header">
+      <div className="mst-doc-eyebrow">{eyebrow}</div>
+      <h1 className="mst-doc-title">{title}</h1>
+      <p className="mst-doc-lede">{summary}</p>
     </header>
   );
 }
@@ -183,65 +111,87 @@ function DocsNavigation({ currentPath }: { currentPath: string }) {
 }
 
 function DocsHome() {
-  const entryCards = [
+  const primaryTasks = [
     {
       icon: <Send className="h-5 w-5" />,
-      title: 'I need to sign',
-      detail: 'Open a Proposal, verify the exact transaction, and add your signature.',
+      title: 'Review and sign a Proposal',
+      detail: 'Open one exact transaction, verify what changes, and add your wallet signature.',
       path: '/docs/sign-a-proposal',
     },
     {
       icon: <Landmark className="h-5 w-5" />,
-      title: 'I manage a Treasury',
-      detail: 'Create shared authorization and understand how payment and account-control rules differ.',
+      title: 'Create or manage a Treasury',
+      detail: 'Design shared Stellar account control and understand payment versus account-control authority.',
       path: '/docs/create-a-treasury',
     },
     {
       icon: <Braces className="h-5 w-5" />,
-      title: 'I build automations',
-      detail: 'Let software propose prepared transactions without giving it Stellar signing custody.',
-      path: DOCS_AUTOMATION_PATH,
+      title: 'Integrate MultiSig Tools',
+      detail: 'Choose Hosted, On my site, or Full Headless before reading API details.',
+      path: DOCS_DEVELOPERS_PATH,
     },
   ] as const;
 
   return (
-    <div className="space-y-14">
+    <div className="mst-doc-page">
       <PageHeader
         eyebrow="Documentation"
-        title="Do the transaction. Understand the model when you need it."
-        summary="MultiSigTools helps people prepare, review, sign, and submit Stellar transactions without passing XDR files around. Start from the task you are trying to complete."
+        title="Start from the job, not the protocol."
+        summary="MultiSig Tools coordinates review, authorization, and execution around exact Stellar work. Human guides use product language first; developer pages expose Request, Intent, XDR, AUTH, idempotency, and execution where those details become the task."
       />
 
-      <section className="grid gap-4 md:grid-cols-3">
-        {entryCards.map((card) => (
-          <a key={card.path} href={stellarHref(card.path)} className="group rounded-2xl border border-black/10 bg-white p-5 transition hover:-translate-y-0.5 hover:border-emerald-700/30 dark:border-white/10 dark:bg-white/[0.03]">
-            <div className="text-emerald-700 dark:text-emerald-300">{card.icon}</div>
-            <h2 className="mt-5 text-lg font-bold">{card.title}</h2>
-            <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{card.detail}</p>
-            <div className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-emerald-700 dark:text-emerald-300">Open guide<ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></div>
-          </a>
-        ))}
-      </section>
-
       <section>
-        <div className="flex items-center gap-2 text-sm font-bold text-neutral-500 dark:text-neutral-400"><BookOpen className="h-4 w-4" />Transactions</div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {DOCS_SECTIONS.find((section) => section.id === 'transactions')?.pages.map((page) => (
-            <a key={page.path} href={stellarHref(page.path)} className="flex items-start justify-between gap-5 rounded-2xl border border-black/10 bg-white p-5 hover:border-emerald-700/30 dark:border-white/10 dark:bg-white/[0.03]">
-              <div><h2 className="font-bold">{page.title}</h2><p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{page.summary}</p></div>
-              <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-neutral-400" />
+        <div className="mst-doc-section-heading">
+          <div className="mst-doc-eyebrow">Start here</div>
+          <h2>Choose the thing you are trying to do.</h2>
+        </div>
+        <div className="mst-doc-link-list">
+          {primaryTasks.map((item) => (
+            <a key={item.path} href={stellarHref(item.path)} className="mst-doc-link-row">
+              <span className="mst-doc-link-row__icon">{item.icon}</span>
+              <span>
+                <strong>{item.title}</strong>
+                <span className="mst-doc-link-row__detail">{item.detail}</span>
+              </span>
+              <ArrowRight className="h-4 w-4" />
             </a>
           ))}
         </div>
       </section>
 
       <section>
-        <div className="flex items-center gap-2 text-sm font-bold text-neutral-500 dark:text-neutral-400"><Users className="h-4 w-4" />Understand MultiSigTools</div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="mst-doc-section-heading">
+          <div className="mst-doc-eyebrow">Transactions</div>
+          <h2>Human transaction guides</h2>
+        </div>
+        <div className="mst-doc-link-list">
+          {DOCS_SECTIONS.find((section) => section.id === 'transactions')?.pages.map((page) => (
+            <a key={page.path} href={stellarHref(page.path)} className="mst-doc-link-row">
+              <span className="mst-doc-link-row__icon"><BookOpen className="h-4 w-4" /></span>
+              <span>
+                <strong>{page.title}</strong>
+                <span className="mst-doc-link-row__detail">{page.summary}</span>
+              </span>
+              <ArrowRight className="h-4 w-4" />
+            </a>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <div className="mst-doc-section-heading">
+          <div className="mst-doc-eyebrow">Concepts</div>
+          <h2>Understand the model when a task needs it.</h2>
+        </div>
+        <div className="mst-doc-link-list">
           {DOCS_SECTIONS.find((section) => section.id === 'concepts')?.pages.map((page) => (
-            <a key={page.path} href={stellarHref(page.path)} className="rounded-2xl border border-black/10 bg-white p-5 hover:border-emerald-700/30 dark:border-white/10 dark:bg-white/[0.03]">
-              <h2 className="font-bold">{page.title}</h2>
-              <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{page.summary}</p>
+            <a key={page.path} href={stellarHref(page.path)} className="mst-doc-link-row">
+              <span className="mst-doc-link-row__icon"><Users className="h-4 w-4" /></span>
+              <span>
+                <strong>{page.title}</strong>
+                <span className="mst-doc-link-row__detail">{page.summary}</span>
+              </span>
+              <ArrowRight className="h-4 w-4" />
             </a>
           ))}
         </div>
@@ -470,107 +420,11 @@ function HistoryPrivacyConceptPage() {
   );
 }
 
-function AutomationPage() {
-  return (
-    <div className="space-y-12">
-      <div>
-        <PageHeader eyebrow="Agents" title="Agent API" summary="Give an Agent delegated access to the same signer-oriented workspace you use: names, Inbox, Activity, Requests, and—only with explicit Sign access—signature contribution." />
-        <div className="mt-7 flex flex-wrap gap-3">
-          <a href={stellarHref('/agent-access')} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Open Agent access<ArrowRight className="h-4 w-4" /></a>
-          <a href="#permissions" className="rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10">Permissions</a>
-        </div>
-      </div>
-
-      <section id="permissions" className="grid gap-4 md:grid-cols-3">
-        {[
-          ['Read', 'Read saved contracts, personal contacts, accessible Treasury metadata, Inbox, Activity, Request details and status.'],
-          ['Write', 'Includes Read. Keep or forget contracts, update personal contacts, create Signing Requests and shared contract authorization, refresh/freeze preparation, and decline.'],
-          ['Sign', 'Includes Write. Submit signed XDR and contribute valid Stellar transaction or detached Soroban authorization signatures attributable to the credential Principal.'],
-        ].map(([title, detail]) => (
-          <article key={title} className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]">
-            <h2 className="font-bold">{title}</h2>
-            <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{detail}</p>
-          </article>
-        ))}
-      </section>
-
-      <section className="space-y-5">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Principal and Actor</h2>
-          <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">The Principal is the Stellar signer that granted access. Each credential is a separate Agent actor. Multiple Agents can share one Principal while remaining independently named, scoped, audited and revocable.</p>
-        </div>
-        <Callout icon={<ShieldCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />} title="Sign does not contain a private key">
-          A Sign credential is permission to perform API actions carrying cryptographic authorization. MultiSig Tools independently verifies newly contributed signatures against the Principal. When an Agent uploads already-signed XDR, Activity can prove which signer signed and which Agent credential submitted it; it does not claim the Agent generated that signature.
-        </Callout>
-      </section>
-
-      <section className="space-y-5">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Compose Headless operations</h2>
-          <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Start from the deployment origin: its standard <code>service-desc</code> link resolves to <code>/openapi.json</code>, while <code>GET /api/operations</code> lists the stable business operations and their OpenAPI path/method pointers. The Web UI, CLI, Agent, bot, and script clients consume the same versioned contract operations; transport adapters do not own separate transaction semantics.</p>
-          <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">The runtime origin is network-bound: <code>{STELLAR_MAINNET_ORIGIN}</code> is Mainnet and <code>{STELLAR_TESTNET_ORIGIN}</code> is Testnet. Documentation is shared, but API calls must use the origin that owns the selected network.</p>
-        </div>
-        <CodeBlock>{contractInterfaceExample}</CodeBlock>
-        <CodeBlock>{contractCallExample}</CodeBlock>
-        <CodeBlock>{contractPrepareExample}</CodeBlock>
-        <CodeBlock>{intentCreateExample}</CodeBlock>
-        <p className="text-sm leading-6 text-neutral-600 dark:text-neutral-300"><code>contract.intent.create</code> starts from semantic contract intent without constructing a final transaction. Detached AUTH is contributed with <code>PATCH /api/intent</code>; only after authorization is ready does <code>PUT /api/intent</code> load fresh source state, enforce the reviewed effects, and return the final unsigned execution package. <code>SOURCE_ACCOUNT</code> authorization is rejected because it would bind AUTH back to the transaction source. The lower-level <code>contract.call.build</code> and <code>contract.call.prepare</code> operations remain available for diagnostics and external tooling.</p>
-        <p className="text-sm leading-6 text-neutral-600 dark:text-neutral-300">Contract discovery exposes recursive <code>fresnica-soroban-abi-v1</code> types and a composition mode for every input. <code>typed_json</code> inputs are guided and may include nested Option, Vec, Map, Tuple and supported UDT values; MultiSig Tools validates the complete JSON shape against the deployed Contract Spec before the Stellar SDK encodes ScVal. Unguided or unknown composition modes fail closed instead of being guessed.</p>
-        <p className="text-sm leading-6 text-neutral-600 dark:text-neutral-300">ABI knowledge explains how a contract call is represented safely. Protocol knowledge is a separate enrichment layer: known protocols may later present business actions, assets and units in Human/Agent language, but familiarity never weakens authorization, effects comparison or execution controls.</p>
-        <p className="text-sm leading-6 text-neutral-600 dark:text-neutral-300">Signer-Agent responses expose a typed <code>task</code> projection over the same Request or Intent. <code>state</code> and <code>nextActions</code> tell the Agent what its signer Principal needs next; every action also reports <code>requiredAccess</code> and whether the current credential can perform it. Technical status, authorization, and evidence remain available for diagnostics.</p>
-        <p className="text-sm leading-6 text-neutral-600 dark:text-neutral-300">Integration responses also expose a compact <code>job</code> projection for business systems. A Service can follow <code>state</code> and <code>nextActions</code> instead of interpreting AuthorizationPlan revisions, contributions, preparations, and observations itself. The Job reuses the Intent id and includes the Human <code>reviewUrl</code>; the technical Intent and evidence remain available for advanced diagnostics.</p>
-        <TechnicalDetails>
-          <h3 className="font-bold text-neutral-900 dark:text-white">Integration Service executor shortcut</h3>
-          <p>A Service may include <code>executor</code> when creating the Intent. That Intent-level value wins over the Service default; otherwise the configured default is snapshotted into the Intent. If neither exists, recording simulation still works with the deployment planning source, but that planning account never becomes the executor.</p>
-          <CodeBlock>{serviceIntentCreateExample}</CodeBlock>
-          <p>After AUTH is ready, <code>prepare_execution</code> uses the already-bound executor. If the Intent is still unresolved, the Service may include <code>executor</code> on this PUT; if it omits one and managed execution is configured, MultiSig Tools takes the managed execution route.</p>
-          <CodeBlock>{serviceIntentPrepareExample}</CodeBlock>
-          <p>If the package was lost, expired, or failed to submit, <code>refresh_execution</code> rebuilds a fresh package with the same bound executor and all enforcing checks repeated. Refresh cannot replace the executor.</p>
-          <CodeBlock>{serviceIntentRefreshExample}</CodeBlock>
-          <p>An owning Service may explicitly close work with <code>action: "cancel"</code>. The resulting Job is terminal <code>cancelled</code>, and MultiSigTools stops accepting new AUTH, replanning, and preparing new execution packages for that Intent.</p>
-          <CodeBlock>{serviceIntentCancelExample}</CodeBlock>
-          <p><strong>Cancellation is coordination-level, not cryptographic revocation.</strong> Detached AUTH or prepared XDR already disclosed outside MultiSigTools cannot be withdrawn by the API and may remain usable until its Stellar validity window ends. A previously prepared transaction can still be reconciled afterward so its actual ledger result remains observable.</p>
-          <p>The response includes the unsigned XDR plus transaction hash, sequence, validity, latest ledger, AuthorizationPlan digest/revision, executor provenance, effects, effects diff, and preparation time. Preparation evidence is durable; returning XDR does not by itself mean handoff, submission, or confirmation.</p>
-        </TechnicalDetails>
-      </section>
-
-      <section id="quick-start" className="space-y-5">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Create a Signing Request</h2>
-          <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300"><code>POST /api/request</code> is the same Request endpoint used by the Human product. Signer Agents may create from exact unsigned XDR. Integration Services can instead send semantic <code>payment</code> business input for a configured Classic source account; MultiSig Tools loads fresh sequence/fee/state, builds the exact unsigned transaction, freezes it into the ordinary Request lifecycle, and keeps exact XDR as an advanced escape hatch. Agent and Integration creation require <code>Idempotency-Key</code>.</p>
-        </div>
-        <CodeBlock>{createRequestExample}</CodeBlock>
-        <CodeBlock>{servicePaymentRequestExample}</CodeBlock>
-        <p className="text-sm leading-6 text-neutral-600 dark:text-neutral-300">A signer Agent credential is bound to one signer Principal and network. An Integration Service is instead bounded by configured business scope such as Classic source accounts; that scope never supplies a Stellar signature.</p>
-        <p className="text-sm leading-6 text-neutral-600 dark:text-neutral-300">Integration credentials are provisioned by a MultiSig Tools operator, not by the Service itself. The operator sets exact network/account/contract/executor scope and gives the Service its one-time <code>msi_...</code> credential; later scope changes, disable, and key rotation remain operator-controlled.</p>
-      </section>
-
-      <section className="space-y-5">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Signer workspace endpoints</h2>
-          <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Use the same Bearer credential across <code>/api/contracts</code>, <code>/api/treasuries</code>, <code>/api/address-book</code>, <code>/api/inbox</code>, <code>/api/activity</code>, and the unified <code>/api/request</code> create/read/contribute surface.</p>
-        </div>
-        <CodeBlock>{statusExample}</CodeBlock>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Callout icon={<History className="h-4 w-4 text-neutral-400" />} title="Inbox is signer-owned">Inbox answers what this Principal needs to review or sign. It does not belong to a Treasury or to the Agent itself.</Callout>
-          <Callout icon={<ShieldCheck className="h-4 w-4 text-neutral-400" />} title="Final submission stays separate">Sign access contributes Stellar authorization. Agent credentials do not submit a Ready transaction to Stellar in the current API.</Callout>
-        </div>
-      </section>
-
-      <section id="audit-access" className="rounded-3xl border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-white/[0.03] sm:p-7">
-        <div className="flex items-center gap-2"><KeyRound className="h-5 w-5 text-neutral-400" /><h2 className="text-xl font-bold">Treasury Audit access</h2></div>
-        <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Treasury Settings has a separate resource-owned Audit credential. It is fixed read-only and can view that Treasury's Activity only. It has no Inbox, personal contacts, Request creation, signing, submission, or Treasury administration authority.</p>
-        <p className="mt-3 text-xs text-neutral-500">Up to {MAX_ACTIVE_SIGNER_AGENT_CREDENTIALS} active Agent credentials per signer/network and {MAX_ACTIVE_TREASURY_AUDIT_KEYS} active Audit credentials per Treasury.</p>
-      </section>
-    </div>
-  );
-}
-
 function DocsNotFound() {
   return (
     <div className="max-w-2xl">
       <PageHeader eyebrow="Documentation" title="Page not found" summary="This documentation path does not exist. Use the task-oriented Docs navigation to continue." />
-      <a href={stellarHref(DOCS_HOME_PATH)} className="mt-7 inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white">Back to Docs<ArrowRight className="h-4 w-4" /></a>
+      <a href={stellarHref(DOCS_HOME_PATH)} className="mst-action-primary mt-7">Back to Docs<ArrowRight className="h-4 w-4" /></a>
     </div>
   );
 }
@@ -588,7 +442,13 @@ function pageContent(path: string) {
     case '/docs/concepts/multi-party-transactions': return <MultiPartyConceptPage />;
     case '/docs/concepts/sign-and-unlock': return <SignUnlockConceptPage />;
     case '/docs/concepts/history-and-privacy': return <HistoryPrivacyConceptPage />;
-    case DOCS_AUTOMATION_PATH: return <AutomationPage />;
+    case DOCS_DEVELOPERS_PATH: return <DeveloperHubPage />;
+    case DOCS_DEVELOPER_QUICKSTART_PATH: return <DeveloperQuickstartPage />;
+    case DOCS_DEVELOPER_CLASSIC_PATH: return <ClassicIntegrationPage />;
+    case DOCS_DEVELOPER_SOROBAN_PATH: return <SorobanIntegrationPage />;
+    case DOCS_DEVELOPER_API_PATH: return <ApiWebhooksPage />;
+    case DOCS_DEVELOPER_SECURITY_PATH: return <DeveloperSecurityPage />;
+    case DOCS_AUTOMATION_PATH: return <AgentApiPage />;
     default: return <DocsNotFound />;
   }
 }
@@ -603,7 +463,7 @@ export default function DocsApp() {
   }, [title]);
 
   return (
-    <div className="min-h-screen bg-[#f6f6f2] text-[#171717] dark:bg-[#090909] dark:text-[#f5f5f0]">
+    <div className="mst-page">
       <StellarHeader />
       <div className="mx-auto w-full max-w-[1320px] px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
         <div className="mb-8 space-y-4 lg:hidden">
@@ -612,7 +472,7 @@ export default function DocsApp() {
             <a href={stellarHref(DOCS_HOME_PATH)} className="hover:text-emerald-700 dark:hover:text-emerald-300">Docs</a>
             {title && title !== 'Docs' && <><span>/</span><span className="truncate text-neutral-800 dark:text-neutral-200">{title}</span></>}
           </div>
-          <details className="rounded-2xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+          <details className="mst-advanced-panel">
             <summary className="cursor-pointer text-sm font-bold">Browse Docs</summary>
             <div className="mt-5"><DocsNavigation currentPath={currentPath} /></div>
           </details>

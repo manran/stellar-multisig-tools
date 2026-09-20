@@ -103,7 +103,7 @@ The complete `msa_...` secret is shown only once. Server storage keeps a verifie
 
 A Sign Agent credential contains no Stellar private key and does not itself satisfy a threshold. MultiSigTools separately verifies the transaction, current Stellar signer relationship, and every newly contributed signature.
 
-Agent access should link to `/developers` for protocol details. Human-facing controls should say **Agent access**, not force users to learn MCP, Skill, Box, or Automation terminology.
+Agent access should link to `/docs/automation` for Agent-specific protocol details; `/developers` remains the broader Integration entry point. Human-facing controls should say **Agent access**, not force users to learn MCP, Skill, Box, or Automation terminology.
 
 Agent machine responses should prefer the typed `task` projection for current action/capability decisions. Human text is not a machine contract. Shared facts with Human and Integration projections are defined in `AUDIENCE_PROJECTION_MODEL.md`.
 

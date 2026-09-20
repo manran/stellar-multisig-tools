@@ -175,7 +175,7 @@ A reliable webhook implementation requires all of:
 - idempotent consumer semantics.
 Do not implement webhook as an untracked `fetch()` after an API mutation. That creates a false reliability guarantee: state may commit while delivery is lost, and retries/replay cannot be proven.
 
-The preferred implementation point is the PostgreSQL persistence milestone, where state transition + outbox insertion can share one database transaction. Until then, polling remains a supported fallback and the Job projection removes the need for callers to understand internal states.
+The shipped runtime uses PostgreSQL coordination with a durable outbox and delivery records. State mutation and event publication are therefore recoverable across process boundaries; signed webhook delivery is retried from durable state rather than from an untracked post-mutation fetch. Polling remains a supported fallback, while the Job projection keeps callers from having to interpret internal authorization records.
 
 ## 7. Cancellation, expiry and replan
 
@@ -183,7 +183,7 @@ Cancellation is an authoritative MultiSigTools coordination fact, not Stellar cr
 
 Detached AUTH or prepared XDR already disclosed outside MultiSigTools cannot be withdrawn by this operation and can remain usable until its Stellar validity window ends. Existing execution preparation evidence remains visible, and reconciliation remains allowed after cancellation so a transaction that was already handed off can still be reported truthfully if it later lands on-chain.
 
-The cancellation marker is immutable/write-once. While coordination is still on Blob storage, it is stored separately from mutable Intent state so a stale `intent.json` rewrite cannot erase cancellation. PostgreSQL can later make cancellation/outbox ordering transactional without changing this product contract.
+The cancellation marker is immutable/write-once in the durable coordination model. PostgreSQL persistence keeps cancellation and related coordination evidence from being erased by a stale mutable-object rewrite; reconciliation remains allowed so later ledger truth can still be recorded.
 
 ### Expiry and replan
 
@@ -201,19 +201,13 @@ Future `autoReplan` may be offered only as an opt-in policy. It may automaticall
 
 ## 8. Execution policy
 
-Current Integration execution remains `external_required` in product terms: authorization can complete in MultiSigTools while the Service retains the final execution gate.
+Execution ownership is configured independently from signer authorization. The shipped Integration model supports both MultiSigTools-managed and external execution; the ordinary provisioning path selects MultiSigTools-managed execution when the deployment/network has the required managed capability, while **Manage execution myself** is explicit progressive disclosure.
 
-Possible future policies:
+Classic semantic payment Requests may use MultiSigTools-managed channel accounts for transaction source, sequence, fee and submission while the Treasury remains the Payment operation source and live signer authority. A Treasury explicitly configured for external execution instead leaves transaction-source/submission mechanics to the Integration Service.
 
-```text
-external_required
-external_preferred
-multisigtools_fallback
-```
+Soroban contract scope likewise records either MultiSigTools-managed execution or an external executor from the Integration's operator-controlled Executor Pool. An external executor is never `any executor`, and a signer cannot replace the Integration-owned execution boundary.
 
-Fallback may happen only when pre-authorized by Service policy. It must never be invented dynamically because the external Service is unavailable.
-
-Executor pools may later replace repeated per-worker credential edits, but pool membership remains an operator-controlled execution scope, never `any executor`.
+There is no dynamic fallback merely because an external Service becomes unavailable. Any alternate route must already be authorized by the persisted Integration/execution policy.
 ## 9. Progressive Integration Levels
 
 MultiSigTools has one Headless capability surface. Integration levels describe how much interaction and orchestration the integrator chooses to own; they are not separate products or separate workflow engines.
@@ -589,37 +583,34 @@ The first production slice keeps existing authority semantics and changes the pr
 14. Existing durable Integration records remain readable; missing profile metadata defaults to the most permissive disclosure view for operators, not to weaker runtime authority.
 15. Partner self-service login is a later delivery concern. This first slice validates the provisioning model on the existing protected Integration administration surface.
 
-## 11. Delivery phases
+## 11. Delivered baseline and remaining ergonomics
 
-### Phase 1 — business projection now
+### Delivered
 
-- add a pure Soroban Integration Job projector;
-- expose `job` on Integration create/inspect/execute/reconcile responses;
-- include `reviewUrl`, state, nextActions, waitingFor, expiry, execution/result summary;
-- preserve all existing technical response fields for compatibility;
-- document and test the mapping against current-plan evidence.
+- Soroban Integration Job projection over the existing Intent/Authorization Core;
+- `job` on Integration create/inspect/execution responses with review URL, state, next actions, waiting authorizers, expiry and execution/result summary;
+- PostgreSQL coordination for the relational/durable records that require query and transaction semantics;
+- durable signed webhook outbox, bounded retry and delivery history;
+- Guided Integration Profile provisioning for Classic Treasury and Soroban Contract scope;
+- MultiSigTools-managed and external execution policies;
+- managed semantic Classic Payment through the channel-account pool;
+- signer/origin/current-plan scoped Browser authorization for Soroban Native Authorization;
+- operator Integration administration for credentials, scope, execution routing and webhook configuration;
+- stable Headless operation/OpenAPI discovery shared by Human, Agent and Integration clients.
 
-### Phase 2 — reliable events with PostgreSQL
+### Remaining ergonomics — not new authority
 
-- freeze Integration persistence schema from Testnet/FedNetwork evidence;
-- move the coordination records that need relational query/transaction semantics;
-- add transactional webhook outbox;
-- add signed retries and delivery history;
-- add Service Activity queries (`serviceId -> Jobs / executions / audit`).
-
-### Phase 3 — partner ergonomics
-
-- signer-scoped Browser authorization over the stable Intent/Authorization Core;
 - optional thin SDK/components over the same API, never as an ability boundary;
-- operator/partner console for credentials, scopes, webhook configuration and Activity;
-- optional auto-replan/execution fallback only after concrete operational evidence.
+- broader partner-facing self-service only when the existing operator model has enough deployment evidence;
+- richer Service Activity/operational views where current API projections are insufficient;
+- optional auto-replan or execution fallback only after concrete operational evidence and explicit policy design.
 
 ## 12. Non-goals
 
 This product simplification must not cause:
 
 - a second workflow engine called Job;
-- a generic event bus before webhook delivery exists;
+- a generic event bus when the signed durable webhook outbox already satisfies the delivery requirement;
 - self-service privilege expansion;
 - hidden acceptance of effects drift;
 - implicit signer authority for `msi_*`;
