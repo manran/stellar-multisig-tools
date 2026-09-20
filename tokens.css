@@ -11,6 +11,7 @@
   --color-accent-hover: oklch(0.45 0.105 166);
   --color-accent-ink: oklch(0.99 0.004 150);
   --color-focus: oklch(0.61 0.145 166);
+  --color-success: oklch(0.51 0.118 166);
   --color-danger: oklch(0.53 0.19 27);
   --color-warning: oklch(0.69 0.12 75);
   --color-info: oklch(0.52 0.125 242);
@@ -69,6 +70,7 @@
   --color-accent-hover: oklch(0.75 0.15 162);
   --color-accent-ink: oklch(0.17 0.007 155);
   --color-focus: oklch(0.75 0.17 162);
+  --color-success: oklch(0.69 0.17 162);
   --color-danger: oklch(0.68 0.17 25);
   --color-warning: oklch(0.78 0.11 75);
   --color-info: oklch(0.74 0.13 242);

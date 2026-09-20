@@ -873,7 +873,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                 </>
               )}
 
-              <details className="group rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:p-6">
+              <details className="group mst-advanced-panel">
                 <summary className="cursor-pointer list-none text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"><span className="flex items-center justify-between gap-4"><span>Advanced</span><span className="text-sm font-normal opacity-55 group-open:hidden">Request id · XDR · Stellar authorization</span><span className="hidden text-sm font-normal opacity-55 group-open:inline">Hide details</span></span></summary>
                 <div className="mt-5 space-y-6 border-t border-black/10 pt-5 dark:border-white/10">
                   <div className="rounded-xl bg-black/[0.035] p-4 text-xs dark:bg-white/[0.04]">

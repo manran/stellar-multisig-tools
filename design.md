@@ -38,6 +38,7 @@ Light:
 - `--color-accent-hover` oklch(0.45 0.105 166)
 - `--color-accent-ink` oklch(0.99 0.004 150)
 - `--color-focus` oklch(0.61 0.145 166)
+- `--color-success` oklch(0.51 0.118 166)
 
 Dark:
 
@@ -52,6 +53,7 @@ Dark:
 - `--color-accent-hover` oklch(0.75 0.15 162)
 - `--color-accent-ink` oklch(0.17 0.007 155)
 - `--color-focus` oklch(0.75 0.17 162)
+- `--color-success` oklch(0.69 0.17 162)
 
 Network semantics:
 

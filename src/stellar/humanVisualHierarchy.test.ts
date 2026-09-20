@@ -18,7 +18,8 @@ const xdrQr = source('../XdrQrCode.tsx');
 
 test('primary Human surfaces share one page-header grammar', () => {
   assert.match(ui, /export function PageHeader/);
-  assert.match(ui, /text-3xl font-bold tracking-tight sm:text-4xl/);
+  assert.match(ui, /className="mst-page-header"/);
+  assert.match(ui, /className="mst-page-title"/);
   assert.match(dashboard, /<PageHeader/);
   assert.match(inbox, /<PageHeader/);
   assert.match(request, /<PageHeader/);
@@ -29,7 +30,9 @@ test('primary Human surfaces share one page-header grammar', () => {
 
 test('terminal workflow marks Done itself as completed', () => {
   assert.match(ui, /current === 'done' && index === currentIndex/);
-  assert.ok(ui.indexOf("complete\n                ? 'text-emerald-700") < ui.indexOf("active\n                  ? 'bg-black"));
+  assert.match(ui, /data-complete=\{complete \? 'true' : 'false'\}/);
+  assert.match(ui, /data-active=\{active \? 'true' : 'false'\}/);
+  assert.match(ui, /complete \? <CheckCircle2/);
 });
 
 test('page identity precedes Proposal workflow progress', () => {
@@ -66,7 +69,7 @@ test('Human work queues use shared rows and master-detail without repeating floa
   assert.match(inbox, /mst-inbox-list/);
   assert.match(inbox, /mst-inbox-item/);
   assert.match(inbox, /mst-inbox-detail/);
-  assert.match(review, /mode === 'history' \? 'rounded-xl dark:bg-white\/\[0\.035\]' : 'rounded-3xl shadow-sm'/);
+  assert.match(review, /mode === 'history'[\s\S]*'mst-evidence-surface'/);
 });
 
 test('shared visual hierarchy does not introduce a new workflow or status vocabulary', () => {

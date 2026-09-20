@@ -189,17 +189,17 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="flex flex-col gap-4 border-b border-black/10 pb-6 dark:border-white/10 sm:flex-row sm:items-end sm:justify-between">
+    <header className="mst-page-header">
       <div className="min-w-0">
         {eyebrow && <div className="mb-1 text-sm font-bold">{eyebrow}</div>}
-        <div className="flex items-center gap-3">
+        <div className="mst-page-header__title-row">
           {icon && <div className="shrink-0 text-neutral-400">{icon}</div>}
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{title}</h1>
+          <h1 className="mst-page-title">{title}</h1>
         </div>
-        {description && <div className="mt-2 max-w-3xl text-sm leading-6 text-neutral-600 dark:text-neutral-300">{description}</div>}
-        {meta && <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">{meta}</div>}
+        {description && <div className="mst-page-header__description">{description}</div>}
+        {meta && <div className="mst-page-header__meta">{meta}</div>}
       </div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="mst-page-header__actions">{actions}</div>}
     </header>
   );
 }
@@ -213,7 +213,7 @@ export function WorkflowProgress({
 }) {
   const currentIndex = HUMAN_WORKFLOW_STEPS.findIndex((step) => step.key === current);
   return (
-    <nav className="grid grid-cols-5 gap-1 rounded-2xl border border-black/10 bg-white p-1 dark:border-white/10 dark:bg-white/[0.04]" aria-label={label}>
+    <nav className="mst-workflow-progress" aria-label={label}>
       {HUMAN_WORKFLOW_STEPS.map((step, index) => {
         const complete = index < currentIndex || (current === 'done' && index === currentIndex);
         const active = index === currentIndex;
@@ -221,17 +221,13 @@ export function WorkflowProgress({
           <div
             key={step.key}
             aria-current={active ? 'step' : undefined}
-            className={`rounded-xl px-1 py-2.5 text-center text-[11px] font-bold sm:px-2 sm:text-xs ${
-              complete
-                ? 'text-emerald-700 dark:text-emerald-300'
-                : active
-                  ? 'bg-black text-white dark:bg-white dark:text-black'
-                  : 'text-neutral-400'
-            }`}
+            data-complete={complete ? 'true' : 'false'}
+            data-active={active ? 'true' : 'false'}
+            className="mst-workflow-step"
           >
-            {complete
-              ? <CheckCircle2 className="mx-auto mb-1 h-3.5 w-3.5" aria-hidden="true" />
-              : <span className="mb-1 block h-3.5" aria-hidden="true">{step.number}</span>}
+            <span className="mst-workflow-step__marker" aria-hidden="true">
+              {complete ? <CheckCircle2 className="h-3.5 w-3.5" /> : step.number}
+            </span>
             {step.label}
           </div>
         );

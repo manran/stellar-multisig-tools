@@ -93,7 +93,8 @@ test('Demo and Production share one Human workflow and semantic status presentat
   assert.match(multiSigUi, /function RequestStatusBadge/);
   assert.match(multiSigUi, /function NetworkBadge/);
   assert.doesNotMatch(multiSigUi, /activeTone/);
-  assert.match(multiSigUi, /bg-black text-white dark:bg-white dark:text-black/);
+  assert.match(multiSigUi, /className="mst-workflow-progress"/);
+  assert.match(multiSigUi, /className="mst-workflow-step"/);
   assert.doesNotMatch(multiSigUi, /useStellarWallet|fetch\(|\/api\/|loadAccount|Horizon/);
   assert.match(uxDesignSystem, /1 Prepare -> 2 Review -> 3 Sign -> 4 Submit -> 5 Done/);
   assert.match(uxDesignSystem, /Stellar Mainnet \| Brand emerald/);

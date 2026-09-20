@@ -48,7 +48,7 @@ test('Soroban Review separates envelope authorization from contract authorizatio
 
 test('Soroban Review routes detached authorization into Intent before envelope signing', () => {
   assert.match(sorobanAuthorization, /Contract authorization/);
-  assert.ok(signingRoom.indexOf('<SorobanAuthorizationResults') < signingRoom.indexOf('<details className=\"group rounded-2xl'));
+  assert.ok(signingRoom.indexOf('<SorobanAuthorizationResults') < signingRoom.indexOf('<details className=\"group mst-advanced-panel'));
   assert.match(signingRoom, /sorobanAuthorizationReady/);
   assert.doesNotMatch(signingRoom, /Complete Soroban authorization in Advanced/);
   assert.match(signingRoom, /autoSorobanSimulation/);

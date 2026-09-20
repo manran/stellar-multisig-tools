@@ -168,7 +168,7 @@ export default function ReviewTransactionSummary({ inspection, xdr, sourceAccoun
     description = mode === 'history' ? 'The recipient claim window and recovery path are encoded in this transaction.' : 'Confirm the recipient and recovery path before signing. If the recipient does not claim in time, the recovery account can take the balance back.';
   }
   return (
-    <section className={`transaction-evidence-summary border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:p-6 ${mode === 'history' ? 'rounded-xl dark:bg-white/[0.035]' : 'rounded-3xl shadow-sm'}`}>
+    <section className={`transaction-evidence-summary ${mode === 'history' ? 'rounded-xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.035] sm:p-6' : 'mst-evidence-surface'}`}>
       <div className="flex items-start gap-3">
         <div className="rounded-xl bg-emerald-500/10 p-2.5 text-emerald-700 dark:text-emerald-300">{isSigningSetup ? <Settings2 className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}</div>
         <div className="min-w-0 flex-1">

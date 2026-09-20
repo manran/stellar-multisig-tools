@@ -13,7 +13,7 @@ import {
 import ReviewTransactionSummary from './ReviewTransactionSummary';
 import SorobanEffectsDiffView from './SorobanEffectsDiffView';
 import SorobanAuthorizationResults from './SorobanAuthorizationResults';
-import { ActionButton, NetworkFact, WorkflowProgress } from './MultiSigUi';
+import { ActionButton, NetworkFact, PageHeader, WorkflowProgress } from './MultiSigUi';
 import { useStellarWallet } from './StellarWalletContext';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import TransactionAuthorizationResults from './TransactionAuthorizationResults';
@@ -533,13 +533,11 @@ export default function SigningRoomApp() {
             </>
           ) : (
             <>
-              <div className="flex flex-wrap items-end justify-between gap-4 border-b border-black/10 pb-5 dark:border-white/10">
-                <div>
-                  <a href={returnTarget.href} className="text-sm font-semibold text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white">← {returnTarget.label}</a>
-                  <h1 className="mt-2 text-3xl font-bold tracking-tight">Review transaction</h1>
-                </div>
-                <NetworkFact network={network} />
-              </div>
+              <PageHeader
+                eyebrow={<a href={returnTarget.href} className="text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white">← {returnTarget.label}</a>}
+                title="Review transaction"
+                meta={<NetworkFact network={network} />}
+              />
 
               <div className="mt-6 space-y-5">
                 <ReviewTransactionSummary inspection={inspection} xdr={roomXdr} sourceAccount={sourceAnalyses.find((analysis) => analysis.accountId === inspection.transactionSourceAccount)?.account ?? null} privateCommitment={privateCommitment} />
@@ -566,7 +564,7 @@ export default function SigningRoomApp() {
                   </section>
                 )}
                 {privateNote !== null && (
-                  <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:p-6">
+                  <section className="mst-evidence-surface">
                     <div className="font-semibold">Private Note</div>
                     <p className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Stored privately by MultiSig Tools · not end-to-end encrypted.</p>
                     <textarea value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} rows={6} placeholder="Why are we doing this transaction?" className="mt-4 w-full resize-y rounded-xl border border-black/10 bg-transparent p-3 text-sm leading-6 outline-none focus:border-emerald-500 dark:border-white/10" />
@@ -578,7 +576,7 @@ export default function SigningRoomApp() {
                   </section>
                 )}
                 {accountSigningAuthorityPending && (
-                  <section className="rounded-2xl border border-black/10 bg-white p-5 text-sm dark:border-white/10 dark:bg-white/5">
+                  <section className="mst-evidence-surface text-sm">
                     <div className="flex items-center gap-3"><LoaderCircle className="h-4 w-4 animate-spin text-neutral-500" /><div><div className="font-semibold">Checking current account signers…</div><div className="mt-1 text-neutral-500 dark:text-neutral-400">MultiSig Tools will choose the signing or XDR handoff path from the account's current on-chain signing policy.</div></div></div>
                   </section>
                 )}
@@ -652,11 +650,11 @@ export default function SigningRoomApp() {
                   )
                 )}
 
-                <details className="group rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5">
+                <details className="group mst-advanced-panel">
                   <summary className="cursor-pointer list-none text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"><span className="flex items-center justify-between gap-4"><span>Advanced</span><span className="text-xs font-normal text-neutral-500 group-open:hidden dark:text-neutral-400">XDR · fees · authorization</span><span className="hidden text-xs font-normal text-neutral-500 group-open:inline dark:text-neutral-400">Hide</span></span></summary>
                   <div className="mt-5 space-y-6">
                     <TransactionInspectorSummary inspection={effectiveInspection ?? inspection} status={status} />
-                    <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5">
+                    <section className="border-t border-black/10 pt-5 dark:border-white/10">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div><div className="font-semibold">Current XDR</div><div className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">The exact Stellar envelope being reviewed.</div></div>
                         <button type="button" onClick={() => void copyMergedXdr()} className="flex items-center gap-2 rounded-xl border border-black/10 px-3 py-2 text-xs font-semibold hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"><ClipboardCopy className="h-4 w-4" />{copied ? 'Copied' : 'Copy XDR'}</button>
