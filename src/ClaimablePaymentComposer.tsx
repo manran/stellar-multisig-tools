@@ -220,23 +220,18 @@ export default function ClaimablePaymentComposer({ network }: Props) {
   }
 
   const testnet = network === 'testnet';
-  const focusClass = testnet ? 'focus:border-sky-500' : 'focus:border-emerald-500';
-  const primaryClass = testnet ? 'bg-sky-700 hover:bg-sky-800' : 'bg-emerald-700 hover:bg-emerald-800';
-  const selectedClass = testnet
-    ? 'border-sky-500 bg-sky-500/10 text-sky-800 dark:text-sky-300'
-    : 'border-emerald-500 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300';
 
   return (
-    <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
+    <main className={`mst-transaction-composer px-4 py-7 sm:px-6 lg:px-8 lg:py-8 ${testnet ? 'mst-testnet-page' : ''}`}>
       <div className="mx-auto max-w-4xl">
         <div className="mb-6"><WorkflowProgress current="prepare" /></div>
         <a href={stellarHref('/new')} className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black dark:text-neutral-300 dark:hover:text-white"><ArrowLeft className="h-4 w-4" />New</a>
         <div className="mt-4 flex items-start gap-3">
-          <div className="rounded-xl bg-emerald-500/10 p-2.5 text-emerald-700 dark:text-emerald-300"><Clock3 className="h-5 w-5" /></div>
+          <div className="mst-transaction-icon"><Clock3 className="h-5 w-5" /></div>
           <div><div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-bold tracking-tight">Claimable payment</h1><NetworkBadge network={network} /></div><p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Send now, let the recipient claim later. If they do not claim in time, the treasury can take it back.</p></div>
         </div>
 
-        <form onSubmit={buildClaimablePayment} className="mt-6 grid gap-5 rounded-2xl border border-black/10 bg-white p-5 shadow-sm shadow-black/[0.02] dark:border-white/10 dark:bg-white/5 sm:p-6 lg:grid-cols-2">
+        <form onSubmit={buildClaimablePayment} className="mst-transaction-form mt-6">
           <div className="lg:col-span-2">
             <SigningAccountPicker id="claimable-source" label="From treasury" network={network} value={source} onChange={setSource} disabled={busy} placeholder="G... treasury account" sharedControlOnly />
             {source && sourceAccount && !sourceHasSharedSigning && <div className="mt-2 text-sm text-red-700 dark:text-red-300">This account is currently single-signature. Choose a treasury with shared signing control.</div>}
@@ -244,7 +239,7 @@ export default function ClaimablePaymentComposer({ network }: Props) {
 
           <div className="lg:col-span-2">
             <label htmlFor="claimable-recipient" className="text-sm font-semibold">Recipient</label>
-            <input id="claimable-recipient" value={recipient} onChange={(event) => setRecipient(event.target.value)} placeholder="G... address or saved name" spellCheck={false} className={`mt-2 w-full rounded-xl border border-black/10 bg-transparent px-4 py-3 text-sm outline-none dark:border-white/10 ${focusClass}`} />
+            <input id="claimable-recipient" value={recipient} onChange={(event) => setRecipient(event.target.value)} placeholder="G... address or saved name" spellCheck={false} className="mst-transaction-control mt-2 w-full" />
             {recipientAddress && <div className="mt-2"><AddressIdentity address={recipientAddress} subjectType="account" /></div>}
             {recipient.trim() && !recipientAddress && <div className="mt-2 text-sm text-red-700 dark:text-red-300">{recipientResolved.issue}</div>}
             {recipientAddress === source && sourceValid && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Choose a different recipient. The treasury is already the recovery claimant.</div>}
@@ -253,7 +248,7 @@ export default function ClaimablePaymentComposer({ network }: Props) {
           <div className="lg:col-span-2">
             <label htmlFor="claimable-amount" className="text-sm font-semibold">Amount</label>
             <div className="mt-2 grid max-w-2xl gap-2 sm:grid-cols-[minmax(0,1fr)_16rem]">
-              <input id="claimable-amount" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.0000000" className={`min-w-0 rounded-xl border border-black/10 bg-transparent px-4 py-3 text-base outline-none dark:border-white/10 ${focusClass}`} />
+              <input id="claimable-amount" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.0000000" className="mst-transaction-control min-w-0 text-base" />
               <PaymentAssetPicker assets={assets} value={selectedAsset?.key ?? 'native'} onChange={setAssetKey} disabled={!sourceAccount} />
             </div>
             {spendability && selectedAsset && <div className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">Available after the recovery balance reserve: <span className="font-semibold text-neutral-700 dark:text-neutral-200">{spendability.assetAvailable} {selectedAsset.code}</span></div>}
@@ -264,9 +259,9 @@ export default function ClaimablePaymentComposer({ network }: Props) {
           <div className="lg:col-span-2">
             <div className="mb-2 text-sm font-semibold">Claim window</div>
             <div className="flex flex-wrap gap-2">
-              {CLAIM_WINDOW_OPTIONS.map((option) => <button key={option.seconds} type="button" aria-pressed={claimWindowSeconds === option.seconds} onClick={() => setClaimWindowSeconds(option.seconds)} className={`rounded-xl border px-4 py-2.5 text-sm font-semibold ${claimWindowSeconds === option.seconds ? selectedClass : 'border-black/10 dark:border-white/10'}`}>{option.label}</button>)}
+              {CLAIM_WINDOW_OPTIONS.map((option) => <button key={option.seconds} type="button" aria-pressed={claimWindowSeconds === option.seconds} onClick={() => setClaimWindowSeconds(option.seconds)} className="mst-transaction-choice">{option.label}</button>)}
             </div>
-            <div className="mt-3 grid gap-3 rounded-xl bg-black/[0.03] p-4 text-sm dark:bg-white/[0.04] sm:grid-cols-2">
+            <div className="mst-claim-window-facts mt-3">
               <div><div className="font-semibold">Recipient</div><div className="mt-1 leading-6 text-neutral-600 dark:text-neutral-300">May claim for {claimWindowLabel(claimWindowSeconds)} after this balance is created.</div></div>
               <div><div className="flex items-center gap-1.5 font-semibold"><RotateCcw className="h-4 w-4" />Recovery</div><div className="mt-1 leading-6 text-neutral-600 dark:text-neutral-300">If still unclaimed, this treasury may reclaim it after {claimWindowLabel(claimWindowSeconds)}.</div></div>
             </div>
@@ -277,7 +272,7 @@ export default function ClaimablePaymentComposer({ network }: Props) {
           <div className="lg:col-span-2">
             <div className="flex items-baseline justify-between gap-3"><label htmlFor="claimable-private-note" className="text-sm font-semibold">Private Note <span className="font-normal text-neutral-400">Optional · private</span></label><span className={`text-xs ${privateNoteValid ? 'text-neutral-400' : 'font-semibold text-red-700 dark:text-red-300'}`}>{privateNoteBytes}/{MAX_PRIVATE_NOTE_BYTES} bytes</span></div>
             <p className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Stored privately by MultiSig Tools · not end-to-end encrypted.</p>
-            <textarea id="claimable-private-note" value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} rows={4} placeholder="Why is this payment claimable?" className={`mt-2 w-full resize-y rounded-xl border border-black/10 bg-transparent px-4 py-3 text-sm leading-6 outline-none dark:border-white/10 ${focusClass}`} />
+            <textarea id="claimable-private-note" value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} rows={4} placeholder="Why is this payment claimable?" className="mst-transaction-control mt-2 w-full resize-y leading-6" />
             {!privateNoteValid && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Private Note can contain at most {MAX_PRIVATE_NOTE_BYTES} UTF-8 bytes.</div>}
           </div>
 
@@ -288,8 +283,8 @@ export default function ClaimablePaymentComposer({ network }: Props) {
 
           {error && <div className="flex whitespace-pre-line gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-800 dark:text-red-200 lg:col-span-2"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
 
-          <div className="flex justify-end border-t border-black/10 pt-5 dark:border-white/10 lg:col-span-2">
-            <button type="submit" disabled={!canContinue} className={`flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-40 ${primaryClass}`}>{busy && <LoaderCircle className="h-4 w-4 animate-spin" />}Review transaction <ArrowRight className="h-4 w-4" /></button>
+          <div className="mst-transaction-actions">
+            <button type="submit" disabled={!canContinue} className="mst-action-primary disabled:opacity-40">{busy && <LoaderCircle className="h-4 w-4 animate-spin" />}Review transaction <ArrowRight className="h-4 w-4" /></button>
           </div>
         </form>
       </div>

@@ -223,16 +223,14 @@ export default function TransferComposer({ network, mode }: Props) {
 
 
   const testnet = network === 'testnet';
-  const focusClass = testnet ? 'focus:border-sky-500' : 'focus:border-emerald-500';
-  const primaryClass = testnet ? 'bg-sky-700 hover:bg-sky-800' : 'bg-emerald-700 hover:bg-emerald-800';
 
   return (
-    <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
+    <main className={`mst-transaction-composer px-4 py-7 sm:px-6 lg:px-8 lg:py-8 ${testnet ? 'mst-testnet-page' : ''}`}>
       <div className="mx-auto max-w-5xl">
         <div className="mb-6"><WorkflowProgress current="prepare" /></div>
         <a href={stellarHref('/new')} className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black dark:text-neutral-300 dark:hover:text-white"><ArrowLeft className="h-4 w-4" />New</a>
         <div className="mt-4 flex items-start gap-3">
-          <div className="rounded-xl bg-emerald-500/10 p-2.5 text-emerald-700 dark:text-emerald-300"><UsersRound className="h-5 w-5" /></div>
+          <div className="mst-transaction-icon"><UsersRound className="h-5 w-5" /></div>
           <div>
             <div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-bold tracking-tight">{title}</h1><NetworkBadge network={network} /></div>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-neutral-600 dark:text-neutral-300">
@@ -243,7 +241,7 @@ export default function TransferComposer({ network, mode }: Props) {
           </div>
         </div>
 
-        <div className="mt-6 grid gap-5 rounded-2xl border border-black/10 bg-white p-5 shadow-sm shadow-black/[0.02] dark:border-white/10 dark:bg-white/5 sm:p-6">
+        <div className="mst-transaction-form mt-6">
           {mode === 'batch' && (
             <SigningAccountPicker
               id="batch-source"
@@ -271,32 +269,32 @@ export default function TransferComposer({ network, mode }: Props) {
               </datalist>
               <div className="mt-3 grid gap-3">
                 {batchRows.map((row, index) => (
-                  <div key={index} className="rounded-xl border border-black/10 bg-black/[0.015] p-3 dark:border-white/10 dark:bg-white/[0.025]">
+                  <div key={index} className="mst-transaction-recipient-row">
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <div className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Recipient {index + 1}</div>
                       <button type="button" disabled={busy} aria-label={`Remove recipient ${index + 1}`} onClick={() => commitBatchRows(removeBatchRecipientRow(batchRows, index))} className="rounded-lg p-1.5 text-neutral-400 hover:bg-black/5 hover:text-red-700 disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-red-300"><Trash2 className="h-4 w-4" /></button>
                     </div>
                     <div className="grid gap-3 md:grid-cols-[minmax(0,1.8fr)_minmax(8rem,0.7fr)_minmax(9rem,0.8fr)]">
                       <label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300">Recipient
-                        <input value={row.recipient} list="batch-recipient-suggestions" disabled={busy} onChange={(event) => changeBatchRow(index, 'recipient', event.target.value)} placeholder="Saved name or G... address" spellCheck={false} className={`mt-1.5 w-full rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm outline-none disabled:opacity-50 dark:border-white/10 dark:bg-white/5 ${focusClass}`} />
+                        <input value={row.recipient} list="batch-recipient-suggestions" disabled={busy} onChange={(event) => changeBatchRow(index, 'recipient', event.target.value)} placeholder="Saved name or G... address" spellCheck={false} className="mst-transaction-control mt-1.5 w-full disabled:opacity-50" />
                       </label>
                       <label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300">Amount
-                        <input value={row.amount} disabled={busy} onChange={(event) => changeBatchRow(index, 'amount', event.target.value)} placeholder="0.00" inputMode="decimal" className={`mt-1.5 w-full rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm outline-none disabled:opacity-50 dark:border-white/10 dark:bg-white/5 ${focusClass}`} />
+                        <input value={row.amount} disabled={busy} onChange={(event) => changeBatchRow(index, 'amount', event.target.value)} placeholder="0.00" inputMode="decimal" className="mst-transaction-control mt-1.5 w-full disabled:opacity-50" />
                       </label>
                       <label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300">Asset
-                        <input value={row.asset} disabled={busy} onChange={(event) => changeBatchRow(index, 'asset', event.target.value)} placeholder="XLM or USDC" spellCheck={false} className={`mt-1.5 w-full rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm outline-none disabled:opacity-50 dark:border-white/10 dark:bg-white/5 ${focusClass}`} />
+                        <input value={row.asset} disabled={busy} onChange={(event) => changeBatchRow(index, 'asset', event.target.value)} placeholder="XLM or USDC" spellCheck={false} className="mst-transaction-control mt-1.5 w-full disabled:opacity-50" />
                       </label>
                     </div>
                   </div>
                 ))}
               </div>
-              <button type="button" disabled={busy || batchRows.length >= 100} onClick={() => commitBatchRows(appendBatchRecipientRow(batchRows))} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold hover:bg-black/[0.03] disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/[0.06]"><Plus className="h-4 w-4" />Add recipient</button>
+              <button type="button" disabled={busy || batchRows.length >= 100} onClick={() => commitBatchRows(appendBatchRecipientRow(batchRows))} className="mst-action-secondary mt-3 disabled:opacity-40"><Plus className="h-4 w-4" />Add recipient</button>
               <div className="mt-3 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Use XLM, a unique held asset code such as USDC, or CODE:ISSUER when the code is ambiguous.{aliasesAvailable ? ' Saved Address Book names are suggested as you type.' : ' Unlock the private workspace to use saved names.'}</div>
-              <details className="mt-4 rounded-xl border border-dashed border-black/10 p-3 dark:border-white/10">
+              <details className="mst-transaction-disclosure mt-4">
                 <summary className="cursor-pointer text-sm font-semibold">Paste a recipient list</summary>
                 <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Optional shortcut for CSV, tab-separated, or one whitespace-separated recipient per line. Imported rows become the same editable fields above.</p>
-                <textarea value={pasteInput} onChange={(event) => setPasteInput(event.target.value)} rows={5} spellCheck={false} placeholder={example} className={`mt-2 w-full resize-y rounded-xl border border-black/10 bg-black/[0.015] p-3 font-mono text-sm leading-6 outline-none dark:border-white/10 dark:bg-white/[0.025] ${focusClass}`} />
-                <div className="mt-2 flex justify-end"><button type="button" disabled={busy || !pasteInput.trim()} onClick={importPastedRecipients} className="rounded-lg border border-black/10 px-3 py-2 text-sm font-semibold hover:bg-black/[0.03] disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/[0.06]">Use pasted rows</button></div>
+                <textarea value={pasteInput} onChange={(event) => setPasteInput(event.target.value)} rows={5} spellCheck={false} placeholder={example} className="mst-transaction-control mt-2 w-full resize-y font-mono leading-6" />
+                <div className="mt-2 flex justify-end"><button type="button" disabled={busy || !pasteInput.trim()} onClick={importPastedRecipients} className="mst-action-secondary disabled:opacity-40">Use pasted rows</button></div>
               </details>
             </div>
           ) : (
@@ -305,21 +303,21 @@ export default function TransferComposer({ network, mode }: Props) {
                 <label htmlFor={`${kind}-input`} className="text-sm font-semibold">Transfers</label>
                 <span className="text-xs text-neutral-400">CSV · tab-separated · one whitespace-separated row per line</span>
               </div>
-              <textarea id={`${kind}-input`} value={input} onChange={(event) => changeInput(event.target.value)} rows={9} spellCheck={false} placeholder={example} className={`mt-2 w-full resize-y rounded-xl border border-black/10 bg-black/[0.015] p-4 font-mono text-sm leading-6 outline-none dark:border-white/10 dark:bg-white/[0.025] ${focusClass}`} />
+              <textarea id={`${kind}-input`} value={input} onChange={(event) => changeInput(event.target.value)} rows={9} spellCheck={false} placeholder={example} className="mst-transaction-control mt-2 w-full resize-y font-mono leading-6" />
               <div className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Columns: source, destination, amount, asset. The first source account pays the transaction fee and supplies the sequence number. Use XLM, a unique held asset code such as USDC, or CODE:ISSUER when the code is ambiguous.{aliasesAvailable ? ' Saved Address Book names are accepted.' : ' Unlock the private workspace to use saved names.'}</div>
             </div>
           )}
 
           <div>
             <div className="flex items-baseline justify-between gap-3"><label htmlFor={`${kind}-memo`} className="text-sm font-semibold">Stellar memo <span className="font-normal text-neutral-400">Optional · public on-chain</span></label><span className={`text-xs ${memoValid ? 'text-neutral-400' : 'font-semibold text-red-700 dark:text-red-300'}`}>{memoBytes}/28 bytes</span></div>
-            <input id={`${kind}-memo`} value={memo} onChange={(event) => setMemo(event.target.value)} placeholder="Short public memo" className={`mt-2 w-full rounded-xl border border-black/10 bg-transparent px-4 py-3 text-sm outline-none dark:border-white/10 ${focusClass}`} />
+            <input id={`${kind}-memo`} value={memo} onChange={(event) => setMemo(event.target.value)} placeholder="Short public memo" className="mst-transaction-control mt-2 w-full" />
             {!memoValid && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Stellar text memos can contain at most 28 UTF-8 bytes.</div>}
           </div>
 
           <div>
             <div className="flex items-baseline justify-between gap-3"><label htmlFor={`${kind}-private-note`} className="text-sm font-semibold">Private Note <span className="font-normal text-neutral-400">Optional · private</span></label><span className={`text-xs ${privateNoteValid ? 'text-neutral-400' : 'font-semibold text-red-700 dark:text-red-300'}`}>{privateNoteBytes}/{MAX_PRIVATE_NOTE_BYTES} bytes</span></div>
             <p className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Stored privately by MultiSig Tools · not end-to-end encrypted.</p>
-            <textarea id={`${kind}-private-note`} value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} rows={3} placeholder="Context for people reviewing this Proposal." className={`mt-2 w-full resize-y rounded-xl border border-black/10 bg-transparent px-4 py-3 text-sm leading-6 outline-none dark:border-white/10 ${focusClass}`} />
+            <textarea id={`${kind}-private-note`} value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} rows={3} placeholder="Context for people reviewing this Proposal." className="mst-transaction-control mt-2 w-full resize-y leading-6" />
             {!privateNoteValid && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Private Note can contain at most {MAX_PRIVATE_NOTE_BYTES} UTF-8 bytes.</div>}
           </div>
 
@@ -327,8 +325,8 @@ export default function TransferComposer({ network, mode }: Props) {
 
           {error && <div className="whitespace-pre-line rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm leading-6 text-red-800 dark:text-red-200"><div className="flex gap-2"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div></div>}
 
-          <div className="flex justify-end border-t border-black/10 pt-5 dark:border-white/10">
-            <button type="button" disabled={busy || !input.trim() || !memoValid || !privateNoteValid} onClick={() => void reviewDraft()} className={`flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-40 ${primaryClass}`}>{busy && <LoaderCircle className="h-4 w-4 animate-spin" />}{busy ? 'Preparing review…' : 'Review transaction'} <ArrowRight className="h-4 w-4" /></button>
+          <div className="mst-transaction-actions">
+            <button type="button" disabled={busy || !input.trim() || !memoValid || !privateNoteValid} onClick={() => void reviewDraft()} className="mst-action-primary disabled:opacity-40">{busy && <LoaderCircle className="h-4 w-4 animate-spin" />}{busy ? 'Preparing review…' : 'Review transaction'} <ArrowRight className="h-4 w-4" /></button>
           </div>
         </div>
       </div>

@@ -51,7 +51,12 @@ function assetToken(asset: Pick<PaymentAssetChoice, 'code' | 'issuer'>) {
 export default function PaymentComposer({ network }: Props) {
   const { privateUnlocked, sessionAddress } = useStellarWallet();
   const { entries, labelFor } = useAddressBook();
-  const [action, setAction] = useState<PaymentDraftAction>('payment');
+  const [action, setAction] = useState<PaymentDraftAction>(() =>
+    window.location.pathname.endsWith('/new/create-account')
+      || new URLSearchParams(window.location.search).get('action') === 'create-account'
+      ? 'create_account'
+      : 'payment',
+  );
   const [source, setSource] = useState('');
   const [sourceAccount, setSourceAccount] = useState<StellarAccountSnapshot | null>(null);
   const [sourceParameters, setSourceParameters] = useState<StellarNetworkParameters | null>(null);
@@ -123,8 +128,6 @@ export default function PaymentComposer({ network }: Props) {
   const canContinue = sourceValid && sourceHasSharedSigning && recipientsValid && contextValid
     && actionShapeValid && !fundingState.error && !busy;
   const testnet = network === 'testnet';
-  const focusClass = testnet ? 'focus:border-sky-500' : 'focus:border-emerald-500';
-  const primaryClass = testnet ? 'bg-sky-700 hover:bg-sky-800' : 'bg-emerald-700 hover:bg-emerald-800';
 
   function saveSelectedTransactionLifetimeAsDefault() {
     setDefaultTransactionLifetime(localStorage, signingWindowSeconds);
@@ -374,18 +377,18 @@ export default function PaymentComposer({ network }: Props) {
   }
 
   return (
-    <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
+    <main className={`mst-transaction-composer px-4 py-7 sm:px-6 lg:px-8 lg:py-8 ${testnet ? 'mst-testnet-page' : ''}`}>
       <div className="mx-auto max-w-4xl">
         <div className="mb-6"><WorkflowProgress current="prepare" /></div>
         <a href={stellarHref('/new')} className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black dark:text-neutral-300 dark:hover:text-white"><ArrowLeft className="h-4 w-4" />New</a>
         <div className="mt-4 flex flex-wrap items-center gap-3"><h1 className="text-3xl font-bold tracking-tight">{action === 'create_account' ? 'Create Stellar account' : 'Send payment'}</h1><NetworkBadge network={network} /></div>
-        <div className="mt-4 inline-flex rounded-xl border border-black/10 bg-white p-1 dark:border-white/10 dark:bg-white/5" role="group" aria-label="Classic action">
-          <button type="button" onClick={() => switchAction('payment')} className={`rounded-lg px-4 py-2 text-sm font-semibold ${action === 'payment' ? 'bg-black text-white dark:bg-white dark:text-black' : 'text-neutral-600 dark:text-neutral-300'}`}>Payment</button>
-          <button type="button" onClick={() => switchAction('create_account')} className={`rounded-lg px-4 py-2 text-sm font-semibold ${action === 'create_account' ? 'bg-black text-white dark:bg-white dark:text-black' : 'text-neutral-600 dark:text-neutral-300'}`}>Create account</button>
+        <div className="mst-transaction-choice-group mt-4" role="group" aria-label="Classic action">
+          <button type="button" aria-pressed={action === 'payment'} onClick={() => switchAction('payment')} className="mst-transaction-choice">Payment</button>
+          <button type="button" aria-pressed={action === 'create_account'} onClick={() => switchAction('create_account')} className="mst-transaction-choice">Create account</button>
         </div>
         <p className="mt-2 text-sm leading-6 text-neutral-500 dark:text-neutral-400">{action === 'create_account' ? 'CreateAccount is explicit: the destination must not exist yet and the starting balance is XLM. Switch back to Payment without losing these fields.' : 'Payment requires an active destination. For a new G-address, switch explicitly to Create account; MultiSig Tools will never change the operation automatically.'}</p>
 
-        <form onSubmit={buildPayment} className="mt-6 grid gap-5 rounded-2xl border border-black/10 bg-white p-5 shadow-sm shadow-black/[0.02] dark:border-white/10 dark:bg-white/5 sm:p-6 lg:grid-cols-2">
+        <form onSubmit={buildPayment} className="mst-transaction-form mt-6">
           <div className="lg:col-span-2">
             <SigningAccountPicker
               id="payment-source"
@@ -400,7 +403,7 @@ export default function PaymentComposer({ network }: Props) {
             {source && sourceAccount && !sourceHasSharedSigning && <div className="mt-2 text-sm text-red-700 dark:text-red-300">This account is currently single-signature. Choose a treasury with shared signing control.</div>}
           </div>
 
-          <section className="lg:col-span-2" aria-labelledby="payment-recipients-heading">
+          <section className="mst-transaction-section" aria-labelledby="payment-recipients-heading">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <h2 id="payment-recipients-heading" className="text-sm font-semibold">{action === 'create_account' ? 'New account' : 'Recipients'}</h2>
@@ -409,11 +412,11 @@ export default function PaymentComposer({ network }: Props) {
               {action === 'payment' && <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">{recipients.length} {recipients.length === 1 ? 'recipient' : 'recipients'}</span>}
             </div>
 
-            <div className="mt-3 space-y-3">
+            <div className="mst-transaction-recipient-list mt-3">
               {recipientDetails.map(({ recipient, destinationValid, amountValid, asset }, index) => {
                 const destinationLabel = destinationValid ? labelFor(recipient.destination, 'account') : '';
                 return (
-                  <div key={index} className="rounded-xl border border-black/10 bg-black/[0.015] p-4 dark:border-white/10 dark:bg-white/[0.025]">
+                  <div key={index} className="mst-transaction-recipient-row">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Recipient {index + 1}</div>
                       {recipients.length > 1 && (
@@ -433,7 +436,7 @@ export default function PaymentComposer({ network }: Props) {
                           <span className="text-xs text-neutral-400">Unlock to use Address Book</span>
                         )}
                       </div>
-                      <input id={`payment-destination-${index}`} value={recipient.destination} onChange={(event) => updateRecipient(index, { destination: event.target.value.trim() })} placeholder="G... destination" spellCheck={false} className={`mt-2 w-full rounded-xl border border-black/10 bg-white px-4 py-3 font-mono text-sm outline-none dark:border-white/10 dark:bg-white/[0.03] ${focusClass}`} />
+                      <input id={`payment-destination-${index}`} value={recipient.destination} onChange={(event) => updateRecipient(index, { destination: event.target.value.trim() })} placeholder="G... destination" spellCheck={false} className="mst-transaction-control mt-2 w-full font-mono" />
                       {destinationValid && (
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
                           {destinationLabel && <span>Saved as <span className="font-semibold text-neutral-700 dark:text-neutral-200">{destinationLabel}</span></span>}
@@ -445,11 +448,11 @@ export default function PaymentComposer({ network }: Props) {
 
                     <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(15rem,0.9fr)]">
                       <label htmlFor={`payment-amount-${index}`} className="text-sm font-semibold">Amount
-                        <input id={`payment-amount-${index}`} inputMode="decimal" value={recipient.amount} onChange={(event) => updateRecipient(index, { amount: event.target.value })} placeholder="0.0000000" className={`mt-2 w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-base outline-none dark:border-white/10 dark:bg-white/[0.03] ${focusClass}`} />
+                        <input id={`payment-amount-${index}`} inputMode="decimal" value={recipient.amount} onChange={(event) => updateRecipient(index, { amount: event.target.value })} placeholder="0.0000000" className="mst-transaction-control mt-2 w-full text-base" />
                       </label>
                       <div>
                         <div className="mb-2 text-sm font-semibold">Asset</div>
-                        {action === 'create_account' ? <div className="rounded-xl border border-black/10 bg-black/[0.015] px-4 py-3 text-sm font-semibold dark:border-white/10 dark:bg-white/[0.025]">XLM <span className="ml-1 font-normal text-neutral-400">required for CreateAccount</span></div> : <PaymentAssetPicker assets={assets} value={asset?.key ?? 'native'} onChange={(assetKey) => updateRecipient(index, { assetKey })} disabled={!sourceAccount} ariaLabel={`Recipient ${index + 1} asset`} />}
+                        {action === 'create_account' ? <div className="mst-transaction-static-field">XLM <span className="ml-1 font-normal text-neutral-400">required for CreateAccount</span></div> : <PaymentAssetPicker assets={assets} value={asset?.key ?? 'native'} onChange={(assetKey) => updateRecipient(index, { assetKey })} disabled={!sourceAccount} ariaLabel={`Recipient ${index + 1} asset`} />}
                       </div>
                     </div>
                     {recipient.amount && !amountValid && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Enter an amount greater than 0 with up to 7 decimal places.</div>}
@@ -460,40 +463,40 @@ export default function PaymentComposer({ network }: Props) {
 
             {action === 'payment' && <>
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button type="button" disabled={busy || recipients.length >= 100} onClick={addRecipient} className="inline-flex items-center gap-2 rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold hover:bg-black/[0.03] disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/[0.06]"><Plus className="h-4 w-4" />Add recipient</button>
+                <button type="button" disabled={busy || recipients.length >= 100} onClick={addRecipient} className="mst-action-secondary disabled:opacity-40"><Plus className="h-4 w-4" />Add recipient</button>
                 <span className="text-xs text-neutral-500 dark:text-neutral-400">Up to 100 payment operations in one Stellar transaction.</span>
               </div>
 
-              <details className="mt-4 rounded-xl border border-dashed border-black/10 p-3 dark:border-white/10">
+              <details className="mst-transaction-disclosure mt-4">
                 <summary className="cursor-pointer text-sm font-semibold">Paste a recipient list</summary>
                 <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Optional shortcut. Use recipient, amount, asset as CSV, tab-separated, or whitespace-separated rows. Saved Address Book names and held asset codes are resolved into the same editable rows above.</p>
-                <textarea value={pasteInput} onChange={(event) => setPasteInput(event.target.value)} rows={5} spellCheck={false} placeholder={'Alice, 150, USDC\nBob, 27.5, XLM'} className={`mt-2 w-full resize-y rounded-xl border border-black/10 bg-black/[0.015] p-3 font-mono text-sm leading-6 outline-none dark:border-white/10 dark:bg-white/[0.025] ${focusClass}`} />
-                <div className="mt-2 flex justify-end"><button type="button" disabled={busy || !pasteInput.trim() || !sourceAccount} onClick={importRecipientList} className="rounded-lg border border-black/10 px-3 py-2 text-sm font-semibold hover:bg-black/[0.03] disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/[0.06]">Use pasted rows</button></div>
+                <textarea value={pasteInput} onChange={(event) => setPasteInput(event.target.value)} rows={5} spellCheck={false} placeholder={'Alice, 150, USDC\nBob, 27.5, XLM'} className="mst-transaction-control mt-2 w-full resize-y font-mono leading-6" />
+                <div className="mt-2 flex justify-end"><button type="button" disabled={busy || !pasteInput.trim() || !sourceAccount} onClick={importRecipientList} className="mst-action-secondary disabled:opacity-40">Use pasted rows</button></div>
               </details>
             </>}
 
             {fundingState.error && <div className="mt-3 text-sm text-red-700 dark:text-red-300">{fundingState.error}</div>}
           </section>
 
-          <div className="lg:col-span-2">
+          <div className="mst-transaction-section">
             <div className="mb-3 text-sm font-semibold">Transaction context <span className="font-normal text-neutral-400">Optional</span></div>
-            <div className="space-y-3">
-              <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+            <div className="mst-transaction-context-list">
+              <div className="mst-transaction-context-section">
                 <div className="flex items-baseline justify-between gap-3">
                   <label htmlFor="payment-memo" className="text-sm font-semibold">Stellar memo <span className="font-normal text-neutral-400">Public · on-chain</span></label>
                   <span className={`text-xs ${memoValid ? 'text-neutral-400' : 'font-semibold text-red-700 dark:text-red-300'}`}>{memoBytes}/28 bytes</span>
                 </div>
-                <input id="payment-memo" value={memo} onChange={(event) => { setMemo(event.target.value); setMemoClearArmed(false); }} placeholder="Short public memo" className={`mt-2 w-full rounded-xl border border-black/10 bg-transparent px-4 py-3 text-sm outline-none dark:border-white/10 ${focusClass}`} />
+                <input id="payment-memo" value={memo} onChange={(event) => { setMemo(event.target.value); setMemoClearArmed(false); }} placeholder="Short public memo" className="mst-transaction-control mt-2 w-full" />
                 {!memoValid && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Stellar text memos can contain at most 28 UTF-8 bytes.</div>}
               </div>
 
-              <div className="rounded-xl border border-black/10 p-4 dark:border-white/10 sm:p-5">
+              <div className="mst-transaction-context-section">
                 <div className="flex flex-wrap items-baseline justify-between gap-3">
                   <div><label htmlFor="private-note" className="text-sm font-semibold">Private Note <span className="font-normal text-neutral-400">Private</span></label><p className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Stored privately by MultiSig Tools · not end-to-end encrypted.</p></div>
                   <span className={`text-xs ${privateNoteValid ? 'text-neutral-400' : 'font-semibold text-red-700 dark:text-red-300'}`}>{privateNoteBytes}/{MAX_PRIVATE_NOTE_BYTES} bytes</span>
                 </div>
-                <textarea id="private-note" value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} rows={7} placeholder="Why are we making this payment? Add any private context signers should see." className={`mt-3 w-full resize-y rounded-xl border border-black/10 bg-transparent px-4 py-3 text-sm leading-6 outline-none dark:border-white/10 ${focusClass}`} />
-                <label className={`mt-3 flex items-start gap-3 rounded-xl border border-black/10 p-3 dark:border-white/10 ${multipleRecipients ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                <textarea id="private-note" value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} rows={7} placeholder="Why are we making this payment? Add any private context signers should see." className="mst-transaction-control mt-3 w-full resize-y leading-6" />
+                <label className={`mst-transaction-option-row mt-3 ${multipleRecipients ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                   <input type="checkbox" checked={addOnChainProof} disabled={multipleRecipients} onChange={(event) => setAddOnChainProof(event.target.checked)} className="mt-1" />
                   <span className="text-sm">
                     <span className="font-semibold">Add on-chain proof</span>
@@ -525,7 +528,7 @@ export default function PaymentComposer({ network }: Props) {
             )}
           </div>
 
-          <div className="lg:col-span-2">
+          <div className="mst-transaction-section">
             <TransactionLifetimePicker network={network} value={signingWindowSeconds} onChange={setSigningWindowSeconds} disabled={busy} />
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-neutral-500 dark:text-neutral-400">
               <span>Default for new transactions: {transactionLifetimeLabel(defaultSigningWindowSeconds)}. This transaction can override it.</span>
@@ -537,8 +540,8 @@ export default function PaymentComposer({ network }: Props) {
 
           {error && <div className="whitespace-pre-line rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-800 dark:text-red-200 lg:col-span-2"><div className="flex gap-2"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div></div>}
 
-          <div className="flex justify-end border-t border-black/10 pt-5 dark:border-white/10 lg:col-span-2">
-            <button type="submit" disabled={!canContinue} className={`flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-40 ${primaryClass}`}>{busy && <LoaderCircle className="h-4 w-4 animate-spin" />}{action === 'create_account' ? 'Review account creation' : 'Review payment'} <ArrowRight className="h-4 w-4" /></button>
+          <div className="mst-transaction-actions">
+            <button type="submit" disabled={!canContinue} className="mst-action-primary disabled:opacity-40">{busy && <LoaderCircle className="h-4 w-4 animate-spin" />}{action === 'create_account' ? 'Review account creation' : 'Review payment'} <ArrowRight className="h-4 w-4" /></button>
           </div>
         </form>
       </div>

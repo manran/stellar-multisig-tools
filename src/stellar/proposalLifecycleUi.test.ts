@@ -229,6 +229,10 @@ test('Human Inbox separates Request status from the current signer next action',
   assert.doesNotMatch(dashboard, /waiting for your approval|need your approval/);
 });
 
+test('direct Create account route renders CreateAccount mode before signer hydration', () => {
+  assert.match(payment, /useState<PaymentDraftAction>\(\(\) =>[\s\S]*window\.location\.pathname\.endsWith\('\/new\/create-account'\)[\s\S]*'create_account'[\s\S]*'payment'/);
+});
+
 test('Payment grows from one recipient to many inside one composer', () => {
   assert.doesNotMatch(newTransaction, /title="Batch payment"/);
   assert.match(newTransaction, /title="Create Stellar account"/);

@@ -14,6 +14,9 @@ const intent = source('../SorobanIntentApp.tsx');
 const treasury = source('../TreasuryApp.tsx');
 const treasurySettings = source('../TreasuryBoxSettingsApp.tsx');
 const addressBook = source('../AddressBookApp.tsx');
+const payment = source('../PaymentComposer.tsx');
+const transfer = source('../TransferComposer.tsx');
+const claimablePayment = source('../ClaimablePaymentComposer.tsx');
 const activity = source('../ActivityApp.tsx');
 const sorobanActivity = source('../SorobanIntentActivityCard.tsx');
 const review = source('../ReviewTransactionSummary.tsx');
@@ -109,6 +112,22 @@ test('Address Book uses shared relationship rows instead of repeated list cards'
   assert.match(addressBook, /mst-address-row/);
   assert.doesNotMatch(addressBook, /rounded-2xl border border-black\/10 bg-white/);
   assert.equal((addressBook.match(/mst-address-list/g) ?? []).length, 3);
+});
+
+test('Classic transaction composers share one continuous preparation workbench', () => {
+  for (const composer of [payment, transfer, claimablePayment]) {
+    assert.match(composer, /mst-transaction-composer/);
+    assert.match(composer, /mst-testnet-page/);
+    assert.match(composer, /mst-transaction-form/);
+    assert.match(composer, /mst-transaction-control/);
+    assert.match(composer, /mst-transaction-actions/);
+    assert.doesNotMatch(composer, /rounded-2xl border border-black\/10 bg-white/);
+    assert.doesNotMatch(composer, /focusClass|primaryClass/);
+  }
+  assert.match(payment, /mst-transaction-recipient-list/);
+  assert.match(payment, /mst-transaction-context-list/);
+  assert.match(transfer, /mst-transaction-disclosure/);
+  assert.match(claimablePayment, /mst-claim-window-facts/);
 });
 
 test('Activity uses one continuous timeline grammar for Classic and Soroban work', () => {
