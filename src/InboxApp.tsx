@@ -210,11 +210,11 @@ export default function InboxApp() {
             {data && visibleIntents.length > 0 && (
               <section className="mt-5">
                 <div className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-neutral-400">Contract authorization</div>
-                <div className="grid gap-3">
+                <div className="mst-inbox-list">
                   {visibleIntents.map((intent) => {
                     const action = intentViewerActionPresentation(intent.viewerAction);
                     return (
-                      <button key={intent.id} type="button" onClick={() => openIntentDetails(intent)} className="group w-full rounded-2xl border border-black/10 bg-white p-4 text-left transition hover:border-violet-500/30 dark:border-white/10 dark:bg-white/5 sm:p-5">
+                      <button key={intent.id} type="button" onClick={() => openIntentDetails(intent)} className="mst-inbox-item group px-1 sm:px-2">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <StatusBadge tone={action.tone}>{action.label}</StatusBadge>
                           <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"><NetworkBadge network={intent.network} /><span>{intentAuthorizationWindowLabel(intent)}</span></div>
@@ -232,13 +232,13 @@ export default function InboxApp() {
 
             {data && visibleRequests.length > 0 && (
               <div className="mt-5 grid min-h-[560px] gap-5 xl:grid-cols-[minmax(300px,0.85fr)_minmax(420px,1.15fr)]">
-                <div className="space-y-2">
+                <div className="mst-inbox-list">
                   {visibleRequests.map((request) => {
                     const description = descriptions.get(request.id)!;
                     const selected = request.id === selectedId;
                     const sourceAlias = labelFor(description.source, 'account');
                     return (
-                      <button key={request.id} type="button" onClick={() => { if (window.matchMedia('(min-width: 1280px)').matches) setSelectedId(request.id); else openRequestDetails(request); }} className={`w-full rounded-2xl border p-4 text-left transition sm:p-5 ${selected ? 'border-emerald-500/45 bg-emerald-500/[0.07] shadow-sm' : 'border-black/10 bg-white hover:border-emerald-500/25 dark:border-white/10 dark:bg-white/5'}`}>
+                      <button key={request.id} type="button" data-selected={selected ? 'true' : 'false'} onClick={() => { if (window.matchMedia('(min-width: 1280px)').matches) setSelectedId(request.id); else openRequestDetails(request); }} className="mst-inbox-item px-1 sm:px-2">
                         <div className="flex items-center justify-between gap-3 text-sm">
                           <RequestStatusBadge status={request.status} />
                           <span className="text-neutral-500 dark:text-neutral-400">{inboxDeadlineLabel(description.inspection)}</span>
@@ -267,7 +267,7 @@ export default function InboxApp() {
                 </div>
 
                 {selectedRequest && selectedDescription && (
-                  <div className="hidden rounded-3xl border border-black/10 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.03] xl:block sm:p-6">
+                  <div className="mst-inbox-detail hidden xl:block">
                     <DetailPane request={selectedRequest} description={selectedDescription} />
                   </div>
                 )}

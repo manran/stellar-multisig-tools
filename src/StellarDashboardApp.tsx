@@ -134,68 +134,75 @@ export default function StellarDashboardApp() {
           <PageHeader
             eyebrow={<span className={accentText}>{testnet ? 'Testnet workspace' : 'Your workspace'}</span>}
             title="Dashboard"
-            description="Proposals that need attention, the treasuries you work with, and the next action — in one place."
+            description="See what needs your action first, then start or continue work from the same workspace."
           />
 
-          <section className="mt-6">
-            <div className="mb-3 flex items-center justify-between gap-4">
-              <div className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-400">What needs your attention</div>
-              {inboxSummary && inboxSummary.actionCounts.actionRequired > 0 && (
-                <a href={stellarHref('/inbox')} className={`text-sm font-bold ${accentText}`}>View all Inbox</a>
+          <section className="mt-8" aria-labelledby="dashboard-attention">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <div id="dashboard-attention" className="text-sm font-bold">Needs your attention</div>
+                <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{inboxAttentionCopy(inboxSummary)}</p>
+              </div>
+              {inboxSummary && inboxSummary.pendingCount > 0 && (
+                <a href={stellarHref('/inbox')} className={'shrink-0 text-sm font-bold ' + accentText}>Open Inbox</a>
               )}
             </div>
 
             {!inboxSummary && (
-              <a
-                href={stellarHref('/inbox')}
-                onClick={(event) => void openPrivateDestination(event, stellarHref('/inbox'))}
-                className="group flex flex-col gap-5 rounded-3xl border border-black/10 bg-white p-5 shadow-sm transition hover:border-emerald-500/35 dark:border-white/10 dark:bg-white/[0.04] sm:flex-row sm:items-center sm:justify-between sm:p-6"
-              >
-                <div className="flex min-w-0 items-start gap-4">
-                  <div className={`rounded-xl p-3 ${testnet ? 'bg-sky-500/10 text-sky-700 dark:text-sky-300' : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'}`}><Inbox className="h-5 w-5" /></div>
-                  <div className="min-w-0">
-                    <div className="text-lg font-bold">Inbox</div>
-                    <p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{inboxAttentionCopy(null)}</p>
+              <div className="mst-work-list mt-4">
+                <a
+                  href={stellarHref('/inbox')}
+                  onClick={(event) => void openPrivateDestination(event, stellarHref('/inbox'))}
+                  className="mst-work-row"
+                >
+                  <div>
+                    <div className="mst-work-row__meta"><Inbox className="h-4 w-4" />Private workspace</div>
+                    <div className="mst-work-row__title">Open your Inbox</div>
+                    <p className="mst-work-row__copy">Confirm the current wallet to see proposals that need your signature, submission, or review.</p>
                   </div>
-                </div>
-                <div className={`inline-flex shrink-0 items-center gap-2 self-start rounded-xl px-4 py-2.5 text-sm font-bold text-white sm:self-auto ${primaryBg}`}>
-                  {authBusy ? 'Confirm in wallet…' : 'Open Inbox'} <ArrowRight className="h-4 w-4" />
-                </div>
-              </a>
+                  <span className={'mst-work-row__action ' + accentText}>{authBusy ? 'Confirm in wallet…' : 'Open Inbox'} <ArrowRight className="h-4 w-4" /></span>
+                </a>
+              </div>
             )}
 
             {inboxSummary && inboxSummary.actionCounts.actionRequired === 0 && (
-              <div className="rounded-3xl border border-black/10 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.04] sm:p-6">
-                <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex min-w-0 items-start gap-4">
-                    <div className={`rounded-xl p-3 ${testnet ? 'bg-sky-500/10 text-sky-700 dark:text-sky-300' : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'}`}><Inbox className="h-5 w-5" /></div>
-                    <div>
-                      <div className="text-lg font-bold">You're all caught up.</div>
-                      <p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{inboxAttentionCopy(inboxSummary)}</p>
-                      {inboxSummary.actionCounts.waiting > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-2" aria-label="Inbox action summary">
-                          {inboxActionCountPresentations(inboxSummary.actionCounts).map((item) => (
-                            <StatusBadge key={item.key} tone={item.tone}>{item.label}</StatusBadge>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+              <div className="mst-work-list mt-4">
+                <div className="mst-work-row">
+                  <div>
+                    <div className="mst-work-row__title">You're all caught up.</div>
+                    <p className="mst-work-row__copy">{inboxAttentionCopy(inboxSummary)}</p>
+                    {inboxSummary.actionCounts.waiting > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2" aria-label="Inbox action summary">
+                        {inboxActionCountPresentations(inboxSummary.actionCounts).map((item) => (
+                          <StatusBadge key={item.key} tone={item.tone}>{item.label}</StatusBadge>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {inboxSummary.actionCounts.waiting > 0 && (
-                    <a href={stellarHrefWithSearch('/inbox', { view: 'waiting' })} className={`inline-flex shrink-0 items-center gap-2 self-start text-sm font-bold sm:self-auto ${accentText}`}>View waiting <ArrowRight className="h-4 w-4" /></a>
+                    <a href={stellarHrefWithSearch('/inbox', { view: 'waiting' })} className={'mst-work-row__action ' + accentText}>View waiting <ArrowRight className="h-4 w-4" /></a>
                   )}
                 </div>
               </div>
             )}
 
             {inboxSummary && inboxSummary.actionCounts.actionRequired > 0 && (
-              <div className="space-y-3">
+              <div className="mst-work-list mt-4">
                 {intentAttention.map((intent) => {
                   const action = intentViewerActionPresentation(intent.viewerAction);
                   return (
-                    <button key={`intent-${intent.id}`} type="button" onClick={() => openIntentDetails(intent)} className="group w-full rounded-2xl border border-violet-500/15 bg-white p-4 text-left transition hover:border-violet-500/35 dark:border-violet-400/15 dark:bg-white/[0.04] sm:p-5">
-                      <div className="flex flex-wrap items-center justify-between gap-2"><StatusBadge tone={action.tone}>{action.label}</StatusBadge><div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"><NetworkBadge network={intent.network} /><span>{intentAuthorizationWindowLabel(intent)}</span></div></div>
-                      <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div className="min-w-0"><h2 className="text-lg font-bold leading-6">Soroban Intent</h2><p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{action.detail}</p><div className="mt-2 font-mono text-xs text-neutral-400">Created by {intent.creatorAddress ? shortAddress(intent.creatorAddress) : (intent.creatorActor?.label ?? intent.creatorActor?.id ?? 'external service')}</div></div><span className="inline-flex shrink-0 items-center gap-2 self-start text-sm font-bold text-violet-700 dark:text-violet-300 sm:self-auto">{action.cta} <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></span></div>
+                    <button key={'intent-' + intent.id} type="button" onClick={() => openIntentDetails(intent)} className="mst-work-row">
+                      <div>
+                        <div className="mst-work-row__meta">
+                          <StatusBadge tone={action.tone}>{action.label}</StatusBadge>
+                          <NetworkBadge network={intent.network} />
+                          <span>{intentAuthorizationWindowLabel(intent)}</span>
+                        </div>
+                        <div className="mst-work-row__title">Contract authorization</div>
+                        <p className="mst-work-row__copy">{action.detail}</p>
+                        <div className="mt-2 font-mono text-xs text-neutral-400">Created by {intent.creatorAddress ? shortAddress(intent.creatorAddress) : (intent.creatorActor?.label ?? intent.creatorActor?.id ?? 'external service')}</div>
+                      </div>
+                      <span className="mst-work-row__action text-violet-700 dark:text-violet-300">{action.cta} <ArrowRight className="h-4 w-4" /></span>
                     </button>
                   );
                 })}
@@ -203,22 +210,18 @@ export default function StellarDashboardApp() {
                   const description = describeInboxRequest(request);
                   const action = inboxViewerActionPresentation(request.viewerAction);
                   return (
-                    <button key={request.id} type="button" onClick={() => openRequestDetails(request)} className="group w-full rounded-2xl border border-black/10 bg-white p-4 text-left transition hover:border-emerald-500/30 dark:border-white/10 dark:bg-white/[0.04] sm:p-5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <StatusBadge tone={action.tone}>{action.label}</StatusBadge>
-                        <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+                    <button key={request.id} type="button" onClick={() => openRequestDetails(request)} className="mst-work-row">
+                      <div>
+                        <div className="mst-work-row__meta">
+                          <StatusBadge tone={action.tone}>{action.label}</StatusBadge>
                           <NetworkBadge network={request.network} />
                           <span>{inboxDeadlineLabel(description.inspection)}</span>
                         </div>
+                        <div className="mst-work-row__title">{description.title}</div>
+                        <p className="mst-work-row__copy">{description.summary}</p>
+                        <div className="mt-2 font-mono text-xs text-neutral-400">{shortAddress(description.source)}</div>
                       </div>
-                      <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                        <div className="min-w-0">
-                          <h2 className="text-lg font-bold leading-6">{description.title}</h2>
-                          <p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{description.summary}</p>
-                          <div className="mt-2 font-mono text-xs text-neutral-400">{shortAddress(description.source)}</div>
-                        </div>
-                        <span className={`inline-flex shrink-0 items-center gap-2 self-start text-sm font-bold sm:self-auto ${accentText}`}>{action.cta} <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></span>
-                      </div>
+                      <span className={'mst-work-row__action ' + accentText}>{action.cta} <ArrowRight className="h-4 w-4" /></span>
                     </button>
                   );
                 })}
@@ -226,27 +229,13 @@ export default function StellarDashboardApp() {
             )}
           </section>
 
-          <section className="mt-6 grid overflow-hidden rounded-2xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.04] md:grid-cols-3">
-            <a href={stellarHref('/new')} className="group border-b border-black/10 p-5 transition hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.04] md:border-b-0 md:border-r">
-              <Plus className={`h-5 w-5 ${accentText}`} />
-              <h2 className="mt-7 text-lg font-bold">New proposal</h2>
-              <p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Prepare an action, review the exact result, then collect approvals.</p>
-              <div className={`mt-5 flex items-center gap-1.5 text-sm font-bold ${accentText}`}>Create proposal <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></div>
-            </a>
-
-            <a href={stellarHref('/treasury')} className="group border-b border-black/10 p-5 transition hover:bg-black/[0.025] dark:border-white/10 dark:hover:bg-white/[0.04] md:border-b-0 md:border-r">
-              <Vault className={`h-5 w-5 ${accentText}`} />
-              <h2 className="mt-7 text-lg font-bold">Treasuries</h2>
-              <p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">See shared-control accounts you can authorize and manage.</p>
-              <div className={`mt-5 flex items-center gap-1.5 text-sm font-bold ${accentText}`}>Open Treasuries <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></div>
-            </a>
-
-            <a href={stellarHref('/activity')} onClick={(event) => void openPrivateDestination(event, stellarHref('/activity'))} className="group hidden p-5 transition hover:bg-black/[0.025] dark:hover:bg-white/[0.04] sm:block">
-              <History className={`h-5 w-5 ${accentText}`} />
-              <h2 className="mt-7 text-lg font-bold">Activity</h2>
-              <p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Follow proposals you participated in and their final state.</p>
-              <div className={`mt-5 flex items-center gap-1.5 text-sm font-bold ${accentText}`}>View Activity <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></div>
-            </a>
+          <section className="mt-10" aria-labelledby="dashboard-start">
+            <div id="dashboard-start" className="text-sm font-bold">Start or continue</div>
+            <div className="mst-dashboard-shortcuts mt-3">
+              <a href={stellarHref('/new')}><Plus className="h-4 w-4" />New proposal</a>
+              <a href={stellarHref('/treasury')}><Vault className="h-4 w-4" />Treasuries</a>
+              <a href={stellarHref('/activity')} onClick={(event) => void openPrivateDestination(event, stellarHref('/activity'))}><History className="h-4 w-4" />Activity</a>
+            </div>
           </section>
         </div>
       </main>

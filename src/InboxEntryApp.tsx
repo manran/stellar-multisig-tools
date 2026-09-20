@@ -33,11 +33,11 @@ export default function InboxEntryApp() {
     <StellarWorkspaceShell active="inbox">
       <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
         <section className="mx-auto max-w-xl py-12 sm:py-20">
-          <Inbox className="h-8 w-8 text-emerald-600 dark:text-emerald-300" />
-          <h1 className="mt-5 text-4xl font-bold tracking-tight">Inbox</h1>
-          <p className="mt-3 text-lg leading-8 text-neutral-600 dark:text-neutral-300">Connect your Stellar wallet to open your Inbox.</p>
-          <p className="mt-2 text-sm leading-6 text-neutral-500 dark:text-neutral-400">Your wallet may ask you to sign a message to verify this wallet. This does not send a Stellar transaction.</p>
-          <button type="button" disabled={opening || wallet.busy || wallet.authBusy} onClick={() => void openInbox()} className="mt-7 flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-base font-semibold text-white disabled:opacity-50">
+          <div className="mst-kicker"><Inbox className="mr-2 inline h-4 w-4" />Private workspace</div>
+          <h1 className="mt-5 text-4xl font-bold tracking-tight">Open your Inbox</h1>
+          <p className="mt-3 text-lg leading-8 text-neutral-600 dark:text-neutral-300">Confirm a Stellar wallet to see proposals that need your signature, submission, or review.</p>
+          <p className="mt-2 text-sm leading-6 text-neutral-500 dark:text-neutral-400">Your wallet may ask you to sign a verification message. This does not send a Stellar transaction.</p>
+          <button type="button" disabled={opening || wallet.busy || wallet.authBusy} onClick={() => void openInbox()} className="mst-action-primary mt-7">
             {opening || wallet.busy || wallet.authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <WalletCards className="h-4 w-4" />}
             {opening || wallet.authBusy ? 'Verifying wallet…' : wallet.busy ? 'Opening wallets…' : 'Connect wallet'}
           </button>

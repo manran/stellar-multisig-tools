@@ -54,17 +54,19 @@ test('Dashboard and Inbox use the same wide Human content frame', () => {
   assert.match(inbox, /mx-auto max-w-6xl/);
 });
 
-test('Dashboard quick actions use one hairline panel instead of three floating cards', () => {
-  assert.match(dashboard, /grid overflow-hidden rounded-2xl border border-black\/10 bg-white/);
-  assert.match(dashboard, /md:border-b-0 md:border-r/);
+test('Dashboard quick actions stay compact instead of becoming another card grid', () => {
+  assert.match(dashboard, /mst-dashboard-shortcuts/);
+  assert.doesNotMatch(dashboard, /md:grid-cols-3/);
   assert.ok(dashboard.indexOf('New proposal') < dashboard.indexOf('Treasuries'));
 });
 
-test('dominant working surfaces use elevation without flattening every card', () => {
-  assert.match(dashboard, /rounded-3xl border border-black\/10 bg-white p-5 shadow-sm/);
-  assert.match(inbox, /hidden rounded-3xl border border-black\/10 bg-white p-5 shadow-sm/);
+test('Human work queues use shared rows and master-detail without repeating floating cards', () => {
+  assert.match(dashboard, /mst-work-list/);
+  assert.match(dashboard, /mst-work-row/);
+  assert.match(inbox, /mst-inbox-list/);
+  assert.match(inbox, /mst-inbox-item/);
+  assert.match(inbox, /mst-inbox-detail/);
   assert.match(review, /mode === 'history' \? 'rounded-xl dark:bg-white\/\[0\.035\]' : 'rounded-3xl shadow-sm'/);
-  assert.match(inbox, /rounded-2xl border p-4 text-left transition/);
 });
 
 test('shared visual hierarchy does not introduce a new workflow or status vocabulary', () => {

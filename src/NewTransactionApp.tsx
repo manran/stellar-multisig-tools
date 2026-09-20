@@ -18,33 +18,22 @@ import { parseTreasuryRoute } from './treasuryNavigation';
 
 const ContractCallComposer = lazy(() => import('./ContractCallComposer'));
 
-function ChoiceCard({ href, icon, title, description, network, badge, sensitive = false }: { href: string; icon: ReactNode; title: string; description: string; network: StellarNetwork | null; badge?: string; sensitive?: boolean }) {
-  const testnet = network === 'testnet';
-  const border = sensitive
-    ? 'border-red-500/25 hover:border-red-500/50 dark:border-red-400/25 dark:hover:border-red-400/50'
-    : testnet
-      ? 'border-black/10 hover:border-sky-500/35 dark:border-white/10 dark:hover:border-sky-400/35'
-      : 'border-black/10 hover:border-emerald-500/35 dark:border-white/10 dark:hover:border-emerald-400/35';
-  const iconClass = sensitive
-    ? 'bg-red-500/10 text-red-700 dark:text-red-300'
-    : testnet
-      ? 'bg-sky-500/10 text-sky-700 dark:text-sky-300'
-      : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-  const actionClass = sensitive
-    ? 'text-red-700 dark:text-red-300'
-    : testnet
-      ? 'text-sky-700 dark:text-sky-300'
-      : 'text-emerald-700 dark:text-emerald-300';
+function ChoiceRow({ href, icon, title, description, network, badge }: { href: string; icon: ReactNode; title: string; description: string; network: StellarNetwork | null; badge?: string }) {
+  const accentClass = network === 'testnet'
+    ? 'text-sky-700 dark:text-sky-300'
+    : 'text-emerald-700 dark:text-emerald-300';
   return (
-    <a href={href} className={`group rounded-2xl border bg-white p-4 transition hover:shadow-sm dark:bg-white/5 sm:p-5 ${border}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className={`rounded-xl p-2.5 ${iconClass}`}>{icon}</div>
-        {badge && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${sensitive ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-black/5 text-neutral-500 dark:bg-white/10 dark:text-neutral-300'}`}>{badge}</span>}
+    <div className="mst-choice-row">
+      <div className={'mst-choice-row__icon ' + accentClass}>{icon}</div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="mst-choice-row__title">{title}</h2>
+          {badge && <span className="rounded-full bg-black/5 px-2.5 py-1 text-xs font-semibold text-neutral-500 dark:bg-white/10 dark:text-neutral-300">{badge}</span>}
+        </div>
+        <p className="mst-choice-row__copy">{description}</p>
       </div>
-      <h2 className="mt-4 text-lg font-bold">{title}</h2>
-      <p className="mt-1.5 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{description}</p>
-      <div className={`mt-4 flex items-center gap-1.5 text-sm font-semibold ${actionClass}`}>Continue <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></div>
-    </a>
+      <a href={href} className={'mst-choice-row__action ' + accentClass}>Continue <ArrowRight className="h-4 w-4" /></a>
+    </div>
   );
 }
 
@@ -55,6 +44,9 @@ function NewTransactionChoices() {
   const proposalNetwork = resolveStellarNetwork(route.network, sessionNetwork);
   const paymentHref = stellarHrefWithSearch('/new/payment', { fresh: '1', account: proposalAccount, network: proposalNetwork });
   const createAccountHref = stellarHrefWithSearch('/new/create-account', { fresh: '1', account: proposalAccount, network: proposalNetwork });
+  const accentClass = proposalNetwork === 'testnet'
+    ? 'text-sky-700 dark:text-sky-300'
+    : 'text-emerald-700 dark:text-emerald-300';
 
   return (
     <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
@@ -65,43 +57,42 @@ function NewTransactionChoices() {
           {proposalAccount && <div className="mt-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400">New proposal for <span className="font-mono">{proposalAccount}</span></div>}
         </div>
 
-        <a href={paymentHref} className="group mt-6 flex flex-col gap-5 rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] p-5 transition hover:border-emerald-500/45 hover:bg-emerald-500/[0.09] dark:border-emerald-400/20 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-          <div className="flex min-w-0 items-start gap-4">
-            <div className="rounded-xl bg-emerald-600 p-3 text-white"><Send className="h-5 w-5" /></div>
-            <div>
-              <h2 className="text-xl font-bold">Send payment</h2>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-neutral-600 dark:text-neutral-300">Choose the source, recipient, asset, and amount. Review the exact Stellar transaction before collecting approvals.</p>
+        <section className="mt-7" aria-labelledby="primary-action">
+          <div id="primary-action" className="text-sm font-bold">Most common</div>
+          <div className="mst-work-list mt-3">
+            <div className="mst-work-row">
+              <div>
+                <div className={'mst-work-row__meta ' + accentClass}><Send className="h-4 w-4" />Payment</div>
+                <h2 className="mst-work-row__title">Send payment</h2>
+                <p className="mst-work-row__copy">Choose the source, recipient, asset, and amount. Review the exact Stellar transaction before collecting signatures.</p>
+              </div>
+              <a href={paymentHref} className="mst-action-primary">Start proposal <ArrowRight className="h-4 w-4" /></a>
+            </div>
+
+            <div className="mst-work-row">
+              <div>
+                <div className={'mst-work-row__meta ' + accentClass}><FileInput className="h-4 w-4" />Technical input</div>
+                <h2 className="mst-work-row__title">Import transaction (XDR)</h2>
+                <p className="mst-work-row__copy">Bring in an exact transaction produced by another wallet, CLI, app, or Agent.</p>
+              </div>
+              <a href={stellarHref('/new/import')} className={'mst-work-row__action ' + accentClass}>Import XDR <ArrowRight className="h-4 w-4" /></a>
             </div>
           </div>
-          <div className="inline-flex shrink-0 items-center gap-2 self-start rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white group-hover:bg-emerald-800 sm:self-auto">Start proposal <ArrowRight className="h-4 w-4" /></div>
-        </a>
+        </section>
 
-        <a href={stellarHref('/new/import')} className="group mt-3 flex items-center justify-between gap-4 rounded-2xl border border-black/10 bg-white p-4 transition hover:border-emerald-500/30 hover:shadow-sm dark:border-white/10 dark:bg-white/5 sm:p-5">
-          <div className="flex min-w-0 items-start gap-4">
-            <div className={`rounded-xl p-2.5 ${proposalNetwork === 'testnet' ? 'bg-sky-500/10 text-sky-700 dark:text-sky-300' : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'}`}><FileInput className="h-5 w-5" /></div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2"><h2 className="font-bold">Import transaction (XDR)</h2><span className="rounded-full bg-black/5 px-2.5 py-1 text-xs font-semibold text-neutral-500 dark:bg-white/10 dark:text-neutral-300">Technical</span></div>
-              <p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Bring in an exact transaction produced by another wallet, CLI, app, or Agent.</p>
-            </div>
-          </div>
-          <span className={`hidden shrink-0 items-center gap-1.5 text-sm font-semibold sm:flex ${proposalNetwork === 'testnet' ? 'text-sky-700 dark:text-sky-300' : 'text-emerald-700 dark:text-emerald-300'}`}>Import XDR <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></span>
-        </a>
-
-        <details className="mt-6 rounded-2xl border border-black/10 bg-white/55 p-4 dark:border-white/10 dark:bg-white/[0.03] sm:p-5">
-          <summary className="cursor-pointer list-none text-sm font-bold">More Stellar actions <span className="ml-1 text-xs font-medium text-neutral-400">Low-frequency workflows</span></summary>
-          <p className="mt-2 text-sm leading-6 text-neutral-500 dark:text-neutral-400">Less common account and protocol actions. Transaction builders still return to the same Review, Sign, Submit, and Done flow.</p>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <ChoiceCard href={createAccountHref} icon={<UserPlus className="h-5 w-5" />} title="Create Stellar account" description="Fund an inactive G-address with an explicit CreateAccount operation. You can switch to Payment without losing the entered address or amount." network={proposalNetwork} badge="CreateAccount" />
-            <ChoiceCard href={stellarHref('/account/signing')} icon={<KeyRound className="h-5 w-5" />} title="Set up multisig" description="Configure signers and approval rules for any Stellar account. If you cannot authorize it here, export XDR for an authorized signer." network={proposalNetwork} badge="Account signing" />
-            <ChoiceCard href={stellarHrefWithSearch('/new/claimable', { fresh: '1', account: proposalAccount, network: proposalNetwork })} icon={<Clock3 className="h-5 w-5" />} title="Claimable payment" description="Create a payment the recipient claims later, with an explicit recovery path." network={proposalNetwork} badge="Claim later" />
-            <ChoiceCard href={stellarHrefWithSearch('/new/multi-party', { fresh: '1', network: proposalNetwork })} icon={<UsersRound className="h-5 w-5" />} title="Multi-source transaction" description="Coordinate operations from more than one authorization domain in one atomic transaction." network={proposalNetwork} badge="Multi-source" />
-            <ChoiceCard href={stellarHrefWithSearch('/new/contract', { account: proposalAccount, network: proposalNetwork })} icon={<Braces className="h-5 w-5" />} title="Call a contract" description="Load a Soroban contract interface from the network, choose a method, and prepare typed arguments for Review." network={proposalNetwork} badge="Soroban" />
+        <details className="mt-8 border-y border-black/10 py-4 dark:border-white/10">
+          <summary className="cursor-pointer list-none text-sm font-bold">More Stellar actions</summary>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-500 dark:text-neutral-400">These builders return to the same Review, Sign, Submit, and Done workflow.</p>
+          <div className="mst-choice-list">
+            <ChoiceRow href={createAccountHref} icon={<UserPlus className="h-5 w-5" />} title="Create Stellar account" description="Fund an inactive G-address with an explicit CreateAccount operation. You can switch to Payment without losing the entered address or amount." network={proposalNetwork} badge="CreateAccount" />
+            <ChoiceRow href={stellarHref('/account/signing')} icon={<KeyRound className="h-5 w-5" />} title="Set up multisig" description="Configure signers and approval rules for any Stellar account. If you cannot authorize it here, export XDR for an authorized signer." network={proposalNetwork} badge="Account signing" />
+            <ChoiceRow href={stellarHrefWithSearch('/new/claimable', { fresh: '1', account: proposalAccount, network: proposalNetwork })} icon={<Clock3 className="h-5 w-5" />} title="Claimable payment" description="Create a payment the recipient claims later, with an explicit recovery path." network={proposalNetwork} badge="Claim later" />
+            <ChoiceRow href={stellarHrefWithSearch('/new/multi-party', { fresh: '1', network: proposalNetwork })} icon={<UsersRound className="h-5 w-5" />} title="Multi-source transaction" description="Coordinate operations from more than one authorization domain in one atomic transaction." network={proposalNetwork} badge="Multi-source" />
+            <ChoiceRow href={stellarHrefWithSearch('/new/contract', { account: proposalAccount, network: proposalNetwork })} icon={<Braces className="h-5 w-5" />} title="Call a contract" description="Load a Soroban contract interface from the network, choose a method, and prepare typed arguments for Review." network={proposalNetwork} badge="Soroban" />
           </div>
         </details>
 
-        <div className="mt-5 rounded-xl border border-black/10 bg-white/55 px-4 py-3 text-sm text-neutral-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-neutral-400">
-          Nothing is signed or submitted from this screen. The next step is always Review.
-        </div>
+        <p className="mt-5 text-sm text-neutral-500 dark:text-neutral-400">Nothing is signed or submitted from this screen. The next step is always Review.</p>
       </div>
     </main>
   );
