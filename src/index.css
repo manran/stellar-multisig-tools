@@ -2935,3 +2935,73 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
     align-items: stretch;
   }
 }
+
+/* Hallmark · Proposal Request · neutral work surface */
+@layer components {
+  .mst-request-lookup-form {
+    padding-block: var(--space-lg);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-request-control {
+    min-height: 2.875rem;
+    border: var(--rule-hairline) solid var(--color-rule);
+    border-radius: var(--radius-input);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--text-sm);
+    outline: none;
+  }
+
+  .mst-request-control:focus-visible {
+    border-color: var(--color-focus);
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .mst-request-control::placeholder {
+    color: var(--color-muted);
+  }
+
+  .mst-request-context-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding-block: var(--space-md);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+    background: var(--color-paper-2);
+    font-size: var(--text-sm);
+  }
+
+  .mst-request-toast {
+    max-width: min(24rem, calc(100vw - 2rem));
+    border: var(--rule-hairline) solid var(--color-rule);
+    border-radius: var(--radius-input);
+    background: var(--color-paper);
+    color: var(--color-accent);
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--text-sm);
+    font-weight: 750;
+  }
+
+  .mst-request-advanced-facts {
+    padding: var(--space-md);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+    background: var(--color-paper-2);
+    font-size: var(--text-xs);
+  }
+}
+
+@media (max-width: 40rem) {
+  .mst-request-toast {
+    right: 1rem;
+    left: 1rem;
+    max-width: none;
+  }
+}

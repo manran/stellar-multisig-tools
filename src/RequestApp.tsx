@@ -689,12 +689,12 @@ async function submitRequest(acceptedEffectsDigest?: string) {
               <h1 className="mt-5 text-3xl font-bold tracking-tight sm:text-4xl">Open a shared transaction</h1>
               <p className="mt-2 text-base leading-7 text-neutral-600 dark:text-neutral-300">Paste a private MultiSigTools link, or a proposal ID and confirm one of its current signer wallets.</p>
 
-              <form onSubmit={submitLookup} className="mt-7 rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:p-6">
+              <form onSubmit={submitLookup} className="mst-request-lookup-form mt-7">
                 <label htmlFor="request-locator" className="text-sm font-semibold">Private link or proposal ID</label>
-                <input id="request-locator" value={requestLocator} onChange={(event) => setRequestLocator(event.target.value)} placeholder="Paste shared transaction link" spellCheck={false} className="mt-2 w-full rounded-xl border border-black/10 bg-transparent px-3 py-3 text-sm outline-none focus:border-emerald-500 dark:border-white/10" />
-                <button disabled={loading || !requestLocator.trim()} className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{loading && <LoaderCircle className="h-4 w-4 animate-spin" />}Open transaction</button>
+                <input id="request-locator" value={requestLocator} onChange={(event) => setRequestLocator(event.target.value)} placeholder="Paste shared transaction link" spellCheck={false} className="mst-request-control mt-2 w-full" />
+                <button disabled={loading || !requestLocator.trim()} className="mst-action-primary mt-3 disabled:opacity-50">{loading && <LoaderCircle className="h-4 w-4 animate-spin" />}Open transaction</button>
               </form>
-              <p className="mt-5 text-sm text-neutral-500 dark:text-neutral-400">Have XDR instead? Use <a href={stellarHref('/new/import')} className="font-semibold text-emerald-700 dark:text-emerald-300">New → Import transaction</a>.</p>
+              <p className="mt-5 text-sm text-neutral-500 dark:text-neutral-400">Have XDR instead? Use <a href={stellarHref('/new/import')} className="whitespace-nowrap font-semibold text-emerald-700 dark:text-emerald-300">New → Import transaction</a>.</p>
             </section>
           )}
 
@@ -739,7 +739,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
 
               {activeCapabilityNeedsActivity && (
                 privateReadyForRequest ? (
-                  <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/10 bg-white/55 px-4 py-3 text-sm dark:border-white/10 dark:bg-white/[0.03]">
+                  <section className="mst-request-context-row">
                     <div className="text-neutral-600 dark:text-neutral-300">Not saved to Activity. Private links close after submission or expiry.</div>
                     <button type="button" disabled={loading} onClick={() => void saveToActivity()} className="font-semibold text-emerald-700 disabled:opacity-50 dark:text-emerald-300">Save to Activity</button>
                   </section>
@@ -748,7 +748,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                 )
               )}
 
-              {copied === 'link' && <div className="fixed bottom-6 right-6 z-[90] rounded-xl border border-emerald-500/25 bg-white px-4 py-3 text-sm font-semibold text-emerald-800 shadow-lg dark:bg-[#151515] dark:text-emerald-200">Private link copied.</div>}
+              {copied === 'link' && <div className="mst-request-toast fixed bottom-6 right-6 z-[90]">Private link copied.</div>}
 
               {!reviewComplete ? (
                 <>
@@ -865,7 +865,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                   )}
 
                   {terminalCapability && (
-                    <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/10 bg-white/55 px-4 py-3 text-sm dark:border-white/10 dark:bg-white/[0.03]">
+                    <section className="mst-request-context-row">
                       <div className="text-neutral-600 dark:text-neutral-300"><span className="font-semibold text-neutral-900 dark:text-white">Private link closed.</span> Finished proposals use retained wallet history instead of the old share link.</div>
                       <button type="button" onClick={() => void openActivity()} className="font-semibold text-emerald-700 dark:text-emerald-300">View Activity</button>
                     </section>
@@ -876,7 +876,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
               <details className="group mst-advanced-panel">
                 <summary className="cursor-pointer list-none text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"><span className="flex items-center justify-between gap-4"><span>Advanced</span><span className="text-sm font-normal opacity-55 group-open:hidden">Request id · XDR · Stellar authorization</span><span className="hidden text-sm font-normal opacity-55 group-open:inline">Hide details</span></span></summary>
                 <div className="mt-5 space-y-6 border-t border-black/10 pt-5 dark:border-white/10">
-                  <div className="rounded-xl bg-black/[0.035] p-4 text-xs dark:bg-white/[0.04]">
+                  <div className="mst-request-advanced-facts">
                     <div><span className="font-semibold">Request id:</span> <span className="break-all font-mono">{displayRequestId(snapshot.id)}</span></div>
                     {snapshot.sorobanOrigin && <div className="mt-2"><span className="font-semibold">Soroban origin:</span> Intent <span className="font-mono">{displayRequestId(snapshot.sorobanOrigin.intentId)}</span> · plan revision {snapshot.sorobanOrigin.authorizationPlanRevision} · prepared {new Date(snapshot.sorobanOrigin.executionPreparedAt).toLocaleString()}</div>}
                     <div className="mt-2">Created {new Date(snapshot.createdAt).toLocaleString()} · signing closes {new Date(snapshot.expiresAt).toLocaleString()}</div>
@@ -897,7 +897,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                       <div className="text-sm font-semibold">Add a signed XDR manually</div>
                       <p className="mt-1 text-sm opacity-65">Use this for a CLI, hardware signer, or another external signing tool.</p>
                       <form onSubmit={contribute} className="mt-3">
-                        <textarea value={signedXdr} onChange={(event) => setSignedXdr(event.target.value)} rows={6} spellCheck={false} placeholder="Signed XDR of this exact transaction..." className="w-full resize-y rounded-xl border border-black/10 bg-transparent p-3 font-mono text-xs leading-5 outline-none focus:border-emerald-500 dark:border-white/10" />
+                        <textarea value={signedXdr} onChange={(event) => setSignedXdr(event.target.value)} rows={6} spellCheck={false} placeholder="Signed XDR of this exact transaction..." className="mst-request-control w-full resize-y font-mono text-xs leading-5" />
                         <ActionButton type="submit" disabled={contributing || !signedXdr.trim()} className="mt-3">{contributing && <LoaderCircle className="h-4 w-4 animate-spin" />}Add signed XDR</ActionButton>
                       </form>
                     </div>

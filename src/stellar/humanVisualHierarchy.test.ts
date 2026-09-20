@@ -55,6 +55,18 @@ test('page identity precedes Proposal workflow progress', () => {
 });
 
 
+test('Proposal Request keeps neutral scaffolding on the shared work surface while status states stay explicit', () => {
+  assert.match(request, /mst-request-lookup-form/);
+  assert.match(request, /mst-request-control/);
+  assert.match(request, /mst-request-context-row/);
+  assert.match(request, /mst-request-toast/);
+  assert.match(request, /mst-request-advanced-facts/);
+  assert.doesNotMatch(request, /dark:bg-\[#151515\]/);
+  assert.match(request, /border-amber-500\/30 bg-amber-500/);
+  assert.match(request, /border-red-500\/25 bg-red-500/);
+  assert.match(request, /border-emerald-500\/25 bg-emerald-500/);
+});
+
 test('page identity precedes Soroban Intent workflow progress', () => {
   const headerIndex = intent.indexOf('<PageHeader');
   const progressIndex = intent.indexOf('<WorkflowProgress current={workflowStage}');
