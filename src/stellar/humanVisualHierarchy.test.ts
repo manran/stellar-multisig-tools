@@ -12,6 +12,8 @@ const inbox = source('../InboxApp.tsx');
 const request = source('../RequestApp.tsx');
 const intent = source('../SorobanIntentApp.tsx');
 const treasury = source('../TreasuryApp.tsx');
+const activity = source('../ActivityApp.tsx');
+const sorobanActivity = source('../SorobanIntentActivityCard.tsx');
 const review = source('../ReviewTransactionSummary.tsx');
 const accountSigningEntry = source('../AccountSigningEntryApp.tsx');
 const xdrQr = source('../XdrQrCode.tsx');
@@ -81,6 +83,21 @@ test('Treasury uses one continuous workbench instead of nested policy and accoun
   assert.match(treasury, /mst-treasury-detail/);
   assert.doesNotMatch(treasury, /lg:grid-cols-4/);
   assert.doesNotMatch(treasury, /rounded-3xl border border-black\/10 bg-white/);
+});
+
+test('Activity uses one continuous timeline grammar for Classic and Soroban work', () => {
+  assert.match(activity, /mst-activity-list/);
+  assert.match(activity, /mst-activity-item/);
+  assert.match(activity, /mst-activity-summary/);
+  assert.match(activity, /mst-activity-timeline/);
+  assert.match(activity, /mst-activity-actions/);
+  assert.match(activity, /mst-activity-filter/);
+  assert.match(sorobanActivity, /mst-activity-item/);
+  assert.match(sorobanActivity, /mst-activity-summary/);
+  assert.match(sorobanActivity, /mst-activity-timeline/);
+  assert.match(sorobanActivity, /mst-activity-actions/);
+  assert.doesNotMatch(activity, /rounded-3xl border border-black\/10 bg-white shadow-sm/);
+  assert.doesNotMatch(sorobanActivity, /rounded-3xl border border-black\/10 bg-white shadow-sm/);
 });
 
 test('shared visual hierarchy does not introduce a new workflow or status vocabulary', () => {

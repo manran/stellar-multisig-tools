@@ -156,8 +156,8 @@ function ActivityCard({
   const signerLabel = (signerAddress: string) => labelFor(signerAddress, 'signer') || shortAddress(signerAddress);
 
   return (
-    <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)} className="group rounded-3xl border border-black/10 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
-      <summary className="cursor-pointer list-none p-5 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 sm:p-6">
+    <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)} className="group mst-activity-item">
+      <summary className="mst-activity-summary">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400">
@@ -177,8 +177,8 @@ function ActivityCard({
         </div>
       </summary>
 
-      <div className="px-5 pb-5 sm:px-6 sm:pb-6">
-        <div className="border-t border-black/10 pt-5 dark:border-white/10">
+      <div className="mst-activity-detail">
+        <div className="mst-activity-timeline">
           {item.events.map((event, index) => {
             const copy = eventCopy(event, currentAddress, signerLabel);
             const isLast = index === item.events.length - 1;
@@ -198,7 +198,7 @@ function ActivityCard({
           })}
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-4 dark:border-white/10">
+        <div className="mst-activity-actions">
           <div>
             {confirmed && <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4" />Confirmed</div>}
           </div>
@@ -416,11 +416,11 @@ export default function ActivityApp() {
           )}
 
           {address && privateReady && isTreasuryActivity && (
-            <section className="mt-5 rounded-2xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03] sm:p-5">
+            <section className="mst-activity-filter mt-5">
               {accountOptions.length > 1 ? (
                 <label className="block max-w-xl">
                   <span className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Treasury</span>
-                  <select value={accountId} onChange={(event) => chooseAccount(event.target.value)} className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-emerald-500 dark:border-white/10 dark:bg-[#151515]">
+                  <select value={accountId} onChange={(event) => chooseAccount(event.target.value)} className="mst-activity-filter-select">
                     <option value="">Choose a treasury</option>
                     {accountOptions.map((id) => <option key={id} value={id}>{treasuryNames[id] || `Treasury · ${shortAddress(id)}`}</option>)}
                   </select>
@@ -452,7 +452,7 @@ export default function ActivityApp() {
           )}
 
           {data && visibleActivityCount > 0 && (
-            <div className="mt-5 space-y-4">
+            <div className="mst-activity-list mt-5">
               {isTreasuryActivity
                 ? data.items.map((item, index) => (
                     <ActivityCard

@@ -46,8 +46,8 @@ export default function SorobanIntentActivityCard({
   const intentHref = `${stellarHref('/a')}#${item.intentId}`;
 
   return (
-    <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)} className="group rounded-3xl border border-black/10 bg-white shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
-      <summary className="cursor-pointer list-none p-5 outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 sm:p-6">
+    <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)} className="group mst-activity-item">
+      <summary className="mst-activity-summary">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400"><span>Contract authorization</span>{item.network === 'testnet' && <><span>·</span><span className="text-sky-700 dark:text-sky-300">Testnet</span></>}</div>
@@ -60,8 +60,8 @@ export default function SorobanIntentActivityCard({
           </div>
         </div>
       </summary>
-      <div className="px-5 pb-5 sm:px-6 sm:pb-6">
-        <div className="border-t border-black/10 pt-5 dark:border-white/10">
+      <div className="mst-activity-detail">
+        <div className="mst-activity-timeline">
           {item.evidence.map((event, index) => {
             const copy = eventCopy(event, currentAddress);
             const isLast = index === item.evidence.length - 1;
@@ -72,7 +72,7 @@ export default function SorobanIntentActivityCard({
             </div>;
           })}
         </div>
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-black/10 pt-4 dark:border-white/10">
+        <div className="mst-activity-actions">
           <div>{result?.type === 'execution_confirmed' && <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4" />Confirmed</div>}{result?.type === 'execution_failed' && <div className="flex items-center gap-2 text-sm font-semibold text-red-700 dark:text-red-300"><CircleAlert className="h-4 w-4" />Execution failed</div>}</div>
           <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-xs font-semibold"><a href={intentHref} className="underline decoration-violet-600/30 text-violet-700 underline-offset-4 dark:text-violet-300">Open Intent</a>{result?.transactionHash && <a href={horizonTransactionUrl(result.transactionHash, item.network)} target="_blank" rel="noreferrer" className="underline decoration-black/20 underline-offset-4 dark:decoration-white/20">View network record</a>}</div>
         </div>

@@ -1866,3 +1866,109 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
     border-top: var(--rule-hairline) solid var(--color-rule);
   }
 }
+
+
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · design-system: design.md · designed-as-app
+ * pre-emit critique: P5 H5 E5 S5 R5 V5
+ */
+@layer components {
+  .mst-activity-list {
+    border-top: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-activity-item {
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-activity-summary {
+    display: block;
+    cursor: pointer;
+    list-style: none;
+    padding-block: var(--space-lg);
+    outline: none;
+  }
+
+  .mst-activity-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .mst-activity-summary:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 3px;
+  }
+
+  .mst-activity-summary > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-md);
+    align-items: start;
+  }
+
+  .mst-activity-detail {
+    padding-bottom: var(--space-lg);
+  }
+
+  .mst-activity-timeline {
+    padding-top: var(--space-lg);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-activity-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    margin-top: var(--space-lg);
+    padding-top: var(--space-md);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-activity-actions a {
+    white-space: nowrap;
+  }
+
+  .mst-activity-filter {
+    padding-block: var(--space-md);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-activity-filter-select {
+    width: 100%;
+    margin-top: var(--space-2xs);
+    border: var(--rule-hairline) solid var(--color-rule);
+    border-radius: var(--radius-input);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--text-sm);
+    font-weight: 650;
+    outline: none;
+  }
+
+  .mst-activity-filter-select:focus-visible {
+    border-color: var(--color-focus);
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
+
+@media (max-width: 40rem) {
+  .mst-activity-summary > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-xs);
+  }
+
+  .mst-activity-summary > div > div:last-child {
+    justify-self: start;
+  }
+
+  .mst-activity-summary > div > div:last-child > div {
+    text-align: left;
+  }
+
+  .mst-activity-actions {
+    align-items: flex-start;
+  }
+}
