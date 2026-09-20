@@ -524,11 +524,11 @@ export default function SigningRoomApp() {
                 <p className="mt-2 text-base leading-7 text-neutral-600 dark:text-neutral-300">Paste a Stellar transaction from another app, wallet, CLI, or Agent. You will see what it does before you approve anything.</p>
               </section>
 
-              <form onSubmit={loadRoom} className="mt-7 max-w-3xl rounded-2xl border border-black/10 bg-white p-5 shadow-sm shadow-black/[0.02] dark:border-white/10 dark:bg-white/5 sm:p-6">
+              <form onSubmit={loadRoom} className={`mst-import-form mt-7 max-w-3xl ${testnet ? 'mst-testnet-page' : ''}`}>
                 <div className="mb-2 text-sm font-semibold">Transaction XDR</div>
                 <div className="flex items-center gap-3"><NetworkFact network={network} long /><span className="text-xs leading-5 text-neutral-500 dark:text-neutral-400">This deployment network is authoritative; imported XDR is not probed against another ledger.</span></div>
-                <textarea value={draftXdr} onChange={(event) => { setDraftXdr(event.target.value); setError(''); }} placeholder="AAAAAgAAA..." spellCheck={false} rows={8} className="mt-4 w-full resize-y rounded-xl border border-black/10 bg-transparent p-4 font-mono text-sm leading-6 outline-none focus:border-emerald-500 dark:border-white/10" />
-                <button disabled={loading || !draftXdr.trim()} className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50">{loading && <LoaderCircle className="h-4 w-4 animate-spin" />}Review transaction</button>
+                <textarea value={draftXdr} onChange={(event) => { setDraftXdr(event.target.value); setError(''); }} placeholder="AAAAAgAAA..." spellCheck={false} rows={8} className="mst-import-control mt-4 w-full resize-y font-mono text-sm leading-6" />
+                <button disabled={loading || !draftXdr.trim()} className="mst-action-primary mt-4 disabled:opacity-50">{loading && <LoaderCircle className="h-4 w-4 animate-spin" />}Review transaction</button>
               </form>
             </>
           ) : (

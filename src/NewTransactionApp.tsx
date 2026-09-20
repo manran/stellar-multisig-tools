@@ -110,8 +110,6 @@ function ImportComposer({ network, onNetworkChange, initialFallbackSource }: Imp
   const [fallbackSource, setFallbackSource] = useState<NetworkFallbackChoiceSource>(initialFallbackSource);
   const [resolving, setResolving] = useState(false);
   const testnet = network === 'testnet';
-  const focusClass = testnet ? 'focus:border-sky-500' : 'focus:border-emerald-500';
-  const primaryClass = testnet ? 'bg-sky-700 hover:bg-sky-800' : 'bg-emerald-700 hover:bg-emerald-800';
 
   function changeFallbackNetwork(value: StellarNetwork) {
     if (value === network) return;
@@ -144,16 +142,16 @@ function ImportComposer({ network, onNetworkChange, initialFallbackSource }: Imp
         <h1 className="mt-4 text-3xl font-bold tracking-tight">Import XDR</h1>
         <p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Import an existing transaction from another Stellar app, wallet, CLI, or Agent.</p>
 
-        <form onSubmit={reviewImported} className="mt-6 space-y-5 rounded-2xl border border-black/10 bg-white p-5 shadow-sm shadow-black/[0.02] dark:border-white/10 dark:bg-white/5 sm:p-6">
+        <form onSubmit={reviewImported} className={`mst-import-form mt-6 ${testnet ? 'mst-testnet-page' : ''}`}>
           <NetworkFallbackChoice network={network} source={fallbackSource} onChange={changeFallbackNetwork} disabled={resolving} />
           <p className="text-xs leading-5 text-neutral-500 dark:text-neutral-400">The selected deployment network is authoritative. Stellar transaction XDR does not encode a network passphrase, so MultiSigTools validates the XDR against this network instead of guessing across ledgers.</p>
           <div>
             <label htmlFor="import-xdr" className="text-sm font-semibold">Transaction XDR</label>
-            <textarea id="import-xdr" value={xdr} onChange={(event) => { setXdr(event.target.value); setXdrError(''); }} aria-invalid={Boolean(xdrError)} aria-describedby={xdrError ? 'import-xdr-error' : undefined} placeholder="AAAAAgAAA..." rows={8} spellCheck={false} className={`mt-2 w-full resize-y rounded-xl border bg-black/[0.015] p-4 font-mono text-xs leading-5 outline-none dark:bg-white/[0.025] ${xdrError ? 'border-red-500/60 dark:border-red-400/60' : 'border-black/10 dark:border-white/10'} ${focusClass}`} />
+            <textarea id="import-xdr" value={xdr} onChange={(event) => { setXdr(event.target.value); setXdrError(''); }} aria-invalid={Boolean(xdrError)} aria-describedby={xdrError ? 'import-xdr-error' : undefined} placeholder="AAAAAgAAA..." rows={8} spellCheck={false} className={`mst-import-control mt-2 w-full resize-y font-mono text-xs leading-5 ${xdrError ? 'mst-import-control--error' : ''}`} />
             {xdrError && <p id="import-xdr-error" role="alert" className="mt-2 text-sm font-medium text-red-700 dark:text-red-300">{xdrError}</p>}
           </div>
           <div className="flex justify-end border-t border-black/10 pt-5 dark:border-white/10">
-            <button type="submit" disabled={resolving || !xdr.trim()} className={`flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-40 ${primaryClass}`}>{resolving ? 'Validating XDR…' : 'Review transaction'} <ArrowRight className="h-4 w-4" /></button>
+            <button type="submit" disabled={resolving || !xdr.trim()} className="mst-action-primary disabled:opacity-40">{resolving ? 'Validating XDR…' : 'Review transaction'} <ArrowRight className="h-4 w-4" /></button>
           </div>
         </form>
       </div>

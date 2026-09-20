@@ -19,6 +19,8 @@ const transfer = source('../TransferComposer.tsx');
 const claimablePayment = source('../ClaimablePaymentComposer.tsx');
 const designer = source('../MultisigDesignerApp.tsx');
 const existingDesigner = source('../ExistingMultisigPolicyEditor.tsx');
+const newTransaction = source('../NewTransactionApp.tsx');
+const signingRoom = source('../SigningRoomApp.tsx');
 const activity = source('../ActivityApp.tsx');
 const sorobanActivity = source('../SorobanIntentActivityCard.tsx');
 const review = source('../ReviewTransactionSummary.tsx');
@@ -187,6 +189,17 @@ test('existing multisig editor reuses the policy editor grammar while retaining 
   assert.doesNotMatch(existingDesigner, /step === 'signers' && <section className="rounded-2xl/);
   assert.doesNotMatch(existingDesigner, /step === 'approvals' && <section className="rounded-2xl/);
   assert.doesNotMatch(existingDesigner, /step === 'review' && <section className="rounded-2xl/);
+});
+
+test('XDR import entry points share one continuous preparation form', () => {
+  for (const entry of [newTransaction, signingRoom]) {
+    assert.match(entry, /mst-import-form/);
+    assert.match(entry, /mst-import-control/);
+    assert.match(entry, /mst-testnet-page/);
+    assert.doesNotMatch(entry, /rounded-2xl border border-black\/10 bg-white p-5 shadow-sm/);
+  }
+  assert.doesNotMatch(newTransaction, /focusClass|primaryClass/);
+  assert.match(newTransaction, /mst-import-control--error/);
 });
 
 test('Activity uses one continuous timeline grammar for Classic and Soroban work', () => {

@@ -3038,3 +3038,39 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
     border-bottom: var(--rule-hairline) solid var(--color-rule);
   }
 }
+
+/* Hallmark · XDR import entry · shared preparation form */
+@layer components {
+  .mst-import-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    padding-block: var(--space-lg);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-import-control {
+    min-height: 7rem;
+    border: var(--rule-hairline) solid var(--color-rule);
+    border-radius: var(--radius-input);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    padding: var(--space-md);
+    outline: none;
+  }
+
+  .mst-import-control:focus-visible {
+    border-color: var(--color-focus);
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .mst-import-control--error {
+    border-color: var(--color-danger);
+  }
+
+  .mst-import-control::placeholder {
+    color: var(--color-muted);
+  }
+}
