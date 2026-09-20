@@ -2222,3 +2222,130 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
     line-height: 1.6;
   }
 }
+
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · design-system: design.md · designed-as-app
+ * pre-emit critique: P5 H5 E5 S5 R5 V5
+ */
+@layer components {
+  .mst-signing-entry-icon {
+    width: 2.75rem;
+    height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: var(--rule-hairline) solid var(--color-rule);
+    border-radius: var(--radius-input);
+    background: var(--color-paper-2);
+    color: var(--color-accent);
+  }
+
+  .mst-signing-entry-icon--offline {
+    color: var(--color-info);
+  }
+
+  .mst-signing-path-section,
+  .mst-signing-entry-form {
+    padding-block: var(--space-lg);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-signing-path {
+    margin-top: var(--space-md);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-signing-path__step {
+    display: grid;
+    grid-template-columns: 3rem minmax(0, 1fr);
+    gap: var(--space-md);
+    align-items: baseline;
+    padding-block: var(--space-sm);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+    font-size: var(--text-sm);
+  }
+
+  .mst-signing-path__number {
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: 700;
+  }
+
+  .mst-signing-security-note {
+    display: flex;
+    gap: var(--space-xs);
+    margin-top: var(--space-md);
+    padding-block: var(--space-md);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    color: var(--color-ink-2);
+    font-size: var(--text-sm);
+    line-height: 1.6;
+  }
+
+  .mst-signing-security-note > svg {
+    color: var(--color-warning);
+  }
+
+  .mst-signing-route-list {
+    border-top: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-signing-route-row {
+    display: grid;
+    grid-template-columns: minmax(12rem, 0.6fr) minmax(0, 1fr);
+    gap: var(--space-lg);
+    padding-block: var(--space-md);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-signing-entry-form {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mst-signing-entry-control {
+    min-height: 2.875rem;
+    border: var(--rule-hairline) solid var(--color-rule);
+    border-radius: var(--radius-input);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--text-sm);
+    outline: none;
+  }
+
+  .mst-signing-entry-control:focus-visible {
+    border-color: var(--color-focus);
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .mst-signing-entry-control::placeholder {
+    color: var(--color-muted);
+  }
+}
+
+@media (min-width: 48rem) {
+  .mst-signing-path {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .mst-signing-path__step {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2xs);
+    padding-inline: var(--space-sm);
+  }
+
+  .mst-signing-path__step + .mst-signing-path__step {
+    border-left: var(--rule-hairline) solid var(--color-rule);
+  }
+}
+
+@media (max-width: 40rem) {
+  .mst-signing-route-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2xs);
+  }
+}

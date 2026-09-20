@@ -124,6 +124,18 @@ test('Human CTAs have semantic Action ownership without turning actions into sta
   assert.match(request, /<ActionButton variant="secondary" size="sm" onClick=\{\(\) => void copyXdr\(\)\}/);
 });
 
+test('account signing entry uses one sequence and continuous form instead of stacked cards', () => {
+  assert.match(accountSigningEntry, /mst-signing-entry-icon/);
+  assert.match(accountSigningEntry, /mst-signing-path/);
+  assert.match(accountSigningEntry, /mst-signing-path__step/);
+  assert.match(accountSigningEntry, /mst-signing-route-list/);
+  assert.match(accountSigningEntry, /mst-signing-route-row/);
+  assert.match(accountSigningEntry, /mst-signing-entry-form/);
+  assert.match(accountSigningEntry, /mst-signing-entry-control/);
+  assert.doesNotMatch(accountSigningEntry, /rounded-2xl border border-black\/10 bg-white/);
+  assert.doesNotMatch(accountSigningEntry, /sm:grid-cols-5/);
+});
+
 test('offline multisig setup keeps one workflow and supports XDR transport', () => {
   assert.match(accountSigningEntry, /Set up multisig offline/);
   assert.match(accountSigningEntry, /Offline signing path/);
