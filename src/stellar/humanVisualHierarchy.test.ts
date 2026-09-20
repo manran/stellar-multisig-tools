@@ -17,6 +17,7 @@ const addressBook = source('../AddressBookApp.tsx');
 const payment = source('../PaymentComposer.tsx');
 const transfer = source('../TransferComposer.tsx');
 const claimablePayment = source('../ClaimablePaymentComposer.tsx');
+const designer = source('../MultisigDesignerApp.tsx');
 const activity = source('../ActivityApp.tsx');
 const sorobanActivity = source('../SorobanIntentActivityCard.tsx');
 const review = source('../ReviewTransactionSummary.tsx');
@@ -128,6 +129,22 @@ test('Classic transaction composers share one continuous preparation workbench',
   assert.match(payment, /mst-transaction-context-list/);
   assert.match(transfer, /mst-transaction-disclosure/);
   assert.match(claimablePayment, /mst-claim-window-facts/);
+});
+
+test('multisig designer uses one continuous policy editor instead of step cards', () => {
+  assert.match(designer, /mst-designer-account-summary/);
+  assert.match(designer, /mst-designer-account-picker/);
+  assert.match(designer, /mst-designer-step/);
+  assert.match(designer, /mst-designer-current-key/);
+  assert.match(designer, /mst-designer-approval-grid/);
+  assert.match(designer, /mst-designer-approval-cell/);
+  assert.match(designer, /mst-designer-review-grid/);
+  assert.match(designer, /mst-designer-review-cell/);
+  assert.match(designer, /mst-designer-control/);
+  assert.doesNotMatch(designer, /step === 'signers' && <section className="rounded-2xl/);
+  assert.doesNotMatch(designer, /step === 'approvals' && <section className="rounded-2xl/);
+  assert.doesNotMatch(designer, /step === 'review' && <section className="rounded-2xl/);
+  assert.doesNotMatch(designer, /sm:grid-cols-3/);
 });
 
 test('Activity uses one continuous timeline grammar for Classic and Soroban work', () => {

@@ -2837,3 +2837,101 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
   }
 }
 
+
+/* Hallmark · multisig designer · continuous policy editor */
+@layer components {
+  .mst-designer-account-summary,
+  .mst-designer-account-picker,
+  .mst-designer-step {
+    padding-block: var(--space-lg);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-designer-account-summary {
+    padding-block: var(--space-md);
+  }
+
+  .mst-designer-current-key {
+    padding-block: var(--space-md);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+    background: var(--color-paper-2);
+  }
+
+  .mst-designer-step-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+    padding-top: var(--space-lg);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-designer-step-actions--split {
+    justify-content: space-between;
+  }
+
+  .mst-designer-approval-grid,
+  .mst-designer-review-grid {
+    display: grid;
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-designer-approval-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mst-designer-review-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mst-designer-approval-cell,
+  .mst-designer-review-cell {
+    min-width: 0;
+    padding: var(--space-md);
+  }
+
+  .mst-designer-approval-cell + .mst-designer-approval-cell,
+  .mst-designer-review-cell + .mst-designer-review-cell {
+    border-left: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-designer-control {
+    min-height: 2.875rem;
+    border: var(--rule-hairline) solid var(--color-rule);
+    border-radius: var(--radius-input);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    padding: var(--space-xs) var(--space-sm);
+    outline: none;
+  }
+
+  .mst-designer-control:focus-visible {
+    border-color: var(--color-focus);
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .mst-designer-review-action {
+    width: 100%;
+    min-height: 3rem;
+  }
+}
+
+@media (max-width: 40rem) {
+  .mst-designer-approval-grid,
+  .mst-designer-review-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mst-designer-approval-cell + .mst-designer-approval-cell,
+  .mst-designer-review-cell + .mst-designer-review-cell {
+    border-left: 0;
+    border-top: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-designer-step-actions--split {
+    align-items: stretch;
+  }
+}
