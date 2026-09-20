@@ -2551,3 +2551,78 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
     border-top: var(--rule-hairline) solid var(--color-rule);
   }
 }
+
+/* Hallmark · Address Book · relationship index */
+@layer components {
+  .mst-address-action-row,
+  .mst-address-add-form {
+    padding-block: var(--space-lg);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-address-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    background: var(--color-paper-2);
+  }
+
+  .mst-address-add-form {
+    display: grid;
+    gap: var(--space-sm);
+  }
+
+  .mst-address-control {
+    min-height: 2.75rem;
+    border: var(--rule-hairline) solid var(--color-rule);
+    border-radius: var(--radius-input);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--text-sm);
+    outline: none;
+  }
+
+  .mst-address-control:focus-visible {
+    border-color: var(--color-focus);
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .mst-address-control::placeholder {
+    color: var(--color-muted);
+  }
+
+  .mst-address-list {
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-address-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-md);
+    padding-block: var(--space-md);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-address-row:last-child {
+    border-bottom: 0;
+  }
+}
+
+@media (min-width: 40rem) {
+  .mst-address-add-form {
+    grid-template-columns: minmax(0, 1fr) 14rem auto;
+    align-items: end;
+  }
+
+  .mst-address-add-form > .text-red-700 {
+    grid-column: 1 / -1;
+  }
+}

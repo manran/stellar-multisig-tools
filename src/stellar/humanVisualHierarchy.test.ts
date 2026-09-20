@@ -13,6 +13,7 @@ const request = source('../RequestApp.tsx');
 const intent = source('../SorobanIntentApp.tsx');
 const treasury = source('../TreasuryApp.tsx');
 const treasurySettings = source('../TreasuryBoxSettingsApp.tsx');
+const addressBook = source('../AddressBookApp.tsx');
 const activity = source('../ActivityApp.tsx');
 const sorobanActivity = source('../SorobanIntentActivityCard.tsx');
 const review = source('../ReviewTransactionSummary.tsx');
@@ -29,6 +30,7 @@ test('primary Human surfaces share one page-header grammar', () => {
   assert.match(intent, /<PageHeader/);
   assert.match(treasury, /<PageHeader/);
   assert.match(treasurySettings, /<PageHeader/);
+  assert.match(addressBook, /<PageHeader/);
 });
 
 
@@ -97,6 +99,16 @@ test('Treasury settings separates public facts from private disclosures without 
   assert.match(treasurySettings, /mst-settings-control/);
   assert.doesNotMatch(treasurySettings, /rounded-2xl border border-black\/10 bg-white/);
   assert.doesNotMatch(treasurySettings, /sm:grid-cols-3/);
+});
+
+test('Address Book uses shared relationship rows instead of repeated list cards', () => {
+  assert.match(addressBook, /mst-address-action-row/);
+  assert.match(addressBook, /mst-address-add-form/);
+  assert.match(addressBook, /mst-address-control/);
+  assert.match(addressBook, /mst-address-list/);
+  assert.match(addressBook, /mst-address-row/);
+  assert.doesNotMatch(addressBook, /rounded-2xl border border-black\/10 bg-white/);
+  assert.equal((addressBook.match(/mst-address-list/g) ?? []).length, 3);
 });
 
 test('Activity uses one continuous timeline grammar for Classic and Soroban work', () => {
