@@ -57,7 +57,7 @@ function TreasuryCard({
   const signerCount = account.signers.filter((signer) => signer.type === 'ed25519_public_key' && signer.weight > 0).length;
 
   return (
-    <article className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.03] sm:p-6">
+    <article className="mst-treasury-row">
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -74,13 +74,13 @@ function TreasuryCard({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3 border-t border-black/10 pt-4 text-sm dark:border-white/10 sm:grid-cols-3">
+      <div className="mst-treasury-summary-grid">
         <div><div className="text-xs text-neutral-500 dark:text-neutral-400">Signers</div><div className="mt-1 font-semibold">{signerCount}</div></div>
         <div><div className="text-xs text-neutral-500 dark:text-neutral-400">Standard transactions</div><div className="mt-1 font-semibold">{humanAuthorizationRequirement(analysis.thresholds.medium)}</div></div>
         <div><div className="text-xs text-neutral-500 dark:text-neutral-400">Core account control</div><div className="mt-1 font-semibold">{humanAuthorizationRequirement(analysis.thresholds.high)}</div></div>
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-3 border-t border-black/10 pt-4 text-sm font-semibold dark:border-white/10">
+      <div className="mst-treasury-row__actions">
         {suggested && onAdopt ? (
           <button type="button" onClick={onAdopt} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-3 py-2 text-white hover:bg-emerald-800"><Plus className="h-4 w-4" />Use as Treasury</button>
         ) : (
@@ -110,7 +110,7 @@ function TreasuryAssets({ assets }: { assets: ReturnType<typeof accountAssetPres
         <h2 className="text-lg font-bold">Assets</h2>
         <span className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">{assets.length} {assets.length === 1 ? 'asset' : 'assets'} on this account</span>
       </div>
-      <div className="mt-3 overflow-hidden rounded-2xl border border-neutral-200/80 dark:border-white/[0.08]">
+      <div className="mst-treasury-list mt-3">
         {assets.map((asset) => {
           const balance = assetBalanceParts(asset.balance);
           return (
@@ -149,7 +149,7 @@ function PersonalAccountPrompt({
   onDismiss: () => void;
 }) {
   return (
-    <article className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03] sm:p-6">
+    <article className="mst-treasury-callout">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><div className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400">Create a treasury</div><h2 className="mt-2 text-lg font-bold">Turn this account into a shared-control treasury</h2></div>
         <button type="button" onClick={onDismiss} className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-neutral-500 hover:bg-black/5 dark:text-neutral-400 dark:hover:bg-white/10">Dismiss guide</button>
@@ -166,7 +166,7 @@ function PersonalAccountPrompt({
 
 function CompactCreateTreasury({ account, network }: { account: StellarAccountSnapshot; network: StellarNetwork }) {
   return (
-    <article className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-black/10 bg-white px-4 py-4 dark:border-white/10 dark:bg-white/[0.03] sm:px-5">
+    <article className="mst-treasury-action-row">
       <div><div className="font-semibold">Create a treasury</div><p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Setup guide dismissed. The create action stays available here.</p></div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <a href={treasurySigningHref(account.accountId, network, 'create-treasury')} className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 px-4 py-2.5 text-sm font-semibold text-emerald-700 dark:text-emerald-300"><Plus className="h-4 w-4" />Create treasury</a>
@@ -178,7 +178,7 @@ function CompactCreateTreasury({ account, network }: { account: StellarAccountSn
 
 function OtherControlledAccount({ account, onAdopt }: { account: StellarAccountSnapshot; onAdopt: () => void }) {
   return (
-    <article className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03] sm:p-6">
+    <article className="mst-treasury-callout">
       <div className="text-sm font-semibold">Other controlled account</div>
       <div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{account.accountId}</div>
       <p className="mt-3 text-sm leading-6 text-neutral-500 dark:text-neutral-400">This wallet can authorize the account, but its current policy is not an obvious shared-control treasury. Add it only if you intentionally want to manage it here.</p>
@@ -214,8 +214,8 @@ function TreasuryDetail({
       <a href={treasuryOverviewHref()} className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black dark:text-neutral-300 dark:hover:text-white">
         <ArrowLeft className="h-4 w-4" />Treasury
       </a>
-      <section className="mt-5 rounded-3xl border border-black/10 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.03] sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-5 border-b border-black/10 pb-5 dark:border-white/10">
+      <section className="mst-treasury-detail mt-5">
+        <div className="mst-treasury-detail__header">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold tracking-tight">{name || (adopted ? (nameReady ? 'Unnamed treasury' : 'Treasury') : 'Account')}</h1>
@@ -233,17 +233,17 @@ function TreasuryDetail({
 
         <div className="mt-6">
           <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-lg font-bold">Signing policy</h2><span className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">Total approval power {analysis.totalActiveWeight}</span></div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl bg-black/[0.035] p-4 dark:bg-white/[0.04]"><div className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Limited account actions</div><div className="mt-2 text-lg font-bold leading-6">{humanAuthorizationRequirement(analysis.thresholds.low)}</div></div>
-            <div className="rounded-2xl bg-black/[0.035] p-4 dark:bg-white/[0.04]"><div className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Standard transactions</div><div className="mt-2 text-lg font-bold leading-6">{humanAuthorizationRequirement(analysis.thresholds.medium)}</div></div>
-            <div className="rounded-2xl bg-black/[0.035] p-4 dark:bg-white/[0.04]"><div className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Core account control</div><div className="mt-2 text-lg font-bold leading-6">{humanAuthorizationRequirement(analysis.thresholds.high)}</div></div>
-            <div className="rounded-2xl bg-black/[0.035] p-4 dark:bg-white/[0.04]"><div className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Account key</div><div className="mt-2 text-lg font-bold leading-6">{approvalPowerLabel(analysis.masterKeyWeight)}</div></div>
+          <div className="mst-treasury-policy-grid">
+            <div className="mst-treasury-policy-cell"><div className="mst-treasury-policy-label">Limited account actions</div><div className="mst-treasury-policy-value">{humanAuthorizationRequirement(analysis.thresholds.low)}</div></div>
+            <div className="mst-treasury-policy-cell"><div className="mst-treasury-policy-label">Standard transactions</div><div className="mst-treasury-policy-value">{humanAuthorizationRequirement(analysis.thresholds.medium)}</div></div>
+            <div className="mst-treasury-policy-cell"><div className="mst-treasury-policy-label">Core account control</div><div className="mst-treasury-policy-value">{humanAuthorizationRequirement(analysis.thresholds.high)}</div></div>
+            <div className="mst-treasury-policy-cell"><div className="mst-treasury-policy-label">Account key</div><div className="mst-treasury-policy-value">{approvalPowerLabel(analysis.masterKeyWeight)}</div></div>
           </div>
         </div>
 
         <div className="mt-7">
           <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-lg font-bold">Signers</h2><span className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">{reusableSigners.length} active signing {reusableSigners.length === 1 ? 'key' : 'keys'}</span></div>
-          <div className="mt-3 overflow-hidden rounded-2xl border border-black/10 dark:border-white/10">
+          <div className="mst-treasury-list mt-3">
             {reusableSigners.map((signer) => {
               const isAccountKey = signer.key === account.accountId;
               const signerAlias = isAccountKey ? '' : labelFor(signer.key, 'signer');
@@ -253,7 +253,7 @@ function TreasuryDetail({
           </div>
         </div>
 
-        {advancedSigners.length > 0 && <details className="mt-5 rounded-xl border border-black/10 p-4 dark:border-white/10"><summary className="cursor-pointer text-sm font-semibold">Advanced signer types · {advancedSigners.length}</summary><div className="mt-3 space-y-2 text-sm text-neutral-600 dark:text-neutral-300">{advancedSigners.map((signer) => <div key={signer.key} className="break-all font-mono text-xs">{signer.type} · {signer.key} · weight {signer.weight}</div>)}</div></details>}
+        {advancedSigners.length > 0 && <details className="mst-advanced-panel mt-5"><summary className="cursor-pointer text-sm font-semibold">Advanced signer types · {advancedSigners.length}</summary><div className="mt-3 space-y-2 text-sm text-neutral-600 dark:text-neutral-300">{advancedSigners.map((signer) => <div key={signer.key} className="break-all font-mono text-xs">{signer.type} · {signer.key} · weight {signer.weight}</div>)}</div></details>}
 
         {adopted && (
           <div className="mt-7 flex flex-wrap items-center justify-between gap-4 border-t border-black/10 pt-5 dark:border-white/10">
@@ -414,7 +414,7 @@ export default function TreasuryApp() {
 
           {!address && <section className="mx-auto max-w-xl py-14 sm:py-20"><Vault className="h-8 w-8 text-neutral-400" /><h2 className="mt-5 text-3xl font-bold">Connect a wallet</h2><p className="mt-2 text-base leading-7 text-neutral-600 dark:text-neutral-300">We'll use public Stellar account data to find accounts this wallet can help authorize.</p><button type="button" disabled={busy} onClick={() => void connect()} className="mt-6 flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-white disabled:opacity-50"><WalletCards className="h-4 w-4" />{busy ? 'Opening wallets…' : 'Connect wallet'}</button></section>}
 
-          {address && !privateReady && !accountParam && <section className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03] sm:p-5"><div><div className="font-semibold">Treasury names are private</div><p className="mt-1 text-sm leading-6 text-neutral-500 dark:text-neutral-400">Public account relationships are available now. Confirm this wallet only when you want to load shared Treasury names and other private details.</p></div><button type="button" disabled={authBusy} onClick={() => void unlock()} className="flex shrink-0 items-center gap-2 rounded-xl border border-emerald-500/30 px-4 py-2.5 text-sm font-semibold text-emerald-700 disabled:opacity-50 dark:text-emerald-300">{authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Show private details</button></section>}
+          {address && !privateReady && !accountParam && <section className="mst-treasury-action-row mt-5"><div><div className="font-semibold">Treasury names are private</div><p className="mt-1 text-sm leading-6 text-neutral-500 dark:text-neutral-400">Public account relationships are available now. Confirm this wallet only when you want to load shared Treasury names and other private details.</p></div><button type="button" disabled={authBusy} onClick={() => void unlock()} className="flex shrink-0 items-center gap-2 rounded-xl border border-emerald-500/30 px-4 py-2.5 text-sm font-semibold text-emerald-700 disabled:opacity-50 dark:text-emerald-300">{authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Show private details</button></section>}
 
           {error && <div className="mt-5 flex gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
           {address && loading && accounts.length === 0 && <div className="flex items-center gap-2 py-10 text-sm text-neutral-500 dark:text-neutral-400"><LoaderCircle className="h-4 w-4 animate-spin" />Loading Treasury accounts…</div>}
@@ -434,14 +434,14 @@ export default function TreasuryApp() {
 
           {!accountParam && accounts.length > 0 && (
             <div className="mt-6 space-y-8">
-              {confirmedAccounts.length > 0 && <section><div className="mb-3 text-sm font-semibold text-neutral-500 dark:text-neutral-400">Treasuries</div><div className="grid gap-4">{confirmedAccounts.map((account) => <TreasuryCard key={account.accountId} account={account} network={network!} name={treasuryNames[account.accountId]} nameReady={privateReady && treasuryMetadataReady} />)}</div></section>}
-              {suggestedAccounts.length > 0 && <section><div className="mb-1 text-lg font-bold">Accounts you can manage</div><p className="mb-3 text-sm text-neutral-500 dark:text-neutral-400">These accounts already use shared signing on Stellar. Choose the ones you want to manage as Treasuries.</p><div className="grid gap-4">{suggestedAccounts.map((account) => <TreasuryCard key={account.accountId} account={account} network={network!} name={treasuryNames[account.accountId]} nameReady={privateReady && treasuryMetadataReady} suggested onAdopt={() => adoptTreasury(account.accountId)} />)}</div></section>}
+              {confirmedAccounts.length > 0 && <section><div className="mb-3 text-sm font-semibold text-neutral-500 dark:text-neutral-400">Treasuries</div><div className="mst-treasury-collection">{confirmedAccounts.map((account) => <TreasuryCard key={account.accountId} account={account} network={network!} name={treasuryNames[account.accountId]} nameReady={privateReady && treasuryMetadataReady} />)}</div></section>}
+              {suggestedAccounts.length > 0 && <section><div className="mb-1 text-lg font-bold">Accounts you can manage</div><p className="mb-3 text-sm text-neutral-500 dark:text-neutral-400">These accounts already use shared signing on Stellar. Choose the ones you want to manage as Treasuries.</p><div className="mst-treasury-collection">{suggestedAccounts.map((account) => <TreasuryCard key={account.accountId} account={account} network={network!} name={treasuryNames[account.accountId]} nameReady={privateReady && treasuryMetadataReady} suggested onAdopt={() => adoptTreasury(account.accountId)} />)}</div></section>}
               {personalAccount && network && (
                 <section>{treasuryOnboardingDismissed
                   ? <CompactCreateTreasury account={personalAccount} network={network} />
                   : <PersonalAccountPrompt account={personalAccount} network={network} onDismiss={dismissTreasuryOnboarding} />}</section>
               )}
-              {otherAccounts.length > 0 && <section><div className="mb-3 text-sm font-semibold text-neutral-500 dark:text-neutral-400">Other accounts you can authorize</div><div className="grid gap-4">{otherAccounts.map((account) => <OtherControlledAccount key={account.accountId} account={account} onAdopt={() => adoptTreasury(account.accountId)} />)}</div></section>}
+              {otherAccounts.length > 0 && <section><div className="mb-3 text-sm font-semibold text-neutral-500 dark:text-neutral-400">Other accounts you can authorize</div><div className="mst-treasury-collection">{otherAccounts.map((account) => <OtherControlledAccount key={account.accountId} account={account} onAdopt={() => adoptTreasury(account.accountId)} />)}</div></section>}
             </div>
           )}
         </div>

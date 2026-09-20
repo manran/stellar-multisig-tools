@@ -72,6 +72,17 @@ test('Human work queues use shared rows and master-detail without repeating floa
   assert.match(review, /mode === 'history'[\s\S]*'mst-evidence-surface'/);
 });
 
+test('Treasury uses one continuous workbench instead of nested policy and account cards', () => {
+  assert.match(treasury, /mst-treasury-row/);
+  assert.match(treasury, /mst-treasury-collection/);
+  assert.match(treasury, /mst-treasury-policy-grid/);
+  assert.match(treasury, /mst-treasury-policy-cell/);
+  assert.match(treasury, /mst-treasury-list/);
+  assert.match(treasury, /mst-treasury-detail/);
+  assert.doesNotMatch(treasury, /lg:grid-cols-4/);
+  assert.doesNotMatch(treasury, /rounded-3xl border border-black\/10 bg-white/);
+});
+
 test('shared visual hierarchy does not introduce a new workflow or status vocabulary', () => {
   assert.doesNotMatch(ui, /Step 6|Stage 6/);
   assert.doesNotMatch(dashboard, /Sign mode|Manage mode/);
