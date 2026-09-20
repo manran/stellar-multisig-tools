@@ -3005,3 +3005,36 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
     max-width: none;
   }
 }
+
+/* Hallmark · Soroban Intent · evidence ledger */
+@layer components {
+  .mst-intent-summary,
+  .mst-intent-evidence-section,
+  .mst-intent-authorization-section {
+    padding-block: var(--space-lg);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-intent-summary,
+  .mst-intent-action-context {
+    background: var(--color-paper-2);
+  }
+
+  .mst-intent-authorizer-list {
+    margin-top: var(--space-md);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-intent-authorizer-row {
+    padding-block: var(--space-md);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+    font-size: var(--text-sm);
+  }
+
+  .mst-intent-action-context {
+    padding-block: var(--space-md);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+}

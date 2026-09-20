@@ -75,6 +75,20 @@ test('page identity precedes Soroban Intent workflow progress', () => {
   assert.match(intent, /title="Contract authorization"/);
 });
 
+test('Soroban Intent uses a continuous evidence ledger while execution states remain explicit', () => {
+  assert.match(intent, /mst-intent-summary/);
+  assert.match(intent, /mst-intent-evidence-section/);
+  assert.match(intent, /mst-intent-authorization-section/);
+  assert.match(intent, /mst-intent-authorizer-list/);
+  assert.match(intent, /mst-intent-authorizer-row/);
+  assert.match(intent, /mst-intent-action-context/);
+  assert.match(intent, /Execution failed on Stellar/);
+  assert.match(intent, /Execution effects comparison/);
+  assert.match(intent, /Authorization expired/);
+  assert.match(intent, /This Intent cannot continue/);
+  assert.doesNotMatch(intent, /Simulation effects at authorization<\/h2><p[^\n]*rounded-2xl/);
+});
+
 test('Dashboard and Inbox use the same wide Human content frame', () => {
   assert.match(dashboard, /mx-auto max-w-6xl/);
   assert.match(inbox, /mx-auto max-w-6xl/);
