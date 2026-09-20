@@ -18,6 +18,7 @@ const payment = source('../PaymentComposer.tsx');
 const transfer = source('../TransferComposer.tsx');
 const claimablePayment = source('../ClaimablePaymentComposer.tsx');
 const designer = source('../MultisigDesignerApp.tsx');
+const existingDesigner = source('../ExistingMultisigPolicyEditor.tsx');
 const activity = source('../ActivityApp.tsx');
 const sorobanActivity = source('../SorobanIntentActivityCard.tsx');
 const review = source('../ReviewTransactionSummary.tsx');
@@ -145,6 +146,21 @@ test('multisig designer uses one continuous policy editor instead of step cards'
   assert.doesNotMatch(designer, /step === 'approvals' && <section className="rounded-2xl/);
   assert.doesNotMatch(designer, /step === 'review' && <section className="rounded-2xl/);
   assert.doesNotMatch(designer, /sm:grid-cols-3/);
+});
+
+test('existing multisig editor reuses the policy editor grammar while retaining explicit risk states', () => {
+  assert.match(existingDesigner, /mst-designer-step/);
+  assert.match(existingDesigner, /mst-designer-current-key/);
+  assert.match(existingDesigner, /mst-designer-approval-grid/);
+  assert.match(existingDesigner, /mst-designer-approval-cell/);
+  assert.match(existingDesigner, /mst-designer-control/);
+  assert.match(existingDesigner, /mst-designer-step-actions/);
+  assert.match(existingDesigner, /Change an existing multisig configuration\?/);
+  assert.match(existingDesigner, /border-red-500\/30 bg-red-500\/10/);
+  assert.match(existingDesigner, /border-amber-500\/25 bg-amber-500/);
+  assert.doesNotMatch(existingDesigner, /step === 'signers' && <section className="rounded-2xl/);
+  assert.doesNotMatch(existingDesigner, /step === 'approvals' && <section className="rounded-2xl/);
+  assert.doesNotMatch(existingDesigner, /step === 'review' && <section className="rounded-2xl/);
 });
 
 test('Activity uses one continuous timeline grammar for Classic and Soroban work', () => {
