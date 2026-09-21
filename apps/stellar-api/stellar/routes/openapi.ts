@@ -1,3 +1,4 @@
+import { stellarApiBaseForDeployment } from '../../../../src/stellar/apiOrigins.js';
 import { configuredDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import { publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
 import { createOpenApiDocument } from '../server/openApiDocument.js';
@@ -11,9 +12,9 @@ export async function OPTIONS(): Promise<Response> {
 
 export async function GET(request: Request): Promise<Response> {
   try {
-    const url = new URL(request.url);
+    const deploymentNetwork = configuredDeploymentNetwork();
     return publicCorsJson(
-      createOpenApiDocument(url.origin, configuredDeploymentNetwork()),
+      createOpenApiDocument(stellarApiBaseForDeployment(deploymentNetwork), deploymentNetwork),
       METHODS,
       200,
       {

@@ -28,89 +28,89 @@ const parameter = (
 
 function operationParameters(path: string, method: string): OpenApiObject[] {
   const values: OpenApiObject[] = [];
-  if (path === '/api/integration-execution') {
+  if (path === '/integration-execution') {
     values.push(parameter('network', 'query', true, schema('StellarNetwork'), 'Must match both this deployment and the Integration credential scope.'));
   }
-  if (path === '/api/contract-interface') {
+  if (path === '/contract-interface') {
     values.push(
       parameter('network', 'query', true, schema('StellarNetwork'), 'Must match this deployment.'),
       parameter('contract', 'query', true, { type: 'string', pattern: '^C[A-Z2-7]{55}$' }, 'Stellar contract address.'),
     );
   }
-  if (path === '/api/request') {
+  if (path === '/request') {
     values.push(
       parameter('x-multisig-request-id', 'header', method !== 'post', { type: 'string' }, 'Authorization or Proposal id.'),
       parameter('x-multisig-capability', 'header', false, { type: 'string' }, 'Private share capability when using capability access.'),
     );
   }
-  if (path === '/api/request' && method === 'get') {
+  if (path === '/request' && method === 'get') {
     values.push(
       parameter('view', 'query', false, { type: 'string', enum: ['history'] }, 'Request retained history projection.'),
       parameter('account', 'query', false, { type: 'string', pattern: '^G[A-Z2-7]{55}$' }, 'Optional Treasury scope for history.'),
     );
   }
-  if (path === '/api/intent' && method !== 'post') {
+  if (path === '/intent' && method !== 'post') {
     values.push(parameter('X-MultiSig-Intent-Id', 'header', true, { type: 'string' }, 'Soroban Intent id.'));
     if (method === 'get' || method === 'patch') {
       values.push(parameter('X-MultiSig-Intent-Capability', 'header', false, { type: 'string' }, 'Short-lived signer-scoped Browser authorization capability (mic_...).'));
     }
   }
-  if (path === '/api/intent' && method === 'post') {
+  if (path === '/intent' && method === 'post') {
     values.push(parameter('Idempotency-Key', 'header', false, { type: 'string' }, 'Required for Agent or Integration Intent creation; Human sessions do not need it.'));
   }
-  if (path === '/api/request' && method === 'post') {
+  if (path === '/request' && method === 'post') {
     values.push(parameter('Idempotency-Key', 'header', false, { type: 'string' }, 'Required for Agent or Integration Request creation; ignored for Human sessions.'));
   }
   return values;
 }
 
 function requestBody(path: string, method: string): OpenApiObject | undefined {
-  if (path === '/api/integration-testnet' && method === 'post') return body(schema('TestnetIntegrationCreateInput'));
-  if (path === '/api/intent' && method === 'post') return body(schema('ContractIntentCreateInput'));
-  if (path === '/api/intent' && method === 'patch') return body(schema('ContractIntentContributionInput'));
-  if (path === '/api/intent' && method === 'put') return body({ oneOf: [schema('ContractIntentExecutionInput'), schema('ContractIntentExecutionReconcileInput'), schema('ContractIntentReplanInput'), schema('ContractIntentCancelInput'), schema('BrowserAuthorizationIssueInput')] });
-  if (path === '/api/contract-call' && method === 'post') return body(schema('ContractCallBuildInput'));
-  if (path === '/api/contract-prepare' && method === 'post') return body(schema('ContractPrepareInput'));
-  if (path === '/api/contracts' && (method === 'put' || method === 'delete')) return body(schema('ContractWorkspaceInput'));
-  if (path === '/api/payment-prepare' && method === 'post') return body(schema('ClassicPaymentPrepareInput'));
-  if (path === '/api/account-create-prepare' && method === 'post') return body(schema('ClassicCreateAccountPrepareInput'));
-  if (path === '/api/request' && method === 'post') return body(schema('ProposalCreateInput'));
-  if (path === '/api/request' && method === 'patch') return body(schema('ProposalPatchInput'));
+  if (path === '/integration-testnet' && method === 'post') return body(schema('TestnetIntegrationCreateInput'));
+  if (path === '/intent' && method === 'post') return body(schema('ContractIntentCreateInput'));
+  if (path === '/intent' && method === 'patch') return body(schema('ContractIntentContributionInput'));
+  if (path === '/intent' && method === 'put') return body({ oneOf: [schema('ContractIntentExecutionInput'), schema('ContractIntentExecutionReconcileInput'), schema('ContractIntentReplanInput'), schema('ContractIntentCancelInput'), schema('BrowserAuthorizationIssueInput')] });
+  if (path === '/contract-call' && method === 'post') return body(schema('ContractCallBuildInput'));
+  if (path === '/contract-prepare' && method === 'post') return body(schema('ContractPrepareInput'));
+  if (path === '/contracts' && (method === 'put' || method === 'delete')) return body(schema('ContractWorkspaceInput'));
+  if (path === '/payment-prepare' && method === 'post') return body(schema('ClassicPaymentPrepareInput'));
+  if (path === '/account-create-prepare' && method === 'post') return body(schema('ClassicCreateAccountPrepareInput'));
+  if (path === '/request' && method === 'post') return body(schema('ProposalCreateInput'));
+  if (path === '/request' && method === 'patch') return body(schema('ProposalPatchInput'));
   return undefined;
 }
 
 function successSchema(path: string, method: string): OpenApiObject {
-  if (path === '/api/runtime-config') return schema('RuntimeConfigResult');
-  if (path === '/api/integration-testnet') return schema('TestnetIntegrationCreateResult');
-  if (path === '/api/integration-execution') return schema('IntegrationExecutionInspectResult');
-  if (path === '/api/contract-interface') return schema('ContractInterfaceResult');
-  if (path === '/api/intent' && method === 'post') return schema('ContractIntentCreateResult');
-  if (path === '/api/intent' && method === 'get') return { oneOf: [schema('ContractIntentInspectResult'), schema('BrowserAuthorizationInspectResult')] };
-  if (path === '/api/intent' && method === 'patch') return { oneOf: [schema('ContractIntentContributionResult'), schema('BrowserAuthorizationContributionResult')] };
-  if (path === '/api/intent' && method === 'put') return { oneOf: [schema('ContractIntentExecutionResult'), schema('ContractIntentExecutionReconcileResult'), schema('ContractIntentReplanResult'), schema('ContractIntentCancelResult'), schema('BrowserAuthorizationIssueResult')] };
-  if (path === '/api/contract-call') return schema('ContractCallBuildResult');
-  if (path === '/api/contract-prepare') return { oneOf: [schema('ContractPrepareResult'), schema('ContractEnforceResult')] };
-  if (path === '/api/contracts' && method === 'get') return schema('ContractWorkspaceListResult');
-  if (path === '/api/contracts' && method === 'put') return schema('ContractWorkspaceKeepResult');
-  if (path === '/api/contracts' && method === 'delete') return schema('ContractWorkspaceForgetResult');
-  if (path === '/api/payment-prepare') return schema('ClassicPaymentPrepareResult');
-  if (path === '/api/account-create-prepare') return schema('ClassicCreateAccountPrepareResult');
-  if (path === '/api/request') return schema('ProposalResult');
+  if (path === '/runtime-config') return schema('RuntimeConfigResult');
+  if (path === '/integration-testnet') return schema('TestnetIntegrationCreateResult');
+  if (path === '/integration-execution') return schema('IntegrationExecutionInspectResult');
+  if (path === '/contract-interface') return schema('ContractInterfaceResult');
+  if (path === '/intent' && method === 'post') return schema('ContractIntentCreateResult');
+  if (path === '/intent' && method === 'get') return { oneOf: [schema('ContractIntentInspectResult'), schema('BrowserAuthorizationInspectResult')] };
+  if (path === '/intent' && method === 'patch') return { oneOf: [schema('ContractIntentContributionResult'), schema('BrowserAuthorizationContributionResult')] };
+  if (path === '/intent' && method === 'put') return { oneOf: [schema('ContractIntentExecutionResult'), schema('ContractIntentExecutionReconcileResult'), schema('ContractIntentReplanResult'), schema('ContractIntentCancelResult'), schema('BrowserAuthorizationIssueResult')] };
+  if (path === '/contract-call') return schema('ContractCallBuildResult');
+  if (path === '/contract-prepare') return { oneOf: [schema('ContractPrepareResult'), schema('ContractEnforceResult')] };
+  if (path === '/contracts' && method === 'get') return schema('ContractWorkspaceListResult');
+  if (path === '/contracts' && method === 'put') return schema('ContractWorkspaceKeepResult');
+  if (path === '/contracts' && method === 'delete') return schema('ContractWorkspaceForgetResult');
+  if (path === '/payment-prepare') return schema('ClassicPaymentPrepareResult');
+  if (path === '/account-create-prepare') return schema('ClassicCreateAccountPrepareResult');
+  if (path === '/request') return schema('ProposalResult');
   return { type: 'object', additionalProperties: true };
 }
 
 function security(path: string, method: string, access: HeadlessOperationAccess): OpenApiObject[] {
   if (access === 'public') return [];
-  if (path === '/api/intent') {
+  if (path === '/intent') {
     if (method === 'patch') return [{ agentBearer: [] }, { humanSession: [] }, { intentCapability: [] }];
     if (method === 'get') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }, { intentCapability: [] }];
     return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
   }
-  if (path === '/api/integration-execution') return [{ integrationBearer: [] }];
-  if (path === '/api/contracts') return [{ agentBearer: [] }, { humanSession: [] }];
-  if (path === '/api/payment-prepare' || path === '/api/account-create-prepare') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
-  if (path === '/api/request' && method === 'put') return [{ integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
-  if (path === '/api/request' && (method === 'post' || method === 'get')) {
+  if (path === '/integration-execution') return [{ integrationBearer: [] }];
+  if (path === '/contracts') return [{ agentBearer: [] }, { humanSession: [] }];
+  if (path === '/payment-prepare' || path === '/account-create-prepare') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
+  if (path === '/request' && method === 'put') return [{ integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
+  if (path === '/request' && (method === 'post' || method === 'get')) {
     return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
   }
   return [{ agentBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
@@ -136,12 +136,12 @@ function openApiPaths(): OpenApiObject {
     const first = operations[0];
     const parameters = operationParameters(path, method);
     const request = requestBody(path, method);
-    const statuses = method === 'post' && ['/api/intent', '/api/request'].includes(path)
+    const statuses = method === 'post' && ['/intent', '/request'].includes(path)
       ? {
           '200': response('Idempotent replay.', successSchema(path, method)),
           '201': response('Created.', successSchema(path, method)),
         }
-      : method === 'post' && path === '/api/integration-testnet'
+      : method === 'post' && path === '/integration-testnet'
         ? { '201': response('Created.', successSchema(path, method)) }
         : { '200': response('Successful operation.', successSchema(path, method)) };
     const pathItem = (paths[path] ?? {}) as OpenApiObject;
@@ -1327,7 +1327,7 @@ export function createOpenApiDocument(
     components,
     externalDocs: {
       description: 'MultiSig Tools developer integration and authority guide',
-      url: `${origin === '/' ? '' : origin}/developers`,
+      url: 'https://docs.multisig.tools/stellar/developers',
     },
   };
 }

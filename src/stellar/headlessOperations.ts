@@ -27,147 +27,147 @@ export interface HeadlessOperationDescriptor {
 
 export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] = [
   {
-    id: 'runtime.config.inspect', version: 1, method: 'GET', path: '/api/runtime-config',
+    id: 'runtime.config.inspect', version: 1, method: 'GET', path: '/runtime-config',
     access: 'public', effect: 'none', summary: 'Read the deployment-owned Stellar network policy.',
   },
   {
-    id: 'integration.testnet.create', version: 1, method: 'POST', path: '/api/integration-testnet',
+    id: 'integration.testnet.create', version: 1, method: 'POST', path: '/integration-testnet',
     access: 'public', effect: 'private-state', summary: 'Create an immediately active Testnet-only Integration Profile and receive its msi credential once.',
   },
   {
-    id: 'contract.interface.inspect', version: 1, method: 'GET', path: '/api/contract-interface',
+    id: 'contract.interface.inspect', version: 1, method: 'GET', path: '/contract-interface',
     access: 'public', effect: 'none', summary: 'Resolve the callable interface of one Soroban contract.',
   },
   {
-    id: 'contract.intent.create', version: 1, method: 'POST', path: '/api/intent',
+    id: 'contract.intent.create', version: 1, method: 'POST', path: '/intent',
     access: 'principal:write', effect: 'coordination-state', summary: 'Create a source-free Soroban Intent and discover its authorization plan.',
   },
   {
-    id: 'integration.intent.create', version: 1, method: 'POST', path: '/api/intent',
+    id: 'integration.intent.create', version: 1, method: 'POST', path: '/intent',
     access: 'integration:write', effect: 'coordination-state', summary: 'Create a scoped external-service Soroban Intent without granting the service signer authority.',
   },
   {
-    id: 'contract.intent.inspect', version: 1, method: 'GET', path: '/api/intent',
+    id: 'contract.intent.inspect', version: 1, method: 'GET', path: '/intent',
     access: 'principal:read', effect: 'none', summary: 'Inspect one Soroban Intent and its live authorization state.',
   },
   {
-    id: 'integration.intent.inspect', version: 1, method: 'GET', path: '/api/intent',
+    id: 'integration.intent.inspect', version: 1, method: 'GET', path: '/intent',
     access: 'integration:read', effect: 'none', summary: "Inspect an external service's own Soroban Intent and live authorization state.",
   },
   {
-    id: 'integration.intent.browser.inspect', version: 1, method: 'GET', path: '/api/intent',
+    id: 'integration.intent.browser.inspect', version: 1, method: 'GET', path: '/intent',
     access: 'browser:read', effect: 'none', summary: 'Inspect one signer-scoped Browser authorization challenge for an Integration-owned Intent.',
   },
   {
-    id: 'contract.intent.contribute', version: 1, method: 'PATCH', path: '/api/intent',
+    id: 'contract.intent.contribute', version: 1, method: 'PATCH', path: '/intent',
     access: 'principal:sign', effect: 'coordination-state', summary: 'Add one verified detached Soroban authorization signature.',
   },
   {
-    id: 'integration.intent.browser.contribute', version: 1, method: 'PATCH', path: '/api/intent',
+    id: 'integration.intent.browser.contribute', version: 1, method: 'PATCH', path: '/intent',
     access: 'browser:sign', effect: 'coordination-state', summary: 'Submit one signer-scoped Browser signature to the existing Soroban Authorization Core.',
   },
   {
-    id: 'contract.intent.execution.prepare', version: 1, method: 'PUT', path: '/api/intent',
+    id: 'contract.intent.execution.prepare', version: 1, method: 'PUT', path: '/intent',
     access: 'principal:write', effect: 'none', summary: 'Late-bind an execution source, compare enforcing effects with reviewed evidence, and prepare the final unsigned Soroban transaction.',
   },
   {
-    id: 'integration.intent.execution.prepare', version: 1, method: 'PUT', path: '/api/intent',
+    id: 'integration.intent.execution.prepare', version: 1, method: 'PUT', path: '/intent',
     access: 'integration:write', effect: 'none', summary: 'Resolve the Integration executor, enforce reviewed effects, and prepare or refresh the final unsigned Soroban execution package.',
   },
   {
-    id: 'contract.intent.execution.reconcile', version: 1, method: 'PUT', path: '/api/intent',
+    id: 'contract.intent.execution.reconcile', version: 1, method: 'PUT', path: '/intent',
     access: 'principal:write', effect: 'coordination-state', summary: 'Independently verify a persisted Soroban execution preparation against Stellar and retain the observed ledger result.',
   },
   {
-    id: 'integration.intent.execution.reconcile', version: 1, method: 'PUT', path: '/api/intent',
+    id: 'integration.intent.execution.reconcile', version: 1, method: 'PUT', path: '/intent',
     access: 'integration:write', effect: 'coordination-state', summary: 'Independently verify an Integration-owned Soroban execution preparation against Stellar and retain the observed ledger result.',
   },
   {
-    id: 'contract.intent.replan', version: 1, method: 'PUT', path: '/api/intent',
+    id: 'contract.intent.replan', version: 1, method: 'PUT', path: '/intent',
     access: 'principal:write', effect: 'coordination-state', summary: 'Replace an expired or structurally changed authorization plan with a fresh revision for the same Soroban Intent.',
   },
   {
-    id: 'integration.intent.replan', version: 1, method: 'PUT', path: '/api/intent',
+    id: 'integration.intent.replan', version: 1, method: 'PUT', path: '/intent',
     access: 'integration:write', effect: 'coordination-state', summary: "Refresh an external service's own AuthorizationPlan when fresh signer AUTH is required.",
   },
   {
-    id: 'contract.intent.cancel', version: 1, method: 'PUT', path: '/api/intent',
+    id: 'contract.intent.cancel', version: 1, method: 'PUT', path: '/intent',
     access: 'principal:write', effect: 'coordination-state', summary: 'Cancel a creator-owned Soroban Intent inside MultiSigTools coordination. Detached AUTH or prepared XDR already disclosed outside MultiSigTools is not revoked.',
   },
   {
-    id: 'integration.intent.cancel', version: 1, method: 'PUT', path: '/api/intent',
+    id: 'integration.intent.cancel', version: 1, method: 'PUT', path: '/intent',
     access: 'integration:write', effect: 'coordination-state', summary: "Cancel an Integration's own Soroban Intent inside MultiSigTools coordination without claiming Stellar-level AUTH revocation.",
   },
   {
-    id: 'integration.intent.browser.issue', version: 1, method: 'PUT', path: '/api/intent',
+    id: 'integration.intent.browser.issue', version: 1, method: 'PUT', path: '/intent',
     access: 'integration:write', effect: 'private-state', summary: 'Issue a short-lived signer/origin/current-plan Browser capability for an Integration-owned Intent.',
   },
   {
-    id: 'contract.call.build', version: 1, method: 'POST', path: '/api/contract-call',
+    id: 'contract.call.build', version: 1, method: 'POST', path: '/contract-call',
     access: 'public', effect: 'none', summary: 'Build an unsigned contract-call transaction from typed string inputs.',
   },
   {
-    id: 'contract.call.prepare', version: 1, method: 'POST', path: '/api/contract-prepare',
+    id: 'contract.call.prepare', version: 1, method: 'POST', path: '/contract-prepare',
     access: 'public', effect: 'none', summary: 'Record-simulate and assemble current Soroban execution resources and authorization requirements.',
   },
   {
-    id: 'contract.workspace.list', version: 1, method: 'GET', path: '/api/contracts',
+    id: 'contract.workspace.list', version: 1, method: 'GET', path: '/contracts',
     access: 'principal:read', effect: 'none', summary: 'List contracts kept by one signer Principal.',
   },
   {
-    id: 'contract.workspace.keep', version: 1, method: 'PUT', path: '/api/contracts',
+    id: 'contract.workspace.keep', version: 1, method: 'PUT', path: '/contracts',
     access: 'principal:write', effect: 'private-state', summary: 'Keep a contract in one signer workspace.',
   },
   {
-    id: 'contract.workspace.forget', version: 1, method: 'DELETE', path: '/api/contracts',
+    id: 'contract.workspace.forget', version: 1, method: 'DELETE', path: '/contracts',
     access: 'principal:write', effect: 'private-state', summary: 'Remove a contract from one signer workspace.',
   },
   {
-    id: 'integration.execution.inspect', version: 1, method: 'GET', path: '/api/integration-execution',
+    id: 'integration.execution.inspect', version: 1, method: 'GET', path: '/integration-execution',
     access: 'integration:read', effect: 'none', summary: 'Inspect this Integration execution capability and the public Classic transaction-source channel identities for the selected network.',
   },
   {
-    id: 'classic.payment.prepare', version: 1, method: 'POST', path: '/api/payment-prepare',
+    id: 'classic.payment.prepare', version: 1, method: 'POST', path: '/payment-prepare',
     access: 'principal:write', effect: 'none', summary: 'Prepare one exact unsigned Classic payment transaction from business payment inputs and fresh Stellar state.',
   },
   {
-    id: 'integration.classic.payment.prepare', version: 1, method: 'POST', path: '/api/payment-prepare',
+    id: 'integration.classic.payment.prepare', version: 1, method: 'POST', path: '/payment-prepare',
     access: 'integration:write', effect: 'none', summary: 'Prepare a scoped external-service Classic payment transaction without requiring the service to construct XDR.',
   },
   {
-    id: 'classic.account.create.prepare', version: 1, method: 'POST', path: '/api/account-create-prepare',
+    id: 'classic.account.create.prepare', version: 1, method: 'POST', path: '/account-create-prepare',
     access: 'principal:write', effect: 'none', summary: 'Prepare one exact unsigned Classic CreateAccount transaction from explicit account-creation inputs and fresh Stellar state.',
   },
   {
-    id: 'integration.classic.account.create.prepare', version: 1, method: 'POST', path: '/api/account-create-prepare',
+    id: 'integration.classic.account.create.prepare', version: 1, method: 'POST', path: '/account-create-prepare',
     access: 'integration:write', effect: 'none', summary: 'Prepare a scoped external-service CreateAccount transaction without silently treating it as Payment.',
   },
   {
-    id: 'proposal.create', version: 1, method: 'POST', path: '/api/request',
+    id: 'proposal.create', version: 1, method: 'POST', path: '/request',
     access: 'principal:write', effect: 'coordination-state', summary: 'Create a Signing Request from exact transaction XDR.',
   },
   {
-    id: 'integration.request.create', version: 1, method: 'POST', path: '/api/request',
+    id: 'integration.request.create', version: 1, method: 'POST', path: '/request',
     access: 'integration:write', effect: 'coordination-state', summary: 'Create a scoped external-service Classic Request; semantic managed execution can use MultiSigTools transaction-source channels.',
   },
   {
-    id: 'proposal.inspect', version: 1, method: 'GET', path: '/api/request',
+    id: 'proposal.inspect', version: 1, method: 'GET', path: '/request',
     access: 'principal:read', effect: 'none', summary: 'Read current Signing Request state and evidence.',
   },
   {
-    id: 'integration.request.inspect', version: 1, method: 'GET', path: '/api/request',
+    id: 'integration.request.inspect', version: 1, method: 'GET', path: '/request',
     access: 'integration:read', effect: 'none', summary: "Read an external service's own Classic multisig Request and merged authorization evidence.",
   },
   {
-    id: 'proposal.contribute', version: 1, method: 'PATCH', path: '/api/request',
+    id: 'proposal.contribute', version: 1, method: 'PATCH', path: '/request',
     access: 'principal:sign', effect: 'coordination-state', summary: 'Add attributable Stellar authorization to a Signing Request.',
   },
   {
-    id: 'proposal.submit', version: 1, method: 'PUT', path: '/api/request',
+    id: 'proposal.submit', version: 1, method: 'PUT', path: '/request',
     access: 'human', effect: 'network-submit', summary: 'Submit an authorized transaction to Stellar after final review.',
   },
   {
-    id: 'integration.request.submit', version: 1, method: 'PUT', path: '/api/request',
+    id: 'integration.request.submit', version: 1, method: 'PUT', path: '/request',
     access: 'integration:write', effect: 'network-submit', summary: 'Retry submission of an already-authorized MultiSigTools-managed Classic Request owned by this Integration.',
   },
 ] as const;

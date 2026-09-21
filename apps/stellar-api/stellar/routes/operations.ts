@@ -1,5 +1,10 @@
-import { publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
+import {
+  STELLAR_PUBLIC_DOCS_BASE,
+  stellarApiBaseForDeployment,
+} from '../../../../src/stellar/apiOrigins.js';
 import { HEADLESS_OPERATION_CATALOG } from '../../../../src/stellar/headlessOperations.js';
+import { configuredDeploymentNetwork } from '../server/deploymentNetworkPolicy.js';
+import { publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
 
 const METHODS = 'GET, OPTIONS';
 
@@ -8,15 +13,19 @@ export async function OPTIONS(): Promise<Response> {
 }
 
 export async function GET(): Promise<Response> {
+  const apiBase = stellarApiBaseForDeployment(configuredDeploymentNetwork());
+  const openapi = `${apiBase}/openapi.json`;
+
   return publicCorsJson({
     contract: 'multisig-tools.headless-operations',
     version: 1,
-    openapi: '/openapi.json',
-    documentation: '/developers',
+    base: apiBase,
+    openapi,
+    documentation: `${STELLAR_PUBLIC_DOCS_BASE}/developers`,
     operations: HEADLESS_OPERATION_CATALOG.map((operation) => ({
       ...operation,
       schema: {
-        href: '/openapi.json',
+        href: openapi,
         path: operation.path,
         method: operation.method,
       },

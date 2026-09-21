@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { GET as getOpenApi } from '../routes/openapi.js';
 import { GET as getOperations } from '../routes/operations.js';
+import {
+  STELLAR_PUBLIC_DOCS_BASE,
+  STELLAR_TESTNET_API_BASE,
+} from '../../../../src/stellar/apiOrigins.js';
 import { HEADLESS_OPERATION_CATALOG } from '../../../../src/stellar/headlessOperations.js';
 import { createOpenApiDocument } from './openApiDocument.js';
 
@@ -62,18 +66,18 @@ test('OpenAPI covers every catalog transport and business operation exactly once
 test('OpenAPI describes the public Contract composition without UI state', () => {
   const document = createOpenApiDocument();
   const paths = document.paths as Record<string, JsonObject>;
-  const testnetIntegrationCreate = paths['/api/integration-testnet'].post as JsonObject;
-  const inspect = paths['/api/contract-interface'].get as JsonObject;
-  const intent = paths['/api/intent'].post as JsonObject;
-  const intentInspect = paths['/api/intent'].get as JsonObject;
-  const intentContribute = paths['/api/intent'].patch as JsonObject;
-  const intentExecution = paths['/api/intent'].put as JsonObject;
-  const build = paths['/api/contract-call'].post as JsonObject;
-  const prepare = paths['/api/contract-prepare'].post as JsonObject;
-  const integrationExecution = paths['/api/integration-execution'].get as JsonObject;
-  const paymentPrepare = paths['/api/payment-prepare'].post as JsonObject;
-  const requestCreate = paths['/api/request'].post as JsonObject;
-  const requestSubmit = paths['/api/request'].put as JsonObject;
+  const testnetIntegrationCreate = paths['/integration-testnet'].post as JsonObject;
+  const inspect = paths['/contract-interface'].get as JsonObject;
+  const intent = paths['/intent'].post as JsonObject;
+  const intentInspect = paths['/intent'].get as JsonObject;
+  const intentContribute = paths['/intent'].patch as JsonObject;
+  const intentExecution = paths['/intent'].put as JsonObject;
+  const build = paths['/contract-call'].post as JsonObject;
+  const prepare = paths['/contract-prepare'].post as JsonObject;
+  const integrationExecution = paths['/integration-execution'].get as JsonObject;
+  const paymentPrepare = paths['/payment-prepare'].post as JsonObject;
+  const requestCreate = paths['/request'].post as JsonObject;
+  const requestSubmit = paths['/request'].put as JsonObject;
 
   assert.equal(testnetIntegrationCreate.operationId, 'integration.testnet.create');
   assert.deepEqual(testnetIntegrationCreate.security, []);
@@ -112,7 +116,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.equal(requestCreate.operationId, 'proposal.create.integration.request.create');
   assert.equal(requestSubmit.operationId, 'proposal.submit.integration.request.submit');
   assert.deepEqual(requestSubmit.security, [{ integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }]);
-  assert.equal(paths['/api/preparation'], undefined);
+  assert.equal(paths['/preparation'], undefined);
 
   const components = document.components as JsonObject;
   const schemas = (components.schemas as Record<string, JsonObject>);
@@ -241,20 +245,25 @@ test('discovery endpoints expose the deployment-bound description and schema poi
   assert.match(openApiResponse.headers.get('content-type') ?? '', /^application\/vnd\.oai\.openapi\+json/);
   const document = await openApiResponse.json() as JsonObject;
   assert.equal(document['x-multisig-deployment-network'], 'testnet');
+  assert.deepEqual(document.servers, [{ url: STELLAR_TESTNET_API_BASE }]);
+  assert.equal((document.externalDocs as JsonObject).url, `${STELLAR_PUBLIC_DOCS_BASE}/developers`);
 
   const catalogResponse = await getOperations();
   assert.equal(catalogResponse.status, 200);
   const catalog = await catalogResponse.json() as {
+    base: string;
     openapi: string;
     documentation: string;
     operations: Array<{ id: string; schema: { href: string; path: string; method: string } }>;
   };
-  assert.equal(catalog.openapi, '/openapi.json');
-  assert.equal(catalog.documentation, '/developers');
+  assert.equal(catalog.base, STELLAR_TESTNET_API_BASE);
+  assert.equal(catalog.openapi, `${STELLAR_TESTNET_API_BASE}/openapi.json`);
+  assert.equal(catalog.documentation, `${STELLAR_PUBLIC_DOCS_BASE}/developers`);
   assert.equal(catalog.operations.length, HEADLESS_OPERATION_CATALOG.length);
   assert.ok(catalog.operations.every((operation) =>
-    operation.schema.href === '/openapi.json'
-    && operation.schema.path.startsWith('/api/')
+    operation.schema.href === `${STELLAR_TESTNET_API_BASE}/openapi.json`
+    && operation.schema.path.startsWith('/')
+    && !operation.schema.path.startsWith('/api/')
     && HTTP_METHODS.has(operation.schema.method.toLowerCase())));
 });
 
