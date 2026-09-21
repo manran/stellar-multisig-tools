@@ -1,1 +1,1 @@
-export * from '../apps/api/stellar/routes/address-book.js';
+export * from '../apps/stellar-api/stellar/routes/address-book.js';

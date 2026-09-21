@@ -1,1 +1,1 @@
-export * from '../apps/api/stellar/routes/contract-call.js';
+export * from '../apps/stellar-api/stellar/routes/contract-call.js';

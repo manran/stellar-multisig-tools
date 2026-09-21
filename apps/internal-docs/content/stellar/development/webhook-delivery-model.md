@@ -161,7 +161,7 @@ Redaction is a contract: callback payload tests contain sentinel XDR/AUTH/privat
 
 ## 8. Vercel execution plan
 
-The Vercel Queue/Cron adapter is active on the Testnet PostgreSQL deployment. The portable dispatcher/sweeper still does not import Vercel; only `apps/api/stellar/platform/vercel/` imports `@vercel/queue`.
+The Vercel Queue/Cron adapter is active on the Testnet PostgreSQL deployment. The portable dispatcher/sweeper still does not import Vercel; only `apps/stellar-api/stellar/platform/vercel/` imports `@vercel/queue`.
 
 Current Vercel Queues supports:
 
@@ -176,8 +176,8 @@ Use one topic for this product boundary, e.g. `mst-stellar-integration-webhooks`
 Implemented adapters:
 
 ```
-apps/api/stellar/platform/vercel/integrationWebhookQueueAdapter.ts
-apps/api/stellar/platform/vercel/integrationWebhookCronAdapter.ts
+apps/stellar-api/stellar/platform/vercel/integrationWebhookQueueAdapter.ts
+apps/stellar-api/stellar/platform/vercel/integrationWebhookCronAdapter.ts
 ```
 
 The Queue message carries only `{ version: 1, eventId }`. It deliberately does not use `eventId` as a 24-hour Queue idempotency key because the same outbox event must be wakeable again after PostgreSQL backoff. Duplicate Queue messages are safe because the PostgreSQL lease is the real claim/idempotency boundary.

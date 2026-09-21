@@ -1,1 +1,1 @@
-export * from '../apps/api/stellar/routes/integration-testnet.js';
+export * from '../apps/stellar-api/stellar/routes/integration-testnet.js';

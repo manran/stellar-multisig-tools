@@ -1,1 +1,1 @@
-export * from '../apps/api/stellar/routes/inbox.js';
+export * from '../apps/stellar-api/stellar/routes/inbox.js';

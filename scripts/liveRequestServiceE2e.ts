@@ -6,13 +6,13 @@ import {
   Operation,
   TransactionBuilder,
 } from '@stellar/stellar-sdk';
-import { blobSigningRequestStore } from '../apps/api/stellar/server/blobRequestStore';
+import { blobSigningRequestStore } from '../apps/stellar-api/stellar/server/blobRequestStore';
 import {
   contributeSigningRequest,
   createSigningRequest,
   getSigningRequest,
   submitSigningRequest,
-} from '../apps/api/stellar/server/requestService';
+} from '../apps/stellar-api/stellar/server/requestService';
 import { loadAccount, loadNetworkParameters } from '../src/stellar/horizon';
 
 const network = 'testnet' as const;

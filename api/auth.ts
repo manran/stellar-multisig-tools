@@ -1,1 +1,1 @@
-export * from '../apps/api/stellar/routes/auth.js';
+export * from '../apps/stellar-api/stellar/routes/auth.js';

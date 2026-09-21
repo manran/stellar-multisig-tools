@@ -1,1 +1,1 @@
-export * from '../apps/api/stellar/routes/integration-admin.js';
+export * from '../apps/stellar-api/stellar/routes/integration-admin.js';

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/integration-webhook-dispatch.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "mst-stellar-integration-webhooks",
+          "retryAfterSeconds": 180,
+          "initialDelaySeconds": 0
+        }
+      ]
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/integration-webhook-sweep",
+      "schedule": "0 * * * *"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Link",
+          "value": "</openapi.json>; rel=\"service-desc\"; type=\"application/vnd.oai.openapi+json;version=3.1\", <https://docs.multisig.tools/stellar/developers>; rel=\"service-doc\"; type=\"text/html\""
+        },
+        {
+          "key": "Access-Control-Expose-Headers",
+          "value": "Link"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/openapi.json",
+      "destination": "/api/openapi"
+    },
+    {
+      "source": "/.well-known/stellar.toml",
+      "destination": "/api/stellar-toml"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import { createIntegrationAdminSecret } from '../apps/api/stellar/server/integrationAdminService.js';
+import { createIntegrationAdminSecret } from '../apps/stellar-api/stellar/server/integrationAdminService.js';
 
 const generated = createIntegrationAdminSecret();
 console.log('Integration administrator secret (shown once):');

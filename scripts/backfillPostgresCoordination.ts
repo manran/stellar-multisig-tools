@@ -1,5 +1,5 @@
-import { closeCoordinationPool } from '../apps/api/stellar/db/postgres.js';
-import { runRuntimeCoordinationBackfill } from '../apps/api/stellar/db/postgresBackfillRuntime.js';
+import { closeCoordinationPool } from '../apps/stellar-api/stellar/db/postgres.js';
+import { runRuntimeCoordinationBackfill } from '../apps/stellar-api/stellar/db/postgresBackfillRuntime.js';
 import type { StellarNetwork } from '../src/stellar/types.js';
 
 function requestedNetwork(): StellarNetwork {

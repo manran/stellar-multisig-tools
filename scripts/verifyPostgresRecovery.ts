@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { Pool } from 'pg';
-import { normalizePostgresConnectionString } from '../apps/api/stellar/db/postgres.js';
+import { normalizePostgresConnectionString } from '../apps/stellar-api/stellar/db/postgres.js';
 
 const MIGRATION_FILE = /^([0-9]{4}_[a-z0-9_]+)\.sql$/;
 
@@ -18,7 +18,7 @@ if (!connectionString) {
   throw new Error('DATABASE_URL_UNPOOLED or DATABASE_URL is required.');
 }
 
-const migrationDirectory = path.resolve(process.cwd(), 'apps/api/stellar/db/migrations');
+const migrationDirectory = path.resolve(process.cwd(), 'apps/stellar-api/stellar/db/migrations');
 const expectedMigrations = (await readdir(migrationDirectory))
   .map((name) => MIGRATION_FILE.exec(name)?.[1])
   .filter((value): value is string => Boolean(value))

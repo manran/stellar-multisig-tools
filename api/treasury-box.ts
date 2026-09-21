@@ -1,1 +1,1 @@
-export * from '../apps/api/stellar/routes/treasury-box.js';
+export * from '../apps/stellar-api/stellar/routes/treasury-box.js';

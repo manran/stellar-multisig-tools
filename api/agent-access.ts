@@ -1,1 +1,1 @@
-export * from '../apps/api/stellar/routes/agent-access.js';
+export * from '../apps/stellar-api/stellar/routes/agent-access.js';

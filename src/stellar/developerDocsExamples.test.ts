@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { StrKey } from '@stellar/stellar-sdk';
-import { createOpenApiDocument } from '../../apps/api/stellar/server/openApiDocument.js';
+import { createOpenApiDocument } from '../../apps/stellar-api/stellar/server/openApiDocument.js';
 import { normalizeClassicPaymentInstruction } from './classicPaymentPrepare.js';
 import {
   CLASSIC_PAYMENT_EXAMPLE,

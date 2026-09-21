@@ -7,8 +7,8 @@ const developerExamples = readFileSync(new URL('./developerDocsExamples.ts', imp
 const docsArchitecture = readFileSync(new URL('../../DOCS_INFORMATION_ARCHITECTURE.md', import.meta.url), 'utf8');
 const integrationModel = readFileSync(new URL('../../apps/internal-docs/content/stellar/architecture/integration-product-model.md', import.meta.url), 'utf8');
 const integrationWizard = readFileSync(new URL('../IntegrationProfileWizard.tsx', import.meta.url), 'utf8');
-const intentRoute = readFileSync(new URL('../../apps/api/stellar/routes/intent.ts', import.meta.url), 'utf8');
-const requestService = readFileSync(new URL('../../apps/api/stellar/server/integrationRequestService.ts', import.meta.url), 'utf8');
+const intentRoute = readFileSync(new URL('../../apps/stellar-api/stellar/routes/intent.ts', import.meta.url), 'utf8');
+const requestService = readFileSync(new URL('../../apps/stellar-api/stellar/server/integrationRequestService.ts', import.meta.url), 'utf8');
 
 test('Developer Hub starts from integration ownership instead of endpoint inventory', () => {
   assert.match(developerDocs, /title="Choose your integration"/);

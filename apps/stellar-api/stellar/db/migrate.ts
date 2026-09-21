@@ -18,7 +18,7 @@ async function appliedVersions(client: PoolClient): Promise<Set<string>> {
 }
 
 export async function applyCoordinationMigrations(
-  directory = path.resolve(process.cwd(), 'apps/api/stellar/db/migrations'),
+  directory = path.resolve(process.cwd(), 'apps/stellar-api/stellar/db/migrations'),
 ): Promise<string[]> {
   const entries = (await readdir(directory))
     .map((name) => ({ name, match: MIGRATION_FILE.exec(name) }))

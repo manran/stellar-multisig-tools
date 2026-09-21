@@ -1,1 +1,1 @@
-export { vercelIntegrationWebhookSweepHandler as GET } from '../apps/api/stellar/platform/vercel/integrationWebhookCronAdapter.js';
+export { vercelIntegrationWebhookSweepHandler as GET } from '../apps/stellar-api/stellar/platform/vercel/integrationWebhookCronAdapter.js';

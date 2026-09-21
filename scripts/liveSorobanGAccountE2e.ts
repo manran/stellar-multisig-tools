@@ -13,13 +13,13 @@ import {
   contributeSigningRequest,
   createSigningRequest,
   submitSigningRequest,
-} from '../apps/api/stellar/server/requestService';
+} from '../apps/stellar-api/stellar/server/requestService';
 import type {
   SigningRequestStore,
   StoredSignatureContribution,
   StoredSigningRequest,
   StoredSubmissionResult,
-} from '../apps/api/stellar/server/requestStore';
+} from '../apps/stellar-api/stellar/server/requestStore';
 import { loadAccount, loadNetworkParameters } from '../src/stellar/horizon';
 import {
   analyzeSorobanGAccountAuthorization,

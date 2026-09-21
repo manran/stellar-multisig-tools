@@ -1,1 +1,1 @@
-export * from '../apps/api/stellar/routes/payment-prepare.js';
+export * from '../apps/stellar-api/stellar/routes/payment-prepare.js';
