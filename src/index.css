@@ -3161,3 +3161,75 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
     border-top: var(--rule-hairline) solid var(--color-rule);
   }
 }
+
+/* Hallmark · shared execution route choices */
+@layer components {
+  .mst-execution-note {
+    padding-block: var(--space-md);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+    background: var(--color-paper-2);
+    color: var(--color-ink-2);
+    font-size: var(--text-sm);
+  }
+
+  .mst-execution-route-list {
+    border-top: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-execution-route-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(11rem, 0.42fr) minmax(0, 1fr) auto;
+    gap: var(--space-md);
+    align-items: center;
+    padding-block: var(--space-md);
+    border: 0;
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+    background: transparent;
+    color: var(--color-ink);
+    text-align: left;
+  }
+
+  .mst-execution-route-row:hover {
+    color: var(--color-accent);
+  }
+
+  .mst-execution-route-row[aria-pressed="true"] {
+    background: var(--color-paper-2);
+    color: var(--color-accent);
+  }
+
+  .mst-execution-route-row:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 3px;
+  }
+
+  .mst-execution-control {
+    min-height: 2.875rem;
+    border: var(--rule-hairline) solid var(--color-rule);
+    border-radius: var(--radius-input);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--text-sm);
+    outline: 2px solid transparent;
+    outline-offset: 1px;
+  }
+
+  .mst-execution-control:focus-visible {
+    border-color: var(--color-focus);
+    outline-color: var(--color-focus);
+  }
+
+  .mst-execution-control::placeholder {
+    color: var(--color-muted);
+  }
+}
+
+@media (max-width: 40rem) {
+  .mst-execution-route-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2xs);
+  }
+}

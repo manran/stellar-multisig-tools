@@ -232,6 +232,17 @@ test('Activity uses one continuous timeline grammar for Classic and Soroban work
   assert.doesNotMatch(sorobanActivity, /rounded-3xl border border-black\/10 bg-white shadow-sm/);
 });
 
+test('execution choices use shared rows while status boundaries remain distinct', () => {
+  assert.match(request, /mst-execution-note/);
+  assert.match(request, /mst-execution-route-list/);
+  assert.match(request, /mst-execution-route-row/);
+  assert.match(intent, /mst-execution-route-list/);
+  assert.match(intent, /mst-execution-route-row/);
+  assert.match(intent, /mst-execution-control/);
+  assert.doesNotMatch(request, /bg-violet|text-violet/);
+  assert.doesNotMatch(intent, /sm:grid-cols-3/);
+});
+
 test('shared visual hierarchy does not introduce a new workflow or status vocabulary', () => {
   assert.doesNotMatch(ui, /Step 6|Stage 6/);
   assert.doesNotMatch(dashboard, /Sign mode|Manage mode/);

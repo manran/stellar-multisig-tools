@@ -793,8 +793,8 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                           ? 'All required signatures are present. This work is already routed through MultiSigTools execution.'
                           : 'All required signatures are present. Choose how this exact authorized transaction should be executed.'}</p>
                       {snapshot.execution?.mode === 'external' ? (
-                        <div className="mt-4 rounded-xl border border-violet-500/25 bg-violet-500/[0.07] p-4 text-sm">
-                          <div className="font-semibold text-violet-800 dark:text-violet-200">Waiting for external execution</div>
+                        <div className="mst-execution-note mt-4">
+                          <div className="font-semibold">Waiting for external execution</div>
                           <p className="mt-1 leading-6 text-neutral-600 dark:text-neutral-300">The originating service will re-check its business state and submit after its own execution conditions are satisfied.</p>
                         </div>
                       ) : (
@@ -806,15 +806,15 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                               <p className="mt-1 leading-6 text-neutral-600 dark:text-neutral-300">The existing signatures cannot approve a different effect shape. Return to the original Soroban Intent, refresh authorization, and create a fresh Proposal.</p>
                             </div>
                           ) : !submitArmed && !executionAlreadyRoutedToMst ? (
-                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                              <button type="button" onClick={() => setSubmitArmed(true)} className="rounded-xl border border-emerald-500/35 bg-white/70 p-4 text-left hover:border-emerald-500/60 dark:bg-black/15">
-                                <div className="flex items-center gap-2 text-sm font-semibold"><Send className="h-4 w-4 text-emerald-600" />MultiSigTools submits</div>
-                                <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Re-check final conditions, then broadcast this exact authorized transaction through MultiSigTools.</p>
+                            <div className="mst-execution-route-list mt-4">
+                              <button type="button" onClick={() => setSubmitArmed(true)} className="mst-execution-route-row">
+                                <span className="flex items-center gap-2 text-sm font-semibold"><Send className="h-4 w-4" />MultiSigTools submits</span>
+                                <span className="text-xs leading-5 text-neutral-500 dark:text-neutral-400">Re-check final conditions, then broadcast this exact authorized transaction through MultiSigTools.</span>
                               </button>
-                              <button type="button" onClick={() => void copyXdr()} className="rounded-xl border border-black/10 bg-white/70 p-4 text-left hover:border-emerald-500/40 dark:border-white/10 dark:bg-black/15">
-                                <div className="flex items-center gap-2 text-sm font-semibold"><ClipboardCopy className="h-4 w-4" />Handle outside MultiSigTools</div>
-                                <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Copy the fully authorized XDR for another wallet, CLI, service, or operator to submit. Copying is not handoff or submission evidence.</p>
-                                <div className="mt-3 text-xs font-semibold text-emerald-700 dark:text-emerald-300">{copied === 'xdr' ? 'Authorized XDR copied' : 'Copy authorized XDR'}</div>
+                              <button type="button" onClick={() => void copyXdr()} className="mst-execution-route-row">
+                                <span className="flex items-center gap-2 text-sm font-semibold"><ClipboardCopy className="h-4 w-4" />Handle outside MultiSigTools</span>
+                                <span className="text-xs leading-5 text-neutral-500 dark:text-neutral-400">Copy the fully authorized XDR for another wallet, CLI, service, or operator to submit. Copying is not handoff or submission evidence.</span>
+                                <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">{copied === 'xdr' ? 'Authorized XDR copied' : 'Copy authorized XDR'}</span>
                               </button>
                             </div>
                           ) : (
