@@ -100,7 +100,33 @@ MULTISIG_COORDINATION_WRITE_FREEZE=0
 8. FedNetwork E2E；
 9. PG outbox 只出现切换后的新 coordination changes。
 
-出现语义差异时，优先恢复 `MULTISIG_COORDINATION_STORAGE=blob`；不要同时让 Blob/PG 接受新写入来“补救”。
+### 6.1 切换后的回滚窗口
+
+`MULTISIG_COORDINATION_STORAGE=blob` 只允许作为**刚切换后的短窗口回滚手段**：前提是从 final freeze 以来尚未接受任何仅写入 PostgreSQL 的新 coordination fact，且 operator 能再次证明 Blob/PG digest 与事实计数仍一致。
+
+一旦 PostgreSQL 已接受新的 Request / Intent / AUTH / signature / cancellation / execution / outbox 等事实，Blob 就只是切换时的历史证据，不再是可直接恢复的 authority。此后：
+
+- **禁止**仅把 `MULTISIG_COORDINATION_STORAGE` 改回 `blob`；这样会把 runtime 指向陈旧状态。
+- 应优先回滚**应用部署版本**，继续连接当前 PostgreSQL authority。
+- 若 PostgreSQL 本身损坏，应进入受控的数据库恢复流程（provider backup / point-in-time restore / verified snapshot），恢复后再做 migration/version、关键事实计数和读写 smoke。
+- 数据库恢复期间如需要停写，使用 `MULTISIG_COORDINATION_WRITE_FREEZE=1`；不要启用 Blob/PG dual-write 来“补差”。
+- 任何恢复都必须保持 Testnet/Mainnet 数据源隔离，且不得从 Testnet 数据构造 Mainnet authority。
+
+因此，长期稳定运行后的标准 rollback 顺序是：
+
+```text
+freeze writes if data integrity is in doubt
+-> restore/redeploy application against PostgreSQL
+-> if needed restore PostgreSQL from verified provider recovery point
+-> verify migrations + canonical facts + Inbox/Activity + Request/Intent reads
+-> re-enable writes
+```
+
+不是：
+
+```text
+postgres -> blob
+```
 
 ## 7. Mainnet
 
