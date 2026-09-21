@@ -158,7 +158,7 @@ Redaction is a contract: callback payload tests contain sentinel XDR/AUTH/privat
 
 ## 8. Vercel execution plan
 
-The Vercel Queue/Cron adapter is implemented but intentionally dormant until the Testnet PostgreSQL cutover is complete. The portable dispatcher/sweeper does not import Vercel; only `apps/api/stellar/platform/vercel/` imports `@vercel/queue`.
+The Vercel Queue/Cron adapter is active on the Testnet PostgreSQL deployment. The portable dispatcher/sweeper still does not import Vercel; only `apps/api/stellar/platform/vercel/` imports `@vercel/queue`.
 
 Current Vercel Queues supports:
 
@@ -181,20 +181,26 @@ The Queue message carries only `{ version: 1, eventId }`. It deliberately does n
 
 When the dispatcher schedules a PostgreSQL retry, the Vercel adapter makes a best-effort delayed Queue wake. Failure to schedule that wake does not lose the event: Cron later scans due unpublished outbox rows and re-enqueues them.
 
-No Queue trigger, Cron entry, or public Function entrypoint is enabled in `vercel.json` yet. Those deployment adapters are activated only after Testnet has a real remote `DATABASE_URL`, migration/backfill/hash verification is complete, and runtime coordination is switched to PostgreSQL.
+Testnet `vercel.json` now enables:
 
-## 9. What is intentionally not enabled yet
+- one Queue-triggered Function at `api/integration-webhook-dispatch.ts` on topic `mst-stellar-integration-webhooks`;
+- one hourly Cron entry at `/api/integration-webhook-sweep` (`0 * * * *`).
 
-The delivery core, retry policy, redaction contract, Standard Webhooks signing, SSRF-safe Node transport, delivery history, Vercel Queue publisher/callback adapter and Cron sweeper adapter are implemented and tested.
+Testnet production also has `DATABASE_URL`, `MULTISIG_COORDINATION_STORAGE`, `MULTISIG_WEBHOOK_MASTER_SECRET`, and `CRON_SECRET` configured. An unauthenticated direct request to the sweep endpoint returns `401 webhook_sweep_unauthorized`, confirming the HTTP authorization boundary is live.
 
-Before enabling live customer delivery:
+## 9. Current deployment status
 
-- provision the real Testnet PostgreSQL resource and set `DATABASE_URL`;
-- execute the documented Blob -> PostgreSQL backfill/final hash-verification cutover;
-- add the two thin Vercel Function entrypoints plus Queue trigger/Cron schedule to deployment configuration;
-- configure `MULTISIG_WEBHOOK_MASTER_SECRET` and `CRON_SECRET` in the Testnet deployment;
-- run a real external callback E2E (including Standard Webhooks verification, duplicate delivery and retry recovery) with a dedicated Testnet Integration Service;
-- keep Mainnet disabled until explicit approval after Testnet evidence is clean.
+The delivery core, retry policy, redaction contract, Standard Webhooks signing, SSRF-safe Node transport, delivery history, Vercel Queue publisher/callback adapter and Cron sweeper adapter are implemented and active on Testnet.
+
+Evidence already obtained:
+
+- Testnet PostgreSQL coordination cutover is complete;
+- Queue/Cron deployment-contract tests pass;
+- Queue and Cron adapter tests pass;
+- Testnet real Managed Classic E2E proved PostgreSQL outbox -> signed webhook delivery;
+- deployment secrets required for signing and Cron authentication are present.
+
+Mainnet remains disabled until explicit approval. Mainnet activation must verify the same Queue/Cron/signing configuration in the canonical/public project rather than assuming Testnet configuration carries over.
 
 ## 10. Database table impact
 
@@ -208,7 +214,7 @@ There is additionally one technical `schema_migrations` table and one derived `i
 
 `integration_webhook_deliveries` exists because per-attempt audit history is a real requirement. It stores only bounded metadata: endpoint hash, attempt, timing, outcome, HTTP status/error code. It does not store callback URL, response body, Standard Webhooks secret, API credential, raw signature/AUTH, or private note.
 
-## 11. Success criteria before enabling webhook delivery
+## 11. Testnet success criteria / Mainnet repeat-verification
 
 - Testnet runs on the PostgreSQL coordination path.
 - FedNetwork polling E2E still passes.

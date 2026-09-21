@@ -2,8 +2,8 @@
 
 **Status:** Testnet RC ready; Mainnet managed execution not ready
 **RC App SHA:** `6503b5fbb96a23f3e8be150ddf8d1d330ff9c864`
-**Current Testnet hardening SHA:** `1b30dd9a659ca7f5562e6af8acb0bf6725746466`
-**Testnet production deployment:** `dpl_2x9j1fUHpHD1vFFbUYpeWz52rjqF`
+**Current Testnet hardening SHA:** `17d672a1955c4579e2114679b48c94fe937f54f7`
+**Testnet production deployment:** `dpl_FeQWfBamBYM2gHnPxfAhp1h7AoNR`
 **Updated:** 2026-09-21
 
 This document is the operational gate after the Hallmark/UI freeze. It does not redefine signer authority, Request/Intent semantics, or execution ownership.
@@ -33,9 +33,9 @@ The 2026-09-20 real-chain Managed Classic E2E remains authoritative for authorit
 Intentional blockers remain:
 
 - no explicit Mainnet managed-channel provisioning/funding process has been verified;
-- operator-only channel visibility is implemented and deployed on Testnet, but the authenticated production projection still needs one operator login verification with the deployment `mia_*` credential;
+- operator-only channel visibility is implemented, deployed, and manually verified on Testnet;
 - no low-funds policy/alert threshold is defined;
-- no fee/spend budget policy exists for MST-funded transaction-source channels;
+- per-transaction fee bid is fixed at 50x latest network base fee for MST-managed Classic, but cumulative spend-budget policy is not defined;
 - semantic Firewall rules `request-create`, `treasury-admin`, and `agent-access-admin` are confirmed missing from the canonical/public Vercel project;
 - provider database recovery has not been drill-tested for Mainnet;
 - Mainnet managed Classic capability remains disabled.
@@ -195,15 +195,31 @@ Therefore the semantic rate-limit hook exists in application code but is **not c
 - A durable disabled Integration record suppresses bootstrap credentials with the same Service id.
 - Webhook configuration is independently enable/disable-able.
 
-### Operator procedure before Mainnet
+### Emergency disable / credential rotation procedure
 
-Document:
+For a suspected compromised Service credential (`msi_*`):
 
-- who holds the one-time `mia_*` operator credential;
-- where it is stored;
-- credential rotation frequency/trigger;
-- emergency disable procedure;
-- Service owner notification procedure after rotation.
+1. Open `/admin/integrations` with the deployment `mia_*` operator credential.
+2. Select the affected Service, open Advanced configuration, clear `Enabled`, and save. The durable disabled record overrides any bootstrap credential with the same `serviceId`, so Service authentication fails closed immediately after the update is visible.
+3. Investigate affected Request/Intent activity. Disabling the Service prevents new authenticated Integration actions; it does not erase already disclosed Stellar signatures/AUTH/XDR or rewrite ledger history.
+4. Rotate the MSI credential while the Service remains disabled. Store the newly returned plaintext only in the Service owner's server-side secret store.
+5. Notify the Service owner, update their deployment, then re-enable the Service only after the new credential is confirmed.
+
+For a compromised webhook signing secret:
+
+1. Disable webhook delivery for the affected Service if immediate containment is required.
+2. Rotate the webhook signing secret from the operator surface; the new secret is returned once.
+3. Update the receiver and verify Standard Webhooks signatures with the new secret.
+4. Re-enable delivery.
+
+For a compromised operator credential (`mia_*`):
+
+1. Generate a replacement with `npm run integration:admin-secret` in a trusted operator environment.
+2. Update only `MULTISIG_INTEGRATION_ADMIN_SECRET_HASH` in the deployment environment; do not store the plaintext in repo or docs.
+3. Redeploy so the old `mia_*` no longer verifies.
+4. Confirm `/admin/integrations` accepts only the replacement credential.
+
+Credential rotation is event-driven rather than time-based: rotate on suspected disclosure, owner/operator turnover, or secret-store compromise. Periodic rotation may be added by policy later, but no arbitrary schedule is imposed here.
 
 Do not place plaintext `mia_*`, `msi_*`, webhook secrets, Stellar seeds, or database credentials in repo/runbooks.
 
@@ -224,11 +240,20 @@ Do not place plaintext `mia_*`, `msi_*`, webhook secrets, Stellar seeds, or data
 
 Testnet real E2E already proved PostgreSQL outbox -> webhook delivery on Managed Classic events.
 
-### Operator checks before Mainnet
+### Testnet deployment verification
 
-- verify webhook queue/cron deployment exists in the Mainnet project;
-- verify webhook master secret is configured;
-- verify receiver-side secret rotation procedure;
+Verified on the current Testnet production deployment:
+
+- `vercel.json` contains the Queue trigger for `api/integration-webhook-dispatch.ts` and hourly Cron for `/api/integration-webhook-sweep`;
+- `MULTISIG_WEBHOOK_MASTER_SECRET`, `CRON_SECRET`, `DATABASE_URL`, and `MULTISIG_COORDINATION_STORAGE` are present;
+- unauthenticated Cron access returns `401 webhook_sweep_unauthorized`;
+- Queue/Cron deployment contract and adapter tests pass;
+- real Managed Classic E2E already proved PostgreSQL outbox -> signed webhook delivery.
+
+Before Mainnet:
+
+- verify the same Queue/Cron deployment exists in the Mainnet project;
+- verify webhook master secret and Cron secret are configured there;
 - define alert threshold for prolonged unpublished outbox backlog or repeated retry/permanent-failure outcomes;
 - expose or document a support query for delivery history without leaking callback URLs or signing secrets.
 
@@ -272,9 +297,9 @@ Do not introduce a second telemetry state machine; logs/metrics should reference
 Current Testnet app:
 
 - RC UI baseline SHA: `6503b5fbb96a23f3e8be150ddf8d1d330ff9c864`
-- operational hardening SHA: `1b30dd9a659ca7f5562e6af8acb0bf6725746466`
-- deployment: `dpl_2x9j1fUHpHD1vFFbUYpeWz52rjqF`
-- previous known-good production deployment `dpl_7r6f9wna3S91iacJeSK1fcnEy4zU` remains a rollback candidate
+- operational hardening SHA: `17d672a1955c4579e2114679b48c94fe937f54f7`
+- deployment: `dpl_FeQWfBamBYM2gHnPxfAhp1h7AoNR`
+- previous known-good production deployment `dpl_2x9j1fUHpHD1vFFbUYpeWz52rjqF` remains a verified rollback candidate
 
 A prior READY production deployment remains available as a deployment rollback candidate.
 
@@ -285,6 +310,17 @@ rollback/redeploy previous known-good Vercel deployment
 -> keep PostgreSQL authority unchanged
 -> run bounded read/smoke checks
 ```
+
+Testnet rollback drill completed on 2026-09-21:
+
+- current deployment before drill: `dpl_FeQWfBamBYM2gHnPxfAhp1h7AoNR`;
+- rolled back to previous known-good `dpl_2x9j1fUHpHD1vFFbUYpeWz52rjqF` using `vercel rollback`;
+- rollback completed in about 2 seconds;
+- post-rollback smoke: runtime-config 200/fixed Testnet, managed Classic Testnet=true, OpenAPI 200, Payment page 200, unauthenticated managed-channel detail remained 401 with zero G-address leakage;
+- restored `dpl_FeQWfBamBYM2gHnPxfAhp1h7AoNR` using the same rollback mechanism;
+- restored runtime-config and Payment page smoke passed.
+
+The drill changed only the Testnet Vercel alias; PostgreSQL authority and Mainnet were untouched.
 
 For suspected data-integrity failure:
 
@@ -335,10 +371,10 @@ All of the following must be true before setting managed Classic public/Mainnet 
 - [ ] production managed-channel lifecycle design completed (activation/funding/expansion/rotation/recovery);
 - [ ] low-balance threshold + alert policy defined;
 - [ ] spend/budget policy defined and enforced;
-- [ ] webhook Queue/Cron/signing config verified;
-- [ ] credential/admin emergency-disable procedure documented;
-- [ ] Vercel application rollback procedure tested;
-- [ ] one bounded Mainnet smoke plan reviewed before execution.
+- [x] Testnet webhook Queue/Cron/signing config verified; Mainnet must repeat the check before enablement;
+- [x] credential/admin emergency-disable procedure documented;
+- [x] Vercel application rollback procedure tested on Testnet and current deployment restored;
+- [ ] one bounded Mainnet smoke plan reviewed before execution (`MAINNET_SMOKE_PLAN.md` is drafted but intentionally not approved yet).
 
 Until then:
 
