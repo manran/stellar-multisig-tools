@@ -1,9 +1,33 @@
 import { createHash } from 'node:crypto';
-import { Networks, TransactionBuilder, type Keypair } from '@stellar/stellar-sdk/base';
-import { AccountNotFoundError, loadAccount } from '../../../../src/stellar/horizon.js';
+import {
+  Account,
+  Keypair,
+  Networks,
+  Operation,
+  TransactionBuilder,
+} from '@stellar/stellar-sdk/base';
+import {
+  AccountNotFoundError,
+  loadAccount,
+  loadNetworkParameters,
+  submitTransactionXdr,
+  TransactionSubmissionError,
+} from '../../../../src/stellar/horizon.js';
+import { stellarAmountToStroops } from '../../../../src/stellar/reserve.js';
 import type { StellarAccountSnapshot, StellarNetwork } from '../../../../src/stellar/types.js';
-import { configuredClassicManagedChannels, expandableClassicManagedChannels } from './classicManagedChannelConfig.js';
-import type { ClassicManagedChannelLeaseStore } from './classicManagedChannelStore.js';
+import {
+  classicManagedChannelSoftLimit,
+  configuredClassicManagedChannelInitialBalance,
+  deriveClassicManagedChannelCreator,
+  configuredClassicManagedChannels,
+  deriveClassicManagedChannel,
+} from './classicManagedChannelConfig.js';
+import type {
+  ClassicManagedChannelLeaseStore,
+  StoredClassicManagedChannelLease,
+} from './classicManagedChannelStore.js';
+
+const CREATOR_SEQUENCE_RETRIES = 4;
 
 export class ClassicManagedChannelServiceError extends Error {
   constructor(
@@ -33,22 +57,87 @@ type ChannelProvisioner = (
   network: StellarNetwork,
 ) => Promise<void>;
 
-async function provisionTestnetChannel(accountId: string, network: StellarNetwork): Promise<void> {
-  if (network !== 'testnet') {
+interface IndexedChannel {
+  index: number;
+  keypair: Keypair;
+}
+
+function networkPassphrase(network: StellarNetwork): string {
+  return network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC;
+}
+
+async function provisionManagedChannelWithCreator(
+  accountId: string,
+  network: StellarNetwork,
+): Promise<void> {
+  const creator = deriveClassicManagedChannelCreator(network);
+  if (!creator) {
     throw new ClassicManagedChannelServiceError(
-      'Automatic managed Classic channel provisioning is available only on Testnet.',
+      'Managed Classic channel creator is not configured for this deployment.',
       503,
-      'managed_classic_channel_unavailable',
+      'managed_classic_channel_creator_unavailable',
     );
   }
-  const response = await fetch(`https://friendbot.stellar.org/?addr=${encodeURIComponent(accountId)}`);
-  if (!response.ok) {
+
+  const startingBalance = configuredClassicManagedChannelInitialBalance();
+  const parameters = await loadNetworkParameters(network);
+  if (stellarAmountToStroops(startingBalance) < BigInt(parameters.baseReserveInStroops) * 2n) {
     throw new ClassicManagedChannelServiceError(
-      `Unable to provision managed Classic Testnet channel ${accountId}: Friendbot returned HTTP ${response.status}.`,
+      'Managed Classic channel initial balance is below the network minimum account reserve.',
       503,
-      'managed_classic_channel_unavailable',
+      'managed_classic_channel_creator_unavailable',
     );
   }
+
+  for (let attempt = 0; attempt < CREATOR_SEQUENCE_RETRIES; attempt += 1) {
+    let source: StellarAccountSnapshot;
+    try {
+      source = await loadAccount(creator.publicKey(), network);
+    } catch (cause) {
+      throw new ClassicManagedChannelServiceError(
+        cause instanceof Error
+          ? `Unable to load managed Classic channel creator: ${cause.message}`
+          : 'Unable to load managed Classic channel creator.',
+        503,
+        'managed_classic_channel_creator_unavailable',
+      );
+    }
+
+    const transaction = new TransactionBuilder(new Account(source.accountId, source.sequence), {
+      fee: String(parameters.baseFeeInStroops),
+      networkPassphrase: networkPassphrase(network),
+    })
+      .addOperation(Operation.createAccount({ destination: accountId, startingBalance }))
+      .setTimeout(60)
+      .build();
+    transaction.sign(creator);
+
+    try {
+      await submitTransactionXdr(transaction.toXDR(), network);
+      return;
+    } catch (cause) {
+      if (
+        cause instanceof TransactionSubmissionError
+        && cause.transactionCode === 'tx_bad_seq'
+        && attempt + 1 < CREATOR_SEQUENCE_RETRIES
+      ) {
+        continue;
+      }
+      throw new ClassicManagedChannelServiceError(
+        cause instanceof Error
+          ? `Unable to create managed Classic channel ${accountId}: ${cause.message}`
+          : `Unable to create managed Classic channel ${accountId}.`,
+        503,
+        'managed_classic_channel_creator_unavailable',
+      );
+    }
+  }
+
+  throw new ClassicManagedChannelServiceError(
+    'Managed Classic channel creator sequence remained busy after bounded retries.',
+    503,
+    'managed_classic_channel_creator_unavailable',
+  );
 }
 
 async function loadManagedChannelAccount(
@@ -60,17 +149,59 @@ async function loadManagedChannelAccount(
   try {
     return await accountLoader(accountId, network);
   } catch (cause) {
-    if (!(cause instanceof AccountNotFoundError) || network !== 'testnet') throw cause;
+    if (!(cause instanceof AccountNotFoundError)) throw cause;
     await provisioner(accountId, network);
     return accountLoader(accountId, network);
   }
 }
 
-function orderedChannels(requestId: string, channels: Keypair[]): Keypair[] {
+function orderedChannels(requestId: string, channels: IndexedChannel[]): IndexedChannel[] {
   if (channels.length < 2) return channels;
   const digest = createHash('sha256').update(requestId).digest();
   const offset = digest.readUInt32BE(0) % channels.length;
   return [...channels.slice(offset), ...channels.slice(0, offset)];
+}
+
+function indexedChannels(channels: Keypair[], start = 0): IndexedChannel[] {
+  return channels.map((keypair, offset) => ({ index: start + offset, keypair }));
+}
+
+function legacyLeaseKeypair(
+  accountId: string,
+  network: StellarNetwork,
+  baselineCount: number,
+  softLimit: number,
+  leaseCount: number,
+): Keypair | null {
+  const scanEnd = Math.max(softLimit, baselineCount + leaseCount + 1);
+  for (let index = 0; index <= scanEnd; index += 1) {
+    const candidate = deriveClassicManagedChannel(network, index);
+    if (candidate?.publicKey() === accountId) return candidate;
+  }
+  return null;
+}
+
+function dynamicExpansionChannels(
+  network: StellarNetwork,
+  baselineCount: number,
+  leases: StoredClassicManagedChannelLease[],
+): IndexedChannel[] {
+  const highestIndexedLease = leases.reduce(
+    (highest, lease) => lease.channelIndex === undefined ? highest : Math.max(highest, lease.channelIndex),
+    -1,
+  );
+  const lastIndex = Math.max(
+    baselineCount,
+    highestIndexedLease + 1,
+    baselineCount + leases.length,
+  );
+  const channels: IndexedChannel[] = [];
+  for (let index = baselineCount; index <= lastIndex; index += 1) {
+    const keypair = deriveClassicManagedChannel(network, index);
+    if (!keypair) break;
+    channels.push({ index, keypair });
+  }
+  return channels;
 }
 
 export async function reserveClassicManagedChannel(
@@ -88,17 +219,24 @@ export async function reserveClassicManagedChannel(
     channelProvisioner?: ChannelProvisioner;
   } = {},
 ): Promise<ReservedClassicManagedChannel> {
-  const baselineChannels = options.channels ?? configuredClassicManagedChannels(input.network);
-  const expansionChannels = options.expansionChannels
-    ?? (options.channels ? [] : expandableClassicManagedChannels(input.network));
-  const channels = [...baselineChannels, ...expansionChannels];
-  if (channels.length === 0) {
+  const baselineKeypairs = options.channels ?? configuredClassicManagedChannels(input.network);
+  if (baselineKeypairs.length === 0) {
     throw new ClassicManagedChannelServiceError(
       'MultiSigTools-managed Classic execution is not configured for this network.',
       503,
       'managed_classic_execution_unavailable',
     );
   }
+
+  const baselineChannels = indexedChannels(baselineKeypairs);
+  const leases = await store.listLeases(input.network);
+  const softLimit = classicManagedChannelSoftLimit();
+  const expansionChannels = options.expansionChannels
+    ? indexedChannels(options.expansionChannels, baselineChannels.length)
+    : options.channels
+      ? []
+      : dynamicExpansionChannels(input.network, baselineChannels.length, leases);
+  const customCandidates = [...baselineChannels, ...expansionChannels];
 
   const existing = await store.getLeaseForRequest(input.requestId);
   if (existing) {
@@ -109,19 +247,37 @@ export async function reserveClassicManagedChannel(
         'managed_classic_channel_conflict',
       );
     }
-    const keypair = channels.find((candidate) => candidate.publicKey() === existing.channelAccount);
-    if (!keypair) {
+
+    let keypair = customCandidates.find((candidate) => (
+      candidate.keypair.publicKey() === existing.channelAccount
+      || candidate.index === existing.channelIndex
+    ))?.keypair ?? null;
+
+    if (!keypair && options.channels === undefined) {
+      keypair = existing.channelIndex !== undefined
+        ? deriveClassicManagedChannel(input.network, existing.channelIndex)
+        : legacyLeaseKeypair(
+          existing.channelAccount,
+          input.network,
+          baselineChannels.length,
+          softLimit,
+          leases.length,
+        );
+    }
+
+    if (!keypair || keypair.publicKey() !== existing.channelAccount) {
       throw new ClassicManagedChannelServiceError(
-        'The managed Classic channel reserved for this Request is no longer configured.',
+        'The managed Classic channel reserved for this Request can no longer be derived.',
         503,
         'managed_classic_channel_unavailable',
       );
     }
+
     const account = await loadManagedChannelAccount(
       existing.channelAccount,
       input.network,
       options.accountLoader ?? loadAccount,
-      options.channelProvisioner ?? provisionTestnetChannel,
+      options.channelProvisioner ?? provisionManagedChannelWithCreator,
     );
     return { accountId: existing.channelAccount, sequence: account.sequence, account, keypair };
   }
@@ -129,21 +285,32 @@ export async function reserveClassicManagedChannel(
   const now = options.now ?? new Date();
   const leasedAt = now.toISOString();
   const accountLoader = options.accountLoader ?? loadAccount;
-  const channelProvisioner = options.channelProvisioner ?? provisionTestnetChannel;
+  const channelProvisioner = options.channelProvisioner ?? provisionManagedChannelWithCreator;
   const reservationOrder = [
     ...orderedChannels(input.requestId, baselineChannels),
     ...expansionChannels,
   ];
-  for (const keypair of reservationOrder) {
-    const channelAccount = keypair.publicKey();
+
+  for (const candidate of reservationOrder) {
+    const channelAccount = candidate.keypair.publicKey();
     const claimed = await store.claimLease({
       network: input.network,
       channelAccount,
+      channelIndex: candidate.index,
       requestId: input.requestId,
       leasedAt,
       expiresAt: input.leaseExpiresAt,
     });
     if (!claimed) continue;
+
+    if (candidate.index >= softLimit) {
+      console.warn('Managed Classic channel soft limit exceeded.', {
+        network: input.network,
+        channelIndex: candidate.index,
+        softLimit,
+      });
+    }
+
     try {
       const account = await loadManagedChannelAccount(
         channelAccount,
@@ -151,7 +318,12 @@ export async function reserveClassicManagedChannel(
         accountLoader,
         channelProvisioner,
       );
-      return { accountId: channelAccount, sequence: account.sequence, account, keypair };
+      return {
+        accountId: channelAccount,
+        sequence: account.sequence,
+        account,
+        keypair: candidate.keypair,
+      };
     } catch (cause) {
       await store.releaseRequest(input.requestId).catch(() => undefined);
       throw new ClassicManagedChannelServiceError(
@@ -165,7 +337,7 @@ export async function reserveClassicManagedChannel(
   }
 
   throw new ClassicManagedChannelServiceError(
-    'All managed Classic execution channels are currently in use. Retry after an active Request completes or expires.',
+    'All currently derivable managed Classic execution channels are in use.',
     503,
     'managed_classic_channel_pool_exhausted',
   );
@@ -178,7 +350,7 @@ export function signClassicManagedTransaction(
 ): string {
   const parsed = TransactionBuilder.fromXdr(
     xdr,
-    network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC,
+    networkPassphrase(network),
   );
   if ('innerTransaction' in parsed) {
     throw new ClassicManagedChannelServiceError(

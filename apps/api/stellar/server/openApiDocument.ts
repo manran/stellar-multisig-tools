@@ -330,7 +330,7 @@ const components: OpenApiObject = {
             'managedSourceAccountCount',
             'externalSourceAccountCount',
             'channelCount',
-            'elasticChannelLimit',
+            'channelSoftLimit',
             'channelAccounts',
           ],
           properties: {
@@ -339,7 +339,7 @@ const components: OpenApiObject = {
             managedSourceAccountCount: { type: 'integer', minimum: 0 },
             externalSourceAccountCount: { type: 'integer', minimum: 0 },
             channelCount: { type: 'integer', minimum: 0, maximum: 64, description: 'Configured baseline channel count.' },
-            elasticChannelLimit: { type: 'integer', minimum: 0, maximum: 64, description: 'Maximum deterministic channel slots the deployment may reserve without sequence pipelining.' },
+            channelSoftLimit: { type: 'integer', minimum: 1, description: 'Operational soft limit for managed Classic channel growth. Deterministic derivation may continue beyond this value.' },
             channelAccounts: { type: 'array', items: accountId, description: 'Configured baseline public channel accounts; Testnet may lazily activate later deterministic slots.' },
           },
           additionalProperties: false,

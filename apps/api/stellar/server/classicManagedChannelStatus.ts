@@ -19,7 +19,7 @@ export interface ManagedClassicChannelOperationalRow {
 export interface ManagedClassicChannelOperationalStatus {
   network: StellarNetwork;
   capacity: number;
-  elasticLimit: number;
+  softLimit: number;
   leaseVisibility: 'available' | 'unavailable';
   activeLeaseCount: number | null;
   expiredLeaseCount: number | null;
@@ -70,7 +70,7 @@ export async function inspectManagedClassicChannels(
   input: {
     network: StellarNetwork;
     channelAccounts: string[];
-    elasticLimit?: number;
+    softLimit?: number;
     leaseStore?: ClassicManagedChannelLeaseStore;
   },
   options: {
@@ -113,7 +113,7 @@ export async function inspectManagedClassicChannels(
     return {
       network: input.network,
       capacity: input.channelAccounts.length,
-      elasticLimit: input.elasticLimit ?? input.channelAccounts.length,
+      softLimit: input.softLimit ?? input.channelAccounts.length,
       leaseVisibility,
       activeLeaseCount: null,
       expiredLeaseCount: null,
@@ -127,7 +127,7 @@ export async function inspectManagedClassicChannels(
   return {
     network: input.network,
     capacity: input.channelAccounts.length,
-    elasticLimit: input.elasticLimit ?? input.channelAccounts.length,
+    softLimit: input.softLimit ?? input.channelAccounts.length,
     leaseVisibility,
     activeLeaseCount,
     expiredLeaseCount,

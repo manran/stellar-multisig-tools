@@ -223,7 +223,7 @@ export function DeveloperQuickstartPage() {
       </div>
 
       <DevCallout icon={<FlaskConical className="h-4 w-4" />} title="Do not infer Mainnet readiness from Testnet managed execution">
-        <p>Managed Classic is capability-gated per deployment/network. Query runtime capability and Integration execution scope. Mainnet channel provisioning/funding is an explicit operator responsibility; Testnet Friendbot behavior is not a Mainnet contract.</p>
+        <p>Managed Classic is capability-gated per deployment/network. Query runtime capability and Integration execution scope. New transaction-source channels are activated by a deployment-owned creator account using ordinary Stellar CreateAccount transactions; the configured channel count and soft growth limit are operational policy, not signer authority.</p>
       </DevCallout>
     </div>
   );

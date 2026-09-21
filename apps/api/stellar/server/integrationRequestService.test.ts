@@ -40,6 +40,9 @@ class MemoryChannelStore implements ClassicManagedChannelLeaseStore {
   async releaseRequest(requestId: string) {
     for (const [key, value] of this.leases) if (value.requestId === requestId) this.leases.delete(key);
   }
+  async listLeases(network: 'testnet' | 'public') {
+    return [...this.leases.values()].filter((item) => item.network === network);
+  }
 }
 
 class MemoryRequestStore implements SigningRequestStore {

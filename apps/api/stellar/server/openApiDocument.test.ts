@@ -220,7 +220,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(schemas.ContractPrepareResult.required, ['operation', 'version', 'mode', 'simulation']);
   assert.deepEqual(schemas.ContractEnforceResult.required, ['operation', 'version', 'mode', 'verification']);
   assert.deepEqual(schemas.IntegrationExecutionInspectResult.required, ['operation', 'version', 'serviceId', 'network', 'classic']);
-  assert.deepEqual(((schemas.IntegrationExecutionInspectResult.properties as JsonObject).classic as JsonObject).required, ['scopeConfigured', 'managedAvailable', 'managedSourceAccountCount', 'externalSourceAccountCount', 'channelCount', 'elasticChannelLimit', 'channelAccounts']);
+  assert.deepEqual(((schemas.IntegrationExecutionInspectResult.properties as JsonObject).classic as JsonObject).required, ['scopeConfigured', 'managedAvailable', 'managedSourceAccountCount', 'externalSourceAccountCount', 'channelCount', 'channelSoftLimit', 'channelAccounts']);
   assert.deepEqual(schemas.ClassicPaymentPrepareInput.required, ['network', 'sourceAccount', 'payments']);
   assert.ok((schemas.ClassicPaymentPrepareResult.properties as JsonObject).transactionSourceAccount);
   assert.ok((schemas.ClassicPaymentPrepareResult.properties as JsonObject).transactionSourceSequence);

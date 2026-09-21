@@ -9,6 +9,7 @@ import {
   TransactionBuilder,
 } from '@stellar/stellar-sdk/base';
 import { AccountNotFoundError } from '../../../../src/stellar/horizon.js';
+import { deriveClassicManagedChannel } from './classicManagedChannelConfig.js';
 import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
 import type {
   ClassicManagedChannelLeaseStore,
@@ -43,6 +44,10 @@ class MemoryStore implements ClassicManagedChannelLeaseStore {
     for (const [key, value] of this.leases) {
       if (value.requestId === requestId) this.leases.delete(key);
     }
+  }
+
+  async listLeases(network: 'testnet' | 'public') {
+    return [...this.leases.values()].filter((item) => item.network === network);
   }
 }
 
@@ -173,6 +178,49 @@ test('Testnet pool expands deterministically only after every baseline channel i
   assert.deepEqual(provisioned, [reserved.accountId]);
 });
 
+test('managed channel soft limit does not cap deterministic expansion', async () => {
+  const previousMaster = process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET;
+  const previousPool = process.env.MULTISIG_CLASSIC_CHANNEL_POOL_SIZE;
+  const previousSoft = process.env.MULTISIG_CLASSIC_CHANNEL_SOFT_LIMIT;
+  process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+  process.env.MULTISIG_CLASSIC_CHANNEL_POOL_SIZE = '1';
+  process.env.MULTISIG_CLASSIC_CHANNEL_SOFT_LIMIT = '2';
+  try {
+    const store = new MemoryStore();
+    const now = new Date('2026-09-19T10:00:00.000Z');
+    const occupied = [0, 1, 2].map((index) => deriveClassicManagedChannel('testnet', index)!);
+    for (const [index, channel] of occupied.entries()) {
+      store.leases.set(`testnet:${channel.publicKey()}`, {
+        network: 'testnet',
+        channelAccount: channel.publicKey(),
+        channelIndex: index,
+        requestId: String.fromCharCode(65 + index).repeat(16),
+        leasedAt: now.toISOString(),
+        expiresAt: '2026-09-20T10:00:00.000Z',
+      });
+    }
+
+    const reserved = await reserveClassicManagedChannel(store, {
+      network: 'testnet',
+      requestId: 'Z'.repeat(16),
+      leaseExpiresAt: '2026-09-20T10:00:00.000Z',
+    }, {
+      now,
+      accountLoader: async (accountId) => snapshot(accountId, '10'),
+    });
+
+    assert.equal(reserved.accountId, deriveClassicManagedChannel('testnet', 3)?.publicKey());
+    assert.equal((await store.getLeaseForRequest('Z'.repeat(16)))?.channelIndex, 3);
+  } finally {
+    if (previousMaster === undefined) delete process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET;
+    else process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET = previousMaster;
+    if (previousPool === undefined) delete process.env.MULTISIG_CLASSIC_CHANNEL_POOL_SIZE;
+    else process.env.MULTISIG_CLASSIC_CHANNEL_POOL_SIZE = previousPool;
+    if (previousSoft === undefined) delete process.env.MULTISIG_CLASSIC_CHANNEL_SOFT_LIMIT;
+    else process.env.MULTISIG_CLASSIC_CHANNEL_SOFT_LIMIT = previousSoft;
+  }
+});
+
 test('expired channel lease can be reclaimed without sequence pipelining', async () => {
   const store = new MemoryStore();
   const channel = Keypair.random();
@@ -228,25 +276,31 @@ test('missing Testnet channel is provisioned once before Horizon is reloaded', a
   assert.equal(loads, 2);
 });
 
-test('missing Mainnet channel is never auto-provisioned', async () => {
+test('channel provisioning is network-neutral once the deployment supplies a creator path', async () => {
   const store = new MemoryStore();
   const channel = Keypair.random();
   let provisioned = 0;
-  await assert.rejects(
-    () => reserveClassicManagedChannel(store, {
-      network: 'public',
-      requestId: 'M'.repeat(16),
-      leaseExpiresAt: '2026-09-20T10:00:00.000Z',
-    }, {
-      now: new Date('2026-09-19T10:00:00.000Z'),
-      channels: [channel],
-      accountLoader: async (accountId) => { throw new AccountNotFoundError(accountId); },
-      channelProvisioner: async () => { provisioned += 1; },
-    }),
-    (cause: unknown) => cause instanceof ClassicManagedChannelServiceError
-      && cause.code === 'managed_classic_channel_unavailable',
-  );
-  assert.equal(provisioned, 0);
+  let loads = 0;
+  const reserved = await reserveClassicManagedChannel(store, {
+    network: 'public',
+    requestId: 'M'.repeat(16),
+    leaseExpiresAt: '2026-09-20T10:00:00.000Z',
+  }, {
+    now: new Date('2026-09-19T10:00:00.000Z'),
+    channels: [channel],
+    accountLoader: async (accountId) => {
+      loads += 1;
+      if (loads === 1) throw new AccountNotFoundError(accountId);
+      return snapshot(accountId, '0');
+    },
+    channelProvisioner: async (accountId, network) => {
+      assert.equal(accountId, channel.publicKey());
+      assert.equal(network, 'public');
+      provisioned += 1;
+    },
+  });
+  assert.equal(reserved.accountId, channel.publicKey());
+  assert.equal(provisioned, 1);
 });
 
 test('managed channel signer adds only the transaction-source signature', () => {

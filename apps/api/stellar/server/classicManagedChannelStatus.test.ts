@@ -67,7 +67,7 @@ test('managed Classic operator projection separates capacity, leases and balance
   const result = await inspectManagedClassicChannels({
     network: 'testnet',
     channelAccounts: ['channel-a', 'channel-b', 'channel-c'],
-    elasticLimit: 64,
+    softLimit: 64,
     leaseStore: store,
   }, {
     now,
@@ -80,7 +80,7 @@ test('managed Classic operator projection separates capacity, leases and balance
   });
 
   assert.equal(result.capacity, 3);
-  assert.equal(result.elasticLimit, 64);
+  assert.equal(result.softLimit, 64);
   assert.equal(result.leaseVisibility, 'available');
   assert.equal(result.activeLeaseCount, 2);
   assert.equal(result.expiredLeaseCount, 1);
@@ -124,7 +124,7 @@ test('managed Classic operator projection never reports free capacity when lease
     accountLoader: async (accountId) => snapshot(accountId, '10000.0000000'),
   });
 
-  assert.equal(result.elasticLimit, 1);
+  assert.equal(result.softLimit, 1);
   assert.equal(result.leaseVisibility, 'unavailable');
   assert.equal(result.activeLeaseCount, null);
   assert.equal(result.expiredLeaseCount, null);

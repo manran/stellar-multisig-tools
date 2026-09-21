@@ -1,9 +1,11 @@
 import { createHmac } from 'node:crypto';
 import { Keypair } from '@stellar/stellar-sdk/base';
+import { stellarAmountToStroops } from '../../../../src/stellar/reserve.js';
 import type { StellarNetwork } from '../../../../src/stellar/types.js';
 
 const DEFAULT_CHANNEL_COUNT = 4;
-export const MAX_CHANNELS_PER_NETWORK = 64;
+export const DEFAULT_CHANNEL_SOFT_LIMIT = 64;
+const DEFAULT_CHANNEL_INITIAL_BALANCE = '10';
 const MIN_MASTER_SECRET_LENGTH = 32;
 
 export class ClassicManagedChannelConfigurationError extends Error {
@@ -15,15 +17,25 @@ export class ClassicManagedChannelConfigurationError extends Error {
   }
 }
 
-function channelCount(raw = process.env.MULTISIG_CLASSIC_CHANNEL_POOL_SIZE): number {
-  if (!raw?.trim()) return DEFAULT_CHANNEL_COUNT;
+function positiveSafeInteger(raw: string | undefined, fallback: number, variable: string): number {
+  if (!raw?.trim()) return fallback;
   const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1 || value > MAX_CHANNELS_PER_NETWORK) {
+  if (!Number.isSafeInteger(value) || value < 1) {
     throw new ClassicManagedChannelConfigurationError(
-      `MULTISIG_CLASSIC_CHANNEL_POOL_SIZE must be an integer from 1 to ${MAX_CHANNELS_PER_NETWORK}.`,
+      `${variable} must be a positive safe integer.`,
     );
   }
   return value;
+}
+
+function channelCount(raw = process.env.MULTISIG_CLASSIC_CHANNEL_POOL_SIZE): number {
+  return positiveSafeInteger(raw, DEFAULT_CHANNEL_COUNT, 'MULTISIG_CLASSIC_CHANNEL_POOL_SIZE');
+}
+
+export function classicManagedChannelSoftLimit(
+  raw = process.env.MULTISIG_CLASSIC_CHANNEL_SOFT_LIMIT,
+): number {
+  return positiveSafeInteger(raw, DEFAULT_CHANNEL_SOFT_LIMIT, 'MULTISIG_CLASSIC_CHANNEL_SOFT_LIMIT');
 }
 
 function normalizedMasterSecret(masterSecret = process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET): string {
@@ -53,9 +65,9 @@ export function deriveClassicManagedChannel(
 ): Keypair | null {
   const secret = normalizedMasterSecret(masterSecret);
   if (!secret) return null;
-  if (!Number.isInteger(index) || index < 0 || index >= MAX_CHANNELS_PER_NETWORK) {
+  if (!Number.isSafeInteger(index) || index < 0) {
     throw new ClassicManagedChannelConfigurationError(
-      `Managed Classic channel index must be an integer from 0 to ${MAX_CHANNELS_PER_NETWORK - 1}.`,
+      'Managed Classic channel index must be a non-negative safe integer.',
     );
   }
   return Keypair.fromRawEd25519Seed(derivedSeed(secret, network, index));
@@ -74,16 +86,29 @@ export function configuredClassicManagedChannels(
   ));
 }
 
-export function expandableClassicManagedChannels(
+export function deriveClassicManagedChannelCreator(
   network: StellarNetwork,
   masterSecret = process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET,
-  poolSize = process.env.MULTISIG_CLASSIC_CHANNEL_POOL_SIZE,
-): Keypair[] {
-  if (network !== 'testnet') return [];
+): Keypair | null {
   const secret = normalizedMasterSecret(masterSecret);
-  if (!secret) return [];
-  const baselineCount = channelCount(poolSize);
-  return Array.from({ length: MAX_CHANNELS_PER_NETWORK - baselineCount }, (_, offset) => (
-    Keypair.fromRawEd25519Seed(derivedSeed(secret, network, baselineCount + offset))
-  ));
+  if (!secret) return null;
+  const seed = createHmac('sha256', secret)
+    .update('multisigtools/classic-managed-channel-creator/v1\\0')
+    .update(network)
+    .digest();
+  return Keypair.fromRawEd25519Seed(seed);
+}
+
+export function configuredClassicManagedChannelInitialBalance(
+  raw = process.env.MULTISIG_CLASSIC_CHANNEL_INITIAL_BALANCE,
+): string {
+  const value = raw?.trim() || DEFAULT_CHANNEL_INITIAL_BALANCE;
+  try {
+    if (stellarAmountToStroops(value) <= 0n) throw new Error('non-positive');
+  } catch {
+    throw new ClassicManagedChannelConfigurationError(
+      'MULTISIG_CLASSIC_CHANNEL_INITIAL_BALANCE must be a positive Stellar XLM amount with at most 7 decimal places.',
+    );
+  }
+  return value;
 }
