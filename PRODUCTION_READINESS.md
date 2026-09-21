@@ -2,8 +2,8 @@
 
 **Status:** Testnet RC ready; Mainnet managed execution not ready
 **RC App SHA:** `6503b5fbb96a23f3e8be150ddf8d1d330ff9c864`
-**Current Testnet hardening SHA:** `17d672a1955c4579e2114679b48c94fe937f54f7`
-**Testnet production deployment:** `dpl_FeQWfBamBYM2gHnPxfAhp1h7AoNR`
+**Current Testnet hardening SHA:** `2e72cc4156c38b43fd8ceae32de8c099187342d2`
+**Testnet production deployment:** `dpl_9PDydekf2KdYv3JtZ2LRFENHG1YT`
 **Updated:** 2026-09-21
 
 This document is the operational gate after the Hallmark/UI freeze. It does not redefine signer authority, Request/Intent semantics, or execution ownership.
@@ -14,7 +14,7 @@ This document is the operational gate after the Hallmark/UI freeze. It does not 
 
 Verified:
 
-- final application gate: **799 / 799 PASS**;
+- final application gate: **814 / 814 PASS**;
 - production build PASS;
 - `git diff --check` PASS;
 - Testnet deployment READY and aliased to `stellar-testnet.multisig.tools`;
@@ -24,7 +24,9 @@ Verified:
 - live runtime is fixed Testnet;
 - managed Classic capability is enabled only for Testnet and remains disabled for public/Mainnet;
 - Vercel reported no runtime error clusters in the checked post-deploy window;
-- `/openapi.json` and `/api/operations` return 200.
+- `/openapi.json` and `/api/operations` return 200;
+- public Testnet Integration self-service is live at `/developers/integrations/new` and `POST /api/integration-testnet`;
+- self-service returns a Testnet-only `msi_*` without `mia_*`, signer authority, or Mainnet entitlement.
 
 The 2026-09-20 real-chain Managed Classic E2E remains authoritative for authority/execution behavior because the Hallmark RC did not change Request/Intent authority, managed-channel lease logic, PostgreSQL repositories, webhook delivery, or transaction submission core.
 
@@ -94,13 +96,38 @@ A direct production aggregate DB inspection was intentionally not performed from
 
 - channel keypairs are deterministically derived from `MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET`;
 - Testnet production has the master secret configured;
-- `MULTISIG_CLASSIC_CHANNEL_POOL_SIZE` is not explicitly set, so the code default is **4 channels**;
+- `MULTISIG_CLASSIC_CHANNEL_POOL_SIZE` is not explicitly set, so the configured **baseline is 4 channels**;
+- Testnet elastically continues the same deterministic derivation from index 4 up to the existing hard limit of 64 slots;
+- baseline channels are tried first; expansion slots are considered only when every baseline lease is unavailable;
+- expansion is ordered deterministically (4, 5, 6, ...) rather than hash-rotated;
 - v1 allows one active Request lease per channel;
+- PostgreSQL lease uniqueness arbitrates concurrent expansion without sequence pipelining;
 - expired leases are reclaimable;
 - sequence pipelining is deliberately not used;
-- Testnet may auto-provision missing channel accounts with Friendbot;
+- only a Testnet expansion channel that wins a lease is Friendbot-provisioned;
 - MST-managed Classic bids 50x the latest network base fee; external/self-submit keeps the ordinary network fee path;
 - Mainnet never auto-provisions/funds channels.
+
+### Testnet elastic-pool proof — COMPLETE
+
+Real Testnet evidence on 2026-09-21:
+
+- self-service Integration creation returned HTTP 201 and a Testnet-only `msi_*`;
+- Integration execution inspection reported baseline `channelCount=4` and `elasticChannelLimit=64`;
+- five active managed Classic Requests against the same Treasury produced five distinct transaction-source accounts;
+- Requests 1-4 consumed the four baseline channels; Request 5 automatically moved to the next deterministic expansion channel;
+- the expanded channel was absent from the baseline list and Horizon reported `10000.0000000 XLM`, proving lazy Friendbot activation;
+- all five Requests remained `awaiting_signatures`; no Treasury signature or ledger submission was required to prove pool/sequence behavior;
+- a second wave launched three Requests concurrently while the first five leases were still active;
+- PostgreSQL lease arbitration assigned three more distinct expansion channels and none reused an earlier active source;
+- all three new expansion accounts were Friendbot-funded and Horizon-readable;
+- two concurrent transactions had the same numeric sequence value on different source accounts, demonstrating why horizontal channel expansion removes the shared-sequence bottleneck without sequence pipelining;
+- no generated seed or `msi_*` was persisted in the E2E result artifacts.
+
+Artifacts:
+
+- `/opt/mst-e2e/testnet-selfservice-elastic-result.json`
+- `/opt/mst-e2e/testnet-elastic-concurrency-result.json`
 
 ### Already protected
 
@@ -112,12 +139,12 @@ A direct production aggregate DB inspection was intentionally not performed from
 
 ### Operator visibility — implemented on Testnet
 
-Checkpoint `1b30dd9` extends the existing operator-only `/admin/integrations` boundary; it does not create a new public endpoint or authority model.
+The operator-only `/admin/integrations` boundary remains separate from public Testnet Integration creation. Operator visibility distinguishes baseline capacity from the Testnet elastic limit and can include expansion channels that actually have leases; it does not scan all 64 possible accounts.
 
 The detailed managed-Classic view now exposes only public operational facts:
 
-- configured pool capacity;
-- active / expired / free lease state;
+- configured baseline pool capacity and elastic Testnet limit;
+- active / expired / free lease state, including actually leased expansion channels;
 - per-channel public G-address;
 - current native XLM balance, or explicit missing/unavailable state;
 - lease expiry time when present.
@@ -187,8 +214,10 @@ Therefore the semantic rate-limit hook exists in application code but is **not c
 
 ### Implemented
 
-- Testnet production has `MULTISIG_INTEGRATION_ADMIN_SECRET_HASH` configured.
-- The operator-only `/admin/integrations` surface is not ordinary product navigation.
+- Testnet Integration Profile creation is public/self-service through `/developers/integrations/new` and `POST /api/integration-testnet`;
+- self-service creation forcibly produces an enabled, Testnet-only profile and reuses the existing durable `msi_*` credential model;
+- Testnet production has `MULTISIG_INTEGRATION_ADMIN_SECRET_HASH` configured for operator lifecycle actions;
+- the operator-only `/admin/integrations` surface remains the current disable/rotate/advanced-management boundary and is not ordinary product navigation.
 - Integration `msi_*` credentials can be created, disabled and rotated.
 - Durable storage retains verifier hashes rather than plaintext credentials.
 - A rotated credential is returned once.
@@ -297,9 +326,9 @@ Do not introduce a second telemetry state machine; logs/metrics should reference
 Current Testnet app:
 
 - RC UI baseline SHA: `6503b5fbb96a23f3e8be150ddf8d1d330ff9c864`
-- operational hardening SHA: `17d672a1955c4579e2114679b48c94fe937f54f7`
-- deployment: `dpl_FeQWfBamBYM2gHnPxfAhp1h7AoNR`
-- previous known-good production deployment `dpl_2x9j1fUHpHD1vFFbUYpeWz52rjqF` remains a verified rollback candidate
+- operational hardening SHA: `2e72cc4156c38b43fd8ceae32de8c099187342d2`
+- deployment: `dpl_9PDydekf2KdYv3JtZ2LRFENHG1YT`
+- previous known-good production deployment `dpl_FeQWfBamBYM2gHnPxfAhp1h7AoNR` remains a rollback candidate
 
 A prior READY production deployment remains available as a deployment rollback candidate.
 
@@ -368,7 +397,7 @@ All of the following must be true before setting managed Classic public/Mainnet 
 - [ ] managed channel public accounts explicitly provisioned and funded;
 - [x] operator-only channel pool/capacity/balance visibility implemented and Testnet-deployed;
 - [x] real operator login verified live lease/balance projection with `mia_*`;
-- [ ] production managed-channel lifecycle design completed (activation/funding/expansion/rotation/recovery);
+- [ ] production managed-channel lifecycle design completed (activation/funding/expansion/rotation/recovery); Testnet deterministic lazy expansion is proven, but Mainnet policy is intentionally undecided;
 - [ ] low-balance threshold + alert policy defined;
 - [ ] spend/budget policy defined and enforced;
 - [x] Testnet webhook Queue/Cron/signing config verified; Mainnet must repeat the check before enablement;
