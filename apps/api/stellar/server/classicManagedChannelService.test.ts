@@ -15,6 +15,10 @@ import type {
   ClassicManagedChannelLeaseStore,
   StoredClassicManagedChannelLease,
 } from './classicManagedChannelStore.js';
+import type {
+  ClassicManagedChannelCreatorMonitorStore,
+  StoredClassicManagedChannelCreatorMonitor,
+} from './classicManagedChannelCreatorMonitorStore.js';
 import {
   ClassicManagedChannelServiceError,
   provisionManagedChannelWithCreator,
@@ -408,6 +412,56 @@ test('creator capacity exhaustion blocks only new channel provisioning with a us
       && /Existing requests are unaffected/.test(cause.message),
   );
   assert.equal(submissions, 0);
+});
+
+test('unconfigured alert hook records low creator state without claiming delivery', async () => {
+  const creator = Keypair.random();
+  const target = Keypair.random();
+  let record: StoredClassicManagedChannelCreatorMonitor | null = null;
+  const monitorStore: ClassicManagedChannelCreatorMonitorStore = {
+    async get() { return record; },
+    async observe(next) {
+      const previousState = record?.state ?? null;
+      const alertedAt = previousState === next.state ? record?.alertedAt : undefined;
+      record = { ...next, ...(alertedAt ? { alertedAt } : {}) };
+      return { previousState, changed: previousState !== next.state };
+    },
+    async claimAlert(_network, state, claimedAt) {
+      if (!record || record.state !== state || record.alertedAt) return false;
+      record.alertedAt = claimedAt;
+      return true;
+    },
+    async releaseAlertClaim(_network, state, claimedAt) {
+      if (record?.state === state && record.alertedAt === claimedAt) delete record.alertedAt;
+    },
+  };
+  const previousWebhook = process.env.MULTISIG_CLASSIC_CHANNEL_ALERT_WEBHOOK_URL;
+  delete process.env.MULTISIG_CLASSIC_CHANNEL_ALERT_WEBHOOK_URL;
+  try {
+    await provisionManagedChannelWithCreator(target.publicKey(), 'testnet', {
+      creator,
+      creatorMonitorStore: monitorStore,
+      accountLoader: async (accountId) => {
+        if (accountId === target.publicKey()) throw new AccountNotFoundError(accountId);
+        const value = snapshot(accountId, '10');
+        value.nativeBalance = '49';
+        return value;
+      },
+      networkParametersLoader: async () => ({
+        ledgerSequence: 1,
+        ledgerClosedAt: '2026-09-21T00:00:00.000Z',
+        baseFeeInStroops: 100,
+        baseReserveInStroops: 5_000_000,
+      }),
+      transactionSubmitter: async () => ({ hash: 'a'.repeat(64), ledger: 1, successful: true }),
+    });
+  } finally {
+    if (previousWebhook === undefined) delete process.env.MULTISIG_CLASSIC_CHANNEL_ALERT_WEBHOOK_URL;
+    else process.env.MULTISIG_CLASSIC_CHANNEL_ALERT_WEBHOOK_URL = previousWebhook;
+  }
+
+  assert.equal(record?.state, 'low');
+  assert.equal(record?.alertedAt, undefined);
 });
 
 test('managed channel signer adds only the transaction-source signature', () => {

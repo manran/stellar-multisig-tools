@@ -73,6 +73,16 @@ function networkPassphrase(network: StellarNetwork): string {
   return network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC;
 }
 
+function configuredCreatorAlertSender(
+  override?: ClassicManagedChannelAlertSender,
+): ClassicManagedChannelAlertSender | undefined {
+  if (override) return override;
+  if (!process.env.MULTISIG_CLASSIC_CHANNEL_ALERT_WEBHOOK_URL?.trim()) return undefined;
+  return async (alert) => {
+    await sendClassicManagedChannelAlertWebhook(alert);
+  };
+}
+
 export async function provisionManagedChannelWithCreator(
   accountId: string,
   network: StellarNetwork,
@@ -99,6 +109,7 @@ export async function provisionManagedChannelWithCreator(
   const accountLoader = options.accountLoader ?? loadAccount;
   const parameters = await (options.networkParametersLoader ?? loadNetworkParameters)(network);
   const transactionSubmitter = options.transactionSubmitter ?? submitTransactionXdr;
+  const alertSender = configuredCreatorAlertSender(options.alertSender);
   if (stellarAmountToStroops(startingBalance) < BigInt(parameters.baseReserveInStroops) * 2n) {
     throw new ClassicManagedChannelServiceError(
       'Managed Classic channel initial balance is below the network minimum account reserve.',
@@ -143,9 +154,7 @@ export async function provisionManagedChannelWithCreator(
       parameters,
     }, {
       store: options.creatorMonitorStore,
-      alertSender: options.alertSender ?? (async (alert) => {
-        await sendClassicManagedChannelAlertWebhook(alert);
-      }),
+      alertSender,
       now: options.now,
     });
     if (!capacity.canCreateNextChannel) {
@@ -176,9 +185,7 @@ export async function provisionManagedChannelWithCreator(
           parameters,
         }, {
           store: options.creatorMonitorStore,
-          alertSender: options.alertSender ?? (async (alert) => {
-            await sendClassicManagedChannelAlertWebhook(alert);
-          }),
+          alertSender,
           now: options.now,
         });
       } catch (monitorCause) {
@@ -198,9 +205,7 @@ export async function provisionManagedChannelWithCreator(
               parameters,
             }, {
               store: options.creatorMonitorStore,
-              alertSender: options.alertSender ?? (async (alert) => {
-                await sendClassicManagedChannelAlertWebhook(alert);
-              }),
+              alertSender,
               now: options.now,
             });
           } catch (monitorCause) {

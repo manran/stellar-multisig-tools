@@ -14,5 +14,6 @@ export interface ClassicManagedChannelCreatorMonitorStore {
   observe(
     record: StoredClassicManagedChannelCreatorMonitor,
   ): Promise<{ previousState: ClassicManagedChannelCreatorState | null; changed: boolean }>;
-  markAlerted(network: StellarNetwork, state: ClassicManagedChannelCreatorState, alertedAt: string): Promise<void>;
+  claimAlert(network: StellarNetwork, state: ClassicManagedChannelCreatorState, claimedAt: string): Promise<boolean>;
+  releaseAlertClaim(network: StellarNetwork, state: ClassicManagedChannelCreatorState, claimedAt: string): Promise<void>;
 }

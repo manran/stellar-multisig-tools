@@ -88,16 +88,30 @@ implements ClassicManagedChannelCreatorMonitorStore {
     });
   }
 
-  async markAlerted(
+  async claimAlert(
     network: StellarNetwork,
     state: ClassicManagedChannelCreatorState,
-    alertedAt: string,
+    claimedAt: string,
+  ): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE mst_stellar.classic_managed_channel_creator_monitor
+          SET alerted_at = $3
+        WHERE network = $1 AND state = $2 AND alerted_at IS NULL`,
+      [network, state, claimedAt],
+    );
+    return result.rowCount === 1;
+  }
+
+  async releaseAlertClaim(
+    network: StellarNetwork,
+    state: ClassicManagedChannelCreatorState,
+    claimedAt: string,
   ): Promise<void> {
     await this.pool.query(
       `UPDATE mst_stellar.classic_managed_channel_creator_monitor
-          SET alerted_at = $3
-        WHERE network = $1 AND state = $2`,
-      [network, state, alertedAt],
+          SET alerted_at = NULL
+        WHERE network = $1 AND state = $2 AND alerted_at = $3`,
+      [network, state, claimedAt],
     );
   }
 }

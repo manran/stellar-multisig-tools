@@ -135,7 +135,8 @@ test('managed Classic operator projection auto-grows soft limit and exposes crea
       };
     },
     async observe() { return { previousState: 'low', changed: false }; },
-    async markAlerted() {},
+    async claimAlert() { return false; },
+    async releaseAlertClaim() {},
   };
   const result = await inspectManagedClassicChannels({
     network: 'testnet',

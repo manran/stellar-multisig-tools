@@ -35,12 +35,19 @@ class MemoryMonitorStore implements ClassicManagedChannelCreatorMonitorStore {
 
   async observe(record: StoredClassicManagedChannelCreatorMonitor) {
     const previousState = this.record?.state ?? null;
-    this.record = { ...record };
+    const alertedAt = previousState === record.state ? this.record?.alertedAt : undefined;
+    this.record = { ...record, ...(alertedAt ? { alertedAt } : {}) };
     return { previousState, changed: previousState !== record.state };
   }
 
-  async markAlerted(_network: StellarNetwork, _state: StoredClassicManagedChannelCreatorMonitor['state'], alertedAt: string) {
-    if (this.record) this.record.alertedAt = alertedAt;
+  async claimAlert(_network: StellarNetwork, state: StoredClassicManagedChannelCreatorMonitor['state'], claimedAt: string) {
+    if (!this.record || this.record.state !== state || this.record.alertedAt) return false;
+    this.record.alertedAt = claimedAt;
+    return true;
+  }
+
+  async releaseAlertClaim(_network: StellarNetwork, state: StoredClassicManagedChannelCreatorMonitor['state'], claimedAt: string) {
+    if (this.record?.state === state && this.record.alertedAt === claimedAt) delete this.record.alertedAt;
   }
 }
 
@@ -82,6 +89,57 @@ test('creator monitor alerts only on low/exhausted/recovered state transitions',
     'creator.capacity_exhausted',
     'creator.balance_recovered',
   ]);
+});
+
+test('creator monitor atomically suppresses duplicate concurrent low-balance alerts', async () => {
+  const store = new MemoryMonitorStore();
+  const alerts: ClassicManagedChannelAlert[] = [];
+  const alertSender = async (alert: ClassicManagedChannelAlert) => { alerts.push(alert); };
+  const input = {
+    network: 'public' as const,
+    creatorAccount: 'GCREATOR',
+    account: account('49'),
+    parameters,
+  };
+
+  await Promise.all([
+    observeClassicManagedChannelCreator(input, { store, alertSender, now: new Date('2026-09-21T00:10:00Z') }),
+    observeClassicManagedChannelCreator(input, { store, alertSender, now: new Date('2026-09-21T00:10:01Z') }),
+  ]);
+
+  assert.deepEqual(alerts.map((item) => item.event), ['creator.low_balance']);
+});
+
+test('creator monitor releases a failed alert claim so the next observation can retry', async () => {
+  const store = new MemoryMonitorStore();
+  let attempts = 0;
+  const input = {
+    network: 'public' as const,
+    creatorAccount: 'GCREATOR',
+    account: account('49'),
+    parameters,
+  };
+  const originalError = console.error;
+  console.error = () => undefined;
+  try {
+    await observeClassicManagedChannelCreator(input, {
+      store,
+      alertSender: async () => { attempts += 1; throw new Error('temporary alert failure'); },
+      now: new Date('2026-09-21T00:11:00Z'),
+    });
+    assert.equal(store.record?.alertedAt, undefined);
+
+    await observeClassicManagedChannelCreator(input, {
+      store,
+      alertSender: async () => { attempts += 1; },
+      now: new Date('2026-09-21T00:12:00Z'),
+    });
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.equal(attempts, 2);
+  assert.equal(store.record?.alertedAt, '2026-09-21T00:12:00.000Z');
 });
 
 test('generic alert hook posts a simple text payload over HTTPS', async () => {

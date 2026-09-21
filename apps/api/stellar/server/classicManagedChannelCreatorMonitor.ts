@@ -24,11 +24,10 @@ export type ClassicManagedChannelAlertSender = (alert: ClassicManagedChannelAler
 function alertEvent(
   previous: ClassicManagedChannelCreatorState | null,
   current: ClassicManagedChannelCreatorState,
-  previouslyAlerted: boolean,
 ): ClassicManagedChannelAlertEvent | null {
   if (current === previous) {
-    if (!previouslyAlerted && current === 'low') return 'creator.low_balance';
-    if (!previouslyAlerted && current === 'insufficient') return 'creator.capacity_exhausted';
+    if (current === 'low') return 'creator.low_balance';
+    if (current === 'insufficient') return 'creator.capacity_exhausted';
     return null;
   }
   if (current === 'insufficient') return 'creator.capacity_exhausted';
@@ -83,12 +82,9 @@ export async function observeClassicManagedChannelCreator(
   } = {},
 ): Promise<ClassicManagedChannelCreatorCapacity> {
   let previousState: ClassicManagedChannelCreatorState | null = null;
-  let previouslyAlerted = false;
   if (options.store) {
     try {
-      const previous = await options.store.get(input.network);
-      previousState = previous?.state ?? null;
-      previouslyAlerted = Boolean(previous?.alertedAt);
+      previousState = (await options.store.get(input.network))?.state ?? null;
     } catch (cause) {
       console.error('Unable to read managed Classic creator monitor state.', cause);
     }
@@ -105,21 +101,24 @@ export async function observeClassicManagedChannelCreator(
       nativeBalanceStroops: stellarAmountToStroops(capacity.nativeBalance),
       observedAt,
     });
-    const event = alertEvent(transition.previousState, capacity.state, previouslyAlerted);
+    const event = alertEvent(transition.previousState, capacity.state);
     if (event && options.alertSender) {
-      try {
-        await options.alertSender({
-          event,
-          network: input.network,
-          creatorAccount: input.creatorAccount,
-          nativeBalance: capacity.nativeBalance,
-          lowThreshold: capacity.lowThreshold,
-          recoveryThreshold: capacity.recoveryThreshold,
-          requiredForNextChannel: capacity.requiredForNextChannel,
-        });
-        await options.store.markAlerted(input.network, capacity.state, observedAt);
-      } catch (cause) {
-        console.error('Managed Classic creator alert delivery failed.', cause);
+      const claimed = await options.store.claimAlert(input.network, capacity.state, observedAt);
+      if (claimed) {
+        try {
+          await options.alertSender({
+            event,
+            network: input.network,
+            creatorAccount: input.creatorAccount,
+            nativeBalance: capacity.nativeBalance,
+            lowThreshold: capacity.lowThreshold,
+            recoveryThreshold: capacity.recoveryThreshold,
+            requiredForNextChannel: capacity.requiredForNextChannel,
+          });
+        } catch (cause) {
+          await options.store.releaseAlertClaim(input.network, capacity.state, observedAt).catch(() => undefined);
+          console.error('Managed Classic creator alert delivery failed.', cause);
+        }
       }
     }
   } catch (cause) {
