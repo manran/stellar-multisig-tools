@@ -117,7 +117,7 @@ export const DOCS_SECTIONS: readonly DocsSectionDefinition[] = [
       {
         path: DOCS_DEVELOPER_QUICKSTART_PATH,
         title: 'Testnet quickstart',
-        summary: 'Start from a scoped Integration Profile and exercise a real Testnet Request or Intent without Mainnet assets.',
+        summary: 'Run one Hosted Classic Request end to end on Testnet, then branch into Soroban or deeper API integration as needed.',
         section: 'developers',
       },
       {

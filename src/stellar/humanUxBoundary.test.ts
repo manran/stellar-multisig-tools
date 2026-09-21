@@ -198,6 +198,7 @@ test('Testnet is a network-bound runtime rather than a duplicate content site', 
   const footer = source('../StellarFooter.tsx');
   const testnetLanding = source('../StellarTestnetLandingApp.tsx');
   const developerDocs = source('../DeveloperDocs.tsx');
+  const developerExamples = source('./developerDocsExamples.ts');
 
   assert.match(main, /fixedClientStellarDeploymentNetwork\(\) === 'testnet'/);
   assert.match(main, /isCanonicalStellarContentPath\(window\.location\.pathname\)/);
@@ -207,12 +208,12 @@ test('Testnet is a network-bound runtime rather than a duplicate content site', 
   assert.match(testnetLanding, /Product content stays canonical/);
   assert.match(testnetLanding, /canonicalStellarContentHref\('\/docs'\)/);
   assert.match(footer, /isCanonicalStellarContentPath\(path\) \? canonicalStellarContentHref\(path\) : stellarHref\(path\)/);
-  assert.match(developerDocs, /STELLAR_TESTNET_ORIGIN \+ '\/api\/request/);
-  assert.match(developerDocs, /STELLAR_TESTNET_ORIGIN \+ '\/api\/intent/);
+  assert.match(developerExamples, /STELLAR_TESTNET_ORIGIN.*\/api\/request/);
+  assert.match(developerExamples, /STELLAR_TESTNET_ORIGIN.*\/api\/intent/);
   assert.match(developerDocs, /STELLAR_MAINNET_ORIGIN \+ '\/openapi\.json'/);
-  assert.doesNotMatch(developerDocs, /https:\/\/stellar\.multisig\.tools\/api\/[^'\"]*network=testnet/);
+  assert.doesNotMatch(developerExamples, /https:\/\/stellar\.multisig\.tools\/api\/[^'\"]*network=testnet/);
   assert.match(developerDocs, /Managed by default when the deployment can support it/);
-  assert.match(developerDocs, /issue_browser_authorization/);
-  assert.match(developerDocs, /X-MultiSig-Intent-Capability/);
-  assert.match(developerDocs, /Webhook is a notification, not the source of truth/);
+  assert.match(developerExamples, /issue_browser_authorization/);
+  assert.match(developerExamples, /X-MultiSig-Intent-Capability/);
+  assert.match(developerDocs, /The webhook is not the source of truth/);
 });

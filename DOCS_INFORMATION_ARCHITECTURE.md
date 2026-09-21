@@ -78,6 +78,8 @@ Canonical order:
    - On my site
    - Full Headless
 2. **Testnet quickstart**
+   - One runnable Hosted Classic path from operator-issued `msi_*` -> semantic Request -> signer review -> canonical status/webhook.
+   - It is the first-success path, not an endpoint catalog; Soroban and Full Headless depth stay on their dedicated pages.
 3. **Classic integration**
 4. **Soroban integration**
 5. **API and webhooks**

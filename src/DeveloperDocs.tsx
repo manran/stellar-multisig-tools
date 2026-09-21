@@ -19,6 +19,23 @@ import {
   STELLAR_TESTNET_ORIGIN,
 } from './stellar/deploymentOrigins';
 import {
+  COMMON_API_ERRORS,
+  agentRequestExample,
+  agentStatusExample,
+  apiDiscoveryExample,
+  apiErrorExample,
+  browserInspectExample,
+  classicCreateResponseExample,
+  classicHostedReviewExample,
+  classicRequestExample,
+  classicStatusExample,
+  issueBrowserCapabilityExample,
+  runtimeConfigExample,
+  sorobanIntentExample,
+  webhookPayloadExample,
+  webhookVerifyExample,
+} from './stellar/developerDocsExamples';
+import {
   DOCS_AUTOMATION_PATH,
   DOCS_DEVELOPER_API_PATH,
   DOCS_DEVELOPER_CLASSIC_PATH,
@@ -106,83 +123,6 @@ function DevLink({
   );
 }
 
-const runtimeConfigExample = [
-  'curl ' + STELLAR_TESTNET_ORIGIN + '/api/runtime-config',
-].join('\n');
-
-const classicRequestExample = [
-  'curl -X POST ' + STELLAR_TESTNET_ORIGIN + '/api/request \\',
-  '  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \\',
-  '  -H "Content-Type: application/json" \\',
-  '  -H "Idempotency-Key: payroll-test-001" \\',
-  "  -d '{",
-  '    "network": "testnet",',
-  '    "payment": {',
-  '      "sourceAccount": "G...TREASURY",',
-  '      "payments": [',
-  '        {"destination":"G...RECIPIENT","amount":"1","asset":{"type":"native"}}',
-  '      ],',
-  '      "memo": "Test payment"',
-  '    },',
-  '    "externalReference": "payroll-test-001"',
-  "  }'",
-].join('\n');
-
-const sorobanIntentExample = [
-  'curl -X POST ' + STELLAR_TESTNET_ORIGIN + '/api/intent \\',
-  '  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \\',
-  '  -H "Content-Type: application/json" \\',
-  '  -H "Idempotency-Key: contract-test-001" \\',
-  "  -d '{",
-  '    "network": "testnet",',
-  '    "contractId": "C...CONTRACT",',
-  '    "method": "transfer",',
-  '    "arguments": {"from":"G...","to":"G...","amount":"1"}',
-  "  }'",
-].join('\n');
-
-const issueBrowserCapabilityExample = [
-  'curl -X PUT ' + STELLAR_TESTNET_ORIGIN + '/api/intent \\',
-  '  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \\',
-  '  -H "Content-Type: application/json" \\',
-  '  -H "X-MultiSig-Intent-Id: 0123456789ABCDEF" \\',
-  "  -d '{",
-  '    "action": "issue_browser_authorization",',
-  '    "signerAddress": "G...SIGNER",',
-  '    "origin": "https://app.example"',
-  "  }'",
-].join('\n');
-
-const browserInspectExample = [
-  'curl ' + STELLAR_TESTNET_ORIGIN + '/api/intent \\',
-  '  -H "X-MultiSig-Intent-Id: 0123456789ABCDEF" \\',
-  '  -H "X-MultiSig-Intent-Capability: $MULTISIG_BROWSER_CAPABILITY" \\',
-  '  -H "Origin: https://app.example"',
-].join('\n');
-
-const apiDiscoveryExample = [
-  'curl ' + STELLAR_TESTNET_ORIGIN + '/api/operations',
-  'curl ' + STELLAR_TESTNET_ORIGIN + '/openapi.json',
-].join('\n');
-
-const agentRequestExample = [
-  'curl -X POST ' + STELLAR_TESTNET_ORIGIN + '/api/request \\',
-  '  -H "Authorization: Bearer $MULTISIG_AGENT_KEY" \\',
-  '  -H "Content-Type: application/json" \\',
-  '  -H "Idempotency-Key: agent-request-001" \\',
-  "  -d '{",
-  '    "network": "testnet",',
-  '    "xdr": "AAAA...",',
-  '    "externalReference": "agent-request-001"',
-  "  }'",
-].join('\n');
-
-const agentStatusExample = [
-  'curl ' + STELLAR_TESTNET_ORIGIN + '/api/request \\',
-  '  -H "Authorization: Bearer $MULTISIG_AGENT_KEY" \\',
-  '  -H "X-MultiSig-Request-Id: 0123456789ABCDEF"',
-].join('\n');
-
 export function DeveloperHubPage() {
   return (
     <div className="mst-doc-page">
@@ -194,7 +134,6 @@ export function DeveloperHubPage() {
 
       <section>
         <div className="mst-doc-section-heading">
-          <div className="mst-doc-eyebrow">Integration depth</div>
           <h2>Take over only the layers you actually need.</h2>
         </div>
 
@@ -228,13 +167,16 @@ export function DeveloperHubPage() {
         </div>
       </section>
 
+      <DevCallout icon={<KeyRound className="h-4 w-4" />} title="Integration credentials are operator-issued in this release">
+        <p>There is no public self-service <code>msi_*</code> issuance flow yet. A deployment operator creates the Integration Profile with your service id/label, Testnet Treasury accounts and/or Soroban contract + method scope, execution ownership, and optional HTTPS webhook. The credential is returned once. If you do not already have a Testnet <code>msi_*</code>, stop here and ask the deployment operator to provision that scoped profile.</p>
+      </DevCallout>
+
       <DevCallout icon={<ShieldCheck className="h-4 w-4" />} title="One Integration can mix modes">
         <p>Use Native authorization for your default Soroban wallet flow, keep Hosted as a fallback for unsupported wallets, and use the same <code>msi_*</code> credential plus webhook on your backend. Transport does not change Intent identity.</p>
       </DevCallout>
 
       <section>
         <div className="mst-doc-section-heading">
-          <div className="mst-doc-eyebrow">Next</div>
           <h2>Start with the workload you need to authorize.</h2>
         </div>
         <div className="mst-doc-link-list">
@@ -259,12 +201,17 @@ export function DeveloperQuickstartPage() {
         summary="Use the Testnet deployment to prove scope, authorization, execution, and status delivery before any Mainnet rollout. The Testnet and Mainnet runtimes are separate and cannot be switched inside one deployment."
       />
 
+      <DevCallout icon={<KeyRound className="h-4 w-4" />} title="Before you start">
+        <p>This quickstart begins after an operator has issued a Testnet <code>msi_*</code>. Ask for a profile that includes the exact Treasury you will use. If you also need Soroban, include the contract id + allowed methods. Choose Hosted for the first pass; keep managed execution unless your service intentionally owns submission.</p>
+      </DevCallout>
+
       <DevSteps steps={[
-        ['Get a scoped Integration Profile', <p key="profile">An operator provisions one Testnet Integration Profile with the exact Classic Treasuries and/or Soroban contract methods your service may use. The resulting <code>msi_*</code> value is the API credential for that profile; it is not Stellar signer authority.</p>],
-        ['Inspect deployment capability', <div key="runtime"><p>Check what this deployment can actually execute before promising a managed route.</p><DevCode>{runtimeConfigExample}</DevCode></div>],
-        ['Create one real Testnet work item', <p key="create">Use a semantic Classic payment Request or a Soroban Intent. Always send an <code>Idempotency-Key</code> from machine callers so retries cannot create duplicate work.</p>],
-        ['Give the signer the appropriate surface', <p key="review">Hosted: open the returned review URL. Native Soroban: issue a signer/origin/current-plan browser capability. Full Headless: use the stable operations directly.</p>],
-        ['Observe completion from canonical state', <p key="observe">Webhook is a notification, not the source of truth. Deduplicate the event, then GET the current Request/Intent/Job before acting.</p>],
+        ['Inspect the Testnet deployment', <div key="runtime"><p>Verify the runtime is fixed to Testnet and check whether managed Classic is available.</p><DevCode>{runtimeConfigExample}</DevCode></div>],
+        ['Create one semantic Classic Request', <div key="create"><p>Set <code>MULTISIG_INTEGRATION_KEY</code> to the operator-issued credential. Replace the sample Treasury/recipient with accounts for your test. The sample G-addresses are syntax-valid documentation fixtures, not funded accounts.</p><DevCode>{classicRequestExample}</DevCode></div>],
+        ['Read the Request id and execution mode', <div key="response"><p>A new call returns HTTP 201; an idempotent replay returns 200. The fields you need first are <code>request.id</code>, <code>request.status</code>, and <code>request.execution.mode</code>.</p><DevCode>{classicCreateResponseExample}</DevCode></div>],
+        ['Open the Hosted signer review', <div key="review"><p>For Classic Hosted, put the returned <code>request.id</code> into the Testnet signer URL. Each Treasury signer still authorizes with their own Stellar wallet.</p><DevCode>{classicHostedReviewExample}</DevCode></div>],
+        ['Read canonical status after signing', <div key="status"><p>Use the same Integration credential and Request id. With managed execution, <code>ready</code> may be brief because MultiSig Tools submits once the threshold is satisfied; the terminal success state is <code>submitted</code>.</p><DevCode>{classicStatusExample}</DevCode></div>],
+        ['Treat webhook as a wake-up signal', <p key="observe">If the profile has a webhook, deduplicate the event id, verify its Standard Webhooks signature, then GET the current Request/Intent/Job before acting. The webhook is not the source of truth.</p>],
       ]} />
 
       <div className="mst-doc-two-up">
@@ -294,16 +241,14 @@ export function ClassicIntegrationPage() {
 
       <section>
         <div className="mst-doc-section-heading">
-          <div className="mst-doc-eyebrow">Create</div>
           <h2>Send semantic payment input.</h2>
         </div>
         <DevCode>{classicRequestExample}</DevCode>
-        <p className="mst-doc-body">The response is the ordinary Request/Proposal lifecycle used by Human flows. It includes the current execution projection and a signer review URL where applicable. Exact unsigned XDR remains an advanced escape hatch; semantic creation is the path that can safely reconstruct transaction-source mechanics.</p>
+        <p className="mst-doc-body">The response is the ordinary Request/Proposal lifecycle used by Human flows. Read <code>request.id</code>, <code>request.status</code>, and the current execution projection. For Hosted Classic, open <code>/s?request=&lt;request.id&gt;&amp;network=testnet</code> on the Testnet deployment. Exact unsigned XDR remains an advanced escape hatch; semantic creation is the path that can safely reconstruct transaction-source mechanics.</p>
       </section>
 
       <section>
         <div className="mst-doc-section-heading">
-          <div className="mst-doc-eyebrow">Execution</div>
           <h2>Managed by default when the deployment can support it.</h2>
         </div>
         <div className="mst-doc-fact-list">
@@ -341,7 +286,6 @@ export function SorobanIntegrationPage() {
 
       <section>
         <div className="mst-doc-section-heading">
-          <div className="mst-doc-eyebrow">On my site</div>
           <h2>Issue a narrow browser authorization capability.</h2>
         </div>
         <p className="mst-doc-body">Only the owning Integration Service may issue this capability. It binds one service, Intent, AuthorizationPlan revision/digest, signer, exact browser origin, and expiry. A replan invalidates the old capability automatically.</p>
@@ -364,7 +308,6 @@ export function ApiWebhooksPage() {
 
       <section>
         <div className="mst-doc-section-heading">
-          <div className="mst-doc-eyebrow">Discovery</div>
           <h2>Start from operations and OpenAPI.</h2>
         </div>
         <DevCode>{apiDiscoveryExample}</DevCode>
@@ -381,6 +324,27 @@ export function ApiWebhooksPage() {
         <div><strong>Job projection</strong><span>Integration callers may follow compact business state/next actions without interpreting every authorization/preparation/evidence record.</span></div>
         <div><strong>Webhook</strong><span>Receive → deduplicate event id → GET canonical Request/Intent/Job → act from current state. Delivery is durable and signed, but it is never the source of truth.</span></div>
       </div>
+
+      <section>
+        <div className="mst-doc-section-heading">
+          <h2>Verify the webhook, then read canonical state.</h2>
+        </div>
+        <p className="mst-doc-body">Webhook signing uses Standard Webhooks. The operator returns a <code>whsec_*</code> secret when webhook delivery is enabled or rotated. Verify the raw request body before JSON parsing, deduplicate <code>event.id</code>, then GET the current Request/Intent/Job.</p>
+        <DevCode>{webhookPayloadExample}</DevCode>
+        <DevCode>{webhookVerifyExample}</DevCode>
+      </section>
+
+      <section>
+        <div className="mst-doc-section-heading">
+          <h2>Branch on stable error codes, not message text.</h2>
+        </div>
+        <DevCode>{apiErrorExample}</DevCode>
+        <div className="mst-doc-fact-list">
+          {COMMON_API_ERRORS.map(([status, meaning, action]) => (
+            <div key={status}><strong>HTTP {status}</strong><span>{meaning}. {action}</span></div>
+          ))}
+        </div>
+      </section>
 
       <DevCallout icon={<Webhook className="h-4 w-4" />} title="Webhook configuration is part of the Integration Profile">
         <p>The callback URL is operator-controlled and HTTPS-only. MultiSig Tools stores durable delivery state, retries with bounds/backoff, and redacts credentials/private signing material. Consumers must still implement idempotent event handling.</p>
@@ -434,7 +398,6 @@ export function AgentApiPage() {
 
       <section>
         <div className="mst-doc-section-heading">
-          <div className="mst-doc-eyebrow">Access</div>
           <h2>Read, Write, and Sign are cumulative scopes.</h2>
         </div>
         <div className="mst-doc-fact-list">
@@ -444,15 +407,20 @@ export function AgentApiPage() {
         </div>
       </section>
 
+      <DevCallout icon={<KeyRound className="h-4 w-4" />} title="Create the Agent credential from the signer account">
+        <p>Agent credentials are self-service for the signer, unlike Integration credentials. Open <a href={stellarHref('/agent-access')} className="font-semibold text-emerald-700 underline underline-offset-4 dark:text-emerald-300">Agent access</a>, connect the signer wallet, unlock the private workspace, choose Read/Write/Sign, and create one named credential. The <code>msa_*</code> secret is shown once; store it in the Agent's secret manager.</p>
+      </DevCallout>
+
       <DevCallout icon={<KeyRound className="h-4 w-4" />} title="Sign access still does not contain a private key">
         <p>MultiSig Tools independently validates newly contributed signatures against the Principal. If an Agent uploads already-signed XDR, audit evidence can show which signer signed and which Agent credential transported it; it does not claim the Agent generated that signature.</p>
       </DevCallout>
 
       <section>
         <div className="mst-doc-section-heading">
-          <div className="mst-doc-eyebrow">Classic Request</div>
-          <h2>Create and inspect signer-owned work.</h2>
+          <h2>Discover the contract, then create signer-owned work.</h2>
         </div>
+        <DevCode>{apiDiscoveryExample}</DevCode>
+        <p className="mst-doc-body">Agent Request creation currently uses exact transaction XDR. Build it with your wallet/CLI or the available prepare operation first; semantic Integration payment creation is a separate <code>msi_*</code> capability.</p>
         <DevCode>{agentRequestExample}</DevCode>
         <DevCode>{agentStatusExample}</DevCode>
       </section>
