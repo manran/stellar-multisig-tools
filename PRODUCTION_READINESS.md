@@ -2,8 +2,8 @@
 
 **Status:** Testnet RC ready; Mainnet managed execution not ready
 **RC App SHA:** `6503b5fbb96a23f3e8be150ddf8d1d330ff9c864`
-**Current Testnet hardening SHA:** `2e72cc4156c38b43fd8ceae32de8c099187342d2`
-**Testnet production deployment:** `dpl_9PDydekf2KdYv3JtZ2LRFENHG1YT`
+**Current Testnet hardening SHA:** `decbae2b3df30a97a880efa51701e92c7107e4f9`
+**Testnet production deployment:** `dpl_ACDjZrwbJBHjuK4YbyQyKnVN7qaG`
 **Updated:** 2026-09-21
 
 This document is the operational gate after the Hallmark/UI freeze. It does not redefine signer authority, Request/Intent semantics, or execution ownership.
@@ -14,7 +14,7 @@ This document is the operational gate after the Hallmark/UI freeze. It does not 
 
 Verified:
 
-- final application gate: **814 / 814 PASS**;
+- final application gate: **824 / 824 PASS**;
 - production build PASS;
 - `git diff --check` PASS;
 - Testnet deployment READY and aliased to `stellar-testnet.multisig.tools`;
@@ -34,9 +34,9 @@ The 2026-09-20 real-chain Managed Classic E2E remains authoritative for authorit
 
 Intentional blockers remain:
 
-- no explicit Mainnet managed-channel provisioning/funding process has been verified;
-- operator-only channel visibility is implemented, deployed, and manually verified on Testnet;
-- no low-funds policy/alert threshold is defined;
+- Mainnet creator/account activation and the human refill/emergency procedure have not yet been executed/verified;
+- operator-only channel visibility is implemented and deployed on Testnet;
+- creator/channel capacity policy is implemented (about 1000 XLM creator target, 2 XLM/channel, low <50, recover >=60, half-full soft-limit doubling), but the final HTTPS/Telegram alert destination is not configured;
 - per-transaction fee bid is fixed at 50x latest network base fee for MST-managed Classic, but cumulative spend-budget policy is not defined;
 - semantic Firewall rules `request-create`, `treasury-admin`, and `agent-access-admin` are confirmed missing from the canonical/public Vercel project;
 - provider database recovery has not been drill-tested for Mainnet;
@@ -126,7 +126,8 @@ Sequence-source expansion was first proven on 2026-09-21 with the 5-Request + 3-
 Current creator-account evidence on Stellar Testnet:
 
 - creator account: `GD4KEGJWRO7UGRUWP34T3OYKGSCMEGQAFFFCZ3J2OFKE74OKWJZ5X3RD`;
-- Horizon reports creator balance `979.9999800 XLM` at verification time;
+- live post-deploy monitor smoke reports creator balance `979.9999800 XLM`, state `ready`, low threshold `50`, recovery threshold `60`, and `3.0000100 XLM` required to create the next 2-XLM channel at the observed reserve/fee;
+- PostgreSQL `0008_classic_managed_channel_creator_monitor` persisted the same `ready` state; `alertedAt` is null as expected because no alert condition is active and no alert URL is configured;
 - creator `CreateAccount` tx `6382194a23ccd410d0ebd5c2db05f116173ec09397032e376743ca41cbac0159` created `GBCCQRVVRFWMXC2WZMHFZ2SMQCUAR4TUPMNSIRXE5A72ZXE35QHMY35C` with `10.0000000 XLM` at `2026-09-21T04:37:57Z`;
 - creator `CreateAccount` tx `6fb7f7011eb2c267117a8c2933499a34c0766991d938ce13660e53277f035e8b` created `GCDH2XCUU2KT52JSCYOYYAWLCG5SRBQSJ6Y3GQY3YLGTQZF43EYUJEKX` with `10.0000000 XLM` at `2026-09-21T04:38:27Z`;
 - PostgreSQL records these as `channel_index=8` and `channel_index=9` respectively, proving durable deterministic-index recovery across the new migration;
@@ -163,14 +164,15 @@ It deliberately does **not** expose channel seeds, Request ids, Service ids, sig
 
 Verification completed:
 
-- pure projection tests cover active/expired/free lease classification and balance ready/missing/unavailable states;
-- full suite: **801 / 801 PASS**;
+- pure projection tests cover active/expired/free lease classification, balance ready/missing/unavailable states, creator capacity, 50/60 hysteresis, half-full soft-limit doubling, alert transition de-duplication, and capacity-exhaustion fail-closed behavior;
+- full suite: **824 / 824 PASS**;
 - production build PASS;
 - `git diff --check` PASS;
-- 375 / 1280 operator-panel browser geometry: zero overflow / zero JS errors;
-- Testnet production deployment `dpl_2x9j1fUHpHD1vFFbUYpeWz52rjqF` READY;
-- unauthenticated detailed-view smoke returns 401 `integration_admin_credential_required` and leaks zero G-addresses;
-- Testnet runtime/OpenAPI/admin shell/payment smoke remain 200;
+- Testnet production deployment `dpl_ACDjZrwbJBHjuK4YbyQyKnVN7qaG` READY and aliased to `stellar-testnet.multisig.tools`;
+- live OpenAPI has no 64 maximum on `channelCount` and documents the current auto-doubling soft-limit policy;
+- live runtime remains fixed Testnet with managed Classic enabled only for Testnet;
+- live creator monitor smoke wrote/read the `ready` state through Horizon + PostgreSQL without creating a channel;
+- `MULTISIG_CLASSIC_CHANNEL_ALERT_WEBHOOK_URL` is intentionally absent; defaults for 2 XLM / 50 / 60 / base soft-limit 64 are active;
 - Vercel reported no runtime error clusters in the checked post-deploy window.
 
 Operator verification completed manually on 2026-09-21: the authenticated deployment view showed live channel balances and lease state, including expired leases. For the current Testnet stage, this is sufficient evidence for the operator visibility slice.
