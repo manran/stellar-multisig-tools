@@ -111,7 +111,8 @@ The local application-layer proof does not count as the Neon provider recovery d
 - PostgreSQL migration `0007_classic_managed_channel_index` persists `channel_index` with the lease so replay can recover channels beyond any soft threshold without scanning a fixed address window;
 - v1 allows one active Request lease per channel;
 - PostgreSQL lease uniqueness arbitrates concurrent expansion without sequence pipelining;
-- expired leases are reclaimable;
+- expired leases are reclaimed lazily and atomically by the next claim; no periodic lease-cleanup job is required because the table is keyed by `(network, channel_account)` and therefore retains at most one current/last lease row per created channel;
+- successful managed submission and failed pre-durable creation paths release the Request lease explicitly; an expired row may remain as last-occupancy evidence until the channel is reused;
 - sequence pipelining is deliberately not used;
 - when a derived channel does not exist on-chain, the creator submits an ordinary Stellar `CreateAccount` transaction; the default new-channel balance is **2 XLM** (`MULTISIG_CLASSIC_CHANNEL_INITIAL_BALANCE` may override it);
 - production creator funding target is approximately **1000 XLM** before enabling Mainnet managed execution;
@@ -191,7 +192,8 @@ Before Mainnet managed execution:
 1. **Production channel lifecycle design**
    - deterministic derivation + dedicated creator-account provisioning are proven on Testnet;
    - decided policy: approximately 1000 XLM initial creator funding, 2 XLM per new channel, low warning below 50 XLM, recovery at 60 XLM, and automatic soft-limit doubling at half utilization;
-   - still to decide before Mainnet: refill operator procedure, final alert destination/credentials, channel refill/drain policy after creation, replacement/rotation, master-secret recovery, and stale-lease cleanup;
+   - still to decide before Mainnet: refill operator procedure, final alert destination/credentials, channel refill/drain policy after creation, replacement/rotation, and master-secret recovery;
+   - stale/expired lease cleanup is resolved as lazy atomic reclaim rather than a periodic cleanup job;
    - the soft limit is not a derivation cap and must not be treated as production maximum capacity.
 
 2. **Low-funds / capacity policy — implemented, destination pending**
