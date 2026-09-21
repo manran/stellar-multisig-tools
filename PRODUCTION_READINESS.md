@@ -38,6 +38,7 @@ Intentional blockers remain:
 - operator-only channel visibility is implemented and deployed on Testnet;
 - creator/channel capacity policy is implemented (about 1000 XLM creator target, 2 XLM/channel, low <50, recover >=60, half-full soft-limit doubling), but the final HTTPS/Telegram alert destination is not configured;
 - per-transaction fee bid is fixed at 50x latest network base fee for MST-managed Classic, but cumulative spend-budget policy is not defined;
+- the canonical/public Vercel project is still serving the legacy `feat/stellar-mvp` deployment (`fa14599a...`): its live operation registry exposes 16 operations versus Testnet's 36, and `/api/integration-webhook-sweep` is absent (404). The current RC/PG code baseline has **not** been deployed to the canonical project;
 - semantic Firewall rules `request-create`, `treasury-admin`, and `agent-access-admin` are confirmed missing from the canonical/public Vercel project;
 - provider database recovery has not been drill-tested for Mainnet;
 - Mainnet managed Classic capability remains disabled.
@@ -303,7 +304,8 @@ Verified on the current Testnet production deployment:
 
 Before Mainnet:
 
-- verify the same Queue/Cron deployment exists in the Mainnet project;
+- first deploy the approved current code baseline to the canonical/public project; do not configure Queue/Cron parity against the legacy 16-operation deployment and mistake that for readiness;
+- after that deployment, verify the same Queue/Cron contract exists in the Mainnet project (the current legacy deployment returns 404 for `/api/integration-webhook-sweep`);
 - verify webhook master secret and Cron secret are configured there;
 - define alert threshold for prolonged unpublished outbox backlog or repeated retry/permanent-failure outcomes;
 - expose or document a support query for delivery history without leaking callback URLs or signing secrets.
@@ -399,7 +401,9 @@ Current routing contract intentionally sends Testnet:
 
 to `stellar.multisig.tools`.
 
-The canonical/public project is still serving the older docs:
+The canonical/public project is still serving the older code and docs. Live read-only verification on 2026-09-21 resolved `stellar.multisig.tools` to Vercel deployment `dpl_D6msPjBm29VEqEm32Gq5rgFmK5Tf`, legacy repo/branch `MultiSigTools` / `feat/stellar-mvp` at `fa14599a269ef23214f1e26c90dc81802b8f9e78`. It reports `fixedNetwork=public`, but exposes 16 operations versus Testnet's 36 and has no `/api/integration-webhook-sweep` route.
+
+Documentation is correspondingly stale:
 
 - `/developers` -> old Agent API page;
 - `/docs/developers/testnet-quickstart` -> Page not found.
@@ -412,7 +416,7 @@ Publishing the new docs changes the canonical/public project and therefore requi
 
 All of the following must be true before setting managed Classic public/Mainnet capability on:
 
-- [ ] canonical/public deployment change explicitly approved;
+- [ ] canonical/public deployment change explicitly approved and current RC/PG code baseline deployed; the live canonical project is still the legacy 16-operation `fa14599a...` deployment;
 - [ ] Mainnet DB/persistence recovery drill completed;
 - [ ] Mainnet private Blob read/write verified;
 - [ ] semantic Firewall rules created with reviewed limits (`request-create`, `treasury-admin`, `agent-access-admin`);
