@@ -80,17 +80,22 @@ freeze writes if integrity is in doubt
 
 Do not switch `MULTISIG_COORDINATION_STORAGE=blob` after PG-only writes have accumulated.
 
-### Operator checks still required
+### Recovery status / operator checks still required
+
+- Current Testnet PostgreSQL provider is **Neon**, verified from redacted Vercel production environment metadata without recording credentials.
+- Local PostgreSQL 18 application-layer restore proof is complete: native dump/restore preserved 20 `mst_stellar` tables, migrations `0001` through `0008`, exact per-table row counts/content digests, and the restored database reports no pending migrations.
+- `npm run db:verify-recovery` is a read-only recovery verifier and fails closed on migration mismatch.
+- The verifier also passed against the live Testnet Neon database without writes: 8 migrations and all 20 `mst_stellar` base tables were readable.
+- Canonical operator procedure: `POSTGRES_RECOVERY_RUNBOOK.md`.
 
 Before Mainnet:
 
-- identify and document the actual database provider recovery mechanism;
-- prove one restore/PITR/snapshot recovery in a non-production environment;
-- record expected recovery-point and recovery-time behavior;
-- document who can initiate restore and how credentials are controlled;
-- after restore, verify migration versions and canonical Request/Intent reads before unfreezing writes.
+- prove one isolated Neon PITR/snapshot recovery on Testnet without switching the active branch;
+- record the configured provider retention/recovery capability and observed recovery time;
+- document who can initiate restore and how provider recovery access is controlled;
+- after restore, verify migration versions, canonical Request/Intent facts, Inbox/Activity, and bounded read smoke before unfreezing writes.
 
-A direct production aggregate DB inspection was intentionally not performed from this development session because it required injecting production database credentials into a local process and was blocked by the safety layer.
+The local application-layer proof does not count as the Neon provider recovery drill. Mainnet remains blocked until the provider-level drill is completed.
 
 ## 3. Managed Classic channels
 

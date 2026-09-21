@@ -18,6 +18,7 @@
     "integration:admin-secret": "tsx scripts/createIntegrationAdminSecret.ts",
     "db:migrate": "tsx scripts/applyPostgresMigrations.ts",
     "db:backfill": "tsx scripts/backfillPostgresCoordination.ts",
+    "db:verify-recovery": "tsx scripts/verifyPostgresRecovery.ts",
     "test:postgres": "tsx --test --test-concurrency=1 apps/api/stellar/db/*.test.ts"
   },
   "dependencies": {
