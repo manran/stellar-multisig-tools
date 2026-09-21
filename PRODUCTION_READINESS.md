@@ -2,7 +2,8 @@
 
 **Status:** Testnet RC ready; Mainnet managed execution not ready
 **RC App SHA:** `6503b5fbb96a23f3e8be150ddf8d1d330ff9c864`
-**Testnet production deployment:** `dpl_7r6f9wna3S91iacJeSK1fcnEy4zU`
+**Current Testnet hardening SHA:** `1b30dd9a659ca7f5562e6af8acb0bf6725746466`
+**Testnet production deployment:** `dpl_2x9j1fUHpHD1vFFbUYpeWz52rjqF`
 **Updated:** 2026-09-21
 
 This document is the operational gate after the Hallmark/UI freeze. It does not redefine signer authority, Request/Intent semantics, or execution ownership.
@@ -32,10 +33,10 @@ The 2026-09-20 real-chain Managed Classic E2E remains authoritative for authorit
 Intentional blockers remain:
 
 - no explicit Mainnet managed-channel provisioning/funding process has been verified;
-- no operator-facing channel balance / active lease / pool-capacity view exists;
+- operator-only channel visibility is implemented and deployed on Testnet, but the authenticated production projection still needs one operator login verification with the deployment `mia_*` credential;
 - no low-funds policy/alert threshold is defined;
 - no fee/spend budget policy exists for MST-funded transaction-source channels;
-- platform semantic rate-limit rule configuration has not been operator-verified for Mainnet;
+- semantic Firewall rules `request-create`, `treasury-admin`, and `agent-access-admin` are confirmed missing from the canonical/public Vercel project;
 - provider database recovery has not been drill-tested for Mainnet;
 - Mainnet managed Classic capability remains disabled.
 
@@ -108,27 +109,44 @@ A direct production aggregate DB inspection was intentionally not performed from
 - managed source signatures are restricted to the reserved transaction source;
 - Treasury signer authority remains independent from the channel key.
 
-### Missing operator controls
+### Operator visibility — implemented on Testnet
+
+Checkpoint `1b30dd9` extends the existing operator-only `/admin/integrations` boundary; it does not create a new public endpoint or authority model.
+
+The detailed managed-Classic view now exposes only public operational facts:
+
+- configured pool capacity;
+- active / expired / free lease state;
+- per-channel public G-address;
+- current native XLM balance, or explicit missing/unavailable state;
+- lease expiry time when present.
+
+It deliberately does **not** expose channel seeds, Request ids, Service ids, signer material, or any funding action.
+
+Verification completed:
+
+- pure projection tests cover active/expired/free lease classification and balance ready/missing/unavailable states;
+- full suite: **801 / 801 PASS**;
+- production build PASS;
+- `git diff --check` PASS;
+- 375 / 1280 operator-panel browser geometry: zero overflow / zero JS errors;
+- Testnet production deployment `dpl_2x9j1fUHpHD1vFFbUYpeWz52rjqF` READY;
+- unauthenticated detailed-view smoke returns 401 `integration_admin_credential_required` and leaks zero G-addresses;
+- Testnet runtime/OpenAPI/admin shell/payment smoke remain 200;
+- Vercel reported no runtime error clusters in the checked post-deploy window.
+
+One operator-only check remains: log in with the real deployment `mia_*` credential and confirm that the live PostgreSQL lease projection and Horizon balances match the expected 4-channel pool. This development session intentionally did not retrieve the plaintext admin credential.
+
+### Remaining operator controls
 
 Before Mainnet managed execution:
 
-1. **Pool visibility**
-   - configured channel count;
-   - active leases;
-   - expired/stale leases;
-   - free capacity.
-
-2. **Balance visibility**
-   - current native balance per public channel account;
-   - missing/unfunded channel state;
-   - last successful balance check.
-
-3. **Low-funds policy**
+1. **Low-funds policy**
    - operator-defined warning threshold;
    - alert destination;
    - explicit action when every usable channel is below threshold.
 
-4. **Spend/budget control**
+2. **Spend/budget control**
    - define what is budgeted: base fee only, resource fees if applicable, or other execution cost;
    - define per-Service / per-period limits if MST funds execution;
    - fail closed before accepting new MST-funded work once the budget is exhausted.
@@ -147,11 +165,17 @@ Semantic Vercel Firewall rate-limit checks exist for:
 
 The code uses verified identities as rate-limit keys and returns stable 429/503 errors.
 
-### Platform verification required
+### Platform status — rules currently missing
 
 The application deliberately treats a missing Vercel rate-limit rule as “not configured” and logs a warning rather than pretending the rule exists.
 
-Before Mainnet launch, an operator must verify the corresponding Vercel Firewall rules actually exist and match the intended limits. The presence of application code alone is not evidence that the platform rule is configured.
+A read-only Vercel Firewall configuration check on 2026-09-21 confirmed that all three application rule ids are currently missing from **both** the Testnet project and the canonical/public project:
+
+- `request-create` — missing;
+- `treasury-admin` — missing;
+- `agent-access-admin` — missing.
+
+Therefore the semantic rate-limit hook exists in application code but is **not currently enforcing a platform limit**. This is acceptable as an explicit Testnet limitation, but Mainnet launch requires the rules to be created with reviewed policy values. Do not invent those limits in code; they are an operator/product policy decision.
 
 ## 5. Integration credentials / operator admin
 
@@ -239,10 +263,12 @@ Do not introduce a second telemetry state machine; logs/metrics should reference
 
 ### Testnet
 
-Current RC app:
+Current Testnet app:
 
-- SHA: `6503b5fbb96a23f3e8be150ddf8d1d330ff9c864`
-- deployment: `dpl_7r6f9wna3S91iacJeSK1fcnEy4zU`
+- RC UI baseline SHA: `6503b5fbb96a23f3e8be150ddf8d1d330ff9c864`
+- operational hardening SHA: `1b30dd9a659ca7f5562e6af8acb0bf6725746466`
+- deployment: `dpl_2x9j1fUHpHD1vFFbUYpeWz52rjqF`
+- previous known-good production deployment `dpl_7r6f9wna3S91iacJeSK1fcnEy4zU` remains a rollback candidate
 
 A prior READY production deployment remains available as a deployment rollback candidate.
 
@@ -296,9 +322,10 @@ All of the following must be true before setting managed Classic public/Mainnet 
 - [ ] canonical/public deployment change explicitly approved;
 - [ ] Mainnet DB/persistence recovery drill completed;
 - [ ] Mainnet private Blob read/write verified;
-- [ ] semantic firewall rules verified at platform level;
+- [ ] semantic Firewall rules created with reviewed limits (`request-create`, `treasury-admin`, `agent-access-admin`);
 - [ ] managed channel public accounts explicitly provisioned and funded;
-- [ ] channel pool/capacity visibility available;
+- [x] operator-only channel pool/capacity/balance visibility implemented and Testnet-deployed;
+- [ ] real operator login verifies live lease/balance projection with `mia_*`;
 - [ ] low-balance threshold + alert policy defined;
 - [ ] spend/budget policy defined and enforced;
 - [ ] webhook Queue/Cron/signing config verified;
