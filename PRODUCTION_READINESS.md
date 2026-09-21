@@ -95,36 +95,37 @@ A direct production aggregate DB inspection was intentionally not performed from
 ### Current implementation
 
 - channel keypairs are deterministically derived from `MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET`;
-- Testnet production has the master secret configured;
+- a **separate deterministic creator account** is derived from the same deployment master with a different domain tag; it exists only to create/fund managed channel accounts and is not a Treasury signer or transaction-source channel;
+- Testnet production has the master secret configured and the creator account active;
 - `MULTISIG_CLASSIC_CHANNEL_POOL_SIZE` is not explicitly set, so the configured **baseline is 4 channels**;
-- Testnet elastically continues the same deterministic derivation from index 4 up to the existing hard limit of 64 slots;
-- baseline channels are tried first; expansion slots are considered only when every baseline lease is unavailable;
-- expansion is ordered deterministically (4, 5, 6, ...) rather than hash-rotated;
+- `MULTISIG_CLASSIC_CHANNEL_SOFT_LIMIT` defaults to **64**, but this is an operational warning threshold only: deterministic derivation is valid beyond 64 (tests cover index 64 and index 4096);
+- baseline channels are tried first; expansion slots continue deterministically as 4, 5, 6, ... and may cross the soft limit;
+- PostgreSQL migration `0007_classic_managed_channel_index` persists `channel_index` with the lease so replay can recover channels beyond any soft threshold without scanning a fixed address window;
 - v1 allows one active Request lease per channel;
 - PostgreSQL lease uniqueness arbitrates concurrent expansion without sequence pipelining;
 - expired leases are reclaimable;
 - sequence pipelining is deliberately not used;
-- only a Testnet expansion channel that wins a lease is Friendbot-provisioned;
+- when a derived channel does not exist on-chain, the creator submits an ordinary Stellar `CreateAccount` transaction with the configured initial XLM balance;
+- creator submission reconciles outcome-unknown responses and rebuilds on creator `tx_bad_seq` using bounded retries;
+- **managed-channel runtime contains no Friendbot provisioning path**;
 - MST-managed Classic bids 50x the latest network base fee; external/self-submit keeps the ordinary network fee path;
-- Mainnet never auto-provisions/funds channels.
+- Mainnet managed Classic remains disabled; before future enablement, the creator account must be explicitly activated/funded under the production policy.
 
-### Testnet elastic-pool proof — COMPLETE
+### Testnet horizontal-expansion / creator proof — COMPLETE
 
-Real Testnet evidence on 2026-09-21:
+Sequence-source expansion was first proven on 2026-09-21 with the 5-Request + 3-concurrent-Request E2E artifacts below: every active Request received a distinct transaction source and PostgreSQL lease arbitration avoided sequence collisions. Those original artifacts predate the creator-account cutover and therefore preserve historical funding evidence only; they remain valid for the **horizontal sequence-source mechanism**, not for the current provisioning method.
 
-- self-service Integration creation returned HTTP 201 and a Testnet-only `msi_*`;
-- Integration execution inspection reported baseline `channelCount=4` and `elasticChannelLimit=64`;
-- five active managed Classic Requests against the same Treasury produced five distinct transaction-source accounts;
-- Requests 1-4 consumed the four baseline channels; Request 5 automatically moved to the next deterministic expansion channel;
-- the expanded channel was absent from the baseline list and Horizon reported `10000.0000000 XLM`, proving lazy Friendbot activation;
-- all five Requests remained `awaiting_signatures`; no Treasury signature or ledger submission was required to prove pool/sequence behavior;
-- a second wave launched three Requests concurrently while the first five leases were still active;
-- PostgreSQL lease arbitration assigned three more distinct expansion channels and none reused an earlier active source;
-- all three new expansion accounts were Friendbot-funded and Horizon-readable;
-- two concurrent transactions had the same numeric sequence value on different source accounts, demonstrating why horizontal channel expansion removes the shared-sequence bottleneck without sequence pipelining;
-- no generated seed or `msi_*` was persisted in the E2E result artifacts.
+Current creator-account evidence on Stellar Testnet:
 
-Artifacts:
+- creator account: `GD4KEGJWRO7UGRUWP34T3OYKGSCMEGQAFFFCZ3J2OFKE74OKWJZ5X3RD`;
+- Horizon reports creator balance `979.9999800 XLM` at verification time;
+- creator `CreateAccount` tx `6382194a23ccd410d0ebd5c2db05f116173ec09397032e376743ca41cbac0159` created `GBCCQRVVRFWMXC2WZMHFZ2SMQCUAR4TUPMNSIRXE5A72ZXE35QHMY35C` with `10.0000000 XLM` at `2026-09-21T04:37:57Z`;
+- creator `CreateAccount` tx `6fb7f7011eb2c267117a8c2933499a34c0766991d938ce13660e53277f035e8b` created `GCDH2XCUU2KT52JSCYOYYAWLCG5SRBQSJ6Y3GQY3YLGTQZF43EYUJEKX` with `10.0000000 XLM` at `2026-09-21T04:38:27Z`;
+- PostgreSQL records these as `channel_index=8` and `channel_index=9` respectively, proving durable deterministic-index recovery across the new migration;
+- the temporary one-shot bootstrap endpoint used only to inspect/initialize creator state reported `already_active`; it was removed immediately and the clean deployment was force-rebuilt; the endpoint now returns 404;
+- no managed-channel runtime code references Friendbot.
+
+Historical sequence-expansion artifacts:
 
 - `/opt/mst-e2e/testnet-selfservice-elastic-result.json`
 - `/opt/mst-e2e/testnet-elastic-concurrency-result.json`
@@ -139,11 +140,11 @@ Artifacts:
 
 ### Operator visibility — implemented on Testnet
 
-The operator-only `/admin/integrations` boundary remains separate from public Testnet Integration creation. Operator visibility distinguishes baseline capacity from the Testnet elastic limit and can include expansion channels that actually have leases; it does not scan all 64 possible accounts.
+The operator-only `/admin/integrations` boundary remains separate from public Testnet Integration creation. Operator visibility distinguishes baseline capacity from the configured **soft limit** and can include expansion channels that actually have leases; it does not enumerate the unbounded deterministic derivation space.
 
 The detailed managed-Classic view now exposes only public operational facts:
 
-- configured baseline pool capacity and elastic Testnet limit;
+- configured baseline pool capacity and operational soft limit;
 - active / expired / free lease state, including actually leased expansion channels;
 - per-channel public G-address;
 - current native XLM balance, or explicit missing/unavailable state;
@@ -170,9 +171,9 @@ Operator verification completed manually on 2026-09-21: the authenticated deploy
 Before Mainnet managed execution:
 
 1. **Production channel lifecycle design**
-   - deterministic derivation is already used, but Mainnet activation/funding/expansion lifecycle needs a separate design pass;
-   - define lazy activation, funding, pool expansion, replacement/rotation, recovery, capacity growth, and stale-lease handling before Mainnet;
-   - Testnet Friendbot behavior is not a Mainnet design.
+   - deterministic derivation + dedicated creator-account provisioning are now proven on Testnet;
+   - Mainnet still needs explicit policy for creator activation/funding, creator low-balance behavior, channel starting balance, soft-limit alerts, expansion pace, refill/drain, replacement/rotation, recovery, and stale-lease handling;
+   - the soft limit is not a derivation cap and must not be treated as production maximum capacity.
 
 2. **Low-funds policy**
    - operator-defined warning threshold;
