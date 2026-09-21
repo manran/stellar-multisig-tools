@@ -1,0 +1,12 @@
+{
+  "title": "Stellar Internal",
+  "pages": [
+    "index",
+    "---Architecture---",
+    "architecture",
+    "---Operations---",
+    "operations",
+    "---Development---",
+    "development"
+  ]
+}

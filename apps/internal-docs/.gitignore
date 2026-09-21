@@ -1,0 +1,8 @@
+.next/
+.source/
+.vercel/
+node_modules/
+tsconfig.tsbuildinfo
+content/stellar/architecture/
+content/stellar/operations/
+content/stellar/development/
