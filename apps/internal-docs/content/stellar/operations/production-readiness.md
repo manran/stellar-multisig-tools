@@ -1,4 +1,7 @@
-# MultiSig Tools Production Readiness
+---
+title: "MultiSig Tools Production Readiness"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 **Status:** Testnet RC ready; Mainnet managed execution not ready
 **RC App SHA:** `6503b5fbb96a23f3e8be150ddf8d1d330ff9c864`

@@ -1,4 +1,7 @@
-# MultiSig Tools Deployment Topology
+---
+title: "MultiSig Tools Deployment Topology"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 **Status:** Approved architecture
 **Updated:** 2026-09-21

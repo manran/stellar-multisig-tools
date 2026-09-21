@@ -1,27 +1,28 @@
 # MultiSig Tools Internal Docs
 
-Private Fumadocs projection of canonical repository engineering Markdown.
+Private Fumadocs application for canonical Stellar engineering and operations documentation.
 
 ## Authority
 
-Do not edit generated pages under:
+The Markdown under `content/stellar/` is authoritative and edited directly.
 
-- `content/stellar/architecture/`
-- `content/stellar/operations/`
-- `content/stellar/development/`
+The content is grouped into:
 
-Edit the source Markdown at repository root and rebuild.
+- `architecture/`
+- `operations/`
+- `development/`
+
+There is no generated mirror and no second copy at repository root.
 
 ## Access
 
 This application is not an access-control boundary by itself.
 
-Before assigning `internal.multisig.tools`, the Vercel project must have deployment protection / authenticated access enabled.
+The Vercel project must keep Deployment Protection / authenticated access enabled before assigning `internal.multisig.tools`.
 
 Defense in depth:
 
-- all routes emit `X-Robots-Tag: noindex, nofollow, noarchive`;
-- metadata disables indexing;
+- page metadata disables indexing;
 - `robots.txt` disallows all crawlers.
 
-Do not rely on these indexing controls for confidentiality.
+Do not rely on indexing controls for confidentiality.

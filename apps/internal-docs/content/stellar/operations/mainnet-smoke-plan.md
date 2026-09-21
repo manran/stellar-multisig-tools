@@ -1,4 +1,7 @@
-# MultiSig Tools Mainnet Smoke Plan — Draft
+---
+title: "MultiSig Tools Mainnet Smoke Plan — Draft"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 **Status:** Draft only; not approved for execution
 **Mainnet managed Classic:** disabled

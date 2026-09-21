@@ -1,0 +1,9 @@
+{
+  "title": "Operations",
+  "pages": [
+    "production-readiness",
+    "postgres-cutover-runbook",
+    "postgres-recovery-runbook",
+    "mainnet-smoke-plan"
+  ]
+}

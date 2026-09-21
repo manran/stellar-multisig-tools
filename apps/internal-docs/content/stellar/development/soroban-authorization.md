@@ -1,4 +1,7 @@
-# MultiSig Tools — Soroban Authorization
+---
+title: "MultiSig Tools — Soroban Authorization"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 Status: Current architecture
 Date: 2026-09-14

@@ -134,7 +134,7 @@ Agent `task` is additive to existing technical Request/Intent fields. MCP, Skill
 
 ## 5. Integration projection — Job
 
-The Integration `job` contract remains governed by `INTEGRATION_PRODUCT_MODEL.md`.
+The Integration `job` contract remains governed by `apps/internal-docs/content/stellar/architecture/integration-product-model.md`.
 
 A Job answers what the owning business system should do next. It is not Principal-oriented and therefore does not expose Agent credential capability checks.
 

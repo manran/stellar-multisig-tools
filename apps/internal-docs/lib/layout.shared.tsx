@@ -5,6 +5,9 @@ export function baseOptions(): BaseLayoutProps {
     nav: {
       title: 'MultiSig Tools · Internal · Stellar',
     },
+    searchToggle: {
+      enabled: false,
+    },
     links: [
       {
         text: 'Public Docs',

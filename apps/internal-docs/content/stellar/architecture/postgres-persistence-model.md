@@ -1,4 +1,7 @@
-# PostgreSQL coordination persistence model
+---
+title: "PostgreSQL coordination persistence model"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 **Status:** frozen for implementation
 **Date:** 2026-09-18

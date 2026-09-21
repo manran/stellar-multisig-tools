@@ -5,7 +5,7 @@ import test from 'node:test';
 const developerDocs = readFileSync(new URL('../DeveloperDocs.tsx', import.meta.url), 'utf8');
 const developerExamples = readFileSync(new URL('./developerDocsExamples.ts', import.meta.url), 'utf8');
 const docsArchitecture = readFileSync(new URL('../../DOCS_INFORMATION_ARCHITECTURE.md', import.meta.url), 'utf8');
-const integrationModel = readFileSync(new URL('../../INTEGRATION_PRODUCT_MODEL.md', import.meta.url), 'utf8');
+const integrationModel = readFileSync(new URL('../../apps/internal-docs/content/stellar/architecture/integration-product-model.md', import.meta.url), 'utf8');
 const integrationWizard = readFileSync(new URL('../IntegrationProfileWizard.tsx', import.meta.url), 'utf8');
 const intentRoute = readFileSync(new URL('../../apps/api/stellar/routes/intent.ts', import.meta.url), 'utf8');
 const requestService = readFileSync(new URL('../../apps/api/stellar/server/integrationRequestService.ts', import.meta.url), 'utf8');

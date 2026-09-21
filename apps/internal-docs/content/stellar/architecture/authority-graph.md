@@ -1,4 +1,7 @@
-# MultiSigTools Authority Graph
+---
+title: "MultiSigTools Authority Graph"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 Status: architecture baseline
 

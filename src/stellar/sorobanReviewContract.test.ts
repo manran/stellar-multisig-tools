@@ -34,8 +34,8 @@ const envExample = source('../../.env.example');
 const requestService = source('../../apps/api/stellar/server/requestService.ts');
 const requestOriginService = source('../../apps/api/stellar/server/sorobanRequestOrigin.ts');
 const requestApi = source('../../apps/api/stellar/routes/request.ts');
-const productSemantics = source('../../PRODUCT_SEMANTICS.md');
-const sorobanContract = source('../../SOROBAN_AUTHORIZATION.md');
+const productSemantics = source('../../apps/internal-docs/content/stellar/architecture/product-semantics.md');
+const sorobanContract = source('../../apps/internal-docs/content/stellar/development/soroban-authorization.md');
 
 test('Soroban Review separates envelope authorization from contract authorization', () => {
   assert.match(inspector, /Envelope signatures/);

@@ -1,0 +1,9 @@
+{
+  "title": "Development",
+  "pages": [
+    "platform-extension-points",
+    "soroban-abi-product-model",
+    "soroban-authorization",
+    "webhook-delivery-model"
+  ]
+}

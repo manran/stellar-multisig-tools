@@ -2,7 +2,7 @@
 
 **Status:** canonical Human-layer product contract for the Stellar surface
 
-This document records the Human UX boundary after the September 2026 external review. It complements `PRODUCT_SEMANTICS.md`, `UX_DESIGN_SYSTEM.md`, and the protocol/security documents. When an internal route, authentication mechanism, or Stellar primitive conflicts with a simpler Human mental model, keep the technical mechanism underneath and translate it at the Human boundary rather than exposing it directly.
+This document records the Human UX boundary after the September 2026 external review. It complements `apps/internal-docs/content/stellar/architecture/product-semantics.md`, `UX_DESIGN_SYSTEM.md`, and the protocol/security documents. When an internal route, authentication mechanism, or Stellar primitive conflicts with a simpler Human mental model, keep the technical mechanism underneath and translate it at the Human boundary rather than exposing it directly.
 
 ## 1. Core product rule
 

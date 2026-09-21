@@ -1,4 +1,7 @@
-# MultiSig Tools — Multi-Authority Intents and Advanced Team Evolution
+---
+title: "MultiSig Tools — Multi-Authority Intents and Advanced Team Evolution"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 Status: advanced product/architecture discussion; not current MVP scope
 Date: 2026-08-30

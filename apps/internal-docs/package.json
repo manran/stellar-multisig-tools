@@ -7,11 +7,10 @@
     "node": "24.19.0"
   },
   "scripts": {
-    "sync-content": "node scripts/sync-content.mjs",
-    "dev": "npm run sync-content && next dev",
-    "build": "npm run sync-content && next build",
+    "dev": "next dev",
+    "build": "next build",
     "start": "next start",
-    "typecheck": "npm run sync-content && tsc --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "fumadocs-core": "16.15.12",

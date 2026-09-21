@@ -1,4 +1,7 @@
-# MultiSigTools — Event-Sourced History and Audit
+---
+title: "MultiSigTools — Event-Sourced History and Audit"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 **Status:** architecture/product decision baseline  
 **Date:** 2026-09-03  

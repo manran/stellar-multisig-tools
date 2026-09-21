@@ -1,4 +1,7 @@
-# PostgreSQL Recovery Runbook
+---
+title: "PostgreSQL Recovery Runbook"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 **Scope:** MST coordination PostgreSQL recovery. Testnet is the only environment approved for recovery drills. Mainnet managed Classic remains disabled.
 

@@ -16,7 +16,7 @@ Credential != Stellar private key != Stellar signature
 
 Two Agent credentials may represent the same Principal while remaining independently named, scoped, audited and revocable.
 
-External `msi_...` Service integrations are intentionally **not** Signer Agents. A Service workload is not bound to one signer Principal; it receives explicit Classic source-account / Soroban contract scope and must still collect the real chain authorization. See `PLATFORM_EXTENSION_POINTS.md` and `OPERATION_ARCHITECTURE.md`.
+External `msi_...` Service integrations are intentionally **not** Signer Agents. A Service workload is not bound to one signer Principal; it receives explicit Classic source-account / Soroban contract scope and must still collect the real chain authorization. See `apps/internal-docs/content/stellar/development/platform-extension-points.md` and `apps/internal-docs/content/stellar/architecture/operation-architecture.md`.
 
 ## Agent access levels
 
@@ -256,13 +256,13 @@ Example semantic creation:
 `GET /api/contract-interface` exposes the recursive `fresnica-soroban-abi-v1` model and a `composition` decision for every input. `typed_json` inputs are `guided=true` and may include recursively typed `Option`, `Vec`, `Map`, `Tuple`, `BytesN`, and supported UDT struct/union/enum values. MultiSig Tools validates the complete JSON shape against the deployed Contract Spec before delegating ScVal encoding to the official Stellar SDK. For optional inputs, omission or JSON `null` encodes `None`. `dynamic_scval_json`, `scval_xdr_success_only`, `unsupported`, and any unknown future composition mode are not semantic guided input and fail closed rather than being guessed.
 
 
-A generic ABI description explains how to call a contract, not what a protocol action means. For example, ABI support can safely compose Blend-style `Vec<Request>` values without knowing that a particular `request_type` means Supply or Borrow. Protocol/domain knowledge is an additive product layer used for richer Human explanations and stable Agent semantics; recognizing a familiar protocol never relaxes AUTH, effects comparison, executor scope, revalidation, or signature requirements. See `SOROBAN_ABI_PRODUCT_MODEL.md`.
+A generic ABI description explains how to call a contract, not what a protocol action means. For example, ABI support can safely compose Blend-style `Vec<Request>` values without knowing that a particular `request_type` means Supply or Borrow. Protocol/domain knowledge is an additive product layer used for richer Human explanations and stable Agent semantics; recognizing a familiar protocol never relaxes AUTH, effects comparison, executor scope, revalidation, or signature requirements. See `apps/internal-docs/content/stellar/development/soroban-abi-product-model.md`.
 
 For signer-Agent callers, Intent create/inspect/contribute/prepare/reconcile/replan responses expose the same typed `task` projection used by Classic Request workflow. It derives Principal action from current authorization/execution facts and reports whether the current Agent credential can perform it.
 
 For Integration Service callers, create/inspect/prepare/reconcile/replan responses also expose a `job` business projection. Normal business code may consume this projection without interpreting `AuthorizationPlan`, contribution, preparation, or evidence internals. The stable states are `waiting_for_authorization`, `ready`, `executing`, `completed`, `expired`, and `failed`; `nextActions` tells the Service what action, if any, it should take next. `waitingFor` identifies unresolved authorizer addresses, not every signer candidate in a multisig threshold. The full technical fields remain available for diagnostics and advanced clients.
 
-`job.reviewUrl` is the Human review/signing URL for the same Intent id; Job does not create a second workflow identity. `created` is an event rather than a long-lived Job state. See `INTEGRATION_PRODUCT_MODEL.md` for the product boundary and webhook reliability rules.
+`job.reviewUrl` is the Human review/signing URL for the same Intent id; Job does not create a second workflow identity. `created` is an event rather than a long-lived Job state. See `apps/internal-docs/content/stellar/architecture/integration-product-model.md` for the product boundary and webhook reliability rules.
 
 GET inspection returns the current Intent/authorization state plus a persisted evidence timeline for creation provenance, accepted AUTH contributions, AuthorizationPlan revisions, execution preparations, and independently observed Stellar results. The timeline contains contribution digests and signer/Agent provenance where recorded, but not raw signature/XDR payloads. `execution_confirmed` or `execution_failed` appears only after MultiSigTools reconciles a persisted preparation hash against Horizon; it never attributes an external submitter that MultiSigTools did not observe.
 

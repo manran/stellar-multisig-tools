@@ -1,4 +1,7 @@
-# MultiSigTools Workflow Architecture
+---
+title: "MultiSigTools Workflow Architecture"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 **Status:** active refactor contract
 **Date:** 2026-09-15

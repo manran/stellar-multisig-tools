@@ -1,4 +1,7 @@
-# Soroban ABI and Protocol Knowledge Product Model
+---
+title: "Soroban ABI and Protocol Knowledge Product Model"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 Status: guiding contract for MultiSigTools Soroban composition.
 

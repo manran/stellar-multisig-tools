@@ -1,4 +1,7 @@
-# MultiSig Tools — Privacy and Auditable Activity Model
+---
+title: "MultiSig Tools — Privacy and Auditable Activity Model"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 Status: architecture/product decision baseline
 Date: 2026-08-30

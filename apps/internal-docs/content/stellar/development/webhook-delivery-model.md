@@ -1,4 +1,7 @@
-# Integration Webhook Delivery Model
+---
+title: "Integration Webhook Delivery Model"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 **Status:** delivery foundation frozen; endpoint/signing contract pending
 **Date:** 2026-09-18

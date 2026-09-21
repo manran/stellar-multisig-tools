@@ -1,4 +1,7 @@
-# MultiSigTools Integration Product Model
+---
+title: "MultiSigTools Integration Product Model"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 Status: product/architecture guidance
 Date: 2026-09-17

@@ -4,7 +4,7 @@
 
 **Updated:** 2026-09-20
 
-This file defines the public documentation structure for MultiSig Tools on the Stellar product site. It is the documentation counterpart to `PRODUCT_SEMANTICS.md`, `UX_DESIGN_SYSTEM.md`, `INTEGRATION_PRODUCT_MODEL.md`, and the running Headless API.
+This file defines the public documentation structure for MultiSig Tools on the Stellar product site. It is the documentation counterpart to `apps/internal-docs/content/stellar/architecture/product-semantics.md`, `UX_DESIGN_SYSTEM.md`, `apps/internal-docs/content/stellar/architecture/integration-product-model.md`, and the running Headless API.
 
 ## 1. Purpose
 

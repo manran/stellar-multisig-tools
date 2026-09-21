@@ -25,9 +25,9 @@ The service is non-custodial. It never asks for or stores Stellar seed phrases o
 - [`UX_LANGUAGE_AND_DISCOVERY.md`](UX_LANGUAGE_AND_DISCOVERY.md) — current workspace navigation, language hierarchy, and Inbox discovery contract.
 - [`PRODUCT.md`](PRODUCT.md) — broader historical Human product contract; the UX document supersedes older naming/navigation wording where they conflict.
 - [`BRAND.md`](BRAND.md) — product-name, mark semantics, descriptor discussion, and the professionally bounded 虎符 / tiger-tally historical analogy.
-- [`SOROBAN_AUTHORIZATION.md`](SOROBAN_AUTHORIZATION.md) — current Intent-first Soroban AUTH, configured C-account adapter, and late Execution boundary.
+- [`apps/internal-docs/content/stellar/development/soroban-authorization.md`](apps/internal-docs/content/stellar/development/soroban-authorization.md) — current Intent-first Soroban AUTH, configured C-account adapter, and late Execution boundary.
 - [`AGENT_API.md`](AGENT_API.md) — current signer-owned machine integration contract and examples.
-- [`OPERATION_ARCHITECTURE.md`](OPERATION_ARCHITECTURE.md) — operation-first product rule and composition contract for every consumer.
+- [`apps/internal-docs/content/stellar/architecture/operation-architecture.md`](apps/internal-docs/content/stellar/architecture/operation-architecture.md) — operation-first product rule and composition contract for every consumer.
 - [`CONTRACT_WORKSPACE.md`](CONTRACT_WORKSPACE.md) — Contract workspace, discovery, and authority boundaries.
 - [`TRANSACTION_CONTEXT.md`](TRANSACTION_CONTEXT.md) — Stellar Memo / Private Note / Private Commitment model.
 - [`PRIVACY.md`](PRIVACY.md) — beta privacy notice.

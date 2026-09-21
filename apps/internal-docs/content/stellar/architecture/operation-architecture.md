@@ -1,4 +1,7 @@
-# Operation Architecture
+---
+title: "Operation Architecture"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 **Status:** active product and architecture constraint
 

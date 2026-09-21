@@ -1,4 +1,7 @@
-# MultiSigTools Product Semantics
+---
+title: "MultiSigTools Product Semantics"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 This file is the compact Human/AI product-language contract. It does not replace protocol, security, or API documentation. When product wording or display behavior conflicts with older narrative docs, use this file for the Human product model and then reconcile the older document.
 

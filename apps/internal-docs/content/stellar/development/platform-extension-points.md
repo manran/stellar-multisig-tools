@@ -1,4 +1,7 @@
-# MultiSig Tools — Progressive SaaS and Platform Extension Points
+---
+title: "MultiSig Tools — Progressive SaaS and Platform Extension Points"
+description: "Internal MultiSig Tools engineering documentation."
+---
 
 Status: architecture/product guidance; future-facing, not current MVP implementation
 Date: 2026-08-30

@@ -314,7 +314,7 @@ Possible future guided templates include:
 - issuer authorization operations;
 - account flags;
 - sponsorship;
-- Soroban contract actions through the Intent-first flow in `SOROBAN_AUTHORIZATION.md`: semantic Intent -> detached AUTH -> late execution -> final transaction;
+- Soroban contract actions through the Intent-first flow in `apps/internal-docs/content/stellar/development/soroban-authorization.md`: semantic Intent -> detached AUTH -> late execution -> final transaction;
 - other frequently used Stellar operation groups.
 
 Do not expose every Stellar operation merely to make the list look complete. A guided template earns its place by making a real task safer or easier than Advanced import.
