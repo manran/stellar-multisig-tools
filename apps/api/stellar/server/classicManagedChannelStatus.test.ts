@@ -67,21 +67,24 @@ test('managed Classic operator projection separates capacity, leases and balance
   const result = await inspectManagedClassicChannels({
     network: 'testnet',
     channelAccounts: ['channel-a', 'channel-b', 'channel-c'],
+    elasticLimit: 64,
     leaseStore: store,
   }, {
     now,
     accountLoader: async (accountId) => {
       if (accountId === 'channel-a') return snapshot(accountId, '9999.5000000');
       if (accountId === 'channel-b') throw new AccountNotFoundError(accountId);
+      if (accountId === 'old-channel') return snapshot(accountId, '5000.0000000');
       throw new Error('Horizon unavailable');
     },
   });
 
   assert.equal(result.capacity, 3);
+  assert.equal(result.elasticLimit, 64);
   assert.equal(result.leaseVisibility, 'available');
-  assert.equal(result.activeLeaseCount, 1);
+  assert.equal(result.activeLeaseCount, 2);
   assert.equal(result.expiredLeaseCount, 1);
-  assert.equal(result.freeCapacity, 2);
+  assert.equal(result.freeCapacity, 1);
   assert.deepEqual(result.channels, [
     {
       accountId: 'channel-a',
@@ -101,8 +104,15 @@ test('managed Classic operator projection separates capacity, leases and balance
       leaseState: 'free',
       balanceState: 'unavailable',
     },
+    {
+      accountId: 'old-channel',
+      leaseState: 'active',
+      leaseExpiresAt: '2026-09-22T00:00:00.000Z',
+      balanceState: 'ready',
+      nativeBalance: '5000.0000000',
+    },
   ]);
-  assert.doesNotMatch(JSON.stringify(result), /AAAAAAAAAAAAAAAA|BBBBBBBBBBBBBBBB|old-channel/);
+  assert.doesNotMatch(JSON.stringify(result), /AAAAAAAAAAAAAAAA|BBBBBBBBBBBBBBBB/);
 });
 
 test('managed Classic operator projection never reports free capacity when lease storage is unavailable', async () => {
@@ -114,6 +124,7 @@ test('managed Classic operator projection never reports free capacity when lease
     accountLoader: async (accountId) => snapshot(accountId, '10000.0000000'),
   });
 
+  assert.equal(result.elasticLimit, 1);
   assert.equal(result.leaseVisibility, 'unavailable');
   assert.equal(result.activeLeaseCount, null);
   assert.equal(result.expiredLeaseCount, null);

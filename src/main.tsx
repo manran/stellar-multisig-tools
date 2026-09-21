@@ -13,6 +13,7 @@ import DemoTreasuryApp from './DemoTreasuryApp';
 import DocsApp from './DocsApp';
 import InboxEntryApp from './InboxEntryApp';
 import IntegrationAdminApp from './IntegrationAdminApp';
+import TestnetIntegrationApp from './TestnetIntegrationApp';
 import LegalApp from './LegalApp';
 import MultisigDesignerApp from './MultisigDesignerApp';
 import NewTransactionApp from './NewTransactionApp';
@@ -73,6 +74,7 @@ function titleFor(kind: RouteKind) {
     case 'docs': return 'Docs | MultiSig Tools';
     case 'legal': return 'Legal | MultiSig Tools';
     case 'integration-admin': return 'Integration administration | MultiSig Tools';
+    case 'integration-self-service': return 'Create Testnet Integration | MultiSig Tools';
     default: return 'MultiSig Tools - The Ultimate Directory for Multi-Signature Solutions';
   }
 }
@@ -177,6 +179,7 @@ function RoutedApp() {
     case 'docs': Component = DocsApp; break;
     case 'legal': Component = LegalApp; break;
     case 'integration-admin': Component = IntegrationAdminApp; break;
+    case 'integration-self-service': Component = TestnetIntegrationApp; break;
     default: Component = InboxEntryApp;
   }
 

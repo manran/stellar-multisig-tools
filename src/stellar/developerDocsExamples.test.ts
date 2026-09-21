@@ -16,6 +16,7 @@ import {
   classicRequestExample,
   classicStatusExample,
   issueBrowserCapabilityExample,
+  testnetIntegrationCreateExample,
   webhookVerifyExample,
 } from './developerDocsExamples.js';
 
@@ -46,11 +47,17 @@ test('Soroban developer example uses valid Stellar identities and the shipped br
 
 test('developer transport examples remain aligned with OpenAPI discovery', () => {
   const document = createOpenApiDocument('https://stellar-testnet.multisig.tools', 'testnet') as any;
+  const testnetIntegrationPost = document.paths['/api/integration-testnet'].post;
   const requestPost = document.paths['/api/request'].post;
   const requestGet = document.paths['/api/request'].get;
   const intentPost = document.paths['/api/intent'].post;
   const intentPut = document.paths['/api/intent'].put;
 
+  assert.equal(testnetIntegrationPost.requestBody.content['application/json'].schema.$ref, '#/components/schemas/TestnetIntegrationCreateInput');
+  assert.deepEqual(testnetIntegrationPost.security, []);
+  assert.ok(testnetIntegrationPost.responses['201']);
+  assert.match(testnetIntegrationCreateExample, /\/api\/integration-testnet/);
+  assert.match(testnetIntegrationCreateExample, /my-testnet-app/);
   assert.equal(requestPost.requestBody.content['application/json'].schema.$ref, '#/components/schemas/ProposalCreateInput');
   assert.equal(intentPost.requestBody.content['application/json'].schema.$ref, '#/components/schemas/ContractIntentCreateInput');
   assert.equal(

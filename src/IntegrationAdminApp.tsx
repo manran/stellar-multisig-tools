@@ -44,6 +44,7 @@ interface ManagedClassicChannelRow {
 interface ManagedClassicOperationalStatus {
   network: 'public' | 'testnet';
   capacity: number;
+  elasticLimit: number;
   leaseVisibility: 'available' | 'unavailable';
   activeLeaseCount: number | null;
   expiredLeaseCount: number | null;
@@ -420,9 +421,9 @@ function ManagedClassicStatusPanel({
     {!error && status && <>
       <div className="ia-ops__summary">
         <div><span>Network</span><strong>{status.network === 'public' ? 'Mainnet' : 'Testnet'}</strong></div>
-        <div><span>Capacity</span><strong>{operational?.capacity ?? status.channelAccounts.length}</strong></div>
+        <div><span>Baseline</span><strong>{operational?.capacity ?? status.channelAccounts.length}</strong></div>
+        <div><span>Elastic limit</span><strong>{operational?.elasticLimit ?? status.channelAccounts.length}</strong></div>
         <div><span>Active leases</span><strong>{operational?.activeLeaseCount ?? 'Unavailable'}</strong></div>
-        <div><span>Free capacity</span><strong>{operational?.freeCapacity ?? 'Unavailable'}</strong></div>
       </div>
 
       {!status.configured

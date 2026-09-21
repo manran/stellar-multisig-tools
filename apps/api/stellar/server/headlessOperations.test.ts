@@ -12,6 +12,9 @@ test('runtime policy and contract vertical slice are available to every transpor
   const byId = new Map(HEADLESS_OPERATION_CATALOG.map((operation) => [operation.id, operation]));
   assert.equal(byId.get('runtime.config.inspect')?.path, '/api/runtime-config');
   assert.equal(byId.get('runtime.config.inspect')?.access, 'public');
+  assert.equal(byId.get('integration.testnet.create')?.path, '/api/integration-testnet');
+  assert.equal(byId.get('integration.testnet.create')?.access, 'public');
+  assert.equal(byId.get('integration.testnet.create')?.effect, 'private-state');
   assert.equal(byId.get('contract.interface.inspect')?.access, 'public');
   assert.equal(byId.get('contract.intent.create')?.path, '/api/intent');
   assert.equal(byId.get('contract.intent.create')?.access, 'principal:write');

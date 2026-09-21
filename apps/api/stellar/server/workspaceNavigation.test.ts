@@ -42,6 +42,7 @@ const expectedCanonicalPaths = [
   '/privacy',
   '/terms',
   '/admin/integrations',
+  '/developers/integrations/new',
 ];
 
 test('Stellar workspace hosts include both Mainnet and Testnet deployments', () => {

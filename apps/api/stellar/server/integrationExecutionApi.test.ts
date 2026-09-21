@@ -60,6 +60,7 @@ test('Integration execution inspection requires msi and returns only public mana
       managedSourceAccountCount: number;
       externalSourceAccountCount: number;
       channelCount: number;
+      elasticChannelLimit: number;
       channelAccounts: string[];
     };
   };
@@ -72,6 +73,7 @@ test('Integration execution inspection requires msi and returns only public mana
   assert.equal(body.classic.managedSourceAccountCount, 1);
   assert.equal(body.classic.externalSourceAccountCount, 0);
   assert.equal(body.classic.channelCount, 4);
+  assert.equal(body.classic.elasticChannelLimit, 64);
   assert.equal(body.classic.channelAccounts.length, 4);
   assert.equal(JSON.stringify(body).includes(MASTER), false);
   for (const address of body.classic.channelAccounts) assert.match(address, /^G[A-Z2-7]{55}$/);

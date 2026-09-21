@@ -31,6 +31,10 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'public', effect: 'none', summary: 'Read the deployment-owned Stellar network policy.',
   },
   {
+    id: 'integration.testnet.create', version: 1, method: 'POST', path: '/api/integration-testnet',
+    access: 'public', effect: 'private-state', summary: 'Create an immediately active Testnet-only Integration Profile and receive its msi credential once.',
+  },
+  {
     id: 'contract.interface.inspect', version: 1, method: 'GET', path: '/api/contract-interface',
     access: 'public', effect: 'none', summary: 'Resolve the callable interface of one Soroban contract.',
   },

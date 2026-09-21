@@ -15,6 +15,7 @@ import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
 import {
   ClassicManagedChannelConfigurationError,
   configuredClassicManagedChannels,
+  MAX_CHANNELS_PER_NETWORK,
 } from '../server/classicManagedChannelConfig.js';
 import { inspectManagedClassicChannels } from '../server/classicManagedChannelStatus.js';
 import {
@@ -93,6 +94,7 @@ export async function GET(request: Request): Promise<Response> {
           operationalStatus: await inspectManagedClassicChannels({
             network,
             channelAccounts,
+            elasticLimit: network === 'testnet' ? MAX_CHANNELS_PER_NETWORK : channelAccounts.length,
             ...(leaseStore ? { leaseStore } : {}),
           }),
         },

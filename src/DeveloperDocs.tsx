@@ -31,6 +31,7 @@ import {
   classicStatusExample,
   issueBrowserCapabilityExample,
   runtimeConfigExample,
+  testnetIntegrationCreateExample,
   sorobanIntentExample,
   webhookPayloadExample,
   webhookVerifyExample,
@@ -167,8 +168,8 @@ export function DeveloperHubPage() {
         </div>
       </section>
 
-      <DevCallout icon={<KeyRound className="h-4 w-4" />} title="Integration credentials are operator-issued in this release">
-        <p>There is no public self-service <code>msi_*</code> issuance flow yet. A deployment operator creates the Integration Profile with your service id/label, Testnet Treasury accounts and/or Soroban contract + method scope, execution ownership, and optional HTTPS webhook. The credential is returned once. If you do not already have a Testnet <code>msi_*</code>, stop here and ask the deployment operator to provision that scoped profile.</p>
+      <DevCallout icon={<KeyRound className="h-4 w-4" />} title="Testnet Integration is self-service">
+        <p>No application or approval is required on Testnet. Create a Testnet-only Integration Profile at <a href={STELLAR_TESTNET_ORIGIN + '/developers/integrations/new'} className="font-semibold text-emerald-700 underline underline-offset-4 dark:text-emerald-300">Create Testnet Integration</a> or call the public creation API directly. The returned <code>msi_*</code> is shown once and grants only the Testnet scope you defined; it grants no Stellar signer authority and no Mainnet access.</p>
       </DevCallout>
 
       <DevCallout icon={<ShieldCheck className="h-4 w-4" />} title="One Integration can mix modes">
@@ -201,13 +202,15 @@ export function DeveloperQuickstartPage() {
         summary="Use the Testnet deployment to prove scope, authorization, execution, and status delivery before any Mainnet rollout. The Testnet and Mainnet runtimes are separate and cannot be switched inside one deployment."
       />
 
-      <DevCallout icon={<KeyRound className="h-4 w-4" />} title="Before you start">
-        <p>This quickstart begins after an operator has issued a Testnet <code>msi_*</code>. Ask for a profile that includes the exact Treasury you will use. If you also need Soroban, include the contract id + allowed methods. Choose Hosted for the first pass; keep managed execution unless your service intentionally owns submission.</p>
+      <DevCallout icon={<KeyRound className="h-4 w-4" />} title="Start by creating the Testnet profile">
+        <p>Use the guided <a href={STELLAR_TESTNET_ORIGIN + '/developers/integrations/new'} className="font-semibold text-emerald-700 underline underline-offset-4 dark:text-emerald-300">Testnet setup</a> or create the profile directly. Testnet profiles are immediately active and never imply Mainnet entitlement.</p>
+        <DevCode>{testnetIntegrationCreateExample}</DevCode>
       </DevCallout>
 
       <DevSteps steps={[
+        ['Store the returned credential', <p key="credential">Copy the one-time <code>msi_*</code> value into your server-side secret store as <code>MULTISIG_INTEGRATION_KEY</code>. If you configured a webhook, store the returned <code>whsec_*</code> separately in the receiver.</p>],
         ['Inspect the Testnet deployment', <div key="runtime"><p>Verify the runtime is fixed to Testnet and check whether managed Classic is available.</p><DevCode>{runtimeConfigExample}</DevCode></div>],
-        ['Create one semantic Classic Request', <div key="create"><p>Set <code>MULTISIG_INTEGRATION_KEY</code> to the operator-issued credential. Replace the sample Treasury/recipient with accounts for your test. The sample G-addresses are syntax-valid documentation fixtures, not funded accounts.</p><DevCode>{classicRequestExample}</DevCode></div>],
+        ['Create one semantic Classic Request', <div key="create"><p>Replace the sample Treasury/recipient with accounts for your test. The sample G-addresses are syntax-valid documentation fixtures, not funded accounts.</p><DevCode>{classicRequestExample}</DevCode></div>],
         ['Read the Request id and execution mode', <div key="response"><p>A new call returns HTTP 201; an idempotent replay returns 200. The fields you need first are <code>request.id</code>, <code>request.status</code>, and <code>request.execution.mode</code>.</p><DevCode>{classicCreateResponseExample}</DevCode></div>],
         ['Open the Hosted signer review', <div key="review"><p>For Classic Hosted, put the returned <code>request.id</code> into the Testnet signer URL. Each Treasury signer still authorizes with their own Stellar wallet.</p><DevCode>{classicHostedReviewExample}</DevCode></div>],
         ['Read canonical status after signing', <div key="status"><p>Use the same Integration credential and Request id. With managed execution, <code>ready</code> may be brief because MultiSig Tools submits once the threshold is satisfied; the terminal success state is <code>submitted</code>.</p><DevCode>{classicStatusExample}</DevCode></div>],
@@ -408,7 +411,7 @@ export function AgentApiPage() {
       </section>
 
       <DevCallout icon={<KeyRound className="h-4 w-4" />} title="Create the Agent credential from the signer account">
-        <p>Agent credentials are self-service for the signer, unlike Integration credentials. Open <a href={stellarHref('/agent-access')} className="font-semibold text-emerald-700 underline underline-offset-4 dark:text-emerald-300">Agent access</a>, connect the signer wallet, unlock the private workspace, choose Read/Write/Sign, and create one named credential. The <code>msa_*</code> secret is shown once; store it in the Agent's secret manager.</p>
+        <p>Agent credentials are signer-scoped and created from <a href={stellarHref('/agent-access')} className="font-semibold text-emerald-700 underline underline-offset-4 dark:text-emerald-300">Agent access</a>. Connect the signer wallet, unlock the private workspace, choose Read/Write/Sign, and create one named credential. The <code>msa_*</code> secret is shown once; store it in the Agent's secret manager. Testnet Integration credentials use the separate self-service Integration setup.</p>
       </DevCallout>
 
       <DevCallout icon={<KeyRound className="h-4 w-4" />} title="Sign access still does not contain a private key">

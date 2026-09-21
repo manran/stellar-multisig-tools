@@ -59,7 +59,8 @@ export interface IntegrationProfileWizardResult {
 }
 
 interface Props {
-  adminSecret: string;
+  adminSecret?: string;
+  createEndpoint?: string;
   onCreated: (result: IntegrationProfileWizardResult) => Promise<void> | void;
   onCancel: () => void;
 }
@@ -80,7 +81,7 @@ function ownerLabel(owner: ExecutionOwner): string {
   return owner === 'multisigtools' ? 'MultiSigTools submits' : 'My service submits';
 }
 
-export default function IntegrationProfileWizard({ adminSecret, onCreated, onCancel }: Props) {
+export default function IntegrationProfileWizard({ adminSecret, createEndpoint = '/api/integration-admin', onCreated, onCancel }: Props) {
   const [step, setStep] = useState(0);
   const [serviceId, setServiceId] = useState('');
   const [label, setLabel] = useState('');
@@ -327,10 +328,10 @@ export default function IntegrationProfileWizard({ adminSecret, onCreated, onCan
         authorizationExperience,
         ...(webhookEnabled ? { webhook: { url: webhookUrl, enabled: true } } : {}),
       });
-      const result = await apiJson<CreateResult>(await fetch('/api/integration-admin', {
+      const result = await apiJson<CreateResult>(await fetch(createEndpoint, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${adminSecret.trim()}`,
+          ...(adminSecret?.trim() ? { Authorization: `Bearer ${adminSecret.trim()}` } : {}),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),

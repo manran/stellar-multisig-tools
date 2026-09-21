@@ -125,6 +125,54 @@ test('managed channel pool refuses another active Request when every channel is 
   );
 });
 
+test('Testnet pool expands deterministically only after every baseline channel is leased', async () => {
+  const store = new MemoryStore();
+  const baseline = [Keypair.random(), Keypair.random()];
+  const expansion = [Keypair.random(), Keypair.random()];
+  const provisioned: string[] = [];
+  const accountLoader = async (accountId: string) => {
+    if (expansion.some((channel) => channel.publicKey() === accountId)) throw new AccountNotFoundError(accountId);
+    return snapshot(accountId, '10');
+  };
+  const provisioner = async (accountId: string, network: 'testnet' | 'public') => {
+    assert.equal(network, 'testnet');
+    provisioned.push(accountId);
+  };
+  const expandedLoader = async (accountId: string) => snapshot(accountId, '0');
+  const now = new Date('2026-09-19T10:00:00.000Z');
+
+  for (const [index, channel] of baseline.entries()) {
+    store.leases.set(`testnet:${channel.publicKey()}`, {
+      network: 'testnet',
+      channelAccount: channel.publicKey(),
+      requestId: String.fromCharCode(65 + index).repeat(16),
+      leasedAt: now.toISOString(),
+      expiresAt: '2026-09-20T10:00:00.000Z',
+    });
+  }
+
+  let loads = 0;
+  const reserved = await reserveClassicManagedChannel(store, {
+    network: 'testnet',
+    requestId: 'Z'.repeat(16),
+    leaseExpiresAt: '2026-09-20T10:00:00.000Z',
+  }, {
+    now,
+    channels: baseline,
+    expansionChannels: expansion,
+    accountLoader: async (accountId) => {
+      loads += 1;
+      if (loads === 1) return accountLoader(accountId);
+      return expandedLoader(accountId);
+    },
+    channelProvisioner: provisioner,
+  });
+
+  assert.equal(baseline.some((channel) => channel.publicKey() === reserved.accountId), false);
+  assert.equal(reserved.accountId, expansion[0]?.publicKey());
+  assert.deepEqual(provisioned, [reserved.accountId]);
+});
+
 test('expired channel lease can be reclaimed without sequence pipelining', async () => {
   const store = new MemoryStore();
   const channel = Keypair.random();

@@ -65,6 +65,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
 }
 
 function requestBody(path: string, method: string): OpenApiObject | undefined {
+  if (path === '/api/integration-testnet' && method === 'post') return body(schema('TestnetIntegrationCreateInput'));
   if (path === '/api/intent' && method === 'post') return body(schema('ContractIntentCreateInput'));
   if (path === '/api/intent' && method === 'patch') return body(schema('ContractIntentContributionInput'));
   if (path === '/api/intent' && method === 'put') return body({ oneOf: [schema('ContractIntentExecutionInput'), schema('ContractIntentExecutionReconcileInput'), schema('ContractIntentReplanInput'), schema('ContractIntentCancelInput'), schema('BrowserAuthorizationIssueInput')] });
@@ -80,6 +81,7 @@ function requestBody(path: string, method: string): OpenApiObject | undefined {
 
 function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/api/runtime-config') return schema('RuntimeConfigResult');
+  if (path === '/api/integration-testnet') return schema('TestnetIntegrationCreateResult');
   if (path === '/api/integration-execution') return schema('IntegrationExecutionInspectResult');
   if (path === '/api/contract-interface') return schema('ContractInterfaceResult');
   if (path === '/api/intent' && method === 'post') return schema('ContractIntentCreateResult');
@@ -139,7 +141,9 @@ function openApiPaths(): OpenApiObject {
           '200': response('Idempotent replay.', successSchema(path, method)),
           '201': response('Created.', successSchema(path, method)),
         }
-      : { '200': response('Successful operation.', successSchema(path, method)) };
+      : method === 'post' && path === '/api/integration-testnet'
+        ? { '201': response('Created.', successSchema(path, method)) }
+        : { '200': response('Successful operation.', successSchema(path, method)) };
     const pathItem = (paths[path] ?? {}) as OpenApiObject;
     pathItem[method] = {
       operationId: transportOperationId(path, method, operations),
@@ -196,6 +200,93 @@ const components: OpenApiObject = {
       },
       additionalProperties: false,
     },
+    TestnetIntegrationCreateInput: {
+      type: 'object',
+      required: ['serviceId', 'label'],
+      anyOf: [
+        { required: ['classicSourceAccounts'] },
+        { required: ['sorobanContracts'] },
+      ],
+      properties: {
+        serviceId: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{0,39}$' },
+        label: { type: 'string', minLength: 1, maxLength: 80 },
+        classicSourceAccounts: { type: 'array', minItems: 1, items: accountId },
+        classicExternalExecutionSourceAccounts: { type: 'array', items: accountId },
+        sorobanContracts: {
+          type: 'array',
+          minItems: 1,
+          items: {
+            type: 'object',
+            required: ['contractId', 'methods'],
+            properties: {
+              contractId,
+              methods: { type: 'array', minItems: 1, items: { type: 'string', pattern: '^[A-Za-z0-9_]{1,64}$' } },
+              execution: {
+                oneOf: [
+                  {
+                    type: 'object',
+                    required: ['mode'],
+                    properties: { mode: { type: 'string', const: 'multisigtools' } },
+                    additionalProperties: false,
+                  },
+                  {
+                    type: 'object',
+                    required: ['mode', 'executor'],
+                    properties: {
+                      mode: { type: 'string', const: 'external' },
+                      executor: accountId,
+                    },
+                    additionalProperties: false,
+                  },
+                ],
+              },
+            },
+            additionalProperties: false,
+          },
+        },
+        sorobanExecutionAccounts: { type: 'array', items: accountId },
+        sorobanDefaultExecutor: accountId,
+        profile: {
+          type: 'object',
+          properties: {
+            authorizationExperience: { type: 'string', enum: ['hosted', 'native', 'headless'] },
+          },
+          additionalProperties: false,
+        },
+        webhook: {
+          type: 'object',
+          required: ['url', 'enabled'],
+          properties: {
+            url: { type: 'string', format: 'uri', pattern: '^https://' },
+            enabled: { type: 'boolean' },
+          },
+          additionalProperties: false,
+        },
+      },
+      additionalProperties: false,
+    },
+    TestnetIntegrationCreateResult: {
+      type: 'object',
+      required: ['operation', 'version', 'service', 'apiKey'],
+      properties: {
+        operation: { type: 'string', const: 'integration.testnet.create' },
+        version: operationVersion,
+        service: {
+          type: 'object',
+          required: ['serviceId', 'label', 'enabled', 'networks'],
+          properties: {
+            serviceId: { type: 'string' },
+            label: { type: 'string' },
+            enabled: { type: 'boolean', const: true },
+            networks: { type: 'array', minItems: 1, maxItems: 1, items: { type: 'string', const: 'testnet' } },
+          },
+          additionalProperties: true,
+        },
+        apiKey: { type: 'string', pattern: '^msi_' },
+        webhookSecret: { type: 'string', pattern: '^whsec_' },
+      },
+      additionalProperties: false,
+    },
     RuntimeConfigResult: {
       type: 'object',
       required: ['operation', 'version', 'stellarNetwork', 'fixedNetwork', 'capabilities'],
@@ -239,6 +330,7 @@ const components: OpenApiObject = {
             'managedSourceAccountCount',
             'externalSourceAccountCount',
             'channelCount',
+            'elasticChannelLimit',
             'channelAccounts',
           ],
           properties: {
@@ -246,8 +338,9 @@ const components: OpenApiObject = {
             managedAvailable: { type: 'boolean' },
             managedSourceAccountCount: { type: 'integer', minimum: 0 },
             externalSourceAccountCount: { type: 'integer', minimum: 0 },
-            channelCount: { type: 'integer', minimum: 0, maximum: 64 },
-            channelAccounts: { type: 'array', items: accountId },
+            channelCount: { type: 'integer', minimum: 0, maximum: 64, description: 'Configured baseline channel count.' },
+            elasticChannelLimit: { type: 'integer', minimum: 0, maximum: 64, description: 'Maximum deterministic channel slots the deployment may reserve without sequence pipelining.' },
+            channelAccounts: { type: 'array', items: accountId, description: 'Configured baseline public channel accounts; Testnet may lazily activate later deterministic slots.' },
           },
           additionalProperties: false,
         },

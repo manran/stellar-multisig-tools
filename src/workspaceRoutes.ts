@@ -22,7 +22,8 @@ export type StellarWorkspaceRouteKind =
   | 'designer'
   | 'docs'
   | 'legal'
-  | 'integration-admin';
+  | 'integration-admin'
+  | 'integration-self-service';
 
 export interface StellarWorkspaceRoute {
   path: string;
@@ -63,6 +64,7 @@ export const CANONICAL_STELLAR_ROUTES = [
   { path: '/privacy', kind: 'legal', mode: null },
   { path: '/terms', kind: 'legal', mode: null },
   { path: '/admin/integrations', kind: 'integration-admin', mode: null },
+  { path: '/developers/integrations/new', kind: 'integration-self-service', mode: null },
 ] as const satisfies readonly StellarWorkspaceRoute[];
 
 export function isStellarWorkspaceHost(hostname: string) {

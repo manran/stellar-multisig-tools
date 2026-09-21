@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { Networks, TransactionBuilder, type Keypair } from '@stellar/stellar-sdk/base';
 import { AccountNotFoundError, loadAccount } from '../../../../src/stellar/horizon.js';
 import type { StellarAccountSnapshot, StellarNetwork } from '../../../../src/stellar/types.js';
-import { configuredClassicManagedChannels } from './classicManagedChannelConfig.js';
+import { configuredClassicManagedChannels, expandableClassicManagedChannels } from './classicManagedChannelConfig.js';
 import type { ClassicManagedChannelLeaseStore } from './classicManagedChannelStore.js';
 
 export class ClassicManagedChannelServiceError extends Error {
@@ -84,10 +84,14 @@ export async function reserveClassicManagedChannel(
     now?: Date;
     accountLoader?: AccountLoader;
     channels?: Keypair[];
+    expansionChannels?: Keypair[];
     channelProvisioner?: ChannelProvisioner;
   } = {},
 ): Promise<ReservedClassicManagedChannel> {
-  const channels = options.channels ?? configuredClassicManagedChannels(input.network);
+  const baselineChannels = options.channels ?? configuredClassicManagedChannels(input.network);
+  const expansionChannels = options.expansionChannels
+    ?? (options.channels ? [] : expandableClassicManagedChannels(input.network));
+  const channels = [...baselineChannels, ...expansionChannels];
   if (channels.length === 0) {
     throw new ClassicManagedChannelServiceError(
       'MultiSigTools-managed Classic execution is not configured for this network.',
@@ -126,7 +130,11 @@ export async function reserveClassicManagedChannel(
   const leasedAt = now.toISOString();
   const accountLoader = options.accountLoader ?? loadAccount;
   const channelProvisioner = options.channelProvisioner ?? provisionTestnetChannel;
-  for (const keypair of orderedChannels(input.requestId, channels)) {
+  const reservationOrder = [
+    ...orderedChannels(input.requestId, baselineChannels),
+    ...expansionChannels,
+  ];
+  for (const keypair of reservationOrder) {
     const channelAccount = keypair.publicKey();
     const claimed = await store.claimLease({
       network: input.network,

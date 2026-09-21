@@ -7,6 +7,7 @@ import {
 import {
   ClassicManagedChannelConfigurationError,
   configuredClassicManagedChannels,
+  MAX_CHANNELS_PER_NETWORK,
 } from '../server/classicManagedChannelConfig.js';
 import {
   AgentCredentialServiceError,
@@ -81,6 +82,7 @@ export async function GET(request: Request): Promise<Response> {
         managedSourceAccountCount,
         externalSourceAccountCount: externalSources.size,
         channelCount: channels.length,
+        elasticChannelLimit: network === 'testnet' ? MAX_CHANNELS_PER_NETWORK : channels.length,
         channelAccounts: channels.map((channel) => channel.publicKey()),
       },
     });

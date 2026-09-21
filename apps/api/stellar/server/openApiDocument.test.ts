@@ -62,6 +62,7 @@ test('OpenAPI covers every catalog transport and business operation exactly once
 test('OpenAPI describes the public Contract composition without UI state', () => {
   const document = createOpenApiDocument();
   const paths = document.paths as Record<string, JsonObject>;
+  const testnetIntegrationCreate = paths['/api/integration-testnet'].post as JsonObject;
   const inspect = paths['/api/contract-interface'].get as JsonObject;
   const intent = paths['/api/intent'].post as JsonObject;
   const intentInspect = paths['/api/intent'].get as JsonObject;
@@ -74,6 +75,11 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   const requestCreate = paths['/api/request'].post as JsonObject;
   const requestSubmit = paths['/api/request'].put as JsonObject;
 
+  assert.equal(testnetIntegrationCreate.operationId, 'integration.testnet.create');
+  assert.deepEqual(testnetIntegrationCreate.security, []);
+  assert.deepEqual(testnetIntegrationCreate['x-multisig-access'], ['public']);
+  assert.equal((((testnetIntegrationCreate.requestBody as JsonObject).content as JsonObject)['application/json'] as JsonObject).schema && ((((testnetIntegrationCreate.requestBody as JsonObject).content as JsonObject)['application/json'] as JsonObject).schema as JsonObject).$ref, '#/components/schemas/TestnetIntegrationCreateInput');
+  assert.ok((testnetIntegrationCreate.responses as JsonObject)['201']);
   assert.deepEqual(inspect.security, []);
   assert.equal(inspect.operationId, 'contract.interface.inspect');
   assert.equal(intent.operationId, 'contract.intent.create.integration.intent.create');
@@ -115,6 +121,8 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.ok(securitySchemes.intentCapability);
   assert.match(String(securitySchemes.integrationBearer.description), /non-signer external service credential/i);
   assert.match(String(securitySchemes.intentCapability.description), /mic_/);
+  assert.deepEqual(schemas.TestnetIntegrationCreateInput.required, ['serviceId', 'label']);
+  assert.deepEqual(schemas.TestnetIntegrationCreateResult.required, ['operation', 'version', 'service', 'apiKey']);
   assert.deepEqual(schemas.RuntimeConfigResult.required, ['operation', 'version', 'stellarNetwork', 'fixedNetwork', 'capabilities']);
   assert.deepEqual(
     (((schemas.RuntimeConfigResult.properties as JsonObject).capabilities as JsonObject).properties as JsonObject).classicManagedExecution,
@@ -212,7 +220,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(schemas.ContractPrepareResult.required, ['operation', 'version', 'mode', 'simulation']);
   assert.deepEqual(schemas.ContractEnforceResult.required, ['operation', 'version', 'mode', 'verification']);
   assert.deepEqual(schemas.IntegrationExecutionInspectResult.required, ['operation', 'version', 'serviceId', 'network', 'classic']);
-  assert.deepEqual(((schemas.IntegrationExecutionInspectResult.properties as JsonObject).classic as JsonObject).required, ['scopeConfigured', 'managedAvailable', 'managedSourceAccountCount', 'externalSourceAccountCount', 'channelCount', 'channelAccounts']);
+  assert.deepEqual(((schemas.IntegrationExecutionInspectResult.properties as JsonObject).classic as JsonObject).required, ['scopeConfigured', 'managedAvailable', 'managedSourceAccountCount', 'externalSourceAccountCount', 'channelCount', 'elasticChannelLimit', 'channelAccounts']);
   assert.deepEqual(schemas.ClassicPaymentPrepareInput.required, ['network', 'sourceAccount', 'payments']);
   assert.ok((schemas.ClassicPaymentPrepareResult.properties as JsonObject).transactionSourceAccount);
   assert.ok((schemas.ClassicPaymentPrepareResult.properties as JsonObject).transactionSourceSequence);

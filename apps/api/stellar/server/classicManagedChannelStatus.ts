@@ -19,6 +19,7 @@ export interface ManagedClassicChannelOperationalRow {
 export interface ManagedClassicChannelOperationalStatus {
   network: StellarNetwork;
   capacity: number;
+  elasticLimit: number;
   leaseVisibility: 'available' | 'unavailable';
   activeLeaseCount: number | null;
   expiredLeaseCount: number | null;
@@ -69,6 +70,7 @@ export async function inspectManagedClassicChannels(
   input: {
     network: StellarNetwork;
     channelAccounts: string[];
+    elasticLimit?: number;
     leaseStore?: ClassicManagedChannelLeaseStore;
   },
   options: {
@@ -90,9 +92,12 @@ export async function inspectManagedClassicChannels(
     }
   }
 
-  const channelSet = new Set(input.channelAccounts);
-  const visibleLeases = leases.filter((lease) => channelSet.has(lease.channelAccount));
-  const channels = await Promise.all(input.channelAccounts.map(async (accountId) => {
+  const visibleAccounts = [...new Set([
+    ...input.channelAccounts,
+    ...leases.map((lease) => lease.channelAccount),
+  ])];
+  const visibleLeases = leases.filter((lease) => visibleAccounts.includes(lease.channelAccount));
+  const channels = await Promise.all(visibleAccounts.map(async (accountId) => {
     const lease = leaseForChannel(visibleLeases, accountId);
     const state = leaseState(lease, now, leaseVisibility === 'available');
     const balance = await accountVisibility(accountId, input.network, accountLoader);
@@ -108,6 +113,7 @@ export async function inspectManagedClassicChannels(
     return {
       network: input.network,
       capacity: input.channelAccounts.length,
+      elasticLimit: input.elasticLimit ?? input.channelAccounts.length,
       leaseVisibility,
       activeLeaseCount: null,
       expiredLeaseCount: null,
@@ -121,10 +127,11 @@ export async function inspectManagedClassicChannels(
   return {
     network: input.network,
     capacity: input.channelAccounts.length,
+    elasticLimit: input.elasticLimit ?? input.channelAccounts.length,
     leaseVisibility,
     activeLeaseCount,
     expiredLeaseCount,
-    freeCapacity: input.channelAccounts.length - activeLeaseCount,
+    freeCapacity: Math.max(0, input.channelAccounts.length - activeLeaseCount),
     channels,
   };
 }

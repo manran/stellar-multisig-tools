@@ -40,6 +40,20 @@ function shellJson(value: unknown): string {
     .join('\n');
 }
 
+export const testnetIntegrationCreateExample = [
+  `curl -sS -X POST ${STELLAR_TESTNET_ORIGIN}/api/integration-testnet \\`,
+  '  -H "Content-Type: application/json" \\',
+  `  -d '${shellJson({
+    serviceId: 'my-testnet-app',
+    label: 'My Testnet App',
+    classicSourceAccounts: [DOCS_SAMPLE_TREASURY],
+    classicExternalExecutionSourceAccounts: [],
+    sorobanContracts: [],
+    sorobanExecutionAccounts: [],
+    profile: { authorizationExperience: 'hosted' },
+  })}'`,
+].join('\n');
+
 export const runtimeConfigExample =
   `curl -sS ${STELLAR_TESTNET_ORIGIN}/api/runtime-config`;
 

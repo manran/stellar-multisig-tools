@@ -16,8 +16,9 @@ test('Developer Hub starts from integration ownership instead of endpoint invent
   assert.match(developerDocs, />On my site</);
   assert.match(developerDocs, />Full Headless</);
   assert.match(developerDocs, /You take over orchestration, not authority/);
-  assert.match(developerDocs, /Integration credentials are operator-issued in this release/);
-  assert.match(developerDocs, /There is no public self-service/);
+  assert.match(developerDocs, /Testnet Integration is self-service/);
+  assert.match(developerDocs, /No application or approval is required on Testnet/);
+  assert.match(developerDocs, /\/developers\/integrations\/new/);
   assert.match(docsArchitecture, /\/developers -> \/docs\/developers/);
   assert.match(docsArchitecture, /\/docs\/automation.*canonical Agent API page/s);
 });
@@ -51,11 +52,13 @@ test('Developer API guidance treats webhook as notification over canonical state
 });
 
 test('Testnet quickstart is a bounded Classic Hosted path from credential to canonical status', () => {
-  assert.match(developerDocs, /Before you start/);
+  assert.match(developerDocs, /Start by creating the Testnet profile/);
+  assert.match(developerDocs, /Store the returned credential/);
   assert.match(developerDocs, /Create one semantic Classic Request/);
   assert.match(developerDocs, /Read the Request id and execution mode/);
   assert.match(developerDocs, /Open the Hosted signer review/);
   assert.match(developerDocs, /Read canonical status after signing/);
+  assert.match(developerExamples, /testnetIntegrationCreateExample/);
   assert.match(developerExamples, /classicHostedReviewExample/);
   assert.match(developerExamples, /classicStatusExample/);
 });
