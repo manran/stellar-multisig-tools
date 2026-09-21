@@ -8,6 +8,7 @@ import {
   classicManagedChannelSoftLimit,
   ClassicManagedChannelConfigurationError,
   configuredClassicManagedChannels,
+  effectiveClassicManagedChannelSoftLimit,
 } from '../server/classicManagedChannelConfig.js';
 import {
   AgentCredentialServiceError,
@@ -20,6 +21,10 @@ import {
   DeploymentNetworkPolicyError,
 } from '../server/deploymentNetworkPolicy.js';
 import { noStoreJson } from '../server/httpResponse.js';
+import {
+  ClassicManagedExecutionStorageUnavailableError,
+  runtimeClassicManagedChannelStore,
+} from '../server/coordinationStores.js';
 
 function errorResponse(cause: unknown): Response {
   if (
@@ -68,6 +73,18 @@ export async function GET(request: Request): Promise<Response> {
     }
 
     const channels = configuredClassicManagedChannels(network);
+    let channelSoftLimit = classicManagedChannelSoftLimit();
+    try {
+      const leases = await runtimeClassicManagedChannelStore().listLeases(network);
+      const highestIndexedLease = leases.reduce(
+        (highest, lease) => lease.channelIndex === undefined ? highest : Math.max(highest, lease.channelIndex),
+        -1,
+      );
+      const allocatedSlots = Math.max(channels.length, leases.length, highestIndexedLease + 1);
+      channelSoftLimit = effectiveClassicManagedChannelSoftLimit(allocatedSlots, channelSoftLimit);
+    } catch (cause) {
+      if (!(cause instanceof ClassicManagedExecutionStorageUnavailableError)) throw cause;
+    }
     const externalSources = new Set(caller.credential.classicExternalExecutionSourceAccounts);
     const managedSourceAccountCount = caller.credential.classicSourceAccounts
       .filter((accountId) => !externalSources.has(accountId)).length;
@@ -82,7 +99,7 @@ export async function GET(request: Request): Promise<Response> {
         managedSourceAccountCount,
         externalSourceAccountCount: externalSources.size,
         channelCount: channels.length,
-        channelSoftLimit: classicManagedChannelSoftLimit(),
+        channelSoftLimit,
         channelAccounts: channels.map((channel) => channel.publicKey()),
       },
     });

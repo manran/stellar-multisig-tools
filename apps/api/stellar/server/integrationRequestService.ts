@@ -22,6 +22,7 @@ import {
 } from './requestService.js';
 import type { SigningRequestStore, StoredSigningRequest } from './requestStore.js';
 import type { ClassicManagedChannelLeaseStore } from './classicManagedChannelStore.js';
+import type { ClassicManagedChannelCreatorMonitorStore } from './classicManagedChannelCreatorMonitorStore.js';
 import {
   ClassicManagedChannelServiceError,
   reserveClassicManagedChannel,
@@ -36,6 +37,7 @@ interface IntegrationRequestOptions {
   networkParametersLoader?: NetworkParametersLoader;
   requestIdFactory?: (serviceId: string, idempotencyKey: string) => string;
   managedChannelStoreFactory?: () => ClassicManagedChannelLeaseStore;
+  managedChannelCreatorMonitorStoreFactory?: () => ClassicManagedChannelCreatorMonitorStore;
   managedChannels?: Keypair[];
 }
 
@@ -353,6 +355,7 @@ export async function createIntegrationPaymentSigningRequest(
     now,
     accountLoader: options.accountLoader,
     channels: options.managedChannels,
+    creatorMonitorStore: options.managedChannelCreatorMonitorStoreFactory?.(),
   });
 
   try {

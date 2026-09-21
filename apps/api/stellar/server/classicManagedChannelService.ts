@@ -17,6 +17,7 @@ import { stellarAmountToStroops } from '../../../../src/stellar/reserve.js';
 import type { StellarAccountSnapshot, StellarNetwork } from '../../../../src/stellar/types.js';
 import {
   classicManagedChannelSoftLimit,
+  effectiveClassicManagedChannelSoftLimit,
   configuredClassicManagedChannelInitialBalance,
   deriveClassicManagedChannelCreator,
   configuredClassicManagedChannels,
@@ -26,6 +27,12 @@ import type {
   ClassicManagedChannelLeaseStore,
   StoredClassicManagedChannelLease,
 } from './classicManagedChannelStore.js';
+import type { ClassicManagedChannelCreatorMonitorStore } from './classicManagedChannelCreatorMonitorStore.js';
+import {
+  observeClassicManagedChannelCreator,
+  sendClassicManagedChannelAlertWebhook,
+  type ClassicManagedChannelAlertSender,
+} from './classicManagedChannelCreatorMonitor.js';
 
 const CREATOR_SEQUENCE_RETRIES = 4;
 
@@ -74,6 +81,9 @@ export async function provisionManagedChannelWithCreator(
     accountLoader?: AccountLoader;
     networkParametersLoader?: typeof loadNetworkParameters;
     transactionSubmitter?: typeof submitTransactionXdr;
+    creatorMonitorStore?: ClassicManagedChannelCreatorMonitorStore;
+    alertSender?: ClassicManagedChannelAlertSender;
+    now?: Date;
   } = {},
 ): Promise<void> {
   const creator = options.creator ?? deriveClassicManagedChannelCreator(network);
@@ -126,6 +136,26 @@ export async function provisionManagedChannelWithCreator(
       );
     }
 
+    const capacity = await observeClassicManagedChannelCreator({
+      network,
+      creatorAccount: creator.publicKey(),
+      account: source,
+      parameters,
+    }, {
+      store: options.creatorMonitorStore,
+      alertSender: options.alertSender ?? (async (alert) => {
+        await sendClassicManagedChannelAlertWebhook(alert);
+      }),
+      now: options.now,
+    });
+    if (!capacity.canCreateNextChannel) {
+      throw new ClassicManagedChannelServiceError(
+        'Managed execution capacity is temporarily full. Existing requests are unaffected. Try again shortly.',
+        503,
+        'managed_execution_capacity_temporarily_unavailable',
+      );
+    }
+
     const transaction = new TransactionBuilder(new Account(source.accountId, source.sequence), {
       fee: String(parameters.baseFeeInStroops),
       networkPassphrase: networkPassphrase(network),
@@ -137,11 +167,45 @@ export async function provisionManagedChannelWithCreator(
 
     try {
       await transactionSubmitter(transaction.toXDR(), network);
+      try {
+        const refreshedCreator = await accountLoader(creator.publicKey(), network);
+        await observeClassicManagedChannelCreator({
+          network,
+          creatorAccount: creator.publicKey(),
+          account: refreshedCreator,
+          parameters,
+        }, {
+          store: options.creatorMonitorStore,
+          alertSender: options.alertSender ?? (async (alert) => {
+            await sendClassicManagedChannelAlertWebhook(alert);
+          }),
+          now: options.now,
+        });
+      } catch (monitorCause) {
+        console.error('Unable to refresh managed Classic creator capacity after provisioning.', monitorCause);
+      }
       return;
     } catch (cause) {
       if (cause instanceof TransactionSubmissionError) {
         try {
           await accountLoader(accountId, network);
+          try {
+            const refreshedCreator = await accountLoader(creator.publicKey(), network);
+            await observeClassicManagedChannelCreator({
+              network,
+              creatorAccount: creator.publicKey(),
+              account: refreshedCreator,
+              parameters,
+            }, {
+              store: options.creatorMonitorStore,
+              alertSender: options.alertSender ?? (async (alert) => {
+                await sendClassicManagedChannelAlertWebhook(alert);
+              }),
+              now: options.now,
+            });
+          } catch (monitorCause) {
+            console.error('Unable to refresh managed Classic creator capacity after reconciliation.', monitorCause);
+          }
           return;
         } catch (verificationCause) {
           if (!(verificationCause instanceof AccountNotFoundError)) {
@@ -219,6 +283,17 @@ function legacyLeaseKeypair(
   return null;
 }
 
+function allocatedChannelSlots(
+  baselineCount: number,
+  leases: StoredClassicManagedChannelLease[],
+): number {
+  const highestIndexedLease = leases.reduce(
+    (highest, lease) => lease.channelIndex === undefined ? highest : Math.max(highest, lease.channelIndex),
+    -1,
+  );
+  return Math.max(baselineCount, leases.length, highestIndexedLease + 1);
+}
+
 function dynamicExpansionChannels(
   network: StellarNetwork,
   baselineCount: number,
@@ -255,6 +330,8 @@ export async function reserveClassicManagedChannel(
     channels?: Keypair[];
     expansionChannels?: Keypair[];
     channelProvisioner?: ChannelProvisioner;
+    creatorMonitorStore?: ClassicManagedChannelCreatorMonitorStore;
+    alertSender?: ClassicManagedChannelAlertSender;
   } = {},
 ): Promise<ReservedClassicManagedChannel> {
   const baselineKeypairs = options.channels ?? configuredClassicManagedChannels(input.network);
@@ -268,7 +345,11 @@ export async function reserveClassicManagedChannel(
 
   const baselineChannels = indexedChannels(baselineKeypairs);
   const leases = await store.listLeases(input.network);
-  const softLimit = classicManagedChannelSoftLimit();
+  const baseSoftLimit = classicManagedChannelSoftLimit();
+  const softLimit = effectiveClassicManagedChannelSoftLimit(
+    allocatedChannelSlots(baselineChannels.length, leases),
+    baseSoftLimit,
+  );
   const expansionChannels = options.expansionChannels
     ? indexedChannels(options.expansionChannels, baselineChannels.length)
     : options.channels
@@ -323,7 +404,14 @@ export async function reserveClassicManagedChannel(
   const now = options.now ?? new Date();
   const leasedAt = now.toISOString();
   const accountLoader = options.accountLoader ?? loadAccount;
-  const channelProvisioner = options.channelProvisioner ?? provisionManagedChannelWithCreator;
+  const channelProvisioner = options.channelProvisioner ?? ((accountId, network) => (
+    provisionManagedChannelWithCreator(accountId, network, {
+      accountLoader,
+      creatorMonitorStore: options.creatorMonitorStore,
+      alertSender: options.alertSender,
+      now,
+    })
+  ));
   const reservationOrder = [
     ...orderedChannels(input.requestId, baselineChannels),
     ...expansionChannels,

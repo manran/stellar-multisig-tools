@@ -7,6 +7,7 @@ import type {
   StoredClassicManagedChannelLease,
 } from './classicManagedChannelStore.js';
 import { inspectManagedClassicChannels } from './classicManagedChannelStatus.js';
+import type { ClassicManagedChannelCreatorMonitorStore } from './classicManagedChannelCreatorMonitorStore.js';
 
 function snapshot(accountId: string, nativeBalance: string): StellarAccountSnapshot {
   return {
@@ -113,6 +114,53 @@ test('managed Classic operator projection separates capacity, leases and balance
     },
   ]);
   assert.doesNotMatch(JSON.stringify(result), /AAAAAAAAAAAAAAAA|BBBBBBBBBBBBBBBB/);
+});
+
+test('managed Classic operator projection auto-grows soft limit and exposes creator capacity state', async () => {
+  const leases: StoredClassicManagedChannelLease[] = [0, 1, 2, 3].map((index) => ({
+    network: 'testnet',
+    channelAccount: `channel-${index}`,
+    channelIndex: index,
+    requestId: String.fromCharCode(65 + index).repeat(16),
+    leasedAt: '2026-09-21T00:00:00.000Z',
+    expiresAt: '2026-09-21T02:00:00.000Z',
+  }));
+  const monitorStore: ClassicManagedChannelCreatorMonitorStore = {
+    async get() {
+      return {
+        network: 'testnet',
+        state: 'low',
+        nativeBalanceStroops: 550_000_000n,
+        observedAt: '2026-09-21T00:30:00.000Z',
+      };
+    },
+    async observe() { return { previousState: 'low', changed: false }; },
+    async markAlerted() {},
+  };
+  const result = await inspectManagedClassicChannels({
+    network: 'testnet',
+    channelAccounts: ['channel-0', 'channel-1'],
+    softLimit: 8,
+    leaseStore: new ReadOnlyLeaseStore(leases),
+    creatorAccount: 'creator',
+    creatorMonitorStore: monitorStore,
+  }, {
+    now: new Date('2026-09-21T01:00:00.000Z'),
+    accountLoader: async (accountId) => snapshot(accountId, accountId === 'creator' ? '55' : '10'),
+    networkParametersLoader: async () => ({
+      ledgerSequence: 1,
+      ledgerClosedAt: '2026-09-21T00:59:55.000Z',
+      baseFeeInStroops: 100,
+      baseReserveInStroops: 5_000_000,
+    }),
+  });
+
+  assert.equal(result.softLimit, 16);
+  assert.equal(result.creator?.state, 'low');
+  assert.equal(result.creator?.nativeBalance, '55');
+  assert.equal(result.creator?.lowThreshold, '50');
+  assert.equal(result.creator?.recoveryThreshold, '60');
+  assert.equal(result.creator?.requiredForNextChannel, '3.0000100');
 });
 
 test('managed Classic operator projection never reports free capacity when lease storage is unavailable', async () => {

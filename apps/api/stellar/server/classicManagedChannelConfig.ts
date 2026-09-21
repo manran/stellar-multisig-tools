@@ -5,7 +5,9 @@ import type { StellarNetwork } from '../../../../src/stellar/types.js';
 
 const DEFAULT_CHANNEL_COUNT = 4;
 export const DEFAULT_CHANNEL_SOFT_LIMIT = 64;
-const DEFAULT_CHANNEL_INITIAL_BALANCE = '10';
+const DEFAULT_CHANNEL_INITIAL_BALANCE = '2';
+const DEFAULT_CREATOR_LOW_BALANCE = '50';
+const DEFAULT_CREATOR_RECOVERY_BALANCE = '60';
 const MIN_MASTER_SECRET_LENGTH = 32;
 
 export class ClassicManagedChannelConfigurationError extends Error {
@@ -36,6 +38,21 @@ export function classicManagedChannelSoftLimit(
   raw = process.env.MULTISIG_CLASSIC_CHANNEL_SOFT_LIMIT,
 ): number {
   return positiveSafeInteger(raw, DEFAULT_CHANNEL_SOFT_LIMIT, 'MULTISIG_CLASSIC_CHANNEL_SOFT_LIMIT');
+}
+
+export function effectiveClassicManagedChannelSoftLimit(
+  allocatedSlots: number,
+  baseSoftLimit = classicManagedChannelSoftLimit(),
+): number {
+  if (!Number.isSafeInteger(allocatedSlots) || allocatedSlots < 0) {
+    throw new ClassicManagedChannelConfigurationError('Allocated managed Classic channel slots must be a non-negative safe integer.');
+  }
+  let limit = baseSoftLimit;
+  while (allocatedSlots * 2 >= limit) {
+    if (limit > Math.floor(Number.MAX_SAFE_INTEGER / 2)) return Number.MAX_SAFE_INTEGER;
+    limit *= 2;
+  }
+  return limit;
 }
 
 function normalizedMasterSecret(masterSecret = process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET): string {
@@ -99,16 +116,34 @@ export function deriveClassicManagedChannelCreator(
   return Keypair.fromRawEd25519Seed(seed);
 }
 
-export function configuredClassicManagedChannelInitialBalance(
-  raw = process.env.MULTISIG_CLASSIC_CHANNEL_INITIAL_BALANCE,
-): string {
-  const value = raw?.trim() || DEFAULT_CHANNEL_INITIAL_BALANCE;
+function positiveStellarAmount(raw: string | undefined, fallback: string, variable: string): string {
+  const value = raw?.trim() || fallback;
   try {
     if (stellarAmountToStroops(value) <= 0n) throw new Error('non-positive');
   } catch {
     throw new ClassicManagedChannelConfigurationError(
-      'MULTISIG_CLASSIC_CHANNEL_INITIAL_BALANCE must be a positive Stellar XLM amount with at most 7 decimal places.',
+      `${variable} must be a positive Stellar XLM amount with at most 7 decimal places.`,
     );
   }
   return value;
+}
+
+export function configuredClassicManagedChannelInitialBalance(
+  raw = process.env.MULTISIG_CLASSIC_CHANNEL_INITIAL_BALANCE,
+): string {
+  return positiveStellarAmount(raw, DEFAULT_CHANNEL_INITIAL_BALANCE, 'MULTISIG_CLASSIC_CHANNEL_INITIAL_BALANCE');
+}
+
+export function configuredClassicManagedChannelCreatorBalanceThresholds(
+  lowRaw = process.env.MULTISIG_CLASSIC_CHANNEL_CREATOR_LOW_BALANCE,
+  recoveryRaw = process.env.MULTISIG_CLASSIC_CHANNEL_CREATOR_RECOVERY_BALANCE,
+): { low: string; recovery: string } {
+  const low = positiveStellarAmount(lowRaw, DEFAULT_CREATOR_LOW_BALANCE, 'MULTISIG_CLASSIC_CHANNEL_CREATOR_LOW_BALANCE');
+  const recovery = positiveStellarAmount(recoveryRaw, DEFAULT_CREATOR_RECOVERY_BALANCE, 'MULTISIG_CLASSIC_CHANNEL_CREATOR_RECOVERY_BALANCE');
+  if (stellarAmountToStroops(recovery) <= stellarAmountToStroops(low)) {
+    throw new ClassicManagedChannelConfigurationError(
+      'MULTISIG_CLASSIC_CHANNEL_CREATOR_RECOVERY_BALANCE must be greater than the low-balance threshold.',
+    );
+  }
+  return { low, recovery };
 }

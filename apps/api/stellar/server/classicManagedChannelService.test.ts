@@ -341,7 +341,7 @@ test('creator provisioning reconciles outcome-unknown and rebuilds with the late
   });
 
   assert.equal(targetExists, true);
-  assert.equal(creatorLoads, 2);
+  assert.equal(creatorLoads, 3);
   assert.equal(submittedSequences.length, 2);
   assert.notEqual(submittedSequences[0], submittedSequences[1]);
 });
@@ -376,6 +376,38 @@ test('creator provisioning treats an outcome-unknown transaction as success when
 
   assert.equal(submissions, 1);
   assert.equal(targetExists, true);
+});
+
+test('creator capacity exhaustion blocks only new channel provisioning with a user-safe error', async () => {
+  const creator = Keypair.random();
+  const target = Keypair.random();
+  let submissions = 0;
+
+  await assert.rejects(
+    provisionManagedChannelWithCreator(target.publicKey(), 'testnet', {
+      creator,
+      accountLoader: async (accountId) => {
+        if (accountId === target.publicKey()) throw new AccountNotFoundError(accountId);
+        const value = snapshot(accountId, '10');
+        value.nativeBalance = '2';
+        return value;
+      },
+      networkParametersLoader: async () => ({
+        ledgerSequence: 1,
+        ledgerClosedAt: '2026-09-21T00:00:00.000Z',
+        baseFeeInStroops: 100,
+        baseReserveInStroops: 5_000_000,
+      }),
+      transactionSubmitter: async () => {
+        submissions += 1;
+        return { hash: 'a'.repeat(64), ledger: 1, successful: true };
+      },
+    }),
+    (cause: unknown) => cause instanceof ClassicManagedChannelServiceError
+      && cause.code === 'managed_execution_capacity_temporarily_unavailable'
+      && /Existing requests are unaffected/.test(cause.message),
+  );
+  assert.equal(submissions, 0);
 });
 
 test('managed channel signer adds only the transaction-source signature', () => {

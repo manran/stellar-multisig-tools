@@ -3,6 +3,7 @@ import { blobAuthStore } from '../server/blobAuthStore.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
 import {
   ClassicManagedExecutionStorageUnavailableError,
+  runtimeClassicManagedChannelCreatorMonitorStore,
   runtimeClassicManagedChannelStore,
   runtimeSigningRequestStore,
   runtimeSorobanIntentStore,
@@ -797,6 +798,7 @@ export async function POST(request: Request): Promise<Response> {
             ...serviceOptions,
             accountLoader: loadAccount,
             managedChannelStoreFactory: runtimeClassicManagedChannelStore,
+            managedChannelCreatorMonitorStoreFactory: runtimeClassicManagedChannelCreatorMonitorStore,
           },
         );
         return noStoreJson({

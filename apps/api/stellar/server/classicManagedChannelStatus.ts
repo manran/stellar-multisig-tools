@@ -1,5 +1,11 @@
-import { AccountNotFoundError, loadAccount } from '../../../../src/stellar/horizon.js';
+import { AccountNotFoundError, loadAccount, loadNetworkParameters } from '../../../../src/stellar/horizon.js';
 import type { StellarAccountSnapshot, StellarNetwork } from '../../../../src/stellar/types.js';
+import {
+  configuredClassicManagedChannelCreatorBalanceThresholds,
+  effectiveClassicManagedChannelSoftLimit,
+} from './classicManagedChannelConfig.js';
+import { assessClassicManagedChannelCreatorCapacity, type ClassicManagedChannelCreatorState } from './classicManagedChannelCapacity.js';
+import type { ClassicManagedChannelCreatorMonitorStore } from './classicManagedChannelCreatorMonitorStore.js';
 import type {
   ClassicManagedChannelLeaseStore,
   StoredClassicManagedChannelLease,
@@ -16,10 +22,21 @@ export interface ManagedClassicChannelOperationalRow {
   nativeBalance?: string;
 }
 
+export interface ManagedClassicCreatorOperationalStatus {
+  accountId: string;
+  balanceState: ManagedClassicBalanceState;
+  nativeBalance?: string;
+  state?: ClassicManagedChannelCreatorState;
+  lowThreshold: string;
+  recoveryThreshold: string;
+  requiredForNextChannel?: string;
+}
+
 export interface ManagedClassicChannelOperationalStatus {
   network: StellarNetwork;
   capacity: number;
   softLimit: number;
+  creator?: ManagedClassicCreatorOperationalStatus;
   leaseVisibility: 'available' | 'unavailable';
   activeLeaseCount: number | null;
   expiredLeaseCount: number | null;
@@ -66,20 +83,71 @@ async function accountVisibility(
   }
 }
 
+async function creatorVisibility(
+  input: {
+    network: StellarNetwork;
+    accountId: string;
+    monitorStore?: ClassicManagedChannelCreatorMonitorStore;
+  },
+  options: {
+    accountLoader: AccountLoader;
+    networkParametersLoader: typeof loadNetworkParameters;
+  },
+): Promise<ManagedClassicCreatorOperationalStatus> {
+  const thresholds = configuredClassicManagedChannelCreatorBalanceThresholds();
+  try {
+    const account = await options.accountLoader(input.accountId, input.network);
+    const parameters = await options.networkParametersLoader(input.network);
+    let previousState: ClassicManagedChannelCreatorState | null = null;
+    if (input.monitorStore) {
+      try { previousState = (await input.monitorStore.get(input.network))?.state ?? null; } catch { previousState = null; }
+    }
+    const capacity = assessClassicManagedChannelCreatorCapacity(account, parameters, previousState);
+    return {
+      accountId: input.accountId,
+      balanceState: 'ready',
+      nativeBalance: capacity.nativeBalance,
+      state: capacity.state,
+      lowThreshold: capacity.lowThreshold,
+      recoveryThreshold: capacity.recoveryThreshold,
+      requiredForNextChannel: capacity.requiredForNextChannel,
+    };
+  } catch (cause) {
+    return {
+      accountId: input.accountId,
+      balanceState: cause instanceof AccountNotFoundError ? 'missing' : 'unavailable',
+      lowThreshold: thresholds.low,
+      recoveryThreshold: thresholds.recovery,
+    };
+  }
+}
+
+function allocatedSlots(channelCount: number, leases: StoredClassicManagedChannelLease[]): number {
+  const highestIndexedLease = leases.reduce(
+    (highest, lease) => lease.channelIndex === undefined ? highest : Math.max(highest, lease.channelIndex),
+    -1,
+  );
+  return Math.max(channelCount, leases.length, highestIndexedLease + 1);
+}
+
 export async function inspectManagedClassicChannels(
   input: {
     network: StellarNetwork;
     channelAccounts: string[];
     softLimit?: number;
     leaseStore?: ClassicManagedChannelLeaseStore;
+    creatorAccount?: string;
+    creatorMonitorStore?: ClassicManagedChannelCreatorMonitorStore;
   },
   options: {
     now?: Date;
     accountLoader?: AccountLoader;
+    networkParametersLoader?: typeof loadNetworkParameters;
   } = {},
 ): Promise<ManagedClassicChannelOperationalStatus> {
   const now = options.now ?? new Date();
   const accountLoader = options.accountLoader ?? loadAccount;
+  const networkParametersLoader = options.networkParametersLoader ?? loadNetworkParameters;
   let leases: StoredClassicManagedChannelLease[] = [];
   let leaseVisibility: ManagedClassicChannelOperationalStatus['leaseVisibility'] = 'unavailable';
 
@@ -91,6 +159,18 @@ export async function inspectManagedClassicChannels(
       leaseVisibility = 'unavailable';
     }
   }
+
+  const baseSoftLimit = input.softLimit ?? input.channelAccounts.length;
+  const softLimit = leaseVisibility === 'available'
+    ? effectiveClassicManagedChannelSoftLimit(allocatedSlots(input.channelAccounts.length, leases), baseSoftLimit)
+    : baseSoftLimit;
+  const creator = input.creatorAccount
+    ? await creatorVisibility({
+        network: input.network,
+        accountId: input.creatorAccount,
+        monitorStore: input.creatorMonitorStore,
+      }, { accountLoader, networkParametersLoader })
+    : undefined;
 
   const visibleAccounts = [...new Set([
     ...input.channelAccounts,
@@ -113,7 +193,8 @@ export async function inspectManagedClassicChannels(
     return {
       network: input.network,
       capacity: input.channelAccounts.length,
-      softLimit: input.softLimit ?? input.channelAccounts.length,
+      softLimit,
+      ...(creator ? { creator } : {}),
       leaseVisibility,
       activeLeaseCount: null,
       expiredLeaseCount: null,
@@ -127,7 +208,8 @@ export async function inspectManagedClassicChannels(
   return {
     network: input.network,
     capacity: input.channelAccounts.length,
-    softLimit: input.softLimit ?? input.channelAccounts.length,
+    softLimit,
+    ...(creator ? { creator } : {}),
     leaseVisibility,
     activeLeaseCount,
     expiredLeaseCount,

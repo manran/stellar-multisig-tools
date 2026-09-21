@@ -41,10 +41,21 @@ interface ManagedClassicChannelRow {
   nativeBalance?: string;
 }
 
+interface ManagedClassicCreatorStatus {
+  accountId: string;
+  balanceState: 'ready' | 'missing' | 'unavailable';
+  nativeBalance?: string;
+  state?: 'ready' | 'low' | 'insufficient';
+  lowThreshold: string;
+  recoveryThreshold: string;
+  requiredForNextChannel?: string;
+}
+
 interface ManagedClassicOperationalStatus {
   network: 'public' | 'testnet';
   capacity: number;
   softLimit: number;
+  creator?: ManagedClassicCreatorStatus;
   leaseVisibility: 'available' | 'unavailable';
   activeLeaseCount: number | null;
   expiredLeaseCount: number | null;
@@ -429,7 +440,31 @@ function ManagedClassicStatusPanel({
       {!status.configured
         ? <p className="ia-muted py-4 text-sm">Managed Classic execution is not configured on this deployment.</p>
         : operational
-          ? <div className="ia-channel-list">
+          ? <>
+            {operational.creator && <div className="ia-channel-row mb-3">
+              <div className="min-w-0">
+                <div className="font-semibold">Channel creator</div>
+                <div className="ia-code mt-1 text-xs">{operational.creator.accountId}</div>
+                <div className="ia-muted mt-1 text-xs">
+                  {operational.creator.balanceState === 'ready'
+                    ? `${operational.creator.nativeBalance ?? 'Unknown'} XLM · low ${operational.creator.lowThreshold} · recover ${operational.creator.recoveryThreshold}`
+                    : operational.creator.balanceState === 'missing'
+                      ? 'Creator account not found'
+                      : 'Creator balance unavailable'}
+                </div>
+              </div>
+              <div className="ia-channel-row__lease">
+                <strong>{operational.creator.state === 'ready'
+                  ? 'Ready'
+                  : operational.creator.state === 'low'
+                    ? 'Low balance'
+                    : operational.creator.state === 'insufficient'
+                      ? 'Capacity exhausted'
+                      : 'State unavailable'}</strong>
+                {operational.creator.requiredForNextChannel && <span>Next channel requires {operational.creator.requiredForNextChannel} XLM</span>}
+              </div>
+            </div>}
+            <div className="ia-channel-list">
               {operational.channels.map((channel) => <div key={channel.accountId} className="ia-channel-row">
                 <div className="min-w-0">
                   <div className="ia-code font-semibold">{channel.accountId}</div>
@@ -453,6 +488,7 @@ function ManagedClassicStatusPanel({
                 </div>
               </div>)}
             </div>
+          </>
           : <p className="ia-muted py-4 text-sm">Detailed channel status is unavailable.</p>}
     </>}
   </section>;

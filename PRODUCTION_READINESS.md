@@ -98,16 +98,24 @@ A direct production aggregate DB inspection was intentionally not performed from
 - a **separate deterministic creator account** is derived from the same deployment master with a different domain tag; it exists only to create/fund managed channel accounts and is not a Treasury signer or transaction-source channel;
 - Testnet production has the master secret configured and the creator account active;
 - `MULTISIG_CLASSIC_CHANNEL_POOL_SIZE` is not explicitly set, so the configured **baseline is 4 channels**;
-- `MULTISIG_CLASSIC_CHANNEL_SOFT_LIMIT` defaults to **64**, but this is an operational warning threshold only: deterministic derivation is valid beyond 64 (tests cover index 64 and index 4096);
-- baseline channels are tried first; expansion slots continue deterministically as 4, 5, 6, ... and may cross the soft limit;
+- `MULTISIG_CLASSIC_CHANNEL_SOFT_LIMIT` starts at **64** and is a soft operational threshold, not a derivation cap; deterministic derivation is valid beyond it (tests cover index 64 and index 4096);
+- the effective soft limit follows a deterministic half-full doubling policy: 64 -> 128 when 32 slots have been allocated, 128 -> 256 at 64 allocated slots, and so on; no separate capacity state is persisted;
+- baseline channels are tried first; expansion slots continue deterministically as 4, 5, 6, ...;
 - PostgreSQL migration `0007_classic_managed_channel_index` persists `channel_index` with the lease so replay can recover channels beyond any soft threshold without scanning a fixed address window;
 - v1 allows one active Request lease per channel;
 - PostgreSQL lease uniqueness arbitrates concurrent expansion without sequence pipelining;
 - expired leases are reclaimable;
 - sequence pipelining is deliberately not used;
-- when a derived channel does not exist on-chain, the creator submits an ordinary Stellar `CreateAccount` transaction with the configured initial XLM balance;
+- when a derived channel does not exist on-chain, the creator submits an ordinary Stellar `CreateAccount` transaction; the default new-channel balance is **2 XLM** (`MULTISIG_CLASSIC_CHANNEL_INITIAL_BALANCE` may override it);
+- production creator funding target is approximately **1000 XLM** before enabling Mainnet managed execution;
+- creator balance policy defaults to **low below 50 XLM** and **recovered at 60 XLM or above**; low balance does not stop work while another channel can still be created;
+- true creator capacity exhaustion is calculated from current creator reserve/liabilities + the 2-XLM channel funding amount + transaction fee, not from the 50-XLM warning threshold;
+- when capacity is genuinely insufficient, only work that requires creating a new channel fails with `503 managed_execution_capacity_temporarily_unavailable`; existing Requests and already-created free channels are unaffected;
 - creator submission reconciles outcome-unknown responses and rebuilds on creator `tx_bad_seq` using bounded retries;
-- **managed-channel runtime contains no Friendbot provisioning path**;
+- **managed-channel runtime contains no Friendbot provisioning path**; a one-time Testnet faucet funding of the creator is an operator bootstrap action only;
+- creator state transitions are durably de-duplicated in PostgreSQL (`0008_classic_managed_channel_creator_monitor`);
+- optional generic HTTPS alerts use `MULTISIG_CLASSIC_CHANNEL_ALERT_WEBHOOK_URL`; the body is a simple JSON `{ "text": "..." }`, so a Telegram Bot `sendMessage` URL with `chat_id` in the URL can be used without coupling Telegram into core logic;
+- alert events are `creator.low_balance`, `creator.capacity_exhausted`, and `creator.balance_recovered`; alert transport failure is logged but never blocks business execution;
 - MST-managed Classic bids 50x the latest network base fee; external/self-submit keeps the ordinary network fee path;
 - Mainnet managed Classic remains disabled; before future enablement, the creator account must be explicitly activated/funded under the production policy.
 
@@ -144,7 +152,8 @@ The operator-only `/admin/integrations` boundary remains separate from public Te
 
 The detailed managed-Classic view now exposes only public operational facts:
 
-- configured baseline pool capacity and operational soft limit;
+- configured baseline pool capacity and the current automatically grown soft limit;
+- creator public address, current XLM balance/state (`ready` / `low` / `insufficient`), 50/60 thresholds, and the calculated balance required to create one more channel;
 - active / expired / free lease state, including actually leased expansion channels;
 - per-channel public G-address;
 - current native XLM balance, or explicit missing/unavailable state;
@@ -171,14 +180,15 @@ Operator verification completed manually on 2026-09-21: the authenticated deploy
 Before Mainnet managed execution:
 
 1. **Production channel lifecycle design**
-   - deterministic derivation + dedicated creator-account provisioning are now proven on Testnet;
-   - Mainnet still needs explicit policy for creator activation/funding, creator low-balance behavior, channel starting balance, soft-limit alerts, expansion pace, refill/drain, replacement/rotation, recovery, and stale-lease handling;
+   - deterministic derivation + dedicated creator-account provisioning are proven on Testnet;
+   - decided policy: approximately 1000 XLM initial creator funding, 2 XLM per new channel, low warning below 50 XLM, recovery at 60 XLM, and automatic soft-limit doubling at half utilization;
+   - still to decide before Mainnet: refill operator procedure, final alert destination/credentials, channel refill/drain policy after creation, replacement/rotation, master-secret recovery, and stale-lease cleanup;
    - the soft limit is not a derivation cap and must not be treated as production maximum capacity.
 
-2. **Low-funds policy**
-   - operator-defined warning threshold;
-   - alert destination;
-   - explicit action when every usable channel is below threshold.
+2. **Low-funds / capacity policy — implemented, destination pending**
+   - low balance warns but continues creating channels while reserve math says another channel can be funded;
+   - true insufficient capacity fails only new expansion with stable 503 `managed_execution_capacity_temporarily_unavailable` and a user-facing message that existing Requests are unaffected;
+   - generic HTTPS alert transport is implemented; no Testnet/production alert URL is configured in this repository because the operator has not selected the final Telegram/other endpoint yet.
 
 3. **Spend/budget control**
    - the per-transaction fee-bid policy is now fixed: 50x latest network base fee for MST-managed Classic;

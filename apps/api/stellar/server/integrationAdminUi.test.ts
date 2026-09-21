@@ -29,6 +29,9 @@ test('Integration admin is an unlinked operator-only runtime surface', () => {
   assert.match(ui, /Baseline/);
   assert.match(ui, /Soft limit/);
   assert.match(ui, /Active leases/);
+  assert.match(ui, /Channel creator/);
+  assert.match(ui, /Low balance/);
+  assert.match(ui, /Capacity exhausted/);
   assert.match(ui, /No signing secret is exposed here/);
   assert.match(ui, /IntegrationProfileDetail/);
   assert.match(wizard, /Define the profile before issuing a credential/);

@@ -16,10 +16,12 @@ import {
   classicManagedChannelSoftLimit,
   ClassicManagedChannelConfigurationError,
   configuredClassicManagedChannels,
+  deriveClassicManagedChannelCreator,
 } from '../server/classicManagedChannelConfig.js';
 import { inspectManagedClassicChannels } from '../server/classicManagedChannelStatus.js';
 import {
   ClassicManagedExecutionStorageUnavailableError,
+  runtimeClassicManagedChannelCreatorMonitorStore,
   runtimeClassicManagedChannelStore,
 } from '../server/coordinationStores.js';
 import {
@@ -83,8 +85,10 @@ export async function GET(request: Request): Promise<Response> {
         return noStoreJson({ managedClassicExecution: basic });
       }
       let leaseStore: ReturnType<typeof runtimeClassicManagedChannelStore> | undefined;
+      let creatorMonitorStore: ReturnType<typeof runtimeClassicManagedChannelCreatorMonitorStore> | undefined;
       try {
         leaseStore = runtimeClassicManagedChannelStore();
+        creatorMonitorStore = runtimeClassicManagedChannelCreatorMonitorStore();
       } catch (cause) {
         if (!(cause instanceof ClassicManagedExecutionStorageUnavailableError)) throw cause;
       }
@@ -95,7 +99,9 @@ export async function GET(request: Request): Promise<Response> {
             network,
             channelAccounts,
             softLimit: classicManagedChannelSoftLimit(),
+            creatorAccount: deriveClassicManagedChannelCreator(network)?.publicKey(),
             ...(leaseStore ? { leaseStore } : {}),
+            ...(creatorMonitorStore ? { creatorMonitorStore } : {}),
           }),
         },
       });
