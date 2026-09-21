@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Keypair } from '@stellar/stellar-sdk/base';
 import type { PrivateCommitmentRecord } from '../../../../src/stellar/privateCommitment.js';
+import { loadNetworkParameters } from '../../../../src/stellar/horizon.js';
 import { normalizeClassicPaymentInstruction, prepareClassicPayment, type ClassicPaymentInstruction } from '../../../../src/stellar/classicPaymentPrepare.js';
 import type { SigningRequestSnapshot } from '../../../../src/stellar/requestTypes.js';
 import type { StellarNetwork } from '../../../../src/stellar/types.js';
@@ -26,6 +27,8 @@ import {
   reserveClassicManagedChannel,
   signClassicManagedTransaction,
 } from './classicManagedChannelService.js';
+
+const MANAGED_CLASSIC_FEE_MULTIPLIER = 50;
 
 interface IntegrationRequestOptions {
   now?: Date;
@@ -353,9 +356,16 @@ export async function createIntegrationPaymentSigningRequest(
   });
 
   try {
+    const baseNetworkParametersLoader = options.networkParametersLoader ?? loadNetworkParameters;
     const prepared = await prepareClassicPayment(normalized, {
       accountLoader: options.accountLoader,
-      networkParametersLoader: options.networkParametersLoader,
+      networkParametersLoader: async (network) => {
+        const parameters = await baseNetworkParametersLoader(network);
+        return {
+          ...parameters,
+          baseFeeInStroops: parameters.baseFeeInStroops * MANAGED_CLASSIC_FEE_MULTIPLIER,
+        };
+      },
       transactionSource: {
         accountId: channel.accountId,
         sequence: channel.sequence,

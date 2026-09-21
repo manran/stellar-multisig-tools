@@ -326,6 +326,7 @@ test('Integration can create a Classic Request from semantic payment input witho
   assert.equal(parsed.operations[0].type, 'payment');
   assert.equal(parsed.source, channel.publicKey());
   assert.equal(parsed.sequence, '42');
+  assert.equal(parsed.fee, '5000');
   assert.equal(parsed.operations[0].source, source.publicKey());
   assert.equal(parsed.signatures.length, 1);
   assert.equal(first.request.execution?.mode, 'multisigtools');

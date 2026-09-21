@@ -99,6 +99,7 @@ A direct production aggregate DB inspection was intentionally not performed from
 - expired leases are reclaimable;
 - sequence pipelining is deliberately not used;
 - Testnet may auto-provision missing channel accounts with Friendbot;
+- MST-managed Classic bids 50x the latest network base fee; external/self-submit keeps the ordinary network fee path;
 - Mainnet never auto-provisions/funds channels.
 
 ### Already protected
@@ -135,21 +136,26 @@ Verification completed:
 - Testnet runtime/OpenAPI/admin shell/payment smoke remain 200;
 - Vercel reported no runtime error clusters in the checked post-deploy window.
 
-One operator-only check remains: log in with the real deployment `mia_*` credential and confirm that the live PostgreSQL lease projection and Horizon balances match the expected 4-channel pool. This development session intentionally did not retrieve the plaintext admin credential.
+Operator verification completed manually on 2026-09-21: the authenticated deployment view showed live channel balances and lease state, including expired leases. For the current Testnet stage, this is sufficient evidence for the operator visibility slice.
 
 ### Remaining operator controls
 
 Before Mainnet managed execution:
 
-1. **Low-funds policy**
+1. **Production channel lifecycle design**
+   - deterministic derivation is already used, but Mainnet activation/funding/expansion lifecycle needs a separate design pass;
+   - define lazy activation, funding, pool expansion, replacement/rotation, recovery, capacity growth, and stale-lease handling before Mainnet;
+   - Testnet Friendbot behavior is not a Mainnet design.
+
+2. **Low-funds policy**
    - operator-defined warning threshold;
    - alert destination;
    - explicit action when every usable channel is below threshold.
 
-2. **Spend/budget control**
-   - define what is budgeted: base fee only, resource fees if applicable, or other execution cost;
-   - define per-Service / per-period limits if MST funds execution;
-   - fail closed before accepting new MST-funded work once the budget is exhausted.
+3. **Spend/budget control**
+   - the per-transaction fee-bid policy is now fixed: 50x latest network base fee for MST-managed Classic;
+   - cumulative spend control is separate: define per-Service / per-period limits only when production abuse policy is discussed;
+   - fail closed before accepting new MST-funded work once a future production budget is exhausted.
 
 Do not conflate semantic write-rate limits with spend control. The existing `request-create` semantic rate limit limits durable creation pressure; it is not a financial budget.
 
@@ -325,7 +331,8 @@ All of the following must be true before setting managed Classic public/Mainnet 
 - [ ] semantic Firewall rules created with reviewed limits (`request-create`, `treasury-admin`, `agent-access-admin`);
 - [ ] managed channel public accounts explicitly provisioned and funded;
 - [x] operator-only channel pool/capacity/balance visibility implemented and Testnet-deployed;
-- [ ] real operator login verifies live lease/balance projection with `mia_*`;
+- [x] real operator login verified live lease/balance projection with `mia_*`;
+- [ ] production managed-channel lifecycle design completed (activation/funding/expansion/rotation/recovery);
 - [ ] low-balance threshold + alert policy defined;
 - [ ] spend/budget policy defined and enforced;
 - [ ] webhook Queue/Cron/signing config verified;
