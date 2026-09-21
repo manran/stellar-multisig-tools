@@ -2,8 +2,8 @@
 
 **Status:** Testnet RC ready; Mainnet managed execution not ready
 **RC App SHA:** `6503b5fbb96a23f3e8be150ddf8d1d330ff9c864`
-**Current Testnet hardening SHA:** `decbae2b3df30a97a880efa51701e92c7107e4f9`
-**Testnet production deployment:** `dpl_ACDjZrwbJBHjuK4YbyQyKnVN7qaG`
+**Current Testnet hardening SHA:** `b9378198b4b02087ef85cbcb8273ebfd599dd578`
+**Testnet production deployment:** `dpl_8t6Rh3KfojQYB5z19DrbriKFQXaZ`
 **Updated:** 2026-09-21
 
 This document is the operational gate after the Hallmark/UI freeze. It does not redefine signer authority, Request/Intent semantics, or execution ownership.
@@ -14,7 +14,7 @@ This document is the operational gate after the Hallmark/UI freeze. It does not 
 
 Verified:
 
-- final application gate: **824 / 824 PASS**;
+- final application gate: **827 / 827 PASS**;
 - production build PASS;
 - `git diff --check` PASS;
 - Testnet deployment READY and aliased to `stellar-testnet.multisig.tools`;
@@ -56,6 +56,8 @@ Do not enable Mainnet managed Classic until those items are closed.
   - `0004_webhook_delivery_history`
   - `0005_browser_authorization_capabilities`
   - `0006_classic_managed_channel_leases`
+  - `0007_classic_managed_channel_index`
+  - `0008_classic_managed_channel_creator_monitor`
 - Runtime `DATABASE_URL` is configured in Testnet production.
 - Migration `DATABASE_URL_UNPOOLED` is configured in Testnet production.
 - `MULTISIG_COORDINATION_STORAGE` is configured.
@@ -113,9 +115,9 @@ A direct production aggregate DB inspection was intentionally not performed from
 - when capacity is genuinely insufficient, only work that requires creating a new channel fails with `503 managed_execution_capacity_temporarily_unavailable`; existing Requests and already-created free channels are unaffected;
 - creator submission reconciles outcome-unknown responses and rebuilds on creator `tx_bad_seq` using bounded retries;
 - **managed-channel runtime contains no Friendbot provisioning path**; a one-time Testnet faucet funding of the creator is an operator bootstrap action only;
-- creator state transitions are durably de-duplicated in PostgreSQL (`0008_classic_managed_channel_creator_monitor`);
+- creator state transitions are durably de-duplicated in PostgreSQL (`0008_classic_managed_channel_creator_monitor`); alert delivery uses an atomic per-state claim so concurrent serverless invocations do not duplicate low/exhausted alerts, and a failed delivery releases the claim for retry;
 - optional generic HTTPS alerts use `MULTISIG_CLASSIC_CHANNEL_ALERT_WEBHOOK_URL`; the body is a simple JSON `{ "text": "..." }`, so a Telegram Bot `sendMessage` URL with `chat_id` in the URL can be used without coupling Telegram into core logic;
-- alert events are `creator.low_balance`, `creator.capacity_exhausted`, and `creator.balance_recovered`; alert transport failure is logged but never blocks business execution;
+- alert events are `creator.low_balance`, `creator.capacity_exhausted`, and `creator.balance_recovered`; alert transport failure is logged but never blocks business execution; when no alert URL is configured, state is recorded but no delivery claim is consumed, so configuring a URL later can still deliver the active low/exhausted alert;
 - MST-managed Classic bids 50x the latest network base fee; external/self-submit keeps the ordinary network fee path;
 - Mainnet managed Classic remains disabled; before future enablement, the creator account must be explicitly activated/funded under the production policy.
 
@@ -165,10 +167,10 @@ It deliberately does **not** expose channel seeds, Request ids, Service ids, sig
 Verification completed:
 
 - pure projection tests cover active/expired/free lease classification, balance ready/missing/unavailable states, creator capacity, 50/60 hysteresis, half-full soft-limit doubling, alert transition de-duplication, and capacity-exhaustion fail-closed behavior;
-- full suite: **824 / 824 PASS**;
+- full suite: **827 / 827 PASS**;
 - production build PASS;
 - `git diff --check` PASS;
-- Testnet production deployment `dpl_ACDjZrwbJBHjuK4YbyQyKnVN7qaG` READY and aliased to `stellar-testnet.multisig.tools`;
+- Testnet production deployment `dpl_8t6Rh3KfojQYB5z19DrbriKFQXaZ` READY and aliased to `stellar-testnet.multisig.tools`;
 - live OpenAPI has no 64 maximum on `channelCount` and documents the current auto-doubling soft-limit policy;
 - live runtime remains fixed Testnet with managed Classic enabled only for Testnet;
 - live creator monitor smoke wrote/read the `ready` state through Horizon + PostgreSQL without creating a channel;
