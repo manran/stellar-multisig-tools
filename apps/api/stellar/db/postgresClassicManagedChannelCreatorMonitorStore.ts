@@ -61,25 +61,30 @@ implements ClassicManagedChannelCreatorMonitorStore {
     record: StoredClassicManagedChannelCreatorMonitor,
   ): Promise<{ previousState: ClassicManagedChannelCreatorState | null; changed: boolean }> {
     return withPostgresTransaction(this.pool, async (client) => {
-      const previous = await selectForUpdate(client, record.network);
-      await client.query(
+      const inserted = await client.query(
         `INSERT INTO mst_stellar.classic_managed_channel_creator_monitor (
            network, state, native_balance_stroops, observed_at, alerted_at
          ) VALUES ($1, $2, $3, $4, NULL)
-         ON CONFLICT (network)
-         DO UPDATE SET
-           state = EXCLUDED.state,
-           native_balance_stroops = EXCLUDED.native_balance_stroops,
-           observed_at = EXCLUDED.observed_at,
-           alerted_at = CASE
-             WHEN mst_stellar.classic_managed_channel_creator_monitor.state = EXCLUDED.state
-             THEN mst_stellar.classic_managed_channel_creator_monitor.alerted_at
-             ELSE NULL
-           END`,
+         ON CONFLICT (network) DO NOTHING
+         RETURNING state`,
         [record.network, record.state, record.nativeBalanceStroops.toString(), record.observedAt],
       );
-      const previousState = previous?.state ?? null;
-      return { previousState, changed: previousState !== record.state };
+      if (inserted.rowCount === 1) {
+        return { previousState: null, changed: true };
+      }
+
+      const previous = await selectForUpdate(client, record.network);
+      if (!previous) throw new Error('Managed Classic creator monitor row disappeared during transition.');
+      await client.query(
+        `UPDATE mst_stellar.classic_managed_channel_creator_monitor
+            SET state = $2,
+                native_balance_stroops = $3,
+                observed_at = $4,
+                alerted_at = CASE WHEN state = $2 THEN alerted_at ELSE NULL END
+          WHERE network = $1`,
+        [record.network, record.state, record.nativeBalanceStroops.toString(), record.observedAt],
+      );
+      return { previousState: previous.state, changed: previous.state !== record.state };
     });
   }
 
