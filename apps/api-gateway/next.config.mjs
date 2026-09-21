@@ -16,7 +16,13 @@ function stellarApiOrigin() {
 const config = {
   async rewrites() {
     const stellar = stellarApiOrigin();
+    const upstreamOrigin = new URL(stellar).origin;
+
     return [
+      {
+        source: '/stellar/openapi.json',
+        destination: `${upstreamOrigin}/openapi.json`,
+      },
       {
         source: '/stellar',
         destination: stellar,
