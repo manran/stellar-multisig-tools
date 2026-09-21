@@ -8,7 +8,7 @@ import {
   Operation,
   TransactionBuilder,
 } from '@stellar/stellar-sdk/base';
-import { AccountNotFoundError } from '../../../../src/stellar/horizon.js';
+import { AccountNotFoundError, TransactionSubmissionError } from '../../../../src/stellar/horizon.js';
 import { deriveClassicManagedChannel } from './classicManagedChannelConfig.js';
 import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
 import type {
@@ -17,6 +17,7 @@ import type {
 } from './classicManagedChannelStore.js';
 import {
   ClassicManagedChannelServiceError,
+  provisionManagedChannelWithCreator,
   reserveClassicManagedChannel,
   signClassicManagedTransaction,
 } from './classicManagedChannelService.js';
@@ -301,6 +302,80 @@ test('channel provisioning is network-neutral once the deployment supplies a cre
   });
   assert.equal(reserved.accountId, channel.publicKey());
   assert.equal(provisioned, 1);
+});
+
+test('creator provisioning reconciles outcome-unknown and rebuilds with the latest creator sequence', async () => {
+  const creator = Keypair.random();
+  const target = Keypair.random();
+  let targetExists = false;
+  let creatorLoads = 0;
+  const submittedSequences: string[] = [];
+
+  await provisionManagedChannelWithCreator(target.publicKey(), 'testnet', {
+    creator,
+    accountLoader: async (accountId) => {
+      if (accountId === target.publicKey()) {
+        if (!targetExists) throw new AccountNotFoundError(accountId);
+        return snapshot(accountId, '0');
+      }
+      assert.equal(accountId, creator.publicKey());
+      creatorLoads += 1;
+      return snapshot(accountId, creatorLoads === 1 ? '10' : '11');
+    },
+    networkParametersLoader: async () => ({
+      ledgerSequence: 1,
+      ledgerClosedAt: '2026-09-21T00:00:00.000Z',
+      baseFeeInStroops: 100,
+      baseReserveInStroops: 5_000_000,
+    }),
+    transactionSubmitter: async (xdr) => {
+      const transaction = TransactionBuilder.fromXdr(xdr, Networks.TESTNET);
+      if ('innerTransaction' in transaction) assert.fail('Expected classic transaction.');
+      submittedSequences.push(transaction.sequence);
+      if (submittedSequences.length === 1) {
+        throw new TransactionSubmissionError('outcome unknown', { outcomeUnknown: true });
+      }
+      targetExists = true;
+      return { hash: 'a'.repeat(64), ledger: 1, successful: true };
+    },
+  });
+
+  assert.equal(targetExists, true);
+  assert.equal(creatorLoads, 2);
+  assert.equal(submittedSequences.length, 2);
+  assert.notEqual(submittedSequences[0], submittedSequences[1]);
+});
+
+test('creator provisioning treats an outcome-unknown transaction as success when the target account exists', async () => {
+  const creator = Keypair.random();
+  const target = Keypair.random();
+  let targetExists = false;
+  let submissions = 0;
+
+  await provisionManagedChannelWithCreator(target.publicKey(), 'testnet', {
+    creator,
+    accountLoader: async (accountId) => {
+      if (accountId === target.publicKey()) {
+        if (!targetExists) throw new AccountNotFoundError(accountId);
+        return snapshot(accountId, '0');
+      }
+      return snapshot(accountId, '20');
+    },
+    networkParametersLoader: async () => ({
+      ledgerSequence: 1,
+      ledgerClosedAt: '2026-09-21T00:00:00.000Z',
+      baseFeeInStroops: 100,
+      baseReserveInStroops: 5_000_000,
+    }),
+    transactionSubmitter: async () => {
+      submissions += 1;
+      targetExists = true;
+      throw new TransactionSubmissionError('outcome unknown', { outcomeUnknown: true });
+    },
+  });
+
+  assert.equal(submissions, 1);
+  assert.equal(targetExists, true);
 });
 
 test('managed channel signer adds only the transaction-source signature', () => {

@@ -66,11 +66,17 @@ function networkPassphrase(network: StellarNetwork): string {
   return network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC;
 }
 
-async function provisionManagedChannelWithCreator(
+export async function provisionManagedChannelWithCreator(
   accountId: string,
   network: StellarNetwork,
+  options: {
+    creator?: Keypair;
+    accountLoader?: AccountLoader;
+    networkParametersLoader?: typeof loadNetworkParameters;
+    transactionSubmitter?: typeof submitTransactionXdr;
+  } = {},
 ): Promise<void> {
-  const creator = deriveClassicManagedChannelCreator(network);
+  const creator = options.creator ?? deriveClassicManagedChannelCreator(network);
   if (!creator) {
     throw new ClassicManagedChannelServiceError(
       'Managed Classic channel creator is not configured for this deployment.',
@@ -80,7 +86,9 @@ async function provisionManagedChannelWithCreator(
   }
 
   const startingBalance = configuredClassicManagedChannelInitialBalance();
-  const parameters = await loadNetworkParameters(network);
+  const accountLoader = options.accountLoader ?? loadAccount;
+  const parameters = await (options.networkParametersLoader ?? loadNetworkParameters)(network);
+  const transactionSubmitter = options.transactionSubmitter ?? submitTransactionXdr;
   if (stellarAmountToStroops(startingBalance) < BigInt(parameters.baseReserveInStroops) * 2n) {
     throw new ClassicManagedChannelServiceError(
       'Managed Classic channel initial balance is below the network minimum account reserve.',
@@ -90,9 +98,24 @@ async function provisionManagedChannelWithCreator(
   }
 
   for (let attempt = 0; attempt < CREATOR_SEQUENCE_RETRIES; attempt += 1) {
+    try {
+      await accountLoader(accountId, network);
+      return;
+    } catch (cause) {
+      if (!(cause instanceof AccountNotFoundError)) {
+        throw new ClassicManagedChannelServiceError(
+          cause instanceof Error
+            ? `Unable to verify managed Classic channel ${accountId}: ${cause.message}`
+            : `Unable to verify managed Classic channel ${accountId}.`,
+          503,
+          'managed_classic_channel_creator_unavailable',
+        );
+      }
+    }
+
     let source: StellarAccountSnapshot;
     try {
-      source = await loadAccount(creator.publicKey(), network);
+      source = await accountLoader(creator.publicKey(), network);
     } catch (cause) {
       throw new ClassicManagedChannelServiceError(
         cause instanceof Error
@@ -113,15 +136,30 @@ async function provisionManagedChannelWithCreator(
     transaction.sign(creator);
 
     try {
-      await submitTransactionXdr(transaction.toXDR(), network);
+      await transactionSubmitter(transaction.toXDR(), network);
       return;
     } catch (cause) {
-      if (
-        cause instanceof TransactionSubmissionError
-        && cause.transactionCode === 'tx_bad_seq'
-        && attempt + 1 < CREATOR_SEQUENCE_RETRIES
-      ) {
-        continue;
+      if (cause instanceof TransactionSubmissionError) {
+        try {
+          await accountLoader(accountId, network);
+          return;
+        } catch (verificationCause) {
+          if (!(verificationCause instanceof AccountNotFoundError)) {
+            throw new ClassicManagedChannelServiceError(
+              verificationCause instanceof Error
+                ? `Unable to reconcile managed Classic channel ${accountId}: ${verificationCause.message}`
+                : `Unable to reconcile managed Classic channel ${accountId}.`,
+              503,
+              'managed_classic_channel_creator_unavailable',
+            );
+          }
+        }
+        if (
+          (cause.transactionCode === 'tx_bad_seq' || cause.outcomeUnknown)
+          && attempt + 1 < CREATOR_SEQUENCE_RETRIES
+        ) {
+          continue;
+        }
       }
       throw new ClassicManagedChannelServiceError(
         cause instanceof Error
