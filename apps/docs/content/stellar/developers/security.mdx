@@ -1,0 +1,17 @@
+---
+title: Security model
+description: Service identity, signer authority, disclosure access, and execution ownership are different capabilities.
+---
+
+The most important integration rule is that coordination identity, signer authority, disclosure access, and execution ownership are different capabilities.
+
+| Capability | What it can do | What it cannot replace |
+| --- | --- | --- |
+| Integration `msi_*` | Create/read/manage work inside configured business scope | Stellar signer signature |
+| Browser `mic_*` | Inspect/contribute for one signer, origin, Intent plan, and expiry | Lifecycle/execution control or signer proof |
+| Agent credential | Act for one delegated signer Principal at Read/Write/Sign scope | A private key |
+| Execution owner | Prepare/submit/reconcile according to configured route | Treasury signer or Soroban AUTH authority |
+
+> **Orchestration may move; authority does not**
+>
+> Hosted, Native, and Full Headless can all reach the same authorization core. Moving UI or transport into your product does not move threshold checks, plan identity, effects validation, expiry, or signature validity out of MultiSig Tools.

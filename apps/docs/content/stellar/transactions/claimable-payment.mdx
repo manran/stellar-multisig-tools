@@ -1,0 +1,21 @@
+---
+title: Send a claimable payment
+description: Let a recipient claim later while keeping a recovery path for the sending Treasury.
+---
+
+Send value now without forcing the recipient to receive it immediately. The default flow also gives the sending Treasury a recovery path if the recipient never claims.
+
+1. **Open New → Claimable payment.** Choose the Treasury, recipient, asset, and amount.
+2. **Choose the claim window.** The recipient may claim during that window.
+3. **Keep the recovery path.** The sending Treasury becomes a claimant after the same window.
+4. **Review, sign, and submit.** Review shows the recipient, amount, asset, claim window, and recovery account.
+
+> **Recovery is the default**
+>
+> A recoverable claimable payment reserves one unit for the balance entry plus one for each of its two claimants. MultiSig Tools includes all three reserve units in source spendability checks.
+
+## Technical details
+
+The underlying operation is `CreateClaimableBalance`. The recipient uses a relative-before predicate; the sending Treasury uses the inverse predicate for recovery after the same interval.
+
+For issued assets, the recipient must satisfy trustline and authorization requirements when claiming.

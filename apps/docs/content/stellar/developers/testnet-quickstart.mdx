@@ -1,0 +1,88 @@
+---
+title: Testnet quickstart
+description: Run one Hosted Classic Request end to end on Testnet.
+---
+
+Use the Testnet deployment to prove scope, authorization, execution, and status delivery before any Mainnet rollout.
+
+The public API base is:
+
+```text
+https://api-testnet.multisig.tools/stellar
+```
+
+The Hosted Human review surface remains:
+
+```text
+https://stellar-testnet.multisig.tools
+```
+
+## 1. Create a Testnet Integration Profile
+
+```bash
+curl -sS -X POST https://api-testnet.multisig.tools/stellar/integration-testnet \
+  -H "Content-Type: application/json" \
+  -d '{
+    "serviceId": "my-testnet-app",
+    "label": "My Testnet App",
+    "classicSourceAccounts": ["GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"],
+    "classicExternalExecutionSourceAccounts": [],
+    "sorobanContracts": [],
+    "sorobanExecutionAccounts": [],
+    "profile": { "authorizationExperience": "hosted" }
+  }'
+```
+
+Copy the returned one-time `msi_*` credential into your server-side secret store.
+
+## 2. Inspect the deployment
+
+```bash
+curl -sS https://api-testnet.multisig.tools/stellar/runtime-config
+```
+
+Verify that the runtime is fixed to Testnet.
+
+## 3. Create one semantic Classic Request
+
+```bash
+curl -sS -X POST https://api-testnet.multisig.tools/stellar/request \
+  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: payroll-test-001" \
+  -d '{
+    "network": "testnet",
+    "payment": {
+      "sourceAccount": "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+      "payments": [{
+        "destination": "GDGV7V7UT3XDMQ3COT25VCQNJDW57WYPHSLFSAJEW2LLZDCDREWNAPXO",
+        "amount": "1",
+        "asset": { "type": "native" }
+      }],
+      "memo": "Test payment"
+    },
+    "externalReference": "payroll-test-001"
+  }'
+```
+
+The sample addresses are documentation fixtures, not funded accounts.
+
+## 4. Open Hosted review
+
+Use the returned Request id:
+
+```text
+https://stellar-testnet.multisig.tools/s?request=<request-id>&network=testnet
+```
+
+Each Treasury signer still authorizes with their own Stellar wallet.
+
+## 5. Read canonical status
+
+```bash
+curl -sS https://api-testnet.multisig.tools/stellar/request \
+  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
+  -H "X-MultiSig-Request-Id: <request-id>"
+```
+
+If a webhook is configured, treat it as a wake-up signal: verify the signature, deduplicate the event id, then GET current canonical state before acting.

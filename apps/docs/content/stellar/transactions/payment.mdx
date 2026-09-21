@@ -1,0 +1,20 @@
+---
+title: Send a payment
+description: Prepare a normal Stellar payment and hand the reviewed transaction to the Proposal flow.
+---
+
+Payment is the primary transaction flow: choose who pays, who receives, what asset moves, and how much. MultiSig Tools builds the transaction and sends it through Review before anyone signs.
+
+1. **Open New → Payment.** Choose the source account. In Treasury work, the Treasury can be preselected.
+2. **Enter recipient, asset, and amount.** Use a Stellar address or saved identity. Credit assets still require the destination trustline and receiving capacity.
+3. **Add context if needed.** A Stellar memo is public transaction data. Private Note is separate off-chain workflow context.
+4. **Choose transaction lifetime.** This controls how long the prepared transaction remains valid for signing and submission.
+5. **Review, then create the Proposal.** Review is the freeze point. After that, signers coordinate around the exact transaction rather than an editable payment form.
+
+> **Review is the boundary**
+>
+> Before Review you are editing a payment draft. After the handoff, the Proposal is about one exact Stellar transaction. Changing the payment means creating a different transaction.
+
+## Technical details
+
+The composer uses Stellar Payment operations. MultiSig Tools validates the selected asset, destination requirements, source spendability, and fee/reserve constraints before handing the transaction to Review.

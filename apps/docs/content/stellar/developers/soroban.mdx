@@ -1,0 +1,39 @@
+---
+title: Soroban integration
+description: Create semantic contract Intents, collect AUTH, and keep execution bound to configured policy.
+---
+
+Soroban Integration starts from contract + method + arguments. MultiSig Tools plans current authorization requirements, keeps detached AUTH separate from the transaction shell, and prepares execution only after authorization is ready.
+
+## Create the Intent
+
+```bash
+curl -sS -X POST https://api-testnet.multisig.tools/stellar/intent \
+  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: contract-test-001" \
+  -d '{
+    "network": "testnet",
+    "contractId": "CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE",
+    "method": "transfer",
+    "arguments": {
+      "from": "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+      "to": "GDGV7V7UT3XDMQ3COT25VCQNJDW57WYPHSLFSAJEW2LLZDCDREWNAPXO",
+      "amount": "1"
+    }
+  }'
+```
+
+## Lifecycle
+
+1. Create the Intent inside the Integration Profile's allowed contract/method scope.
+2. Collect authorization with Hosted review or a narrow browser capability.
+3. Prepare execution after AUTH is ready.
+4. Compare final enforcing simulation with reviewed effects.
+5. Reconcile the actual ledger result back into the Intent.
+
+## Browser authorization
+
+The owning Integration Service may issue a short-lived capability bound to one service, Intent, AuthorizationPlan revision/digest, signer, exact browser origin, and expiry.
+
+The browser can inspect its signer-specific challenge and contribute authorization. It cannot create arbitrary Intents, cancel/replan, change execution ownership, or become a Stellar signer without valid wallet cryptographic evidence.

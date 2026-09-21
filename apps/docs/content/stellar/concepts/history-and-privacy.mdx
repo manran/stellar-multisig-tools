@@ -1,0 +1,24 @@
+---
+title: Activity, History and privacy
+description: Know what is on-chain, what MultiSig Tools retains, and which views are private.
+---
+
+Ledger facts, MultiSig Tools coordination history, and private workflow context are related but not the same thing.
+
+## Activity
+
+Your signer-oriented work view: Proposals you actually participated in, plus retained events authorized for your current private session.
+
+## Transaction Receipt and History
+
+Retained evidence around one finished or historical transaction, including canonical in-product signer facts when MultiSig Tools observed them.
+
+## Private Note
+
+Off-chain workflow context stored by MultiSig Tools. It is not written into the Stellar transaction and it is not end-to-end encrypted in the current product.
+
+A public Stellar transaction can be independently verified on the network. Private coordination context needs separate access control; auditability does not mean every participant should see every private field.
+
+## Technical details
+
+MultiSig Tools treats Request state and Human History as projections over canonical transaction/evidence facts. New accepted signatures persist attributable signer evidence when the signer can be resolved at acceptance time; legacy facts may still be reconstructed from XDR.

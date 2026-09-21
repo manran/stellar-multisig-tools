@@ -1,0 +1,19 @@
+---
+title: Send to multiple recipients
+description: Validate every recipient and prepare one atomic multi-payment transaction.
+---
+
+Start from Send payment, add another recipient, and MultiSig Tools keeps the same Treasury and transaction context while moving to a multiple-recipient transaction.
+
+1. **Open New → Send payment.** Enter the first recipient, then choose Add another recipient.
+2. **Validate the structured draft.** Saved Address Book names must resolve to exactly one address. Asset codes must resolve unambiguously or use `CODE:ISSUER`.
+3. **Check every row and total.** Verify recipient, amount, asset, and aggregate totals before moving on.
+4. **Review the exact transaction.** Review shows the full payment list again, then the batch follows the normal Sign, Submit, and Done flow.
+
+MultiSig Tools deterministically checks amount precision, duplicates, balances, recipient trustlines, and operation count.
+
+## Technical details
+
+Each row becomes a Stellar `Payment` operation. Classic Stellar transactions are limited to 100 operations, so one batch cannot exceed 100 recipients/operations.
+
+The transaction is atomic. If one operation cannot execute, the transaction does not partially apply the others.

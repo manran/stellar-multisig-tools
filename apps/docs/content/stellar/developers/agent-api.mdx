@@ -1,0 +1,35 @@
+---
+title: Agent API
+description: Delegate signer-scoped Read, Write, or Sign API access to a distinct Agent actor.
+---
+
+Delegate signer-scoped API access to a named Agent actor. The credential is bound to one Stellar signer Principal and network; it does not contain or become the Principal's private key.
+
+## Scopes
+
+**Read:** read saved contracts, personal contacts, accessible Treasury metadata, Inbox, Activity, Request details, and status.
+
+**Write:** includes Read. Manage saved context, create Requests/Intents within signer scope, refresh/freeze preparation, and decline.
+
+**Sign:** includes Write. Contribute valid Stellar transaction signatures or detached Soroban authorization attributable to the credential Principal.
+
+## Credential model
+
+Agent credentials are created from the signer account and shown once as `msa_*`. Store the secret in the Agent's secret manager.
+
+Sign access still does not contain a private key. MultiSig Tools independently validates newly contributed cryptographic evidence against the Principal.
+
+## Discover and act
+
+```bash
+curl -sS https://api-testnet.multisig.tools/stellar/operations
+curl -sS https://api-testnet.multisig.tools/stellar/openapi.json
+```
+
+Agent Request creation currently uses exact transaction XDR. Semantic Integration payment creation is a separate `msi_*` capability.
+
+## Identity
+
+**Principal:** the Stellar signer that delegated access.
+
+**Actor:** the individual credential. Multiple Agents can share one Principal while staying independently named, scoped, audited, and revocable.

@@ -1,0 +1,22 @@
+---
+title: Sign and Unlock
+description: Why signing a transaction and opening private workspace data prove different scopes.
+---
+
+Signing proves participation in one exact transaction. Unlock proves that the current browser user controls a signer identity for broader private workspace access. They are intentionally different.
+
+## Sign
+
+Adds a Stellar signature to one exact transaction. A verified signer is already a MultiSig Tools participant; no separate registration or Treasury creation is required.
+
+## Unlock
+
+Uses a fresh wallet identity proof to open broader private views such as Inbox or account-wide Activity for a limited session.
+
+This separation matters because signed XDR can be forwarded. Possessing signed XDR is evidence that an address signed that transaction, but it is not proof that the current browser is that signer for every private resource.
+
+## Technical details
+
+Normal private sessions use the configured Unlock duration. MultiSig Tools prefers SEP-53 message signing with its defined SEP-10 fallback.
+
+After a newly accepted, attributable signature, the same Request may receive a fixed 15-minute Request-scoped Contribution Grant. It does not unlock global Activity, Inbox, Treasury administration, or other Requests.

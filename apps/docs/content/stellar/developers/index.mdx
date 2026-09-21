@@ -1,0 +1,30 @@
+---
+title: Choose your integration
+description: Choose Hosted, On my site, or Full Headless based on how much signer interaction and orchestration your product owns.
+---
+
+MultiSig Tools has one authorization core. Choose how much presentation and orchestration your product owns; Request, Intent, signer checks, effects checks, and execution policy remain authoritative in MultiSig Tools.
+
+## Hosted
+
+Your service creates and tracks work. MultiSig Tools renders the signer review/signing surface through the returned review URL.
+
+**You own:** business flow.
+
+**MultiSig Tools owns:** signer UI.
+
+## On my site
+
+Your product owns the signer UI and wallet UX. For Soroban Intents today, the owning Service can issue a short-lived signer/origin/current-plan browser capability and let the browser inspect and contribute AUTH directly.
+
+Native Browser authorization is currently Intent/Soroban-scoped; Hosted remains the universal Human fallback.
+
+## Full Headless
+
+Your UI, server, wallet adapters, Agents, webhook consumer, and executor orchestrate stable API operations directly. MultiSig Tools still verifies authority, plan identity, signatures, effects, expiry, and execution evidence.
+
+> **You take over orchestration, not authority.**
+
+## Start on Testnet
+
+No application or approval is required on Testnet. Create a Testnet-only Integration Profile, store the one-time `msi_*` credential server-side, then run the [Testnet quickstart](/stellar/developers/testnet-quickstart).

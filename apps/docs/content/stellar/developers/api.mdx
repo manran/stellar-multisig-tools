@@ -1,0 +1,63 @@
+---
+title: API and webhooks
+description: Discover the API contract, use idempotent writes, and consume signed webhook delivery correctly.
+---
+
+The public API is network-deployment bound and protocol namespaced.
+
+```text
+Mainnet: https://api.multisig.tools/stellar
+Testnet: https://api-testnet.multisig.tools/stellar
+```
+
+The `/stellar` segment is the protocol namespace. Mainnet/Testnet isolation is a deployment boundary, not a request parameter.
+
+## Discover the contract
+
+```bash
+curl -sS https://api-testnet.multisig.tools/stellar/operations
+curl -sS https://api-testnet.multisig.tools/stellar/openapi.json
+```
+
+## Core rules
+
+**Network-bound origin:** use the deployment that owns the selected network. A Request/Intent cannot be switched to another network by URL parameter or wallet default.
+
+**Idempotency:** machine creation requires a stable `Idempotency-Key`. Replays return the same work; changing payload under the same key is a conflict.
+
+**Job projection:** Integration callers may follow compact business state and next actions without interpreting every authorization/preparation/evidence record.
+
+**Webhook:** receive → verify → deduplicate event id → GET canonical Request/Intent/Job → act from current state.
+
+## Webhook verification
+
+Webhook signing uses Standard Webhooks. Verify the raw request body before JSON parsing.
+
+```ts
+import { Webhook } from 'standardwebhooks';
+
+const rawBody = await request.text();
+const headers = {
+  'webhook-id': request.headers.get('webhook-id') ?? '',
+  'webhook-timestamp': request.headers.get('webhook-timestamp') ?? '',
+  'webhook-signature': request.headers.get('webhook-signature') ?? '',
+};
+
+const event = new Webhook(process.env.MULTISIG_WEBHOOK_SECRET!)
+  .verify(rawBody, headers);
+
+// Deduplicate event.id, then GET current canonical state.
+```
+
+## Error handling
+
+Branch on stable error codes, not message text.
+
+| HTTP | Meaning | Caller action |
+| --- | --- | --- |
+| 400 | Invalid input or missing idempotency key | Fix the request; do not blind-retry. |
+| 401 | Credential missing or invalid | Refresh or replace the credential. |
+| 403 | Credential outside configured scope | Change scope or request. |
+| 409 | Idempotency/state/network conflict | Read current state before deciding. |
+| 429 | Rate limited | Retry with backoff. |
+| 503 | Dependency/storage unavailable | Retry with backoff and inspect current state. |
