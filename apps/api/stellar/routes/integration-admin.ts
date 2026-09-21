@@ -16,6 +16,11 @@ import {
   ClassicManagedChannelConfigurationError,
   configuredClassicManagedChannels,
 } from '../server/classicManagedChannelConfig.js';
+import { inspectManagedClassicChannels } from '../server/classicManagedChannelStatus.js';
+import {
+  ClassicManagedExecutionStorageUnavailableError,
+  runtimeClassicManagedChannelStore,
+} from '../server/coordinationStores.js';
 import {
   assertDeploymentNetwork,
   DeploymentNetworkPolicyError,
@@ -67,11 +72,29 @@ export async function GET(request: Request): Promise<Response> {
       const network = rawNetwork as StellarNetwork;
       assertDeploymentNetwork(network);
       const channels = configuredClassicManagedChannels(network);
+      const channelAccounts = channels.map((channel) => channel.publicKey());
+      const basic = {
+        network,
+        configured: channels.length > 0,
+        channelAccounts,
+      };
+      if (url.searchParams.get('details') !== 'channels') {
+        return noStoreJson({ managedClassicExecution: basic });
+      }
+      let leaseStore: ReturnType<typeof runtimeClassicManagedChannelStore> | undefined;
+      try {
+        leaseStore = runtimeClassicManagedChannelStore();
+      } catch (cause) {
+        if (!(cause instanceof ClassicManagedExecutionStorageUnavailableError)) throw cause;
+      }
       return noStoreJson({
         managedClassicExecution: {
-          network,
-          configured: channels.length > 0,
-          channelAccounts: channels.map((channel) => channel.publicKey()),
+          ...basic,
+          operationalStatus: await inspectManagedClassicChannels({
+            network,
+            channelAccounts,
+            ...(leaseStore ? { leaseStore } : {}),
+          }),
         },
       });
     }

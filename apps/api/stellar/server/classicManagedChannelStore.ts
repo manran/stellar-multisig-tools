@@ -12,4 +12,6 @@ export interface ClassicManagedChannelLeaseStore {
   getLeaseForRequest(requestId: string): Promise<StoredClassicManagedChannelLease | null>;
   claimLease(record: StoredClassicManagedChannelLease): Promise<boolean>;
   releaseRequest(requestId: string): Promise<void>;
+  /** Optional read-only operator projection; execution code must not depend on it. */
+  listLeases?(network: StellarNetwork): Promise<StoredClassicManagedChannelLease[]>;
 }

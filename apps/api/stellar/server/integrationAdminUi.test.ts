@@ -24,6 +24,11 @@ test('Integration admin is an unlinked operator-only runtime surface', () => {
   assert.match(ui, /API credential — shown once/);
   assert.match(ui, /Copy webhook secret/);
   assert.match(ui, /Advanced configuration/);
+  assert.match(ui, /Managed Classic channels/);
+  assert.match(ui, /details=channels/);
+  assert.match(ui, /Active leases/);
+  assert.match(ui, /Free capacity/);
+  assert.match(ui, /No signing secret is exposed here/);
   assert.match(ui, /IntegrationProfileDetail/);
   assert.match(wizard, /Define the profile before issuing a credential/);
   assert.match(wizard, /Classic Treasuries/);
@@ -51,5 +56,8 @@ test('Integration admin API requires the independent operator bearer secret', ()
   assert.match(api, /rotate_webhook_secret/);
   assert.match(api, /configureIntegrationAdminWebhook/);
   assert.match(api, /rotateIntegrationAdminWebhookSecret/);
+  assert.match(api, /inspectManagedClassicChannels/);
+  assert.match(api, /details/);
+  assert.match(api, /runtimeClassicManagedChannelStore/);
   assert.doesNotMatch(api, /publicCors/);
 });

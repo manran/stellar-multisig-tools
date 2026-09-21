@@ -72,6 +72,17 @@ export class PostgresClassicManagedChannelStore implements ClassicManagedChannel
       [requestId],
     );
   }
+
+  async listLeases(network: StellarNetwork): Promise<StoredClassicManagedChannelLease[]> {
+    const result = await this.pool.query<LeaseRow>(
+      `SELECT network, channel_account, request_id, leased_at, expires_at
+         FROM mst_stellar.classic_managed_channel_leases
+        WHERE network = $1
+        ORDER BY channel_account`,
+      [network],
+    );
+    return result.rows.map(rowToLease);
+  }
 }
 
 export function createPostgresClassicManagedChannelStore(

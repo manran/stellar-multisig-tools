@@ -33,6 +33,31 @@ interface Draft {
 }
 interface ApiError { error?: string; code?: string; }
 
+interface ManagedClassicChannelRow {
+  accountId: string;
+  leaseState: 'active' | 'expired' | 'free' | 'unknown';
+  leaseExpiresAt?: string;
+  balanceState: 'ready' | 'missing' | 'unavailable';
+  nativeBalance?: string;
+}
+
+interface ManagedClassicOperationalStatus {
+  network: 'public' | 'testnet';
+  capacity: number;
+  leaseVisibility: 'available' | 'unavailable';
+  activeLeaseCount: number | null;
+  expiredLeaseCount: number | null;
+  freeCapacity: number | null;
+  channels: ManagedClassicChannelRow[];
+}
+
+interface ManagedClassicExecutionStatus {
+  network: 'public' | 'testnet';
+  configured: boolean;
+  channelAccounts: string[];
+  operationalStatus?: ManagedClassicOperationalStatus;
+}
+
 const emptyDraft: Draft = {
   serviceId: '', label: '', enabled: true, networks: ['testnet'],
   classicSourceAccounts: '', classicExternalExecutionSourceAccounts: '', sorobanContracts: '',
@@ -113,9 +138,35 @@ export default function IntegrationAdminApp() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [managedClassic, setManagedClassic] = useState<ManagedClassicExecutionStatus | null>(null);
+  const [managedClassicBusy, setManagedClassicBusy] = useState(false);
+  const [managedClassicError, setManagedClassicError] = useState('');
   const editing = useMemo(() => services.find((item) => item.serviceId === editingId), [services, editingId]);
 
   const headers = () => ({ Authorization: `Bearer ${adminSecret.trim()}`, 'Content-Type': 'application/json' });
+
+  async function loadManagedClassicStatus(): Promise<void> {
+    setManagedClassicBusy(true); setManagedClassicError('');
+    try {
+      const runtime = await apiJson<{
+        stellarNetwork: 'public' | 'testnet';
+        fixedNetwork?: 'public' | 'testnet';
+      }>(await fetch('/api/runtime-config', { cache: 'no-store' }));
+      const network = runtime.fixedNetwork ?? runtime.stellarNetwork;
+      const body = await apiJson<{ managedClassicExecution: ManagedClassicExecutionStatus }>(
+        await fetch(
+          `/api/integration-admin?view=managed_classic_execution&network=${network}&details=channels`,
+          { headers: { Authorization: `Bearer ${adminSecret.trim()}` }, cache: 'no-store' },
+        ),
+      );
+      setManagedClassic(body.managedClassicExecution);
+    } catch (cause) {
+      setManagedClassic(null);
+      setManagedClassicError(cause instanceof Error ? cause.message : 'Unable to load managed Classic channel status.');
+    } finally {
+      setManagedClassicBusy(false);
+    }
+  }
 
   async function load(preserveGeneratedSecrets = false): Promise<ServiceSummary[]> {
     setBusy(true); setError('');
@@ -123,6 +174,7 @@ export default function IntegrationAdminApp() {
     try {
       const body = await apiJson<{ services: ServiceSummary[] }>(await fetch('/api/integration-admin', { headers: { Authorization: `Bearer ${adminSecret.trim()}` }, cache: 'no-store' }));
       setServices(body.services); setLoaded(true);
+      await loadManagedClassicStatus();
       return body.services;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to load Integration Services.');
@@ -241,6 +293,13 @@ export default function IntegrationAdminApp() {
       {generatedKey && <section className="ia-secret mt-4"><div className="font-bold">API credential — shown once</div><p className="ia-muted mt-1 text-sm">Store this value in your server-side secret store. The Integration Profile can be viewed later, but this credential cannot.</p><p className="ia-code mt-3">{generatedKey}</p><button type="button" onClick={() => void copyKey()} className="ia-action mt-3">{copied ? <Check className="h-4 w-4" /> : <ClipboardCopy className="h-4 w-4" />}{copied ? 'Copied' : 'Copy credential'}</button></section>}
       {generatedWebhookSecret && <section className="ia-secret mt-4"><div className="font-bold">Webhook signing secret</div><p className="ia-muted mt-1 text-sm">Store this value in the webhook receiver and use it to verify Standard Webhooks signatures.</p><p className="ia-code mt-3">{generatedWebhookSecret}</p><button type="button" onClick={() => void copyWebhookSecret()} className="ia-action mt-3">{webhookCopied ? <Check className="h-4 w-4" /> : <ClipboardCopy className="h-4 w-4" />}{webhookCopied ? 'Copied' : 'Copy webhook secret'}</button></section>}
 
+      {loaded && <ManagedClassicStatusPanel
+        status={managedClassic}
+        busy={managedClassicBusy}
+        error={managedClassicError}
+        onRefresh={() => void loadManagedClassicStatus()}
+      />}
+
       {loaded && <div className="ia-workbench mt-6">
         <aside className="ia-service-rail">
           <div className="ia-service-rail__head"><h2 className="m-0 font-bold">Integrations</h2><button type="button" onClick={createNew} className="ia-action px-3 text-xs"><Plus className="h-3.5 w-3.5" />New</button></div>
@@ -329,6 +388,73 @@ export default function IntegrationAdminApp() {
       </div>}
     </div>
   </main>;
+}
+
+function ManagedClassicStatusPanel({
+  status,
+  busy,
+  error,
+  onRefresh,
+}: {
+  status: ManagedClassicExecutionStatus | null;
+  busy: boolean;
+  error: string;
+  onRefresh: () => void;
+}) {
+  const operational = status?.operationalStatus;
+  return <section className="ia-ops mt-6">
+    <div className="ia-ops__head">
+      <div>
+        <p className="ia-kicker">Execution infrastructure</p>
+        <h2 className="m-0 text-lg font-bold">Managed Classic channels</h2>
+        <p className="ia-muted mt-1 text-sm">Public channel identities, lease capacity, and current native balance. No signing secret is exposed here.</p>
+      </div>
+      <button type="button" disabled={busy} onClick={onRefresh} className="ia-action">
+        <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin motion-reduce:animate-none' : ''}`} />
+        Refresh
+      </button>
+    </div>
+
+    {error && <div className="ia-ops__error">{error}</div>}
+    {!error && busy && !status && <div className="ia-muted py-4 text-sm">Loading managed Classic channel status…</div>}
+    {!error && status && <>
+      <div className="ia-ops__summary">
+        <div><span>Network</span><strong>{status.network === 'public' ? 'Mainnet' : 'Testnet'}</strong></div>
+        <div><span>Capacity</span><strong>{operational?.capacity ?? status.channelAccounts.length}</strong></div>
+        <div><span>Active leases</span><strong>{operational?.activeLeaseCount ?? 'Unavailable'}</strong></div>
+        <div><span>Free capacity</span><strong>{operational?.freeCapacity ?? 'Unavailable'}</strong></div>
+      </div>
+
+      {!status.configured
+        ? <p className="ia-muted py-4 text-sm">Managed Classic execution is not configured on this deployment.</p>
+        : operational
+          ? <div className="ia-channel-list">
+              {operational.channels.map((channel) => <div key={channel.accountId} className="ia-channel-row">
+                <div className="min-w-0">
+                  <div className="ia-code font-semibold">{channel.accountId}</div>
+                  <div className="ia-muted mt-1 text-xs">
+                    {channel.balanceState === 'ready'
+                      ? `${channel.nativeBalance ?? 'Unknown'} XLM`
+                      : channel.balanceState === 'missing'
+                        ? 'Account not funded / not found'
+                        : 'Balance unavailable'}
+                  </div>
+                </div>
+                <div className="ia-channel-row__lease">
+                  <strong>{channel.leaseState === 'active'
+                    ? 'Active lease'
+                    : channel.leaseState === 'expired'
+                      ? 'Expired lease'
+                      : channel.leaseState === 'free'
+                        ? 'Free'
+                        : 'Lease status unavailable'}</strong>
+                  {channel.leaseExpiresAt && <span>{channel.leaseState === 'active' ? 'Until ' : 'Expired '}{new Date(channel.leaseExpiresAt).toLocaleString()}</span>}
+                </div>
+              </div>)}
+            </div>
+          : <p className="ia-muted py-4 text-sm">Detailed channel status is unavailable.</p>}
+    </>}
+  </section>;
 }
 
 function IntegrationProfileDetail({ service, onRotate, busy }: { service: ServiceSummary; onRotate: () => void; busy: boolean }) {

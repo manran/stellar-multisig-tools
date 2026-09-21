@@ -58,6 +58,8 @@ test('PostgreSQL managed Classic channel lease is exclusive, idempotent and recl
   }), true);
   assert.equal(await store.getLeaseForRequest('A'.repeat(16)), null);
   assert.equal((await store.getLeaseForRequest('B'.repeat(16)))?.channelAccount, channel);
+  assert.deepEqual((await store.listLeases?.('testnet'))?.map((lease) => lease.requestId), ['B'.repeat(16)]);
+  assert.deepEqual(await store.listLeases?.('public'), []);
 
   await store.releaseRequest('B'.repeat(16));
   assert.equal(await store.getLeaseForRequest('B'.repeat(16)), null);
