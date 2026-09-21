@@ -4,7 +4,7 @@ description: "Internal MultiSig Tools engineering documentation."
 ---
 
 **Status:** Approved architecture
-**Updated:** 2026-09-21
+**Updated:** 2026-09-22
 
 This document is the canonical deployment-boundary contract for MultiSig Tools.
 
@@ -178,6 +178,36 @@ apps/web
   -> stellar-testnet.multisig.tools
   -> stellar.multisig.tools
 ```
+
+### Current Testnet mapping
+
+As of 2026-09-22, Testnet is physically split as follows:
+
+```text
+stellar-testnet.multisig.tools
+  -> Vercel project: multisig-tools-web-testnet
+  -> Root Directory: apps/web
+  -> same-origin /api/* rewrite
+     -> https://api-testnet.multisig.tools/stellar/*
+
+api-testnet.multisig.tools
+  -> Vercel project: multisig-tools-api-gateway-testnet
+  -> Root Directory: apps/api-gateway
+  -> STELLAR_API_ORIGIN=https://multisig-tools-testnet.vercel.app/api
+
+multisig-tools-testnet.vercel.app
+  -> Vercel project: multisig-tools-testnet
+  -> Root Directory: apps/stellar-api
+  -> fixed Stellar Testnet backend
+```
+
+The Testnet Stellar API project retains the existing deployment identity and therefore retains its Sensitive environment variables, Neon resource `multisig-tools-testnet-pg`, Vercel Blob store `multisig-tools-testnet`, Queue, and Cron configuration. The temporary proof project used during extraction was removed after cutover.
+
+The Human Web intentionally keeps browser calls on same-origin `/api/*`. Vercel rewrites those calls to the public Testnet Gateway. This preserves the existing HttpOnly `mst_auth` cookie and `SameSite=Lax` behavior while still forcing browser API traffic through the public Gateway.
+
+Human authentication identity is deployment-bound, not backend-host-bound. Testnet challenges and session issuers remain tied to `stellar-testnet.multisig.tools` even when the request reaches the Stellar API through the Gateway or the backend's Vercel origin.
+
+The external API contract is expressed relative to the protocol base (`/request`, `/intent`, `/operations`, and so on). Internal Vercel function paths under `/api/*` are implementation details and must not appear in public operation discovery or OpenAPI paths.
 
 The same Gateway source is deployed twice with different `STELLAR_API_ORIGIN`.
 
