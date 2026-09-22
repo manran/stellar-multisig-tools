@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   classicManagedChannelSoftLimit,
+  classicManagedExecutionEnabled,
   ClassicManagedChannelConfigurationError,
   configuredClassicManagedChannelCreatorBalanceThresholds,
   configuredClassicManagedChannelInitialBalance,
@@ -13,10 +14,19 @@ import {
 
 const MASTER = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
+test('managed Classic channel config requires an explicit deployment enable flag', () => {
+  assert.equal(classicManagedExecutionEnabled(undefined), false);
+  assert.equal(classicManagedExecutionEnabled('false'), false);
+  assert.equal(classicManagedExecutionEnabled(' TRUE '), true);
+  assert.deepEqual(configuredClassicManagedChannels('testnet', MASTER, '4', undefined), []);
+  assert.deepEqual(configuredClassicManagedChannels('testnet', MASTER, '4', 'false'), []);
+  assert.equal(configuredClassicManagedChannels('testnet', MASTER, '4', 'true').length, 4);
+});
+
 test('managed Classic channel config deterministically derives network-scoped public identities', () => {
-  const first = configuredClassicManagedChannels('testnet', MASTER, '4').map((item) => item.publicKey());
-  const replay = configuredClassicManagedChannels('testnet', MASTER, '4').map((item) => item.publicKey());
-  const publicNetwork = configuredClassicManagedChannels('public', MASTER, '4').map((item) => item.publicKey());
+  const first = configuredClassicManagedChannels('testnet', MASTER, '4', 'true').map((item) => item.publicKey());
+  const replay = configuredClassicManagedChannels('testnet', MASTER, '4', 'true').map((item) => item.publicKey());
+  const publicNetwork = configuredClassicManagedChannels('public', MASTER, '4', 'true').map((item) => item.publicKey());
 
   assert.deepEqual(replay, first);
   assert.equal(new Set(first).size, 4);
@@ -65,17 +75,17 @@ test('managed Classic creator is a separate deterministic identity and initial b
 });
 
 test('managed Classic channel config returns no channels when the deployment secret is absent', () => {
-  assert.deepEqual(configuredClassicManagedChannels('testnet', undefined, '4'), []);
+  assert.deepEqual(configuredClassicManagedChannels('testnet', undefined, '4', 'true'), []);
 });
 
 test('managed Classic channel config fails closed on weak master secret or invalid positive integer settings', () => {
   assert.throws(
-    () => configuredClassicManagedChannels('testnet', 'too-short', '4'),
+    () => configuredClassicManagedChannels('testnet', 'too-short', '4', 'true'),
     (cause: unknown) => cause instanceof ClassicManagedChannelConfigurationError,
   );
   for (const value of ['0', '-1', '1.5', 'not-a-number']) {
     assert.throws(
-      () => configuredClassicManagedChannels('testnet', MASTER, value),
+      () => configuredClassicManagedChannels('testnet', MASTER, value, 'true'),
       (cause: unknown) => cause instanceof ClassicManagedChannelConfigurationError,
     );
     assert.throws(

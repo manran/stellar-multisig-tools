@@ -7,6 +7,7 @@ const MASTER = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 const previous = {
   admin: process.env.MULTISIG_INTEGRATION_ADMIN_SECRET_HASH,
   master: process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET,
+  enabled: process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED,
   deployment: process.env.VITE_STELLAR_DEPLOYMENT_NETWORK,
 };
 const { adminSecret, secretHash } = createIntegrationAdminSecret();
@@ -14,6 +15,7 @@ const { adminSecret, secretHash } = createIntegrationAdminSecret();
 before(() => {
   process.env.MULTISIG_INTEGRATION_ADMIN_SECRET_HASH = secretHash;
   process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET = MASTER;
+  process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED = 'true';
   process.env.VITE_STELLAR_DEPLOYMENT_NETWORK = 'testnet';
 });
 
@@ -22,6 +24,8 @@ after(() => {
   else process.env.MULTISIG_INTEGRATION_ADMIN_SECRET_HASH = previous.admin;
   if (previous.master === undefined) delete process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET;
   else process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET = previous.master;
+  if (previous.enabled === undefined) delete process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED;
+  else process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED = previous.enabled;
   if (previous.deployment === undefined) delete process.env.VITE_STELLAR_DEPLOYMENT_NETWORK;
   else process.env.VITE_STELLAR_DEPLOYMENT_NETWORK = previous.deployment;
 });

@@ -10,6 +10,12 @@ const DEFAULT_CREATOR_LOW_BALANCE = '50';
 const DEFAULT_CREATOR_RECOVERY_BALANCE = '60';
 const MIN_MASTER_SECRET_LENGTH = 32;
 
+export function classicManagedExecutionEnabled(
+  raw = process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED,
+): boolean {
+  return raw?.trim().toLowerCase() === 'true';
+}
+
 export class ClassicManagedChannelConfigurationError extends Error {
   readonly status = 503;
   readonly code = 'managed_classic_channel_configuration_invalid';
@@ -94,7 +100,9 @@ export function configuredClassicManagedChannels(
   network: StellarNetwork,
   masterSecret = process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET,
   poolSize = process.env.MULTISIG_CLASSIC_CHANNEL_POOL_SIZE,
+  enabledRaw = process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED,
 ): Keypair[] {
+  if (!classicManagedExecutionEnabled(enabledRaw)) return [];
   const secret = normalizedMasterSecret(masterSecret);
   if (!secret) return [];
   const count = channelCount(poolSize);

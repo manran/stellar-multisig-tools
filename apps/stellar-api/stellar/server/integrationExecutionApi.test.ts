@@ -9,6 +9,7 @@ const previous = {
   credentials: process.env.MULTISIG_INTEGRATION_CREDENTIALS_JSON,
   admin: process.env.MULTISIG_INTEGRATION_ADMIN_SECRET_HASH,
   master: process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET,
+  enabled: process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED,
   deployment: process.env.VITE_STELLAR_DEPLOYMENT_NETWORK,
 };
 const { apiKey, secretHash } = createIntegrationApiKey('execution-test');
@@ -16,6 +17,7 @@ const { apiKey, secretHash } = createIntegrationApiKey('execution-test');
 before(() => {
   delete process.env.MULTISIG_INTEGRATION_ADMIN_SECRET_HASH;
   process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET = MASTER;
+  process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED = 'true';
   process.env.VITE_STELLAR_DEPLOYMENT_NETWORK = 'testnet';
   process.env.MULTISIG_INTEGRATION_CREDENTIALS_JSON = JSON.stringify([{
     serviceId: 'execution-test',
@@ -36,6 +38,8 @@ after(() => {
   else process.env.MULTISIG_INTEGRATION_ADMIN_SECRET_HASH = previous.admin;
   if (previous.master === undefined) delete process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET;
   else process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET = previous.master;
+  if (previous.enabled === undefined) delete process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED;
+  else process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED = previous.enabled;
   if (previous.deployment === undefined) delete process.env.VITE_STELLAR_DEPLOYMENT_NETWORK;
   else process.env.VITE_STELLAR_DEPLOYMENT_NETWORK = previous.deployment;
 });

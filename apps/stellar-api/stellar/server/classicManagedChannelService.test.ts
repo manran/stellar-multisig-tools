@@ -185,9 +185,11 @@ test('Testnet pool expands deterministically only after every baseline channel i
 
 test('managed channel soft limit does not cap deterministic expansion', async () => {
   const previousMaster = process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET;
+  const previousEnabled = process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED;
   const previousPool = process.env.MULTISIG_CLASSIC_CHANNEL_POOL_SIZE;
   const previousSoft = process.env.MULTISIG_CLASSIC_CHANNEL_SOFT_LIMIT;
   process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+  process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED = 'true';
   process.env.MULTISIG_CLASSIC_CHANNEL_POOL_SIZE = '1';
   process.env.MULTISIG_CLASSIC_CHANNEL_SOFT_LIMIT = '2';
   try {
@@ -219,6 +221,8 @@ test('managed channel soft limit does not cap deterministic expansion', async ()
   } finally {
     if (previousMaster === undefined) delete process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET;
     else process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET = previousMaster;
+    if (previousEnabled === undefined) delete process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED;
+    else process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED = previousEnabled;
     if (previousPool === undefined) delete process.env.MULTISIG_CLASSIC_CHANNEL_POOL_SIZE;
     else process.env.MULTISIG_CLASSIC_CHANNEL_POOL_SIZE = previousPool;
     if (previousSoft === undefined) delete process.env.MULTISIG_CLASSIC_CHANNEL_SOFT_LIMIT;
