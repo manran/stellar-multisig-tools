@@ -92,13 +92,29 @@ A disposable PostgreSQL 18 recovery drill was completed on 2026-09-21 using `mst
 
 This proves the MST application/schema recovery path on a disposable PostgreSQL database. It does **not** prove Neon PITR/snapshot recovery, configured retention, or provider RPO/RTO.
 
-## 6. Mainnet gate
+## 6. Mainnet provider-agnostic preflight
+
+A fresh disposable PostgreSQL 18 Mainnet preflight was completed on 2026-09-22 using the same `mst-pg-foundation` test service, but isolated in new databases:
+
+- created a new empty `mst_mainnet_preflight_20260922` database;
+- `npm run db:migrate` applied migrations `0001` through `0008` from zero state;
+- `npm run db:verify-recovery` passed with all 20 `mst_stellar` base tables readable;
+- the destructive PostgreSQL integration suite passed **29 / 29** against that isolated database;
+- native `pg_dump -Fc` and `pg_restore` restored the database into a second empty `mst_mainnet_restore_20260922` database;
+- the recovery verifier passed on the restored database;
+- all 20 table row counts matched source versus restored database exactly.
+
+This proves the current MST schema, migration runner, PostgreSQL repositories, and native PostgreSQL 18 dump/restore path are provider-agnostic for a fresh Mainnet authority. It does **not** prove the future production provider's PITR, HA, retention, backup automation, access control, or RPO/RTO.
+
+## 7. Mainnet gate
 
 Before Mainnet PostgreSQL recovery readiness can be marked complete:
 
-- complete the isolated Neon Testnet recovery drill;
-- record the configured Neon recovery/retention capability as observed in the provider account;
-- record observed drill recovery time and the chosen operational RPO/RTO;
-- identify who can initiate provider recovery and how that access is controlled;
+- select and provision the independent Mainnet PostgreSQL provider/host;
+- connect it to the isolated `multisig-tools-mainnet` backend without reusing Testnet Neon authority;
+- apply migrations `0001` through `0008` and run `db:verify-recovery` before any coordination writes are unfrozen;
+- execute the production provider's isolated recovery/PITR/snapshot procedure and record observed recovery time;
+- record configured retention, chosen operational RPO/RTO, and who can initiate provider recovery;
 - verify migration list and canonical Request/Intent/Activity reads after restore;
+- complete the isolated Neon Testnet provider drill separately if Testnet provider recovery evidence is still desired;
 - keep Mainnet managed Classic disabled until the remaining production-readiness blockers are also closed.

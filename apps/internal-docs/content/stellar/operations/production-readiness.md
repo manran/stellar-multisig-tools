@@ -89,18 +89,20 @@ Do not switch `MULTISIG_COORDINATION_STORAGE=blob` after PG-only writes have acc
 
 - Current Testnet PostgreSQL provider is **Neon**, verified from redacted Vercel production environment metadata without recording credentials.
 - Local PostgreSQL 18 application-layer restore proof is complete: native dump/restore preserved 20 `mst_stellar` tables, migrations `0001` through `0008`, exact per-table row counts/content digests, and the restored database reports no pending migrations.
+- A separate fresh-Mainnet provider-agnostic preflight completed on 2026-09-22: zero-state migrations `0001` through `0008`, **29 / 29** PostgreSQL integration tests, native `pg_dump -Fc` -> clean restore, recovery verifier PASS, and 20 / 20 table row counts identical between source and restore.
 - `npm run db:verify-recovery` is a read-only recovery verifier and fails closed on migration mismatch.
 - The verifier also passed against the live Testnet Neon database without writes: 8 migrations and all 20 `mst_stellar` base tables were readable.
 - Canonical operator procedure: `POSTGRES_RECOVERY_RUNBOOK.md`.
 
 Before Mainnet:
 
-- prove one isolated Neon PITR/snapshot recovery on Testnet without switching the active branch;
-- record the configured provider retention/recovery capability and observed recovery time;
+- select and provision the actual independent Mainnet PostgreSQL provider/host; no production provider has been chosen yet;
+- connect and migrate that database while the Mainnet backend remains write-frozen;
+- execute that provider's isolated PITR/snapshot/recovery path and record configured retention/recovery capability and observed recovery time;
 - document who can initiate restore and how provider recovery access is controlled;
 - after restore, verify migration versions, canonical Request/Intent facts, Inbox/Activity, and bounded read smoke before unfreezing writes.
 
-The local application-layer proof does not count as the Neon provider recovery drill. Mainnet remains blocked until the provider-level drill is completed.
+The local provider-agnostic PostgreSQL 18 proof closes application/schema compatibility only. It does not count as the future production provider's recovery drill.
 
 ## 3. Managed Classic channels
 

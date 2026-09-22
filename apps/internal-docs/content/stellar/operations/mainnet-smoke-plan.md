@@ -21,7 +21,11 @@ Completed on 2026-09-22 without binding `stellar.multisig.tools` or `api.multisi
 - the three Mainnet projects are intentionally not Git-connected during prelaunch isolation;
 - the legacy `stellar.multisig.tools` deployment remains untouched and `api.multisig.tools` is not DNS-bound.
 
-Phase 0 proves deployment/network boundaries only. A follow-up isolated Preview in the same Mainnet backend project also proved the private OIDC Blob path with `put -> get -> exact content comparison -> delete -> confirm absent`; the temporary route/deployment were removed and the clean production backend was rebuilt. PostgreSQL authority, operator secrets, managed-channel funding, webhook delivery, Firewall policy, and mutation safety remain unproven.
+Phase 0 proves deployment/network boundaries only. A follow-up isolated Preview in the same Mainnet backend project also proved the private OIDC Blob path with `put -> get -> exact content comparison -> delete -> confirm absent`; the temporary route/deployment were removed and the clean production backend was rebuilt.
+
+A separate provider-agnostic PostgreSQL 18 preflight also completed on 2026-09-22: fresh zero-state migrations `0001` through `0008`, **29 / 29** PostgreSQL integration tests, native dump/restore into a second clean database, recovery verifier PASS, and identical row counts across all 20 tables. This proves MST's database contract but is not production-provider recovery evidence.
+
+Actual independent Mainnet PostgreSQL authority, provider recovery/PITR, operator secrets, managed-channel funding, webhook delivery, Firewall policy, and mutation safety remain unproven.
 
 ## Preconditions
 
