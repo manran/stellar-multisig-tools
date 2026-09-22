@@ -193,27 +193,25 @@ test('active Human surfaces do not let legacy workspace mode choose navigation o
 });
 
 
-test('Testnet is a network-bound runtime rather than a duplicate content site', () => {
+test('Testnet is a network-bound runtime while public Docs live on the dedicated Docs origin', () => {
   const main = source('../main.tsx');
   const footer = source('../StellarFooter.tsx');
   const testnetLanding = source('../StellarTestnetLandingApp.tsx');
-  const developerDocs = source('../DeveloperDocs.tsx');
-  const developerExamples = source('./developerDocsExamples.ts');
+  const routes = source('../workspaceRoutes.ts');
+  const agentDocs = source('../../apps/docs/content/stellar/developers/agent-api.mdx');
 
   assert.match(main, /fixedClientStellarDeploymentNetwork\(\) === 'testnet'/);
   assert.match(main, /isCanonicalStellarContentPath\(window\.location\.pathname\)/);
   assert.match(main, /window\.location\.replace\(canonicalContentRedirect\)/);
+  assert.doesNotMatch(main, /DocsApp/);
   assert.match(testnetLanding, /Testnet runtime/);
   assert.match(testnetLanding, /Network stays fixed/);
   assert.match(testnetLanding, /Product content stays canonical/);
-  assert.match(testnetLanding, /canonicalStellarContentHref\('\/docs'\)/);
-  assert.match(footer, /isCanonicalStellarContentPath\(path\) \? canonicalStellarContentHref\(path\) : stellarHref\(path\)/);
-  assert.match(developerExamples, /STELLAR_TESTNET_ORIGIN.*\/api\/request/);
-  assert.match(developerExamples, /STELLAR_TESTNET_ORIGIN.*\/api\/intent/);
-  assert.match(developerDocs, /STELLAR_MAINNET_ORIGIN \+ '\/openapi\.json'/);
-  assert.doesNotMatch(developerExamples, /https:\/\/stellar\.multisig\.tools\/api\/[^'\"]*network=testnet/);
-  assert.match(developerDocs, /Managed by default when the deployment can support it/);
-  assert.match(developerExamples, /issue_browser_authorization/);
-  assert.match(developerExamples, /X-MultiSig-Intent-Capability/);
-  assert.match(developerDocs, /The webhook is not the source of truth/);
+  assert.match(testnetLanding, /href=\{STELLAR_PUBLIC_DOCS_BASE\}/);
+  assert.match(testnetLanding, /STELLAR_PUBLIC_DOCS_BASE}\/developers/);
+  assert.match(footer, /href=\{STELLAR_PUBLIC_DOCS_BASE\}/);
+  assert.match(footer, /STELLAR_PUBLIC_DOCS_BASE}\/developers/);
+  assert.doesNotMatch(routes, /kind: 'docs'/);
+  assert.match(routes, /path: '\/developers\/integrations\/new', kind: 'integration-self-service'/);
+  assert.match(agentDocs, /## Treasury Audit credentials/);
 });

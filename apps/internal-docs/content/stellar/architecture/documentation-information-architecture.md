@@ -1,10 +1,13 @@
-# Documentation Information Architecture
+---
+title: "Documentation Information Architecture"
+description: "Internal contract for the public MultiSig Tools Stellar documentation surface."
+---
 
 **Status:** canonical public documentation contract
 
-**Updated:** 2026-09-20
+**Updated:** 2026-09-22
 
-This file defines the public documentation structure for MultiSig Tools on the Stellar product site. It is the documentation counterpart to `apps/internal-docs/content/stellar/architecture/product-semantics.md`, `UX_DESIGN_SYSTEM.md`, `apps/internal-docs/content/stellar/architecture/integration-product-model.md`, and the running Headless API.
+This file defines the public documentation structure for MultiSig Tools on the dedicated Stellar documentation site. It is the documentation counterpart to `apps/internal-docs/content/stellar/architecture/product-semantics.md`, `UX_DESIGN_SYSTEM.md`, `apps/internal-docs/content/stellar/architecture/integration-product-model.md`, and the running Headless API.
 
 ## 1. Purpose
 
@@ -138,47 +141,39 @@ MultiSig Tools continues to validate signer membership, threshold/plan identity,
 Canonical Docs root:
 
 ```text
-/docs
+https://docs.multisig.tools/stellar
 ```
 
 Human pages:
 
 ```text
-/docs/sign-a-proposal
-/docs/create-a-treasury
-/docs/transactions/payment
-/docs/transactions/batch-payment
-/docs/transactions/claimable-payment
-/docs/transactions/multi-party
-/docs/concepts/proposal-and-transaction
-/docs/concepts/multi-party-transactions
-/docs/concepts/sign-and-unlock
-/docs/concepts/history-and-privacy
+/stellar/start/sign-a-proposal
+/stellar/start/create-a-treasury
+/stellar/transactions/payment
+/stellar/transactions/batch-payment
+/stellar/transactions/claimable-payment
+/stellar/transactions/multi-party
+/stellar/concepts/proposal-and-transaction
+/stellar/concepts/multi-party-transactions
+/stellar/concepts/sign-and-unlock
+/stellar/concepts/history-and-privacy
 ```
 
 Developer pages:
 
 ```text
-/docs/developers
-/docs/developers/testnet-quickstart
-/docs/developers/classic
-/docs/developers/soroban
-/docs/developers/api
-/docs/developers/security
-/docs/automation
+/stellar/developers
+/stellar/developers/testnet-quickstart
+/stellar/developers/classic
+/stellar/developers/soroban
+/stellar/developers/api
+/stellar/developers/security
+/stellar/developers/agent-api
 ```
 
-Compatibility route:
+The Human Web does not own Docs routes. Product links point directly to the dedicated Docs origin. `/developers/integrations/new` remains a Human product route and must never be captured by documentation routing.
 
-```text
-/developers -> /docs/developers
-```
-
-`/docs/automation` remains the canonical Agent API page. It is no longer the destination of `/developers`.
-
-Both the Stellar subdomain and `/stellar/...` directory-host form must resolve the same Docs routes.
-
-Unknown `/docs/...` paths render an explicit Docs not-found state.
+Unknown Docs paths are handled by the Docs application itself.
 
 ## 5. Page types
 

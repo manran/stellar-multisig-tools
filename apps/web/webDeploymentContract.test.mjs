@@ -19,10 +19,9 @@ test('Human Web delegates API traffic to the protocol gateway before SPA fallbac
   assert.equal(config.routes[apiIndex].headers['x-vercel-enable-rewrite-caching'], '0');
 });
 
-test('Human Web keeps docs separate and does not advertise itself as the API service', () => {
-  const redirects = new Map(config.routes.filter((route) => route.status === 308).map((route) => [route.src, route.headers.Location]));
-  assert.equal(redirects.get('/docs'), 'https://docs.multisig.tools/stellar');
-  assert.equal(redirects.get('/developers'), 'https://docs.multisig.tools/stellar/developers');
+test('Human Web does not own public Docs or hijack developer product routes', () => {
+  assert.equal(config.routes.some((route) => route.src === '/docs' || route.src === '/docs/(.*)'), false);
+  assert.equal(config.routes.some((route) => route.src === '/developers' || route.src === '/developers/(.*)'), false);
   assert.doesNotMatch(html, /service-desc/);
   assert.doesNotMatch(html, /openapi\.json/);
 });

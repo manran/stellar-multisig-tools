@@ -2,26 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "routes": [
     {
-      "src": "/docs",
-      "status": 308,
-      "headers": { "Location": "https://docs.multisig.tools/stellar" }
-    },
-    {
-      "src": "/docs/(.*)",
-      "status": 308,
-      "headers": { "Location": "https://docs.multisig.tools/stellar/$1" }
-    },
-    {
-      "src": "/developers",
-      "status": 308,
-      "headers": { "Location": "https://docs.multisig.tools/stellar/developers" }
-    },
-    {
-      "src": "/developers/(.*)",
-      "status": 308,
-      "headers": { "Location": "https://docs.multisig.tools/stellar/developers/$1" }
-    },
-    {
       "src": "/api/(.*)",
       "dest": "${STELLAR_API_ORIGIN}/$1",
       "env": ["STELLAR_API_ORIGIN"],

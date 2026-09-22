@@ -1,5 +1,6 @@
 import { Mail } from 'lucide-react';
 import MultiSigBrandMark from './MultiSigBrandMark';
+import { STELLAR_PUBLIC_DOCS_BASE } from './stellar/apiOrigins';
 import { canonicalStellarContentHref, stellarHref } from './workspaceNavigation';
 import { isCanonicalStellarContentPath } from './workspaceRoutes';
 
@@ -31,8 +32,6 @@ const MARKETING_LINKS = [
   ['Create a treasury', '/treasury'],
   ['New transaction', '/new'],
   ['Live demo', '/demo'],
-  ['Docs', '/docs'],
-  ['Developers', '/developers'],
   ['Privacy', '/privacy'],
   ['Terms', '/terms'],
 ] as const;
@@ -48,7 +47,7 @@ export default function StellarFooter({ workspace = false }: Props) {
               <div className="text-sm"><span className="font-bold text-neutral-800 dark:text-neutral-100">MultiSig Tools</span><span className="ml-2 text-xs">Beta · non-custodial</span></div>
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-semibold">
-              <a href={canonicalStellarContentHref('/docs')} className={linkClass}>Docs</a>
+              <a href={STELLAR_PUBLIC_DOCS_BASE} className={linkClass}>Docs</a>
               <a href={canonicalStellarContentHref('/privacy')} className={linkClass}>Privacy</a>
               <a href={canonicalStellarContentHref('/terms')} className={linkClass}>Terms</a>
               <SupportLink compact />
@@ -74,6 +73,8 @@ export default function StellarFooter({ workspace = false }: Props) {
 
           <nav aria-label="MultiSig Tools directory" className="mst-footer__links">
             {MARKETING_LINKS.map(([label, path]) => <a key={path} href={footerHref(path)}>{label}</a>)}
+            <a href={STELLAR_PUBLIC_DOCS_BASE}>Docs</a>
+            <a href={`${STELLAR_PUBLIC_DOCS_BASE}/developers`}>Developers</a>
             <SupportLink />
           </nav>
         </div>

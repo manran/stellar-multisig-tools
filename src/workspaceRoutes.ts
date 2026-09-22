@@ -20,7 +20,6 @@ export type StellarWorkspaceRouteKind =
   | 'receipt'
   | 'signing-room'
   | 'designer'
-  | 'docs'
   | 'legal'
   | 'integration-admin'
   | 'integration-self-service';
@@ -59,8 +58,6 @@ export const CANONICAL_STELLAR_ROUTES = [
   { path: '/a', kind: 'authorization', mode: null },
   { path: '/receipt', kind: 'receipt', mode: null },
   { path: '/signing-room', kind: 'signing-room', mode: null },
-  { path: '/docs', kind: 'docs', mode: null },
-  { path: '/developers', kind: 'docs', mode: null },
   { path: '/privacy', kind: 'legal', mode: null },
   { path: '/terms', kind: 'legal', mode: null },
   { path: '/admin/integrations', kind: 'integration-admin', mode: null },
@@ -82,19 +79,13 @@ export function normalizedStellarWorkspacePath(pathname: string) {
 export function isCanonicalStellarContentPath(pathname: string) {
   const path = normalizedStellarWorkspacePath(pathname);
   return path === '/demo'
-    || path === '/docs'
-    || path.startsWith('/docs/')
-    || path === '/developers'
     || path === '/privacy'
     || path === '/terms';
 }
 
 export function stellarWorkspaceRouteForPath(pathname: string): StellarWorkspaceRoute | null {
   const path = normalizedStellarWorkspacePath(pathname);
-  const exact = CANONICAL_STELLAR_ROUTES.find((route) => route.path === path);
-  if (exact) return exact;
-  if (path.startsWith('/docs/')) return { path, kind: 'docs', mode: null };
-  return null;
+  return CANONICAL_STELLAR_ROUTES.find((route) => route.path === path) ?? null;
 }
 
 export function stellarActivityScopeForPath(pathname: string): StellarActivityScope | null {

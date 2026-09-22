@@ -37,8 +37,6 @@ const expectedCanonicalPaths = [
   '/a',
   '/receipt',
   '/signing-room',
-  '/docs',
-  '/developers',
   '/privacy',
   '/terms',
   '/admin/integrations',
@@ -71,29 +69,13 @@ test('Payment and CreateAccount are distinct canonical entries on the same New s
 });
 
 test('retired public URL paths are not routes', () => {
-  for (const path of ['/account', '/accounts', '/signers', '/designer', '/request', '/transaction']) {
+  for (const path of ['/account', '/accounts', '/signers', '/designer', '/request', '/transaction', '/docs', '/developers']) {
     assert.equal(stellarWorkspaceRouteForPath(path), null, path);
     assert.equal(stellarWorkspaceRouteForPath(`/stellar${path}`), null, `/stellar${path}`);
   }
   assert.equal(stellarWorkspaceRouteForPath('/treasury/unknown'), null);
   assert.equal(stellarWorkspaceRouteForPath('/new/unknown'), null);
-  assert.equal(stellarWorkspaceRouteForPath('/docs/unknown')?.kind, 'docs');
-});
-
-test('nested Docs routes remain inside the neutral Docs surface', () => {
-  for (const path of [
-    '/docs/sign-a-proposal',
-    '/docs/transactions/payment',
-    '/docs/transactions/batch-payment',
-    '/docs/transactions/claimable-payment',
-    '/docs/transactions/multi-party',
-    '/docs/concepts/multi-party-transactions',
-    '/docs/automation',
-  ]) {
-    assert.equal(stellarWorkspaceRouteForPath(path)?.kind, 'docs');
-    assert.equal(stellarWorkspaceRouteForPath(path)?.mode, null);
-    assert.equal(stellarWorkspaceRouteForPath(`/stellar${path}`)?.kind, 'docs');
-  }
+  assert.equal(stellarWorkspaceRouteForPath('/docs/unknown'), null);
 });
 
 test('Activity scope is owned by the explicit route, not a saved workspace preference', () => {
@@ -115,15 +97,13 @@ test('internal call-site aliases generate canonical URLs without becoming public
   assert.equal(canonicalStellarPath('/address-book'), '/address-book');
   assert.equal(canonicalStellarPath('/activity'), '/activity');
   assert.equal(canonicalStellarPath('/treasury'), '/treasury');
-  assert.equal(canonicalStellarPath('/docs'), '/docs');
-  assert.equal(canonicalStellarPath('/developers'), '/developers');
 });
 
-test('content routes are separate from network-bound runtime routes', () => {
-  for (const path of ['/demo', '/docs', '/docs/automation', '/developers', '/privacy', '/terms']) {
+test('shared Human content routes are separate from network-bound runtime routes', () => {
+  for (const path of ['/demo', '/privacy', '/terms']) {
     assert.equal(isCanonicalStellarContentPath(path), true, path);
   }
-  for (const path of ['/', '/inbox', '/new', '/treasury', '/contracts', '/activity', '/s', '/a', '/admin/integrations']) {
+  for (const path of ['/', '/docs', '/developers', '/inbox', '/new', '/treasury', '/contracts', '/activity', '/s', '/a', '/admin/integrations']) {
     assert.equal(isCanonicalStellarContentPath(path), false, path);
   }
 });

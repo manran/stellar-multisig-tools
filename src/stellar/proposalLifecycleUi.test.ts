@@ -51,7 +51,8 @@ const multiSigUi = readFileSync(new URL('../MultiSigUi.tsx', import.meta.url), '
 const humanWorkflow = readFileSync(new URL('./humanWorkflow.ts', import.meta.url), 'utf8');
 const uxDesignSystem = readFileSync(new URL('../../UX_DESIGN_SYSTEM.md', import.meta.url), 'utf8');
 const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
-const vercelConfig = readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8');
+const webVercelConfig = readFileSync(new URL('../../apps/web/vercel.json', import.meta.url), 'utf8');
+const apiVercelConfig = readFileSync(new URL('../../apps/stellar-api/vercel.json', import.meta.url), 'utf8');
 
 
 
@@ -108,7 +109,7 @@ test('durable Proposal creation requires a verified current signer and has no sc
   assert.match(requestApi, /signerCanAccessTransaction\(/);
   assert.match(signingRoom, /await wallet\.unlock\(undefined, network\)/);
   assert.match(readme, /Request expiry closes collaboration; it does not trigger scheduled physical deletion/);
-  assert.doesNotMatch(vercelConfig, /request-cleanup/);
+  assert.doesNotMatch(apiVercelConfig, /request-cleanup/);
 });
 
 test('private Proposal context states the server-private and bearer-link boundaries at the action surface', () => {
@@ -643,8 +644,8 @@ test('portable evidence is a separate projection that cannot consume Human metad
 });
 
 test('production CSP permits only the configured default Stellar RPC origins needed by Soroban Review', () => {
-  assert.match(vercelConfig, /connect-src[^"]*https:\/\/rpc\.lightsail\.network[^"]*https:\/\/soroban-testnet\.stellar\.org/);
-  assert.doesNotMatch(vercelConfig, /connect-src[^"]*\*/);
+  assert.match(webVercelConfig, /connect-src[^"]*https:\/\/rpc\.lightsail\.network[^"]*https:\/\/soroban-testnet\.stellar\.org/);
+  assert.doesNotMatch(webVercelConfig, /connect-src[^"]*\*/);
 });
 
 test('Stellar TypeScript gate starts from the real route entrypoint', () => {

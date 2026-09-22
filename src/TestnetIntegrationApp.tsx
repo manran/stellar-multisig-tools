@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, ClipboardCopy, FlaskConical, KeyRound } from 'lucide-react';
 import IntegrationProfileWizard, { type IntegrationProfileWizardResult } from './IntegrationProfileWizard';
+import { STELLAR_PUBLIC_DOCS_BASE } from './stellar/apiOrigins';
 import { STELLAR_TESTNET_ORIGIN } from './stellar/deploymentOrigins';
 import type { StellarNetwork } from './stellar/types';
 import './integration-admin.css';
@@ -102,7 +103,7 @@ export default function TestnetIntegrationApp() {
       <IntegrationProfileWizard
         createEndpoint="/api/integration-testnet"
         onCreated={setCreated}
-        onCancel={() => { window.location.href = '/developers'; }}
+        onCancel={() => { window.location.href = `${STELLAR_PUBLIC_DOCS_BASE}/developers`; }}
       />
     </div>
   </main>;

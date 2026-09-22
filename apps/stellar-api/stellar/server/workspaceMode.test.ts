@@ -26,9 +26,6 @@ test('exclusive workspace routes identify their owning mode', () => {
   assert.equal(workspaceModeForExclusiveRoute('/contract'), null);
   assert.equal(workspaceModeForExclusiveRoute('/s'), null);
   assert.equal(workspaceModeForExclusiveRoute('/signing-room'), null);
-  assert.equal(workspaceModeForExclusiveRoute('/docs'), null);
-  assert.equal(workspaceModeForExclusiveRoute('/docs/automation'), null);
-  assert.equal(workspaceModeForExclusiveRoute('/developers'), null);
   assert.equal(workspaceModeForExclusiveRoute('/transaction'), null);
 
   assert.equal(workspaceModeForExclusiveRoute('/accounts'), null);

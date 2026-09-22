@@ -62,14 +62,14 @@ test('query-safe Stellar href keeps search parameters out of the pathname', () =
   assert.equal(href.includes('%3F'), false);
 });
 
-test('canonical content always resolves to the Mainnet content origin', () => {
+test('shared Human content resolves to the Mainnet Human origin', () => {
   assert.equal(
-    canonicalStellarContentHref('/docs'),
-    'https://stellar.multisig.tools/docs',
+    canonicalStellarContentHref('/privacy'),
+    'https://stellar.multisig.tools/privacy',
   );
   assert.equal(
-    canonicalStellarContentLocationForLocation('https://stellar-testnet.multisig.tools/docs/automation?from=testnet#permissions'),
-    'https://stellar.multisig.tools/docs/automation?from=testnet#permissions',
+    canonicalStellarContentLocationForLocation('https://stellar-testnet.multisig.tools/demo?from=testnet#flow'),
+    'https://stellar.multisig.tools/demo?from=testnet#flow',
   );
   assert.equal(
     canonicalStellarContentLocationForLocation('https://multisig.tools/stellar/privacy'),

@@ -7,21 +7,21 @@ MultiSigTools is a Stellar shared-authorization operation base. Humans use `stel
 - **Sign** — Inbox is the workspace home, with `New / Inbox / Activity / Address Book` for Human transaction work.
 - **Manage** — Treasury is the workspace home, with `New / Treasury` for shared-account policy and Treasury operations.
 - **Contracts** — `/contracts` is the signer-owned workspace for saved Soroban contracts; saving a contract records work context, not authority.
-- **Signing Request** — the shared coordination object and `/api/request` resource used by Human and Agent clients.
+- **Signing Request** — the shared coordination object and `/request` resource under the public Stellar API used by Human and Agent clients.
 - **Signer Agent access** — one Stellar signer Principal (`network + G-address`) may delegate named `msa_...` credentials with cumulative `Read / Write / Sign` authority. The credential is an API actor, not a Stellar signer or private key.
 - **Treasury Box** — shared MultiSigTools metadata and administration audit around a classic Stellar `G...` Treasury account. Treasury Settings may issue an observer-only `mta_...` Audit credential for that Treasury's Activity; ordinary machine transaction authority is signer-owned, not Treasury-owned.
 
-There is no separate `/api/automation` product endpoint. Agent Request create/read/contribute operations use the same Request handlers and validation core as the Human product. Final Stellar submission remains a separate Human action in Agent API v1.
+There is no separate `/automation` product endpoint. Agent Request create/read/contribute operations use the same Request handlers and validation core as the Human product. Final Stellar submission remains a separate Human action in Agent API v1.
 
 The service is non-custodial. It never asks for or stores Stellar seed phrases or private signing keys.
 
 ## Documentation and machine discovery
 
-- **Public Docs:** `https://stellar.multisig.tools/docs`
-- **OpenAPI 3.1:** `https://stellar.multisig.tools/openapi.json`
-- **Operation catalog:** `https://stellar.multisig.tools/api/operations`
-- The deployment root advertises OpenAPI with the standard HTTP/HTML `service-desc` link relation and developer documentation with `service-doc`.
-- [`DOCS_INFORMATION_ARCHITECTURE.md`](DOCS_INFORMATION_ARCHITECTURE.md) — public Docs routes, information architecture, vocabulary, progressive-disclosure, and growth contract.
+- **Public Docs:** `https://docs.multisig.tools/stellar`
+- **OpenAPI 3.1:** `https://api.multisig.tools/stellar/openapi.json`
+- **Operation catalog:** `https://api.multisig.tools/stellar/operations`
+- Stellar API responses advertise OpenAPI with the standard HTTP `service-desc` link relation and developer documentation with `service-doc`.
+- [`documentation-information-architecture.md`](apps/internal-docs/content/stellar/architecture/documentation-information-architecture.md) — public Docs information architecture, vocabulary, progressive-disclosure, and growth contract.
 - [`UX_LANGUAGE_AND_DISCOVERY.md`](UX_LANGUAGE_AND_DISCOVERY.md) — current workspace navigation, language hierarchy, and Inbox discovery contract.
 - [`PRODUCT.md`](PRODUCT.md) — broader historical Human product contract; the UX document supersedes older naming/navigation wording where they conflict.
 - [`BRAND.md`](BRAND.md) — product-name, mark semantics, descriptor discussion, and the professionally bounded 虎符 / tiger-tally historical analogy.
@@ -52,7 +52,7 @@ Existing Request records are migrated to the discovery index on first use. If di
 - Request capabilities stay in URL fragments and are not ordinary path/query credentials.
 - Accepted Request, signature, submission, participant, and Activity records are durable evidence. Request expiry closes collaboration; it does not trigger scheduled physical deletion.
 - Signer Agent secrets (`msa_...`) and Treasury Audit secrets (`mta_...`) are displayed only once; server storage keeps verifier hashes plus non-secret metadata.
-- Agent `POST /api/request` and semantic `POST /api/intent` require an `Idempotency-Key`; the credential Principal/network and current signer access are independently validated. Soroban Intent AUTH is detached from the final transaction source.
+- Agent `POST /request` and semantic `POST /intent` under the public Stellar API require an `Idempotency-Key`; the credential Principal/network and current signer access are independently validated. Soroban Intent AUTH is detached from the final transaction source.
 - A Sign Agent carries no Stellar private key. Signed XDR/signature contributions are cryptographically verified and may only add authorization attributable to that Principal.
 - Treasury Audit credentials are observer-only and cannot create Requests, contribute signatures, submit transactions, or administer the Treasury.
 - Private Note is server-private, not E2EE, and its plaintext is excluded from Treasury audit events.
@@ -77,12 +77,12 @@ The production build runs Stellar/frontend and API/server TypeScript gates befor
 
 ## Deployment
 
-Mainnet and Testnet are separate products at the deployment boundary: `stellar.multisig.tools` sets `VITE_STELLAR_DEPLOYMENT_NETWORK=public`; `stellar-testnet.multisig.tools` sets `VITE_STELLAR_DEPLOYMENT_NETWORK=testnet`. Production must never use `dual`, which exists only for local compatibility. `GET /api/runtime-config` exposes the effective policy to every client, and mismatched API inputs fail with `deployment_network_mismatch`.
+Mainnet and Testnet are separate products at the deployment boundary. Human Web, protocol Gateway, and Stellar API are separate deployables: `stellar(-testnet).multisig.tools` hosts the Human UI, `api(-testnet).multisig.tools/stellar` is the public API namespace, and the Stellar API backend is fixed to one network by deployment configuration. Production must never use `dual`, which exists only for local compatibility. Human Web keeps same-origin `/api/*` as a transport proxy to the public Gateway so HttpOnly workspace cookies remain same-site.
 
-Each deployment uses its own private Vercel Blob store and authentication cookies. Vercel deployments use the linked store/OIDC; local development may use `BLOB_READ_WRITE_TOKEN`.
+The Stellar API deployment owns PostgreSQL, private Vercel Blob context, Queue/Cron, webhook delivery, and managed-execution secrets. Human Web and Gateway do not receive those backend credentials. Vercel deployments use linked resources/OIDC; local development may use `BLOB_READ_WRITE_TOKEN` where supported.
 
 Accepted Request data is not subject to scheduled cleanup. Human Request creation requires an unlocked Stellar signer session and current signer access to the transaction; Agent creation requires a signer-owned credential and the same live signer check. Request bodies, XDR, and Private Note remain byte-limited before acceptance.
 
-Production must also apply edge/WAF abuse controls to write-heavy or upstream-consuming endpoints, especially `/api/request`, `/api/intent`, `/api/contract-call`, `/api/contract-prepare`, `/api/contract-interface`, `/api/auth`, and credential management. Authentication and payload limits reduce anonymous storage abuse but are not substitutes for rate limiting, anomaly controls, or infrastructure quotas. Do not rely on process-local in-memory rate limiting as a serverless abuse-control boundary.
+Production must also apply edge/WAF abuse controls to write-heavy or upstream-consuming public API endpoints, especially `/request`, `/intent`, `/contract-call`, `/contract-prepare`, `/contract-interface`, `/auth`, and credential management. Authentication and payload limits reduce anonymous storage abuse but are not substitutes for rate limiting, anomaly controls, or infrastructure quotas. Do not rely on process-local in-memory rate limiting as a serverless abuse-control boundary.
 
 Do not commit Blob tokens, Agent/Audit credential secrets, Request capabilities or signer secrets.

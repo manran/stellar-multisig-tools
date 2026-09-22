@@ -33,3 +33,11 @@ Agent Request creation currently uses exact transaction XDR. Semantic Integratio
 **Principal:** the Stellar signer that delegated access.
 
 **Actor:** the individual credential. Multiple Agents can share one Principal while staying independently named, scoped, audited, and revocable.
+
+## Treasury Audit credentials
+
+Treasury Audit credentials are separate from signer Agent credentials. They are read-only resource credentials issued from Treasury Settings for accounting, monitoring, compliance, or external audit systems.
+
+A Treasury Audit credential may read that Treasury's Activity. It cannot access a signer's Inbox or personal contacts, create Requests or Intents, contribute signatures or Soroban AUTH, submit transactions, or manage Treasury settings.
+
+The complete `mta_*` credential is shown once. Store it in the external system's secret manager. Treasury Audit credentials are scoped to one Treasury and remain independently revocable.

@@ -267,20 +267,16 @@ test('discovery endpoints expose the deployment-bound description and schema poi
     && HTTP_METHODS.has(operation.schema.method.toLowerCase())));
 });
 
-test('root HTTP metadata advertises standard service description and documentation links', () => {
-  const config = JSON.parse(readFileSync(new URL('../../../../vercel.json', import.meta.url), 'utf8')) as {
+test('Stellar API deployment advertises standard service description and documentation links', () => {
+  const config = JSON.parse(readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8')) as {
     headers: Array<{ source: string; headers: Array<{ key: string; value: string }> }>;
     rewrites: Array<{ source: string; destination: string }>;
   };
   const globalHeaders = new Map(config.headers[0].headers.map((header) => [header.key, header.value]));
   const link = globalHeaders.get('Link') ?? '';
   assert.match(link, /<\/openapi\.json>; rel="service-desc"/);
-  assert.match(link, /<\/developers>; rel="service-doc"/);
+  assert.match(link, /<https:\/\/docs\.multisig\.tools\/stellar\/developers>; rel="service-doc"/);
   assert.equal(globalHeaders.get('Access-Control-Expose-Headers'), 'Link');
   assert.ok(config.rewrites.some((rewrite) =>
     rewrite.source === '/openapi.json' && rewrite.destination === '/api/openapi'));
-
-  const html = readFileSync(new URL('../../../../index.html', import.meta.url), 'utf8');
-  assert.match(html, /rel="service-desc"[^>]+href="\/openapi\.json"/);
-  assert.match(html, /rel="service-doc"[^>]+href="\/developers"/);
 });

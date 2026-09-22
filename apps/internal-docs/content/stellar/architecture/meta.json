@@ -2,6 +2,7 @@
   "title": "Architecture",
   "pages": [
     "deployment-topology",
+    "documentation-information-architecture",
     "product-semantics",
     "workflow-architecture",
     "operation-architecture",

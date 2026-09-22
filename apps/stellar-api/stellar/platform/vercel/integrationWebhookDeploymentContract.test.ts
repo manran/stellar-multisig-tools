@@ -4,7 +4,7 @@ import test from 'node:test';
 
 test('Vercel deployment exposes one Queue consumer and an hourly outbox sweep', () => {
   const config = JSON.parse(
-    readFileSync(new URL('../../../../../vercel.json', import.meta.url), 'utf8'),
+    readFileSync(new URL('../../../vercel.json', import.meta.url), 'utf8'),
   ) as {
     functions?: Record<string, { experimentalTriggers?: Array<Record<string, unknown>> }>;
     crons?: Array<{ path?: string; schedule?: string }>;

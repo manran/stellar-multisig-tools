@@ -1,7 +1,8 @@
 import { ArrowRight, FlaskConical } from 'lucide-react';
 import StellarHeader from './StellarHeader';
+import { STELLAR_PUBLIC_DOCS_BASE } from './stellar/apiOrigins';
 import { STELLAR_MAINNET_ORIGIN } from './stellar/deploymentOrigins';
-import { canonicalStellarContentHref, stellarHref } from './workspaceNavigation';
+import { stellarHref } from './workspaceNavigation';
 
 const BOUNDARY_FACTS = [
   ['Network stays fixed', 'There is no in-app Mainnet/Testnet switch. The deployment owns the network boundary so runtime state cannot silently cross networks.'],
@@ -37,8 +38,8 @@ export default function StellarTestnetLandingApp() {
 
       <footer className="mst-testnet-footer">
         <div className="mst-testnet-footer__inner">
-          <a href={canonicalStellarContentHref('/docs')}>Documentation</a>
-          <a href={canonicalStellarContentHref('/developers')}>Developers</a>
+          <a href={STELLAR_PUBLIC_DOCS_BASE}>Documentation</a>
+          <a href={`${STELLAR_PUBLIC_DOCS_BASE}/developers`}>Developers</a>
           <a href={STELLAR_MAINNET_ORIGIN}>Mainnet</a>
           <span className="sm:ml-auto">Testnet assets have no Mainnet value.</span>
         </div>

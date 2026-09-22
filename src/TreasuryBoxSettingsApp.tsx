@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import PrivateWorkspaceUnlock from './PrivateWorkspaceUnlock';
 import { PageHeader } from './MultiSigUi';
+import { STELLAR_PUBLIC_DOCS_BASE } from './stellar/apiOrigins';
 import { analyzeAccountAuthorization } from './stellar/authorization';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
@@ -409,7 +410,7 @@ export default function TreasuryBoxSettingsApp() {
                 <div className="mt-5 border-t border-black/10 pt-5 dark:border-white/10">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <p className="max-w-3xl text-sm leading-6 text-neutral-600 dark:text-neutral-300">A Treasury Audit credential can read this Treasury's Activity only. It cannot access a signer's Inbox or personal contacts, create Requests, contribute signatures, submit transactions, or manage Treasury settings.</p>
-                    <a href={stellarHref('/docs/automation')} className="shrink-0 text-sm font-semibold text-emerald-700 underline decoration-emerald-700/30 underline-offset-4 dark:text-emerald-300">Agent & Audit API documentation →</a>
+                    <a href={`${STELLAR_PUBLIC_DOCS_BASE}/developers/agent-api`} className="shrink-0 text-sm font-semibold text-emerald-700 underline decoration-emerald-700/30 underline-offset-4 dark:text-emerald-300">Agent & Audit API documentation →</a>
                   </div>
 
                   {newSecret && (
@@ -423,7 +424,7 @@ export default function TreasuryBoxSettingsApp() {
                           <div className="mt-3 flex flex-wrap items-center gap-4">
                             <button type="button" onClick={() => void copySecret()} className="inline-flex items-center gap-2 text-sm font-semibold"><ClipboardCopy className="h-4 w-4" />{copied ? 'Copied' : 'Copy credential'}</button>
                             <button type="button" onClick={() => { setNewSecret(''); setCopied(false); }} className="text-sm font-semibold text-neutral-600 underline decoration-black/20 underline-offset-4 dark:text-neutral-300 dark:decoration-white/20">Done</button>
-                            <a href={`${stellarHref('/docs/automation')}#quick-start`} className="text-sm font-semibold text-neutral-600 underline decoration-black/20 underline-offset-4 dark:text-neutral-300 dark:decoration-white/20">View quick start</a>
+                            <a href={`${STELLAR_PUBLIC_DOCS_BASE}/developers/agent-api#treasury-audit-credentials`} className="text-sm font-semibold text-neutral-600 underline decoration-black/20 underline-offset-4 dark:text-neutral-300 dark:decoration-white/20">View Audit API guidance</a>
                           </div>
                         </div>
                       </div>
