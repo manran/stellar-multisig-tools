@@ -13,7 +13,7 @@ The existence of Mainnet code deployments is not approval to mutate Mainnet stat
 
 Completed on 2026-09-22 without binding `stellar.multisig.tools` or `api.multisig.tools`:
 
-- backend project `multisig-tools-mainnet` (`apps/stellar-api`) deployed fixed to `public` with `MULTISIG_COORDINATION_WRITE_FREEZE=1`, `MULTISIG_COORDINATION_STORAGE=blob`, `MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED=false`, no PostgreSQL/Blob/admin/webhook/channel secrets, and no Git auto-deploy connection;
+- backend project `multisig-tools-mainnet` (`apps/stellar-api`) deployed fixed to `public` with `MULTISIG_COORDINATION_WRITE_FREEZE=1`, `MULTISIG_COORDINATION_STORAGE=blob`, `MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED=false`, no PostgreSQL/admin/webhook/channel secrets, and no Git auto-deploy connection;
 - backend runtime reports `fixedNetwork=public` and `classicManagedExecution.public=false`; public discovery exposes 36 operations and OpenAPI contains no internal `/api/*` paths;
 - direct backend-internal `POST /api/request` is rejected before persistence with `503 coordination_write_frozen`;
 - gateway project `multisig-tools-api-gateway-mainnet` forwards `/stellar/*` to the isolated backend and preserves the same fixed-public/frozen behavior;
@@ -21,7 +21,7 @@ Completed on 2026-09-22 without binding `stellar.multisig.tools` or `api.multisi
 - the three Mainnet projects are intentionally not Git-connected during prelaunch isolation;
 - the legacy `stellar.multisig.tools` deployment remains untouched and `api.multisig.tools` is not DNS-bound.
 
-Phase 0 proves deployment/network boundaries only. It does not prove Mainnet persistence, private storage, operator secrets, managed-channel funding, webhook delivery, Firewall policy, or mutation safety.
+Phase 0 proves deployment/network boundaries only. A follow-up isolated Preview in the same Mainnet backend project also proved the private OIDC Blob path with `put -> get -> exact content comparison -> delete -> confirm absent`; the temporary route/deployment were removed and the clean production backend was rebuilt. PostgreSQL authority, operator secrets, managed-channel funding, webhook delivery, Firewall policy, and mutation safety remain unproven.
 
 ## Preconditions
 

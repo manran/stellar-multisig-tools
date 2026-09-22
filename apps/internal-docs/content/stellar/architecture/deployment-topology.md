@@ -247,10 +247,11 @@ multisig-tools-mainnet.vercel.app
   -> MULTISIG_COORDINATION_WRITE_FREEZE=1
   -> MULTISIG_COORDINATION_STORAGE=blob
   -> MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED=false
-  -> no Mainnet PostgreSQL, Blob connection, admin secret, webhook secret, Cron secret, or managed-channel master secret
+  -> private `multisig-tools-mainnet` Vercel Blob connected via OIDC only
+  -> no Mainnet PostgreSQL, admin secret, webhook secret, Cron secret, or managed-channel master secret
 ```
 
-The Mainnet backend and gateway stable `.vercel.app` aliases exist only to support the isolated internal chain. The three Mainnet projects are intentionally not Git-connected during this prelaunch stage. The backend's Blob coordination mode is deliberately inert because writes are frozen and no private Blob store is connected; its purpose is deployment/network-boundary proof, not production state authority.
+The Mainnet backend and gateway stable `.vercel.app` aliases exist only to support the isolated internal chain. The three Mainnet projects are intentionally not Git-connected during this prelaunch stage. The backend's private Blob store is connected OIDC-only and its runtime read/write/delete path has been verified in an isolated Preview; coordination is still deliberately inert because writes are frozen and no Mainnet PostgreSQL authority exists. The skeleton remains deployment/network/storage-boundary proof, not production state authority.
 
 Read-only/fail-closed validation completed on the isolated chain: fixed `public`, 36 public operations, no internal `/api/*` paths in discovery/OpenAPI, `classicManagedExecution.public=false`, Request creation rejected with `503 coordination_write_frozen`, and Testnet Integration self-service rejected with `409 testnet_integration_self_service_unavailable`.
 

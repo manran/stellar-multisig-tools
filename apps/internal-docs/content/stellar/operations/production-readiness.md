@@ -37,15 +37,14 @@ The 2026-09-20 real-chain Managed Classic E2E remains authoritative for authorit
 
 Intentional blockers remain:
 
-- an isolated Mainnet Web/Gateway/API skeleton now exists and is fixed to `public`, but it is deliberately write-frozen, has no Mainnet DB/Blob/admin/webhook/channel secrets, and is not bound to `stellar.multisig.tools` or `api.multisig.tools`;
+- an isolated Mainnet Web/Gateway/API skeleton now exists and is fixed to `public`; it has an independently connected private OIDC Blob store but remains deliberately write-frozen with no Mainnet PostgreSQL/admin/webhook/channel secrets, and is not bound to `stellar.multisig.tools` or `api.multisig.tools`;
 - `stellar.multisig.tools` still serves the legacy `feat/stellar-mvp` deployment (`fa14599a...`); no canonical Human cutover has been approved;
 - `api.multisig.tools` has no public DNS/domain binding yet;
 - Mainnet creator/account activation and the human refill/emergency procedure have not yet been executed/verified;
 - creator/channel capacity policy is implemented (about 1000 XLM creator target, 2 XLM/channel, low <50, recover >=60, half-full soft-limit doubling), but the final HTTPS/Telegram alert destination is not configured;
 - per-transaction fee bid is fixed at 50x latest network base fee for MST-managed Classic, but cumulative spend-budget policy is not defined;
 - semantic Firewall rules `request-create`, `treasury-admin`, and `agent-access-admin` are not yet configured for the Mainnet launch deployment;
-- provider database recovery has not been drill-tested for Mainnet;
-- Mainnet private-context Blob read/write has not been verified;
+- independent Mainnet PostgreSQL has not yet been selected/connected, so provider recovery has not been drill-tested for Mainnet;
 - Mainnet managed Classic capability remains explicitly disabled.
 
 Do not enable Mainnet managed Classic until those items are closed.
@@ -312,7 +311,7 @@ Verified on the current Testnet production deployment:
 Before Mainnet launch:
 
 - the isolated `multisig-tools-mainnet` backend skeleton already proves the current code can deploy fixed to `public`, but it intentionally runs with `MULTISIG_COORDINATION_STORAGE=blob`, `MULTISIG_COORDINATION_WRITE_FREEZE=1`, no webhook signing secret, and no Cron secret;
-- connect the independent Mainnet PostgreSQL authority and private Blob store before removing the write freeze;
+- connect, migrate, and recovery-verify the independent Mainnet PostgreSQL authority before removing the write freeze; the private Blob store is already connected and runtime-verified;
 - configure Mainnet webhook master secret and Cron secret only after that storage boundary exists;
 - verify the deployed Queue/Cron contract against the Mainnet backend project and prove one signed delivery path without changing the canonical Human domain;
 - define alert threshold for prolonged unpublished outbox backlog or repeated retry/permanent-failure outcomes;
@@ -322,9 +321,16 @@ Before Mainnet launch:
 
 Private Request/Intent data still uses `@vercel/blob` in the PostgreSQL coordination model.
 
-Absence of a pulled `BLOB_READ_WRITE_TOKEN` is not sufficient to mark Blob unavailable: the implementation intentionally permits project-linked Vercel OIDC credentials resolved from request context.
+Mainnet private Blob is now provisioned independently from Testnet:
 
-Before Mainnet, verify one production-like private-context write/read in the target project without printing credentials.
+- Vercel Blob store `multisig-tools-mainnet` is private, region `iad1`;
+- it is connected only to the `multisig-tools-mainnet` backend project for production/preview;
+- credential mode is OIDC-only; no long-lived `BLOB_READ_WRITE_TOKEN` is installed;
+- an isolated Preview deployment in the same Mainnet backend project exercised the real `@vercel/blob` runtime path with `put -> get -> exact content comparison -> delete -> confirm absent`; all checks passed;
+- the temporary smoke route, bearer credential, test object, local smoke directory, and Preview deployment were removed immediately after verification;
+- the clean Mainnet backend was then rebuilt as production deployment `dpl_GB7B3janNhyu5Ef7dCJz9jFeLsV1`; runtime remains fixed `public`, managed Classic remains disabled, and coordination writes remain frozen.
+
+This closes the Mainnet private-Blob connectivity/read-write gate. PostgreSQL remains the storage blocker before coordination writes can be unfrozen.
 
 ## 8. Observability
 
@@ -417,7 +423,7 @@ All of the following must be true before setting managed Classic public/Mainnet 
 - [x] explicit managed-Classic enable gate implemented; the Mainnet skeleton sets `MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED=false` and a channel master secret alone cannot enable execution;
 - [ ] canonical Human/domain cutover explicitly approved; `stellar.multisig.tools` still serves legacy `fa14599a...` and `api.multisig.tools` is not DNS-bound;
 - [ ] independent Mainnet PostgreSQL authority connected, migrated, recovery-drilled, and verified before removing write freeze;
-- [ ] Mainnet private Blob read/write verified in the Mainnet backend project;
+- [x] Mainnet private Blob store connected OIDC-only and runtime put/get/delete verified in an isolated Mainnet backend Preview;
 - [ ] semantic Firewall rules created with reviewed limits (`request-create`, `treasury-admin`, `agent-access-admin`);
 - [ ] managed channel public accounts explicitly provisioned and funded;
 - [x] operator-only channel pool/capacity/balance visibility implemented and Testnet-deployed;
