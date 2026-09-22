@@ -221,6 +221,41 @@ Human authentication identity is deployment-bound, not backend-host-bound. Testn
 
 The external API contract is expressed relative to the protocol base (`/request`, `/intent`, `/operations`, and so on). Internal Vercel function paths under `/api/*` are implementation details and must not appear in public operation discovery or OpenAPI paths.
 
+### Current Mainnet prelaunch skeleton
+
+As of 2026-09-22, the current code baseline is also deployed in an isolated Mainnet skeleton without changing the public Mainnet domains:
+
+```text
+multisig-tools-web-mainnet
+  -> Root Directory: apps/web
+  -> fixed public
+  -> same-origin /api/* rewrite
+     -> https://multisig-tools-api-gateway-mainnet.vercel.app/stellar/*
+  -> unique Vercel deployment is noindex
+  -> NOT bound to stellar.multisig.tools
+
+multisig-tools-api-gateway-mainnet.vercel.app
+  -> Vercel project: multisig-tools-api-gateway-mainnet
+  -> Root Directory: apps/api-gateway
+  -> STELLAR_API_ORIGIN=https://multisig-tools-mainnet.vercel.app/api
+  -> NOT bound to api.multisig.tools
+
+multisig-tools-mainnet.vercel.app
+  -> Vercel project: multisig-tools-mainnet
+  -> Root Directory: apps/stellar-api
+  -> fixed public
+  -> MULTISIG_COORDINATION_WRITE_FREEZE=1
+  -> MULTISIG_COORDINATION_STORAGE=blob
+  -> MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED=false
+  -> no Mainnet PostgreSQL, Blob connection, admin secret, webhook secret, Cron secret, or managed-channel master secret
+```
+
+The Mainnet backend and gateway stable `.vercel.app` aliases exist only to support the isolated internal chain. The three Mainnet projects are intentionally not Git-connected during this prelaunch stage. The backend's Blob coordination mode is deliberately inert because writes are frozen and no private Blob store is connected; its purpose is deployment/network-boundary proof, not production state authority.
+
+Read-only/fail-closed validation completed on the isolated chain: fixed `public`, 36 public operations, no internal `/api/*` paths in discovery/OpenAPI, `classicManagedExecution.public=false`, Request creation rejected with `503 coordination_write_frozen`, and Testnet Integration self-service rejected with `409 testnet_integration_self_service_unavailable`.
+
+`stellar.multisig.tools` still points to the legacy Mainnet deployment and `api.multisig.tools` is not DNS-bound. Neither public Mainnet surface was changed by the skeleton work.
+
 The same Gateway source is deployed twice with different `STELLAR_API_ORIGIN`.
 
 The same Stellar API source is deployed twice with different fixed-network and infrastructure configuration.

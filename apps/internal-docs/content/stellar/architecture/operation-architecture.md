@@ -82,7 +82,7 @@ Product neutrality does not flatten permissions:
 
 The canonical Headless workflow is `business instruction -> Prepare -> Review -> Authorization -> Ready -> Execution routing -> Execute -> Done`. Protocols keep their real differences inside that lifecycle.
 
-Classic Service work is business-first where MultiSigTools has a stable promoted composer. Payment/batch and explicit account creation are promoted slices: `classic.payment.prepare` takes a scoped source account plus payment rows, while `classic.account.create.prepare` takes a source account, inactive destination, and starting XLM balance. Both load current account/network facts and construct one exact unsigned transaction. Integration `POST /api/request` can compose semantic Payment directly into the existing Request lifecycle; CreateAccount currently uses Prepare -> exact XDR -> the same Request lifecycle rather than adding a second Request type. Exact XDR input remains an advanced escape hatch. Other Classic actions stay XDR-first until their existing Human composer is promoted; do not invent a generic transaction DSL for symmetry.
+Classic Service work is business-first where MultiSigTools has a stable promoted composer. Payment/batch and explicit account creation are promoted slices: `classic.payment.prepare` takes a scoped source account plus payment rows, while `classic.account.create.prepare` takes a source account, inactive destination, and starting XLM balance. Both load current account/network facts and construct one exact unsigned transaction. Integration `POST /request` (relative to the public protocol base) can compose semantic Payment directly into the existing Request lifecycle; CreateAccount currently uses Prepare -> exact XDR -> the same Request lifecycle rather than adding a second Request type. Exact XDR input remains an advanced escape hatch. Other Classic actions stay XDR-first until their existing Human composer is promoted; do not invent a generic transaction DSL for symmetry.
 
 Soroban contract work remains Intent-first and transaction construction stays later than contract authorization:
 
@@ -109,42 +109,42 @@ Soroban contract work remains Intent-first and transaction construction stays la
 
 ## Shipped operation discovery
 
-A client that knows only the deployment origin can discover the operation contract without parsing UI:
+A client that knows the public protocol base (`https://api(-testnet).multisig.tools/stellar`) can discover the operation contract without parsing UI:
 
-- the root response and HTML document advertise `/openapi.json` with the standard `service-desc` link relation;
+- the protocol base advertises `/openapi.json` with the standard `service-desc` link relation;
 - `/openapi.json` is the OpenAPI 3.1 transport contract and states the deployment-owned Stellar network;
-- `GET /api/operations` returns the machine-readable v1 business-operation catalog, with an OpenAPI path/method pointer for every operation;
-- `/developers` is advertised with `service-doc` for Human-readable authority and integration guidance.
+- `GET /operations` returns the machine-readable v1 business-operation catalog, with an OpenAPI path/method pointer for every operation;
+- `https://docs.multisig.tools/stellar/developers` is advertised with `service-doc` for Human-readable authority and integration guidance.
 
-Each stable business operation is exposed through the operation catalog and OpenAPI. The `/api/intent` resource uses HTTP method semantics for create, inspect, AUTH contribution, and late execution preparation.
+Each stable business operation is exposed through the operation catalog and OpenAPI. The public `/intent` resource uses HTTP method semantics for create, inspect, AUTH contribution, and late execution preparation. Internal Vercel `/api/*` function paths are transport implementation details, not public API paths.
 
 The first complete Contract vertical slice is:
 
 | Operation | HTTP | Access | Effect |
 | --- | --- | --- | --- |
-| **runtime.config.inspect** | GET /api/runtime-config | Public | None; returns deployment network policy |
-| **contract.interface.inspect** | GET /api/contract-interface | Public | None |
-| **contract.intent.create** | POST /api/intent | Principal Write | Coordination state; source-free Intent |
-| **contract.intent.inspect** | GET /api/intent | Principal Read | None; current state + persisted evidence timeline |
-| **contract.intent.contribute** | PATCH /api/intent | Principal Sign | Append verified detached AUTH |
-| **contract.intent.execution.prepare** | PUT /api/intent | Principal Write | Late-bind source; build/enforce final unsigned TX |
-| **contract.intent.execution.reconcile** | PUT /api/intent | Principal Write / Integration Write | Verify a persisted preparation hash on Stellar; retain observed result |
-| **contract.call.build** | POST /api/contract-call | Public | Low-level unsigned XDR construction |
-| **contract.call.prepare** | POST /api/contract-prepare | Public | Low-level recording simulation + assembly |
-| **contract.workspace.list** | GET /api/contracts | Principal Read | None |
-| **contract.workspace.keep** | PUT /api/contracts | Principal Write | Private state |
-| **contract.workspace.forget** | DELETE /api/contracts | Principal Write | Private state |
+| **runtime.config.inspect** | GET /runtime-config | Public | None; returns deployment network policy |
+| **contract.interface.inspect** | GET /contract-interface | Public | None |
+| **contract.intent.create** | POST /intent | Principal Write | Coordination state; source-free Intent |
+| **contract.intent.inspect** | GET /intent | Principal Read | None; current state + persisted evidence timeline |
+| **contract.intent.contribute** | PATCH /intent | Principal Sign | Append verified detached AUTH |
+| **contract.intent.execution.prepare** | PUT /intent | Principal Write | Late-bind source; build/enforce final unsigned TX |
+| **contract.intent.execution.reconcile** | PUT /intent | Principal Write / Integration Write | Verify a persisted preparation hash on Stellar; retain observed result |
+| **contract.call.build** | POST /contract-call | Public | Low-level unsigned XDR construction |
+| **contract.call.prepare** | POST /contract-prepare | Public | Low-level recording simulation + assembly |
+| **contract.workspace.list** | GET /contracts | Principal Read | None |
+| **contract.workspace.keep** | PUT /contracts | Principal Write | Private state |
+| **contract.workspace.forget** | DELETE /contracts | Principal Write | Private state |
 
 The first promoted Classic Prepare operation is:
 
 | Operation | HTTP | Access | Effect |
 | --- | --- | --- | --- |
-| **classic.payment.prepare** | POST /api/payment-prepare | Principal Write / Integration Write | None; fresh business input -> exact unsigned Classic TX |
-| **classic.account.create.prepare** | POST /api/account-create-prepare | Principal Write / Integration Write | None; explicit account-creation input -> exact unsigned CreateAccount TX |
+| **classic.payment.prepare** | POST /payment-prepare | Principal Write / Integration Write | None; fresh business input -> exact unsigned Classic TX |
+| **classic.account.create.prepare** | POST /account-create-prepare | Principal Write / Integration Write | None; explicit account-creation input -> exact unsigned CreateAccount TX |
 
-Integration Services may also pass the same semantic payment instruction directly to `POST /api/request`; the server composes Prepare + Request creation while preserving business-level idempotency. The exact-XDR Request form remains available.
+Integration Services may also pass the same semantic payment instruction directly to `POST /request`; the server composes Prepare + Request creation while preserving business-level idempotency. The exact-XDR Request form remains available.
 
-The existing **/api/request** resource remains the canonical proposal create/read/contribute interface. There is no second automation Request type.
+The existing **/request** resource remains the canonical proposal create/read/contribute interface. There is no second automation Request type.
 
 ## Consumer rules
 

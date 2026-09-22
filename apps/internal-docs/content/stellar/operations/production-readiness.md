@@ -3,11 +3,11 @@ title: "MultiSig Tools Production Readiness"
 description: "Internal MultiSig Tools engineering documentation."
 ---
 
-**Status:** Testnet RC ready; Mainnet managed execution not ready
-**RC App SHA:** `6503b5fbb96a23f3e8be150ddf8d1d330ff9c864`
-**Current Testnet hardening SHA:** `b9378198b4b02087ef85cbcb8273ebfd599dd578`
-**Testnet production deployment:** `dpl_8t6Rh3KfojQYB5z19DrbriKFQXaZ`
-**Updated:** 2026-09-21
+**Status:** Testnet current topology ready; Mainnet prelaunch skeleton ready; Mainnet managed execution not ready
+**Current code baseline:** `c6c9e93` (`feat/monorepo-deployment-topology`)
+**Testnet topology:** Human Web -> Testnet API Gateway -> fixed-Testnet Stellar API
+**Mainnet topology:** isolated fixed-Mainnet Web/Gateway/API skeleton only; no public custom-domain cutover
+**Updated:** 2026-09-22
 
 This document is the operational gate after the Hallmark/UI freeze. It does not redefine signer authority, Request/Intent semantics, or execution ownership.
 
@@ -17,18 +17,18 @@ This document is the operational gate after the Hallmark/UI freeze. It does not 
 
 Verified:
 
-- final application gate: **827 / 827 PASS**;
+- final application gate: **820 / 820 PASS**;
+- PostgreSQL integration gate: **29 / 29 PASS**;
 - production build PASS;
 - `git diff --check` PASS;
-- Testnet deployment READY and aliased to `stellar-testnet.multisig.tools`;
-- 20/20 non-mutating production browser smoke checks PASS at 375 and 1280;
-- checked routes returned 200 with zero horizontal overflow and zero console/page errors;
-- Soroban Import -> Review -> live RPC simulation PASS without signing or submission;
+- Testnet Human Web, API Gateway, and Stellar API are physically separate READY deployments;
+- `stellar-testnet.multisig.tools` serves `apps/web` and keeps browser `/api/*` same-origin while forwarding through `api-testnet.multisig.tools/stellar`;
+- `api-testnet.multisig.tools/stellar` exposes 36 public operations with no internal `/api/*` paths in the published contract;
 - live runtime is fixed Testnet;
-- managed Classic capability is enabled only for Testnet and remains disabled for public/Mainnet;
-- Vercel reported no runtime error clusters in the checked post-deploy window;
-- `/openapi.json` and `/api/operations` return 200;
-- public Testnet Integration self-service is live at `/developers/integrations/new` and `POST /api/integration-testnet`;
+- managed Classic requires both a configured channel master secret and explicit `MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED=true`; Testnet is enabled and public/Mainnet remains disabled;
+- 20/20 non-mutating production browser smoke checks PASS at 375 and 1280;
+- Soroban Import -> Review -> live RPC simulation PASS without signing or submission;
+- public Testnet Integration self-service is live at `/developers/integrations/new` and `POST https://api-testnet.multisig.tools/stellar/integration-testnet`;
 - self-service returns a Testnet-only `msi_*` without `mia_*`, signer authority, or Mainnet entitlement.
 
 The 2026-09-20 real-chain Managed Classic E2E remains authoritative for authority/execution behavior because the Hallmark RC did not change Request/Intent authority, managed-channel lease logic, PostgreSQL repositories, webhook delivery, or transaction submission core.
@@ -37,14 +37,16 @@ The 2026-09-20 real-chain Managed Classic E2E remains authoritative for authorit
 
 Intentional blockers remain:
 
+- an isolated Mainnet Web/Gateway/API skeleton now exists and is fixed to `public`, but it is deliberately write-frozen, has no Mainnet DB/Blob/admin/webhook/channel secrets, and is not bound to `stellar.multisig.tools` or `api.multisig.tools`;
+- `stellar.multisig.tools` still serves the legacy `feat/stellar-mvp` deployment (`fa14599a...`); no canonical Human cutover has been approved;
+- `api.multisig.tools` has no public DNS/domain binding yet;
 - Mainnet creator/account activation and the human refill/emergency procedure have not yet been executed/verified;
-- operator-only channel visibility is implemented and deployed on Testnet;
 - creator/channel capacity policy is implemented (about 1000 XLM creator target, 2 XLM/channel, low <50, recover >=60, half-full soft-limit doubling), but the final HTTPS/Telegram alert destination is not configured;
 - per-transaction fee bid is fixed at 50x latest network base fee for MST-managed Classic, but cumulative spend-budget policy is not defined;
-- the canonical/public Vercel project is still serving the legacy `feat/stellar-mvp` deployment (`fa14599a...`): its live operation registry exposes 16 operations versus Testnet's 36, and `/api/integration-webhook-sweep` is absent (404). The current RC/PG code baseline has **not** been deployed to the canonical project;
-- semantic Firewall rules `request-create`, `treasury-admin`, and `agent-access-admin` are confirmed missing from the canonical/public Vercel project;
+- semantic Firewall rules `request-create`, `treasury-admin`, and `agent-access-admin` are not yet configured for the Mainnet launch deployment;
 - provider database recovery has not been drill-tested for Mainnet;
-- Mainnet managed Classic capability remains disabled.
+- Mainnet private-context Blob read/write has not been verified;
+- Mainnet managed Classic capability remains explicitly disabled.
 
 Do not enable Mainnet managed Classic until those items are closed.
 
@@ -105,6 +107,7 @@ The local application-layer proof does not count as the Neon provider recovery d
 
 ### Current implementation
 
+- managed Classic runtime requires both `MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET` and explicit `MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED=true`; a copied/configured master secret alone cannot enable execution;
 - channel keypairs are deterministically derived from `MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET`;
 - a **separate deterministic creator account** is derived from the same deployment master with a different domain tag; it exists only to create/fund managed channel accounts and is not a Treasury signer or transaction-source channel;
 - Testnet production has the master secret configured and the creator account active;
@@ -177,10 +180,11 @@ It deliberately does **not** expose channel seeds, Request ids, Service ids, sig
 Verification completed:
 
 - pure projection tests cover active/expired/free lease classification, balance ready/missing/unavailable states, creator capacity, 50/60 hysteresis, half-full soft-limit doubling, alert transition de-duplication, and capacity-exhaustion fail-closed behavior;
-- full suite: **827 / 827 PASS**;
+- full suite: **820 / 820 PASS**;
+- PostgreSQL integration suite: **29 / 29 PASS**;
 - production build PASS;
 - `git diff --check` PASS;
-- Testnet production deployment `dpl_8t6Rh3KfojQYB5z19DrbriKFQXaZ` READY and aliased to `stellar-testnet.multisig.tools`;
+- current Testnet split topology is READY: `stellar-testnet.multisig.tools` -> Web -> `api-testnet.multisig.tools/stellar` -> `multisig-tools-testnet.vercel.app`;
 - live OpenAPI has no 64 maximum on `channelCount` and documents the current auto-doubling soft-limit policy;
 - live runtime remains fixed Testnet with managed Classic enabled only for Testnet;
 - live creator monitor smoke wrote/read the `ready` state through Horizon + PostgreSQL without creating a channel;
@@ -240,7 +244,7 @@ Therefore the semantic rate-limit hook exists in application code but is **not c
 
 ### Implemented
 
-- Testnet Integration Profile creation is public/self-service through `/developers/integrations/new` and `POST /api/integration-testnet`;
+- Testnet Integration Profile creation is public/self-service through `/developers/integrations/new` and `POST https://api-testnet.multisig.tools/stellar/integration-testnet`;
 - self-service creation forcibly produces an enabled, Testnet-only profile and reuses the existing durable `msi_*` credential model;
 - Testnet production has `MULTISIG_INTEGRATION_ADMIN_SECRET_HASH` configured for operator lifecycle actions;
 - the operator-only `/admin/integrations` surface remains the current disable/rotate/advanced-management boundary and is not ordinary product navigation.
@@ -305,11 +309,12 @@ Verified on the current Testnet production deployment:
 - Queue/Cron deployment contract and adapter tests pass;
 - real Managed Classic E2E already proved PostgreSQL outbox -> signed webhook delivery.
 
-Before Mainnet:
+Before Mainnet launch:
 
-- first deploy the approved current code baseline to the canonical/public project; do not configure Queue/Cron parity against the legacy 16-operation deployment and mistake that for readiness;
-- after that deployment, verify the same Queue/Cron contract exists in the Mainnet project (the current legacy deployment returns 404 for `/api/integration-webhook-sweep`);
-- verify webhook master secret and Cron secret are configured there;
+- the isolated `multisig-tools-mainnet` backend skeleton already proves the current code can deploy fixed to `public`, but it intentionally runs with `MULTISIG_COORDINATION_STORAGE=blob`, `MULTISIG_COORDINATION_WRITE_FREEZE=1`, no webhook signing secret, and no Cron secret;
+- connect the independent Mainnet PostgreSQL authority and private Blob store before removing the write freeze;
+- configure Mainnet webhook master secret and Cron secret only after that storage boundary exists;
+- verify the deployed Queue/Cron contract against the Mainnet backend project and prove one signed delivery path without changing the canonical Human domain;
 - define alert threshold for prolonged unpublished outbox backlog or repeated retry/permanent-failure outcomes;
 - expose or document a support query for delivery history without leaking callback URLs or signing secrets.
 
@@ -350,14 +355,14 @@ Do not introduce a second telemetry state machine; logs/metrics should reference
 
 ### Testnet
 
-Current Testnet app:
+Current split Testnet production topology:
 
-- RC UI baseline SHA: `6503b5fbb96a23f3e8be150ddf8d1d330ff9c864`
-- operational hardening SHA: `2e72cc4156c38b43fd8ceae32de8c099187342d2`
-- deployment: `dpl_9PDydekf2KdYv3JtZ2LRFENHG1YT`
-- previous known-good production deployment `dpl_FeQWfBamBYM2gHnPxfAhp1h7AoNR` remains a rollback candidate
+- Human Web: `dpl_9rW1be9vEmKYi3EuQGAAo5c8RCAr` -> `stellar-testnet.multisig.tools`;
+- API Gateway: `dpl_3fBm6UXBEdTQ9MyRMKxZbtdqmXk5` -> `api-testnet.multisig.tools`;
+- Stellar API backend: `dpl_QmbAobn5LRzv7YrsvrXYiFxUoRrP` -> `multisig-tools-testnet.vercel.app`;
+- backend runtime is fixed Testnet and reports `classicManagedExecution.testnet=true`, `public=false`.
 
-A prior READY production deployment remains available as a deployment rollback candidate.
+Each Vercel project retains prior READY deployments as project-local rollback candidates. Roll back the affected layer rather than treating the three-layer system as one deployment.
 
 For an application-only regression:
 
@@ -367,7 +372,7 @@ rollback/redeploy previous known-good Vercel deployment
 -> run bounded read/smoke checks
 ```
 
-Testnet rollback drill completed on 2026-09-21:
+Historical Testnet application rollback drill completed on 2026-09-21 before the final Web/Gateway/API split:
 
 - current deployment before drill: `dpl_FeQWfBamBYM2gHnPxfAhp1h7AoNR`;
 - rolled back to previous known-good `dpl_2x9j1fUHpHD1vFFbUYpeWz52rjqF` using `vercel rollback`;
@@ -376,7 +381,7 @@ Testnet rollback drill completed on 2026-09-21:
 - restored `dpl_FeQWfBamBYM2gHnPxfAhp1h7AoNR` using the same rollback mechanism;
 - restored runtime-config and Payment page smoke passed.
 
-The drill changed only the Testnet Vercel alias; PostgreSQL authority and Mainnet were untouched.
+That drill remains evidence for Vercel rollback mechanics. The current topology requires layer-specific rollback plus the same bounded end-to-end smoke. PostgreSQL authority and Mainnet remain untouched by application-only rollback.
 
 For suspected data-integrity failure:
 
@@ -392,47 +397,38 @@ Never use stale Blob coordination objects as the normal long-running rollback ta
 
 ## 10. Documentation publication
 
-The new Developer Hub is present in RC source, but canonical content publication is incomplete.
+Public Docs are now independently deployed at:
 
-Current routing contract intentionally sends Testnet:
+```text
+https://docs.multisig.tools/stellar
+```
 
-- `/docs`
-- `/docs/*`
-- `/developers`
-- `/demo`
-- legal content
+The Human Web no longer owns `/docs` or `/developers` documentation routes. Product navigation links directly to the dedicated Docs origin, while `/developers/integrations/new` remains a Human application route.
 
-to `stellar.multisig.tools`.
+Public Docs therefore do not depend on the legacy `stellar.multisig.tools` Mainnet deployment and no longer block Testnet documentation completeness.
 
-The canonical/public project is still serving the older code and docs. Live read-only verification on 2026-09-21 resolved `stellar.multisig.tools` to Vercel deployment `dpl_D6msPjBm29VEqEm32Gq5rgFmK5Tf`, legacy repo/branch `MultiSigTools` / `feat/stellar-mvp` at `fa14599a269ef23214f1e26c90dc81802b8f9e78`. It reports `fixedNetwork=public`, but exposes 16 operations versus Testnet's 36 and has no `/api/integration-webhook-sweep` route.
-
-Documentation is correspondingly stale:
-
-- `/developers` -> old Agent API page;
-- `/docs/developers/testnet-quickstart` -> Page not found.
-
-This does **not** block the Testnet App runtime, but it blocks declaring the Developer Docs publication complete.
-
-Publishing the new docs changes the canonical/public project and therefore requires a separate explicit Mainnet/canonical deployment decision.
+The legacy `stellar.multisig.tools` project still serves `feat/stellar-mvp` at `fa14599a...`, but this is now solely a Mainnet Human/canonical cutover concern rather than a Docs publication concern.
 
 ## 11. Mainnet enablement gate
 
 All of the following must be true before setting managed Classic public/Mainnet capability on:
 
-- [ ] canonical/public deployment change explicitly approved and current RC/PG code baseline deployed; the live canonical project is still the legacy 16-operation `fa14599a...` deployment;
-- [ ] Mainnet DB/persistence recovery drill completed;
-- [ ] Mainnet private Blob read/write verified;
+- [x] isolated Mainnet Web/Gateway/API skeleton deployed from the current code baseline with fixed `public`, no public custom-domain cutover, writes frozen, and managed Classic disabled;
+- [x] explicit managed-Classic enable gate implemented; the Mainnet skeleton sets `MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED=false` and a channel master secret alone cannot enable execution;
+- [ ] canonical Human/domain cutover explicitly approved; `stellar.multisig.tools` still serves legacy `fa14599a...` and `api.multisig.tools` is not DNS-bound;
+- [ ] independent Mainnet PostgreSQL authority connected, migrated, recovery-drilled, and verified before removing write freeze;
+- [ ] Mainnet private Blob read/write verified in the Mainnet backend project;
 - [ ] semantic Firewall rules created with reviewed limits (`request-create`, `treasury-admin`, `agent-access-admin`);
 - [ ] managed channel public accounts explicitly provisioned and funded;
 - [x] operator-only channel pool/capacity/balance visibility implemented and Testnet-deployed;
 - [x] real operator login verified live lease/balance projection with `mia_*`;
 - [ ] production managed-channel lifecycle design completed (activation/funding/expansion/rotation/recovery); Testnet deterministic lazy expansion is proven, but Mainnet policy is intentionally undecided;
-- [ ] low-balance threshold + alert policy defined;
+- [ ] low-balance threshold + alert destination/credentials defined;
 - [ ] spend/budget policy defined and enforced;
-- [x] Testnet webhook Queue/Cron/signing config verified; Mainnet must repeat the check before enablement;
+- [x] Testnet webhook Queue/Cron/signing config verified; Mainnet must configure and repeat the check after PostgreSQL/Blob are connected;
 - [x] credential/admin emergency-disable procedure documented;
 - [x] Vercel application rollback procedure tested on Testnet and current deployment restored;
-- [ ] one bounded Mainnet smoke plan reviewed before execution (`MAINNET_SMOKE_PLAN.md` is drafted but intentionally not approved yet).
+- [ ] one bounded Mainnet mutation smoke explicitly reviewed and approved; the current Mainnet skeleton has completed only read-only/fail-closed prelaunch validation.
 
 Until then:
 

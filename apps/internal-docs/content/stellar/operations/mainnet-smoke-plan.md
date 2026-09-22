@@ -3,26 +3,39 @@ title: "MultiSig Tools Mainnet Smoke Plan — Draft"
 description: "Internal MultiSig Tools engineering documentation."
 ---
 
-**Status:** Draft only; not approved for execution
-**Mainnet managed Classic:** disabled
-**Purpose:** Bound the first Mainnet validation after production channel lifecycle, funding, Firewall, DB recovery, and operator policies are complete.
+**Status:** Draft for mutation; isolated read-only/fail-closed skeleton validated 2026-09-22
+**Mainnet managed Classic:** explicitly disabled
+**Purpose:** Separate safe deployment proof from the first Mainnet mutation after storage, funding, Firewall, recovery, and operator policies are complete.
 
-This plan must not be executed merely because the code is deployed. It requires explicit approval at execution time.
+The existence of Mainnet code deployments is not approval to mutate Mainnet state. Phase 0 below is intentionally state-less/fail-closed. Any later mutation requires the explicit approval gate at the end of this document.
+
+## Phase 0 — isolated prelaunch skeleton — COMPLETE
+
+Completed on 2026-09-22 without binding `stellar.multisig.tools` or `api.multisig.tools`:
+
+- backend project `multisig-tools-mainnet` (`apps/stellar-api`) deployed fixed to `public` with `MULTISIG_COORDINATION_WRITE_FREEZE=1`, `MULTISIG_COORDINATION_STORAGE=blob`, `MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED=false`, no PostgreSQL/Blob/admin/webhook/channel secrets, and no Git auto-deploy connection;
+- backend runtime reports `fixedNetwork=public` and `classicManagedExecution.public=false`; public discovery exposes 36 operations and OpenAPI contains no internal `/api/*` paths;
+- direct backend-internal `POST /api/request` is rejected before persistence with `503 coordination_write_frozen`;
+- gateway project `multisig-tools-api-gateway-mainnet` forwards `/stellar/*` to the isolated backend and preserves the same fixed-public/frozen behavior;
+- Web project `multisig-tools-web-mainnet` is fixed to `public`, forwards same-origin `/api/*` through the isolated gateway, returns `409 testnet_integration_self_service_unavailable` for Testnet self-service, and its Vercel deployment is `noindex`;
+- the three Mainnet projects are intentionally not Git-connected during prelaunch isolation;
+- the legacy `stellar.multisig.tools` deployment remains untouched and `api.multisig.tools` is not DNS-bound.
+
+Phase 0 proves deployment/network boundaries only. It does not prove Mainnet persistence, private storage, operator secrets, managed-channel funding, webhook delivery, Firewall policy, or mutation safety.
 
 ## Preconditions
 
 All must be true before any Mainnet mutation:
 
-- canonical/public deployment change explicitly approved;
-- PostgreSQL recovery drill completed;
-- Mainnet private-context storage verified;
-- semantic Firewall limits reviewed and configured if required by launch policy;
-- production Managed Classic channel lifecycle designed;
-- channel accounts provisioned/funded under that design;
-- low-balance and spend-budget policy decided;
-- webhook Queue/Cron/signing config verified on the Mainnet project;
-- operator emergency-disable procedure available;
-- current Testnet release remains rollback-ready.
+- canonical/public domain cutover and mutation scope explicitly approved;
+- independent Mainnet PostgreSQL is connected, migrated, recovery-drilled, and verified;
+- Mainnet private-context Blob storage is connected and write/read verified;
+- `MULTISIG_COORDINATION_WRITE_FREEZE` is removed only after the storage checks above pass;
+- semantic Firewall limits are reviewed and configured for the launch deployment;
+- webhook Queue/Cron/signing config is verified on the Mainnet backend project;
+- operator emergency-disable procedure is available;
+- current Testnet release remains rollback-ready;
+- for managed Classic specifically: production channel lifecycle is designed, creator/channels are explicitly funded, alert destination is configured, spend policy is enforced, and `MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED=true` is set only after those prerequisites and explicit Phase 2 approval.
 
 If any precondition is false, stop before creating a Mainnet Request/Intent.
 
@@ -32,10 +45,10 @@ No signatures, no Request/Intent creation, no transaction submission.
 
 Verify:
 
-1. `/api/runtime-config` reports:
+1. `GET https://api.multisig.tools/stellar/runtime-config` reports:
    - `fixedNetwork=public`;
    - managed Classic capability is exactly the intended launch state.
-2. `/openapi.json` returns 200.
+2. `GET https://api.multisig.tools/stellar/openapi.json` returns 200 and publishes protocol-relative paths without internal `/api/*` implementation paths.
 3. Human entry pages load without cross-network leakage.
 4. Operator-only Integration administration remains protected.
 5. Managed-channel operator view, if enabled, shows only expected public channel identities and operational facts.
@@ -135,4 +148,4 @@ Never record:
 
 ## Approval gate
 
-Before Phase 2, review this plan again against the final production channel lifecycle and fee/spend policies. Explicit approval is required at that time.
+Before Phase 1 against public custom domains, confirm the domain cutover itself is approved. Before Phase 2, review this plan again against the final production channel lifecycle, funding, alerting, Firewall, recovery, and fee/spend policies. Explicit approval is required at that time, followed by the deliberate `MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED=true` transition only if managed Classic is in launch scope.

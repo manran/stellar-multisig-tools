@@ -39,7 +39,7 @@ The product rule is:
 2. Job reuses the existing Intent/Request id; do not invent another identity.
 3. Do not rename or weaken the internal authorization/evidence model.
 4. Do not create a universal endpoint that hides materially different operations.
-5. Existing `/api/intent` and `/api/request` remain the canonical resources.
+5. Existing public `/intent` and `/request` remain the canonical resources.
 6. Integration responses may expose a stable `job` projection over those resources.
 7. Integration authentication never becomes signer authority.
 8. Disclosure access never becomes signing authority.
@@ -182,7 +182,7 @@ The shipped runtime uses PostgreSQL coordination with a durable outbox and deliv
 
 ## 7. Cancellation, expiry and replan
 
-Cancellation is an authoritative MultiSigTools coordination fact, not Stellar cryptographic revocation. `PUT /api/intent` with `action: "cancel"` is allowed only to the original Human/Agent creator or the Integration Service that owns the Intent. It closes further AUTH contribution, replan and execution-package preparation in MultiSigTools and projects terminal `cancelled`.
+Cancellation is an authoritative MultiSigTools coordination fact, not Stellar cryptographic revocation. `PUT /intent` with `action: "cancel"` (relative to the public protocol base) is allowed only to the original Human/Agent creator or the Integration Service that owns the Intent. It closes further AUTH contribution, replan and execution-package preparation in MultiSigTools and projects terminal `cancelled`.
 
 Detached AUTH or prepared XDR already disclosed outside MultiSigTools cannot be withdrawn by this operation and can remain usable until its Stellar validity window ends. Existing execution preparation evidence remains visible, and reconciliation remains allowed after cancellation so a transaction that was already handed off can still be reported truthfully if it later lands on-chain.
 
@@ -374,9 +374,9 @@ Every wizard step is a client of a stable Headless operation or persisted Integr
 
 The same profile must be creatable and inspectable by future CLI/Agent/operator tooling without reproducing UI logic.
 
-The public `runtime.config.inspect` surface (`GET /api/runtime-config`) exposes only deployment-level capability booleans such as whether Managed Classic execution is available on Testnet/Mainnet. The Integration Wizard uses this before promising a managed default; a deployment without a configured pool must require external Classic routing instead of failing later at Request creation.
+The public `runtime.config.inspect` surface (`GET /runtime-config` relative to the protocol base) exposes only deployment-level capability booleans such as whether Managed Classic execution is available on Testnet/Mainnet. The Integration Wizard uses this before promising a managed default; a deployment without a configured pool must require external Classic routing instead of failing later at Request creation.
 
-An Integration can inspect its effective execution capability through the Headless operation `integration.execution.inspect` (`GET /api/integration-execution?network=...`, authenticated by `msi_*`). The response exposes only public execution facts: whether Classic scope exists, managed/external Treasury counts, and the public identities of the deployment's managed Classic channel pool. It never exposes the channel master secret or derived private seeds.
+An Integration can inspect its effective execution capability through the Headless operation `integration.execution.inspect` (`GET /integration-execution?network=...`, authenticated by `msi_*`). The response exposes only public execution facts: whether Classic scope exists, managed/external Treasury counts, and the public identities of the deployment's managed Classic channel pool. It never exposes the channel master secret or derived private seeds.
 
 ### Classic Treasury onboarding
 
@@ -599,7 +599,7 @@ The first production slice keeps existing authority semantics and changes the pr
 - managed semantic Classic Payment through the channel-account pool;
 - signer/origin/current-plan scoped Browser authorization for Soroban Native Authorization;
 - operator Integration administration for credentials, scope, execution routing and webhook configuration;
-- bounded public Testnet Integration self-service at `/developers/integrations/new` and `POST /api/integration-testnet`;
+- bounded public Testnet Integration self-service at `/developers/integrations/new` and `POST https://api-testnet.multisig.tools/stellar/integration-testnet`;
 - stable Headless operation/OpenAPI discovery shared by Human, Agent and Integration clients.
 
 ### Remaining ergonomics — not new authority
@@ -620,7 +620,7 @@ This product simplification must not cause:
 - implicit signer authority for `msi_*`;
 - implicit executor authority from the planning source;
 - claiming that Intent cancellation revokes already disclosed detached AUTH or prepared XDR;
-- breaking replacement of existing `/api/intent` or `/api/request` contracts;
+- breaking replacement of existing public `/intent` or `/request` contracts;
 - making Browser capability equivalent to Stellar signer authority;
 - requiring an SDK for Native Authorization;
 - building public/anonymous Browser Intent creation before real Integration demand exists.
