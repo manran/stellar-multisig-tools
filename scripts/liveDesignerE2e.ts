@@ -7,8 +7,8 @@ import {
   TransactionBuilder,
 } from '@stellar/stellar-sdk';
 import { loadAccount, submitTransactionXdr } from '../packages/stellar-core/src/horizon';
-import { assessSetupSource, designExactMultisigPolicy } from '../src/stellar/multisigDesigner';
-import { buildMultisigSetupXdr } from '../src/stellar/multisigSetupXdr';
+import { assessSetupSource, designExactMultisigPolicy } from '../apps/web/src/stellar/multisigDesigner';
+import { buildMultisigSetupXdr } from '../apps/web/src/stellar/multisigSetupXdr';
 
 const network = 'testnet' as const;
 

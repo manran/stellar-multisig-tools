@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const ui = readFileSync(new URL('../../../../src/IntegrationAdminApp.tsx', import.meta.url), 'utf8');
-const wizard = readFileSync(new URL('../../../../src/IntegrationProfileWizard.tsx', import.meta.url), 'utf8');
-const main = readFileSync(new URL('../../../../src/main.tsx', import.meta.url), 'utf8');
-const shell = readFileSync(new URL('../../../../src/StellarWorkspaceShell.tsx', import.meta.url), 'utf8');
+const ui = readFileSync(new URL('../../../web/src/IntegrationAdminApp.tsx', import.meta.url), 'utf8');
+const wizard = readFileSync(new URL('../../../web/src/IntegrationProfileWizard.tsx', import.meta.url), 'utf8');
+const main = readFileSync(new URL('../../../web/src/main.tsx', import.meta.url), 'utf8');
+const shell = readFileSync(new URL('../../../web/src/StellarWorkspaceShell.tsx', import.meta.url), 'utf8');
 const api = readFileSync(new URL('../routes/integration-admin.ts', import.meta.url), 'utf8');
 
 test('Integration admin is an unlinked operator-only runtime surface', () => {

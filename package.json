@@ -18,7 +18,7 @@
     "preview": "npm run preview -w @multisig-tools/web",
     "clean": "rm -rf dist apps/web/dist",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/stellar/*.test.ts apps/stellar-api/stellar/server/*.test.ts apps/stellar-api/stellar/platform/vercel/*.test.ts",
+    "test": "tsx --test apps/web/src/stellar/*.test.ts apps/stellar-api/stellar/server/*.test.ts apps/stellar-api/stellar/platform/vercel/*.test.ts",
     "integration:credential": "tsx apps/stellar-api/scripts/createIntegrationCredential.ts",
     "integration:admin-secret": "tsx apps/stellar-api/scripts/createIntegrationAdminSecret.ts",
     "db:migrate": "tsx apps/stellar-api/scripts/applyPostgresMigrations.ts",

@@ -158,7 +158,7 @@ packages/
   stellar-core/
 ```
 
-`packages/stellar-core` contains Stellar runtime modules that are consumed by both Human Web and the Stellar API. It contains no React or browser-only ownership and is not a Vercel project. This package exists because reuse is already proven in both deployables; do not create speculative cross-protocol packages before equivalent real reuse exists.
+`apps/web/src` is the sole Human Web source tree. `packages/stellar-core` contains Stellar runtime modules that are consumed by both Human Web and the Stellar API. It contains no React or browser-only ownership and is not a Vercel project. This package exists because reuse is already proven in both deployables; do not create speculative cross-protocol packages before equivalent real reuse exists.
 
 Shared packages are introduced only when code is actually consumed by more than one deployable.
 

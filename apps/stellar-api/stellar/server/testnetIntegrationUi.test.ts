@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const app = readFileSync(new URL('../../../../src/TestnetIntegrationApp.tsx', import.meta.url), 'utf8');
-const wizard = readFileSync(new URL('../../../../src/IntegrationProfileWizard.tsx', import.meta.url), 'utf8');
-const routes = readFileSync(new URL('../../../../src/workspaceRoutes.ts', import.meta.url), 'utf8');
+const app = readFileSync(new URL('../../../web/src/TestnetIntegrationApp.tsx', import.meta.url), 'utf8');
+const wizard = readFileSync(new URL('../../../web/src/IntegrationProfileWizard.tsx', import.meta.url), 'utf8');
+const routes = readFileSync(new URL('../../../web/src/workspaceRoutes.ts', import.meta.url), 'utf8');
 
 test('Testnet Integration self-service reuses the existing Integration wizard without mia credential', () => {
   assert.match(app, /Create Testnet Integration/);

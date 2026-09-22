@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canonicalStellarPath } from '../../../../src/workspaceNavigation.js';
+import { canonicalStellarPath } from '../../../web/src/workspaceNavigation.js';
 import {
   CANONICAL_STELLAR_ROUTES,
   isCanonicalStellarContentPath,
   isStellarWorkspaceHost,
   stellarActivityScopeForPath,
   stellarWorkspaceRouteForPath,
-} from '../../../../src/workspaceRoutes.js';
+} from '../../../web/src/workspaceRoutes.js';
 
 const expectedCanonicalPaths = [
   '/',

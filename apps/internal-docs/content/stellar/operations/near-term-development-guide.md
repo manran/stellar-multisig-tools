@@ -164,27 +164,27 @@ No production route/component deletion without explicit approval.
 ### Critical
 
 1. **Structural fingerprint / equal-card workflow**
-   - `src/StellarLandingApp.tsx`: the four-step section is a uniform four-column card strip.
+   - `apps/web/src/StellarLandingApp.tsx`: the four-step section is a uniform four-column card strip.
    - Effect: reads as a generic SaaS feature grid rather than one continuous authorization story.
    - Direction: convert to one narrative sequence with shared structure, not four isolated tiles.
 
 2. **Footer fingerprint**
-   - `src/StellarFooter.tsx`: marketing footer is brand column + three link columns.
+   - `apps/web/src/StellarFooter.tsx`: marketing footer is brand column + three link columns.
    - Effect: generic Product / Resources / Trust SaaS footer.
    - Direction: compact product statement plus a single directory/link field with less categorical chrome.
 
 ### Major
 
 3. **Competing primary actions**
-   - `src/StellarLandingApp.tsx`: Open workspace / Try live demo / Create a treasury share near-equal CTA weight.
+   - `apps/web/src/StellarLandingApp.tsx`: Open workspace / Try live demo / Create a treasury share near-equal CTA weight.
    - Direction: one primary action, one clear secondary; other entry points move into the next decision surface.
 
 4. **Role cards repeat card grammar**
-   - `src/StellarLandingApp.tsx`: signer vs treasury-manager is another equal-card grid.
+   - `apps/web/src/StellarLandingApp.tsx`: signer vs treasury-manager is another equal-card grid.
    - Direction: use a task index/list with explicit entry paths.
 
 5. **Testnet hero + two cards**
-   - `src/StellarTestnetLandingApp.tsx`: generic hero followed by two equal informational cards.
+   - `apps/web/src/StellarTestnetLandingApp.tsx`: generic hero followed by two equal informational cards.
    - Direction: treat Testnet as an environment notice/workbench entrance, with one compact boundary-facts list.
 
 6. **Token drift**

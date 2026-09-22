@@ -200,7 +200,7 @@ The canonical Human Web runtime values live in `apps/web/tokens.css`. It must in
 
 ### Tailwind v4 @theme
 
-Tailwind consumes semantic tokens through `src/index.css`. New Hallmark surfaces prefer CSS variables or semantic utilities over raw one-off values.
+Tailwind consumes semantic tokens through `apps/web/src/index.css`. New Hallmark surfaces prefer CSS variables or semantic utilities over raw one-off values.
 
 ### DTCG tokens.json
 

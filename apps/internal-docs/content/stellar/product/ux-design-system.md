@@ -96,7 +96,7 @@ Demo safety/teaching notices may use amber when they communicate caution such as
 
 ## 4. MultiSigTools UI primitives
 
-Human workflow semantics must be rendered through `src/MultiSigUi.tsx` where practical.
+Human workflow semantics must be rendered through `apps/web/src/MultiSigUi.tsx` where practical.
 
 Current primitives:
 
@@ -111,7 +111,7 @@ Current primitives:
 
 Action controls are not status indicators. Brand emerald on a primary action means **do this**, not **this succeeded**. Warning/success/danger state remains owned by status components. Do not introduce page-local primary-button palettes when an existing Action variant expresses the same Human action role; equally, do not wrap every tiny technical control merely to deduplicate Tailwind classes.
 
-Pure lifecycle/status mapping lives in `src/stellar/humanWorkflow.ts` so controllers and tests do not depend on React.
+Pure lifecycle/status mapping lives in `apps/web/src/stellar/humanWorkflow.ts` so controllers and tests do not depend on React.
 
 ### Boundary rule
 

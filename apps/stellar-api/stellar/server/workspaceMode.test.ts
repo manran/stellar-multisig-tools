@@ -5,7 +5,7 @@ import {
   resolveWorkspaceMode,
   workspaceHomePath,
   workspaceModeForExclusiveRoute,
-} from '../../../../src/workspaceMode.js';
+} from '../../../web/src/workspaceMode.js';
 
 test('exclusive workspace routes identify their owning mode', () => {
   assert.equal(workspaceModeForExclusiveRoute('/'), null);
