@@ -1,7 +1,7 @@
 import type {
   InboxSorobanIntentSnapshot,
   SorobanIntentViewerAction,
-} from './sorobanIntentApiTypes.js';
+} from '../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 
 export function intentViewerActionNeedsAction(action: SorobanIntentViewerAction): boolean {
   return action === 'sign' || action === 'route_execution' || action === 'execution_failed' || action === 'attention';

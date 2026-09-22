@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Keypair, Networks, TransactionBuilder } from '@stellar/stellar-sdk/base';
-import { buildTransferTransaction, transferFundingIssues } from './transferTransactions.js';
-import type { StellarNetworkParameters } from './horizon.js';
-import type { ResolvedTransferRow } from './structuredTransfers.js';
-import type { StellarAccountSnapshot } from './types.js';
+import { buildTransferTransaction, transferFundingIssues } from '../../packages/stellar-core/src/transferTransactions.js';
+import type { StellarNetworkParameters } from '../../packages/stellar-core/src/horizon.js';
+import type { ResolvedTransferRow } from '../../packages/stellar-core/src/structuredTransfers.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 const A = Keypair.random().publicKey();
 const B = Keypair.random().publicKey();

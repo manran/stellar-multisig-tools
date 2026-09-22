@@ -1,5 +1,5 @@
 import { StatusBadge } from './MultiSigUi';
-import type { SorobanEffectsDiff } from './stellar/sorobanEffects';
+import type { SorobanEffectsDiff } from '../packages/stellar-core/src/sorobanEffects';
 
 function percentLabel(basisPoints: number | null) {
   if (basisPoints === null) return 'unbounded';

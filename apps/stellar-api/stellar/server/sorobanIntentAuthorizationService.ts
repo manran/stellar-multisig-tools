@@ -1,22 +1,22 @@
 import { createHash } from 'node:crypto';
 import { StrKey, inspectAuthEntry, xdr } from '@stellar/stellar-sdk/base';
-import type { AgentActorProvenance } from '../../../../src/stellar/agentAccessTypes.js';
+import type { AgentActorProvenance } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 import {
   analyzeSorobanGAccountAuthorizationEntries,
   mergeSorobanGAccountSignatureEntry,
   type SorobanGAccountAuthorizerStatus,
-} from '../../../../src/stellar/sorobanAuthorization.js';
+} from '../../../../packages/stellar-core/src/sorobanAuthorization.js';
 import {
   analyzeKnownSorobanContractAuthorizationEntries,
   resolveSimpleEd25519ContractAccountAdapter,
   simpleEd25519ContractCredentialContribution,
-} from '../../../../src/stellar/sorobanContractAdapter.js';
+} from '../../../../packages/stellar-core/src/sorobanContractAdapter.js';
 import {
   createSorobanContractAuthorizationChallengeForEntry,
   stageSorobanContractCredentialContributionEntry,
-} from '../../../../src/stellar/sorobanCustomAuthorization.js';
-import { authorizationEntriesFromPlan } from '../../../../src/stellar/sorobanAuthorizationPlan.js';
-import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../../../../src/stellar/horizon.js';
+} from '../../../../packages/stellar-core/src/sorobanCustomAuthorization.js';
+import { authorizationEntriesFromPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
 import type { SorobanIntentStore, StoredSorobanIntentAuthorizationContribution } from './sorobanIntentStore.js';
 
 export type SorobanIntentAuthorizationStatus =

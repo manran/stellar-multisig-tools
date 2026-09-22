@@ -1,5 +1,5 @@
 import { getSorobanIntentAuthorization, type SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
-import { compareSorobanEffects } from '../../../../src/stellar/sorobanEffects.js';
+import { compareSorobanEffects } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import { planSorobanIntentForStorage } from './sorobanIntentPlanningService.js';
 import {
   SorobanIntentStoreConflictError,

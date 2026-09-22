@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from 'pg';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import type { ClassicManagedChannelCreatorState } from '../server/classicManagedChannelCapacity.js';
 import type {
   ClassicManagedChannelCreatorMonitorStore,

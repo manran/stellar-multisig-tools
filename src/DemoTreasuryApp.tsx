@@ -29,7 +29,7 @@ import {
 } from './stellar/demoRuntime';
 import type { DemoPaymentDraft, DemoProposal, DemoSignerName } from './stellar/demoRuntime';
 import { projectTransactionSemantics } from './stellar/transactionSemantics';
-import { inspectTransactionXdr } from './stellar/transactionXdr';
+import { inspectTransactionXdr } from '../packages/stellar-core/src/transactionXdr';
 import { stellarHref } from './workspaceNavigation';
 
 type DemoStage = 'prepare' | 'review' | 'proposal' | 'details' | 'activity';

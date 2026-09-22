@@ -5,14 +5,15 @@
   "type": "module",
   "workspaces": [
     "apps/stellar-api",
-    "apps/web"
+    "apps/web",
+    "packages/stellar-core"
   ],
   "engines": {
     "node": "24.19.0"
   },
   "scripts": {
     "dev": "npm run dev -w @multisig-tools/web",
-    "build": "tsc -p tsconfig.stellar.json && tsc -p tsconfig.api.json && npm run build -w @multisig-tools/web",
+    "build": "npm run typecheck -w @multisig-tools/stellar-core && tsc -p tsconfig.stellar.json && tsc -p tsconfig.api.json && npm run build -w @multisig-tools/web",
     "live:e2e:request": "tsx scripts/liveRequestServiceE2e.ts",
     "preview": "npm run preview -w @multisig-tools/web",
     "clean": "rm -rf dist apps/web/dist",

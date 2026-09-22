@@ -5,7 +5,7 @@ import {
   type AgentActorProvenance,
   type SignerAgentCredentialSummary,
   type SignerPrincipalRef,
-} from '../../../../src/stellar/agentAccessTypes.js';
+} from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 import type { AgentCredentialStore, StoredSignerAgentCredential } from './agentCredentialStore.js';
 
 const AGENT_KEY_PREFIX = 'msa';

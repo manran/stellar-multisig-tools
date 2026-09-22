@@ -1,4 +1,4 @@
-import type { ThresholdAuthorizationSummary, ThresholdLevel } from './types.js';
+import type { ThresholdAuthorizationSummary, ThresholdLevel } from '../../packages/stellar-core/src/types.js';
 
 export function humanAuthorizationLevelLabel(level: ThresholdLevel): string {
   if (level === 'low') return 'Limited account actions';

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Account, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
 import { summarizeAccountControlReview } from './accountControlReview.js';
-import type { StellarAccountSnapshot } from './types.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 const SIGNED_PAYLOAD = 'PA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUAAAAAQACAQDAQCQMBYIBEFAWDANBYHRAEISCMKBKFQXDAMRUGY4DUPB6IBZGM';
 

@@ -1,5 +1,5 @@
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
-import { privateSessionAddressFromRequest } from '../../../../src/stellar/privateSessionTransport.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import { privateSessionAddressFromRequest } from '../../../../packages/stellar-core/src/privateSessionTransport.js';
 import { authConfigForRequest } from './authConfig.js';
 import { AuthServiceError, privateWorkspaceSessionFromRequest, type AuthSession } from './authService.js';
 import type { AuthStore } from './authStore.js';

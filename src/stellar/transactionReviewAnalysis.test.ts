@@ -4,9 +4,9 @@ import {
   canSubmitReviewedTransactionDirectly,
   loadTransactionSourceAnalyses,
   projectTransactionReviewAuthorizationStatus,
-} from './transactionReviewAnalysis.js';
-import type { TransactionXdrInspection } from './transactionXdr.js';
-import type { StellarAccountSnapshot } from './types.js';
+} from '../../packages/stellar-core/src/transactionReviewAnalysis.js';
+import type { TransactionXdrInspection } from '../../packages/stellar-core/src/transactionXdr.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 const ACCOUNT_A = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 const ACCOUNT_B = 'GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBFKQ';

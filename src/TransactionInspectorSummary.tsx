@@ -1,6 +1,6 @@
 import { AlertTriangle, CheckCircle2, CircleAlert } from 'lucide-react';
-import type { TransactionReviewAuthorizationStatus } from './stellar/transactionReviewAnalysis';
-import type { TransactionXdrInspection } from './stellar/transactionXdr';
+import type { TransactionReviewAuthorizationStatus } from '../packages/stellar-core/src/transactionReviewAnalysis';
+import type { TransactionXdrInspection } from '../packages/stellar-core/src/transactionXdr';
 
 interface Props {
   inspection: TransactionXdrInspection;

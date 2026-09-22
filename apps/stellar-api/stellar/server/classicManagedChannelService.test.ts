@@ -8,9 +8,9 @@ import {
   Operation,
   TransactionBuilder,
 } from '@stellar/stellar-sdk/base';
-import { AccountNotFoundError, TransactionSubmissionError } from '../../../../src/stellar/horizon.js';
+import { AccountNotFoundError, TransactionSubmissionError } from '../../../../packages/stellar-core/src/horizon.js';
 import { deriveClassicManagedChannel } from './classicManagedChannelConfig.js';
-import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
+import type { StellarAccountSnapshot } from '../../../../packages/stellar-core/src/types.js';
 import type {
   ClassicManagedChannelLeaseStore,
   StoredClassicManagedChannelLease,

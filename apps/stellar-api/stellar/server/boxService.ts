@@ -12,9 +12,9 @@ import {
   type TreasuryAuditKeySummary,
   type TreasuryBoxMetadata,
   type TreasuryBoxRef,
-} from '../../../../src/stellar/boxTypes.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
-import { inspectTransactionXdr } from '../../../../src/stellar/transactionXdr.js';
+} from '../../../../packages/stellar-core/src/boxTypes.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 import type { BoxStore, StoredTreasuryAuditKey } from './boxStore.js';
 
 const AUDIT_KEY_PREFIX = 'mta';

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assessMultisigReserve, stellarAmountToStroops, stroopsToStellarAmount, stroopsToXlm, xlmToStroops } from './reserve.js';
-import type { StellarAccountSnapshot } from './types.js';
+import { assessMultisigReserve, stellarAmountToStroops, stroopsToStellarAmount, stroopsToXlm, xlmToStroops } from '../../packages/stellar-core/src/reserve.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 const MASTER = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 

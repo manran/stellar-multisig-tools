@@ -5,7 +5,7 @@ import {
   STELLAR_PUBLIC_DOCS_BASE,
   STELLAR_TESTNET_API_BASE,
   stellarApiBaseForDeployment,
-} from './apiOrigins.js';
+} from '../../packages/stellar-core/src/apiOrigins.js';
 
 test('public API bases separate protocol namespace from deployment environment', () => {
   assert.equal(STELLAR_MAINNET_API_BASE, 'https://api.multisig.tools/stellar');

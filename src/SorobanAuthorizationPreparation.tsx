@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import { CircleAlert, KeyRound, LoaderCircle, Share2, ShieldCheck } from 'lucide-react';
 import { ActionButton } from './MultiSigUi';
 import { useStellarWallet } from './StellarWalletContext';
-import { loadAccount } from './stellar/horizon';
-import { analyzeSorobanGAccountAuthorization } from './stellar/sorobanAuthorization';
-import type { SorobanGAccountAuthorizationStatus } from './stellar/sorobanAuthorization';
-import { analyzeKnownSorobanContractAuthorization } from './stellar/sorobanContractAdapter';
-import type { KnownSorobanContractAuthorizationStatus } from './stellar/sorobanContractAdapter';
-import { privateSessionAddressHeaders } from './stellar/privateSessionTransport';
-import type { StellarNetwork } from './stellar/types';
+import { loadAccount } from '../packages/stellar-core/src/horizon';
+import { analyzeSorobanGAccountAuthorization } from '../packages/stellar-core/src/sorobanAuthorization';
+import type { SorobanGAccountAuthorizationStatus } from '../packages/stellar-core/src/sorobanAuthorization';
+import { analyzeKnownSorobanContractAuthorization } from '../packages/stellar-core/src/sorobanContractAdapter';
+import type { KnownSorobanContractAuthorizationStatus } from '../packages/stellar-core/src/sorobanContractAdapter';
+import { privateSessionAddressHeaders } from '../packages/stellar-core/src/privateSessionTransport';
+import type { StellarNetwork } from '../packages/stellar-core/src/types';
 import { navigateWorkspace } from './workspaceNavigation';
 
 export interface SorobanAuthorizationPreparationInput {

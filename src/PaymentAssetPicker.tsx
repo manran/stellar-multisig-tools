@@ -1,6 +1,6 @@
 import { ChevronDown } from 'lucide-react';
 import { assetBalanceParts, compactAssetIssuer } from './stellar/assetPresentation';
-import type { PaymentAssetChoice } from './stellar/paymentAsset';
+import type { PaymentAssetChoice } from '../packages/stellar-core/src/paymentAsset';
 
 export default function PaymentAssetPicker({ assets, value, onChange, disabled, ariaLabel = 'Payment asset' }: {
   assets: PaymentAssetChoice[];

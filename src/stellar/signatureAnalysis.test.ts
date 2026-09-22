@@ -10,7 +10,7 @@ import {
   TransactionBuilder,
   hash,
 } from '@stellar/stellar-sdk/base';
-import { analyzeEnvelopeSignatures } from './signatureAnalysis.js';
+import { analyzeEnvelopeSignatures } from '../../packages/stellar-core/src/signatureAnalysis.js';
 
 function paymentTransaction() {
   const source = Keypair.random();

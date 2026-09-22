@@ -6,9 +6,9 @@ import type { NetworkFallbackChoiceSource } from './MultiSigUi';
 import { useStellarWallet } from './StellarWalletContext';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { accountSigningIntentForRoute } from './stellar/accountSigningFlow';
-import { isValidStellarAccountId, loadAccount } from './stellar/horizon';
+import { isValidStellarAccountId, loadAccount } from '../packages/stellar-core/src/horizon';
 import { resolveStellarNetwork } from './stellar/networkPreference';
-import type { StellarNetwork } from './stellar/types';
+import type { StellarNetwork } from '../packages/stellar-core/src/types';
 import { navigateWorkspace } from './workspaceNavigation';
 
 const OFFLINE_SETUP_STEPS = ['Public address', 'Signing policy', 'Review', 'Sign elsewhere', 'Return XDR or submit'] as const;

@@ -1,7 +1,7 @@
-import type { SigningRequestSnapshot } from './requestTypes.js';
+import type { SigningRequestSnapshot } from '../../packages/stellar-core/src/requestTypes.js';
 import { projectTransactionSemantics } from './transactionSemantics.js';
-import { inspectTransactionXdr } from './transactionXdr.js';
-import type { TransactionXdrInspection } from './transactionXdr.js';
+import { inspectTransactionXdr } from '../../packages/stellar-core/src/transactionXdr.js';
+import type { TransactionXdrInspection } from '../../packages/stellar-core/src/transactionXdr.js';
 
 export interface InboxRequestDescription {
   title: string;

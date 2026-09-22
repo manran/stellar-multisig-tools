@@ -1,4 +1,4 @@
-import { STELLAR_MAINNET_ORIGIN } from './stellar/deploymentOrigins.js';
+import { STELLAR_MAINNET_ORIGIN } from '../packages/stellar-core/src/deploymentOrigins.js';
 import { isStellarWorkspaceHost, normalizedStellarWorkspacePath } from './workspaceRoutes.js';
 
 export const WORKSPACE_NAVIGATION_EVENT = 'multisig-tools:workspace-navigate';

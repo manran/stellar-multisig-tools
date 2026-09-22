@@ -9,9 +9,9 @@ import {
   xdr,
 } from '@stellar/stellar-sdk/base';
 import { inspectAuthEntry } from '@stellar/stellar-sdk/base';
-import { authorizationEntriesFromPlan } from '../../../../src/stellar/sorobanAuthorizationPlan.js';
-import { createSorobanIntent, materializeSorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
-import { emptySorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
+import { authorizationEntriesFromPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import { createSorobanIntent, materializeSorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
+import { emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import { planSorobanIntent, planSorobanIntentForStorage } from './sorobanIntentPlanningService.js';
 
 function fixture() {

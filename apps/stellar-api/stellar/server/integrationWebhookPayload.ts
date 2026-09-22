@@ -1,10 +1,10 @@
-import type { IntegrationSorobanJobProjection } from '../../../../src/stellar/sorobanIntentApiTypes.js';
+import type { IntegrationSorobanJobProjection } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 import type {
   SigningRequestSnapshot,
   SigningRequestStatus,
   SigningRequestStatusReason,
-} from '../../../../src/stellar/requestTypes.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+} from '../../../../packages/stellar-core/src/requestTypes.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import type { IntegrationOutboxRecord } from '../db/postgresIntegrationOutboxDispatch.js';
 import { projectIntegrationSorobanJob } from './integrationSorobanJobProjection.js';
 import type { IntegrationWebhookPayloadBuilder } from './integrationWebhookDispatcher.js';

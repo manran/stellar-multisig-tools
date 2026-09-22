@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizePrivateNote, privateNoteByteLength } from '../../../../src/stellar/privateNote.js';
+import { normalizePrivateNote, privateNoteByteLength } from '../../../../packages/stellar-core/src/privateNote.js';
 import { latestPrivateNote, revisePrivateNote } from './requestPrivateNote.js';
 import type { SigningRequestStore } from './requestStore.js';
-import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
+import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
 
 function noteStore() {
   const notes: PrivateNoteRevision[] = [];

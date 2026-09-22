@@ -12,9 +12,9 @@ import {
   loadNetworkParameters,
   submitTransactionXdr,
   TransactionSubmissionError,
-} from '../../../../src/stellar/horizon.js';
-import { stellarAmountToStroops } from '../../../../src/stellar/reserve.js';
-import type { StellarAccountSnapshot, StellarNetwork } from '../../../../src/stellar/types.js';
+} from '../../../../packages/stellar-core/src/horizon.js';
+import { stellarAmountToStroops } from '../../../../packages/stellar-core/src/reserve.js';
+import type { StellarAccountSnapshot, StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import {
   classicManagedChannelSoftLimit,
   effectiveClassicManagedChannelSoftLimit,

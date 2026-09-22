@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Address, Keypair, nativeToScVal, xdr } from '@stellar/stellar-sdk/base';
-import { emptySorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
+import { emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
 import type { StoredSorobanIntent } from './sorobanIntentStore.js';
 import type {

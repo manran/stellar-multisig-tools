@@ -1,4 +1,4 @@
-import type { StellarNetwork } from './types.js';
+import type { StellarNetwork } from '../../packages/stellar-core/src/types.js';
 
 export type IntegrationAuthorizationExperience = 'hosted' | 'native' | 'headless';
 export type IntegrationExecutionOwner = 'multisigtools' | 'integration';

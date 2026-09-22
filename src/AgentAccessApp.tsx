@@ -9,8 +9,8 @@ import {
   type AgentAccessLevel,
   type SignerAgentCredentialSummary,
   type SignerPrincipalRef,
-} from './stellar/agentAccessTypes';
-import { privateSessionAddressHeaders } from './stellar/privateSessionTransport';
+} from '../packages/stellar-core/src/agentAccessTypes';
+import { privateSessionAddressHeaders } from '../packages/stellar-core/src/privateSessionTransport';
 
 const ACCESS_OPTIONS: readonly { value: AgentAccessLevel; title: string; detail: string }[] = [
   {

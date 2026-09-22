@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { analyzeAccountAuthorization } from './authorization.js';
-import { thresholdLevelForOperation } from './operationThreshold.js';
-import { summarizeTransactionSources } from './transactionRequirements.js';
-import type { StellarAccountSnapshot } from './types.js';
+import { analyzeAccountAuthorization } from '../../packages/stellar-core/src/authorization.js';
+import { thresholdLevelForOperation } from '../../packages/stellar-core/src/operationThreshold.js';
+import { summarizeTransactionSources } from '../../packages/stellar-core/src/transactionRequirements.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 const baseAccount: StellarAccountSnapshot = {
   accountId: 'GMASTER',

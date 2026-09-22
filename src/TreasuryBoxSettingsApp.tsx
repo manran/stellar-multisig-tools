@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 import PrivateWorkspaceUnlock from './PrivateWorkspaceUnlock';
 import { PageHeader } from './MultiSigUi';
-import { STELLAR_PUBLIC_DOCS_BASE } from './stellar/apiOrigins';
-import { analyzeAccountAuthorization } from './stellar/authorization';
+import { STELLAR_PUBLIC_DOCS_BASE } from '../packages/stellar-core/src/apiOrigins';
+import { analyzeAccountAuthorization } from '../packages/stellar-core/src/authorization';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
 import {
@@ -21,12 +21,12 @@ import {
   type BoxAuditEvent,
   type TreasuryAuditKeySummary,
   type TreasuryBoxMetadata,
-} from './stellar/boxTypes';
-import { loadAccount } from './stellar/horizon';
-import { privateSessionAddressHeaders } from './stellar/privateSessionTransport';
-import { loadAccountsForSigner } from './stellar/signerAccounts';
-import { hasSharedSigningControl } from './stellar/treasuryModel';
-import type { StellarAccountSnapshot } from './stellar/types';
+} from '../packages/stellar-core/src/boxTypes';
+import { loadAccount } from '../packages/stellar-core/src/horizon';
+import { privateSessionAddressHeaders } from '../packages/stellar-core/src/privateSessionTransport';
+import { loadAccountsForSigner } from '../packages/stellar-core/src/signerAccounts';
+import { hasSharedSigningControl } from '../packages/stellar-core/src/treasuryModel';
+import type { StellarAccountSnapshot } from '../packages/stellar-core/src/types';
 import {
   parseTreasuryRoute,
   treasuryOverviewHref,

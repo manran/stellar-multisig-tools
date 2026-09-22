@@ -1,5 +1,5 @@
-import { isTransactionLifetimeSeconds } from './transactionPreferences.js';
-import type { StellarNetwork } from './types.js';
+import { isTransactionLifetimeSeconds } from '../../packages/stellar-core/src/transactionPreferences.js';
+import type { StellarNetwork } from '../../packages/stellar-core/src/types.js';
 
 export interface PaymentRecipientDraft {
   destination: string;

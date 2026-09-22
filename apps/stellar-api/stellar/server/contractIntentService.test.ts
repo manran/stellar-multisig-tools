@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Spec } from '@stellar/stellar-sdk/contract';
 import { Keypair, xdr } from '@stellar/stellar-sdk/base';
-import { describeContractSpec } from '../../../../src/stellar/contractSpec.js';
+import { describeContractSpec } from '../../../../packages/stellar-core/src/contractSpec.js';
 import {
   buildContractIntent,
   ContractIntentServiceError,

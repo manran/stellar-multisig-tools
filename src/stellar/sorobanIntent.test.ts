@@ -11,7 +11,7 @@ import {
 import {
   createSorobanIntent,
   materializeSorobanIntent,
-} from './sorobanIntent.js';
+} from '../../packages/stellar-core/src/sorobanIntent.js';
 
 function fixture() {
   const authorizer = Keypair.random();

@@ -9,10 +9,10 @@ import {
   xdr,
 } from '@stellar/stellar-sdk/base';
 import { Spec } from '@stellar/stellar-sdk/contract';
-import type { SignerPrincipalRef } from '../../../../src/stellar/agentAccessTypes.js';
-import { describeContractSpec } from '../../../../src/stellar/contractSpec.js';
-import { materializeSorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
-import { emptySorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
+import type { SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
+import { describeContractSpec } from '../../../../packages/stellar-core/src/contractSpec.js';
+import { materializeSorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
+import { emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import type {
   AgentCredentialStore,
   StoredAgentIdempotencyClaim,

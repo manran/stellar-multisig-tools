@@ -1,6 +1,6 @@
 import { Mail } from 'lucide-react';
 import MultiSigBrandMark from './MultiSigBrandMark';
-import { STELLAR_PUBLIC_DOCS_BASE } from './stellar/apiOrigins';
+import { STELLAR_PUBLIC_DOCS_BASE } from '../packages/stellar-core/src/apiOrigins';
 import { canonicalStellarContentHref, stellarHref } from './workspaceNavigation';
 import { isCanonicalStellarContentPath } from './workspaceRoutes';
 

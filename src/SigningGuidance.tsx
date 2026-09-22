@@ -6,9 +6,9 @@ import { useStellarWallet } from './StellarWalletContext';
 import { cachedTreasuryNames, loadSharedTreasuryNames } from './treasuryMetadataCache';
 import { treasuryDisplayLabel } from './treasuryDisplay';
 import { humanAuthorizationRequirement } from './stellar/authorizationPresentation';
-import type { SourceAnalysis } from './stellar/transactionReviewAnalysis';
-import type { TransactionAuthorizationStatus } from './stellar/transactionAuthorization';
-import type { TransactionXdrInspection } from './stellar/transactionXdr';
+import type { SourceAnalysis } from '../packages/stellar-core/src/transactionReviewAnalysis';
+import type { TransactionAuthorizationStatus } from '../packages/stellar-core/src/transactionAuthorization';
+import type { TransactionXdrInspection } from '../packages/stellar-core/src/transactionXdr';
 
 interface Props {
   inspection: TransactionXdrInspection;

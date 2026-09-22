@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { STELLAR_MAINNET_ORIGIN, STELLAR_TESTNET_ORIGIN } from '../../../../src/stellar/deploymentOrigins.js';
+import { STELLAR_MAINNET_ORIGIN, STELLAR_TESTNET_ORIGIN } from '../../../../packages/stellar-core/src/deploymentOrigins.js';
 import { coordinationPool } from '../db/postgres.js';
 import { createPostgresSigningRequestStore } from '../db/postgresSigningRequestStore.js';
 import { createPostgresSorobanIntentStore } from '../db/postgresSorobanIntentStore.js';

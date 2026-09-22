@@ -1,5 +1,5 @@
-import { clientStellarDeploymentNetwork, resolveDeploymentNetwork } from './deploymentNetwork.js';
-import type { StellarNetwork } from './types.js';
+import { clientStellarDeploymentNetwork, resolveDeploymentNetwork } from '../../packages/stellar-core/src/deploymentNetwork.js';
+import type { StellarNetwork } from '../../packages/stellar-core/src/types.js';
 
 export function resolveStellarNetwork(
   explicitNetwork: string | null | undefined,

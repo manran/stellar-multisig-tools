@@ -1,4 +1,4 @@
-import { stellarApiBaseForDeployment } from '../../../../src/stellar/apiOrigins.js';
+import { stellarApiBaseForDeployment } from '../../../../packages/stellar-core/src/apiOrigins.js';
 import { configuredDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import { publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
 import { createOpenApiDocument } from '../server/openApiDocument.js';

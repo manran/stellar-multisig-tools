@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { approvalPowerLabel, humanAuthorizationLevelLabel, humanAuthorizationRequirement } from './authorizationPresentation.js';
-import type { ThresholdAuthorizationSummary } from './types.js';
+import type { ThresholdAuthorizationSummary } from '../../packages/stellar-core/src/types.js';
 
 function summary(overrides: Partial<ThresholdAuthorizationSummary> = {}): ThresholdAuthorizationSummary {
   return {

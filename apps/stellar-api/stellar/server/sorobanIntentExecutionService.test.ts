@@ -11,9 +11,9 @@ import {
   nativeToScVal,
   xdr,
 } from '@stellar/stellar-sdk/base';
-import { createSorobanAuthorizationPlan } from '../../../../src/stellar/sorobanAuthorizationPlan.js';
-import { emptySorobanEffectsSnapshot, sorobanEffectsSnapshot, type SorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
-import { createSorobanIntent, materializeSorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
+import { createSorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import { emptySorobanEffectsSnapshot, sorobanEffectsSnapshot, type SorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
+import { createSorobanIntent, materializeSorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
 import {
   prepareSorobanIntentExecution,
   SorobanIntentExecutionServiceError,

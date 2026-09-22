@@ -10,10 +10,10 @@ import {
   nativeToScVal,
   xdr,
 } from '@stellar/stellar-sdk/base';
-import { sorobanAuthorizationEntryPreimageXdr } from '../../../../src/stellar/sorobanAuthorization.js';
-import { authorizationEntriesFromPlan, createSorobanAuthorizationPlan } from '../../../../src/stellar/sorobanAuthorizationPlan.js';
-import { emptySorobanEffectsSnapshot, sorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
-import { createSorobanIntent, materializeSorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
+import { sorobanAuthorizationEntryPreimageXdr } from '../../../../packages/stellar-core/src/sorobanAuthorization.js';
+import { authorizationEntriesFromPlan, createSorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import { emptySorobanEffectsSnapshot, sorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
+import { createSorobanIntent, materializeSorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
 import { contributeSorobanIntentAuthorization } from './sorobanIntentAuthorizationService.js';
 import { replanExpiredSorobanIntent, SorobanIntentReplanServiceError } from './sorobanIntentReplanService.js';
 import { createStoredSorobanIntent } from './sorobanIntentService.js';

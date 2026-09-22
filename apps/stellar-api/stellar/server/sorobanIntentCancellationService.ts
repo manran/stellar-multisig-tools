@@ -1,4 +1,4 @@
-import type { MachineCallerProvenance } from '../../../../src/stellar/coordinationActorTypes.js';
+import type { MachineCallerProvenance } from '../../../../packages/stellar-core/src/coordinationActorTypes.js';
 import { SorobanIntentStoreConflictError } from './sorobanIntentStore.js';
 import type {
   SorobanIntentStore,

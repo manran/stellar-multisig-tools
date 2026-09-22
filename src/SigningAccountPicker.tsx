@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, LoaderCircle } from 'lucide-react';
 import { useAddressBook } from './AddressBookContext';
 import { useStellarWallet } from './StellarWalletContext';
-import { analyzeAccountAuthorization } from './stellar/authorization';
+import { analyzeAccountAuthorization } from '../packages/stellar-core/src/authorization';
 import { humanAuthorizationRequirement } from './stellar/authorizationPresentation';
-import { isValidStellarAccountId } from './stellar/horizon';
-import { loadAccountsForSigner, peekAccountsForSigner } from './stellar/signerAccounts';
-import { hasSharedSigningControl } from './stellar/treasuryModel';
-import type { StellarAccountSnapshot, StellarNetwork } from './stellar/types';
+import { isValidStellarAccountId } from '../packages/stellar-core/src/horizon';
+import { loadAccountsForSigner, peekAccountsForSigner } from '../packages/stellar-core/src/signerAccounts';
+import { hasSharedSigningControl } from '../packages/stellar-core/src/treasuryModel';
+import type { StellarAccountSnapshot, StellarNetwork } from '../packages/stellar-core/src/types';
 import { cachedTreasuryName } from './treasuryMetadataCache';
 
 function shortAddress(address: string) {

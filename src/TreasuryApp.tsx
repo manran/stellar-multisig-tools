@@ -15,19 +15,19 @@ import { PageHeader } from './MultiSigUi';
 import { useAddressBook } from './AddressBookContext';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
-import { analyzeAccountAuthorization } from './stellar/authorization';
+import { analyzeAccountAuthorization } from '../packages/stellar-core/src/authorization';
 import { approvalPowerLabel, humanAuthorizationRequirement } from './stellar/authorizationPresentation';
 import { accountAssetPresentations, assetBalanceParts, compactAssetIssuer } from './stellar/assetPresentation';
-import { loadAccount } from './stellar/horizon';
-import { loadAccountsForSigner, peekAccountsForSigner } from './stellar/signerAccounts';
-import { classifyTreasuryRelationship } from './stellar/treasuryModel';
+import { loadAccount } from '../packages/stellar-core/src/horizon';
+import { loadAccountsForSigner, peekAccountsForSigner } from '../packages/stellar-core/src/signerAccounts';
+import { classifyTreasuryRelationship } from '../packages/stellar-core/src/treasuryModel';
 import {
   loadAdoptedTreasuryAccountIds,
   loadTreasuryOnboardingDismissed,
   saveAdoptedTreasuryAccountIds,
   saveTreasuryOnboardingDismissed,
 } from './stellar/treasuryPreferences';
-import type { StellarAccountSnapshot, StellarNetwork } from './stellar/types';
+import type { StellarAccountSnapshot, StellarNetwork } from '../packages/stellar-core/src/types';
 import { cachedTreasuryNames, loadSharedTreasuryNames } from './treasuryMetadataCache';
 import {
   parseTreasuryRoute,

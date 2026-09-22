@@ -28,7 +28,7 @@ import {
   assertDeploymentNetwork,
   DeploymentNetworkPolicyError,
 } from '../server/deploymentNetworkPolicy.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 

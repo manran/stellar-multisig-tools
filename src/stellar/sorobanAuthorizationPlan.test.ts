@@ -11,12 +11,12 @@ import {
 import {
   authorizationEntriesFromPlan,
   createSorobanAuthorizationPlan,
-} from './sorobanAuthorizationPlan.js';
-import { emptySorobanEffectsSnapshot } from './sorobanEffects.js';
+} from '../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import { emptySorobanEffectsSnapshot } from '../../packages/stellar-core/src/sorobanEffects.js';
 import {
   createSorobanIntent,
   materializeSorobanIntent,
-} from './sorobanIntent.js';
+} from '../../packages/stellar-core/src/sorobanIntent.js';
 
 function fixture() {
   const authorizer = Keypair.random();

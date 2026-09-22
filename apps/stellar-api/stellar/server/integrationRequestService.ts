@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 import type { Keypair } from '@stellar/stellar-sdk/base';
-import type { PrivateCommitmentRecord } from '../../../../src/stellar/privateCommitment.js';
-import { loadNetworkParameters } from '../../../../src/stellar/horizon.js';
-import { normalizeClassicPaymentInstruction, prepareClassicPayment, type ClassicPaymentInstruction } from '../../../../src/stellar/classicPaymentPrepare.js';
-import type { SigningRequestSnapshot } from '../../../../src/stellar/requestTypes.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
-import { inspectTransactionXdr } from '../../../../src/stellar/transactionXdr.js';
+import type { PrivateCommitmentRecord } from '../../../../packages/stellar-core/src/privateCommitment.js';
+import { loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
+import { normalizeClassicPaymentInstruction, prepareClassicPayment, type ClassicPaymentInstruction } from '../../../../packages/stellar-core/src/classicPaymentPrepare.js';
+import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 import type { ConfiguredIntegrationCredential } from './integrationCredentialService.js';
 import { integrationCallerForCredential } from './integrationCredentialService.js';
 import {

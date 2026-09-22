@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Check, ClipboardCopy, FlaskConical, KeyRound } from 'lucide-react';
 import IntegrationProfileWizard, { type IntegrationProfileWizardResult } from './IntegrationProfileWizard';
-import { STELLAR_PUBLIC_DOCS_BASE } from './stellar/apiOrigins';
-import { STELLAR_TESTNET_ORIGIN } from './stellar/deploymentOrigins';
-import type { StellarNetwork } from './stellar/types';
+import { STELLAR_PUBLIC_DOCS_BASE } from '../packages/stellar-core/src/apiOrigins';
+import { STELLAR_TESTNET_ORIGIN } from '../packages/stellar-core/src/deploymentOrigins';
+import type { StellarNetwork } from '../packages/stellar-core/src/types';
 import './integration-admin.css';
 
 interface RuntimeConfig {

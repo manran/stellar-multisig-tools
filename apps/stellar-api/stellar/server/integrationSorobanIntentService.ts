@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { isValidStellarAccountId } from '../../../../src/stellar/horizon.js';
-import type { SorobanExecutorBinding, SorobanExecutionPolicy } from '../../../../src/stellar/executionPolicy.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import { isValidStellarAccountId } from '../../../../packages/stellar-core/src/horizon.js';
+import type { SorobanExecutorBinding, SorobanExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { buildContractIntent } from './contractIntentService.js';
 import type { ConfiguredIntegrationCredential } from './integrationCredentialService.js';
 import { integrationCallerForCredential } from './integrationCredentialService.js';

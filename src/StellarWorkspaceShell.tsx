@@ -5,7 +5,7 @@ import StellarFooter from './StellarFooter';
 import StellarHeader from './StellarHeader';
 import { useStellarWallet } from './StellarWalletContext';
 import { resolveStellarNetwork } from './stellar/networkPreference';
-import type { StellarNetwork } from './stellar/types';
+import type { StellarNetwork } from '../packages/stellar-core/src/types';
 import { stellarHref } from './workspaceNavigation';
 import { isWalletUserRejected } from './stellar/walletKit';
 

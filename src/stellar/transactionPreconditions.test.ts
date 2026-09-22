@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assessTransactionPreconditions } from './transactionPreconditions.js';
-import type { StellarNetworkParameters } from './horizon.js';
-import type { TransactionXdrInspection } from './transactionXdr.js';
-import type { StellarAccountSnapshot } from './types.js';
+import { assessTransactionPreconditions } from '../../packages/stellar-core/src/transactionPreconditions.js';
+import type { StellarNetworkParameters } from '../../packages/stellar-core/src/horizon.js';
+import type { TransactionXdrInspection } from '../../packages/stellar-core/src/transactionXdr.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 const source = (overrides: Partial<StellarAccountSnapshot> = {}): StellarAccountSnapshot => ({
   accountId: 'G...',

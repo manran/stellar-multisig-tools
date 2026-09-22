@@ -5,16 +5,16 @@ import {
   describeContractAbi,
   isValidContractId,
   loadContractInterface,
-} from '../../../../src/stellar/contractSpec.js';
-import type { ContractAbiDescriptor, ContractMethodDescriptor, LoadedContractInterface } from '../../../../src/stellar/contractSpec.js';
+} from '../../../../packages/stellar-core/src/contractSpec.js';
+import type { ContractAbiDescriptor, ContractMethodDescriptor, LoadedContractInterface } from '../../../../packages/stellar-core/src/contractSpec.js';
 import {
   AccountNotFoundError,
   isValidStellarAccountId,
   loadAccount,
   loadNetworkParameters,
-} from '../../../../src/stellar/horizon.js';
-import { isTransactionLifetimeSeconds } from '../../../../src/stellar/transactionPreferences.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+} from '../../../../packages/stellar-core/src/horizon.js';
+import { isTransactionLifetimeSeconds } from '../../../../packages/stellar-core/src/transactionPreferences.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
 export class ContractCallServiceError extends Error {
   readonly status: number;

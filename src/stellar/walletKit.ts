@@ -1,5 +1,5 @@
 import { Networks } from '@stellar/stellar-sdk/base';
-import type { StellarNetwork } from './types.js';
+import type { StellarNetwork } from '../../packages/stellar-core/src/types.js';
 
 let initialized = false;
 let hardwareModulesLoaded = false;

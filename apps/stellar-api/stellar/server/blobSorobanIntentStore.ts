@@ -1,7 +1,7 @@
 import { get, list, put } from '@vercel/blob';
 import { withBlobStorage } from './blobRequestStore.js';
-import type { SorobanExecutionPolicy } from '../../../../src/stellar/executionPolicy.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import type { SorobanExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { isValidSigningRequestId } from './requestLocator.js';
 import type {
   SorobanIntentStore,

@@ -6,7 +6,7 @@ import {
   inboxViewerActionPresentation,
   projectInboxViewerAction,
   summarizeInboxActions,
-} from './inboxPresentation.js';
+} from '../../packages/stellar-core/src/inboxPresentation.js';
 
 test('Inbox viewer action stays separate from canonical Request status', () => {
   assert.equal(projectInboxViewerAction('awaiting_signatures', { hasSigned: false }), 'sign');

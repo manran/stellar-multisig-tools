@@ -28,9 +28,9 @@ import {
 import { canViewTreasuryActivity } from '../server/treasuryActivityAccess.js';
 import { listWorkActivityPage } from '../server/workActivity.js';
 import { noStoreJson } from '../server/httpResponse.js';
-import { AccountNotFoundError, isValidStellarAccountId, loadAccount } from '../../../../src/stellar/horizon.js';
+import { AccountNotFoundError, isValidStellarAccountId, loadAccount } from '../../../../packages/stellar-core/src/horizon.js';
 import { isValidSigningRequestId } from '../server/requestLocator.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
 const signingRequestStore = runtimeSigningRequestStore();
 const sorobanIntentStore = runtimeSorobanIntentStore();

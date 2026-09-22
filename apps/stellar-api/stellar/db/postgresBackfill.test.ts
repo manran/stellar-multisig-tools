@@ -8,9 +8,9 @@ import {
   Operation,
   TransactionBuilder,
 } from '@stellar/stellar-sdk/base';
-import type { ActivityEvent, ActivityFactEvent } from '../../../../src/stellar/activityTypes.js';
-import { emptySorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
-import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
+import type { ActivityEvent, ActivityFactEvent } from '../../../../packages/stellar-core/src/activityTypes.js';
+import { emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
+import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
 import { applyCoordinationMigrations } from './migrate.js';
 import { backfillCoordinationData } from './postgresBackfill.js';
 import { assertCoordinationBackfillSchemaReady } from './postgresBackfillRuntime.js';

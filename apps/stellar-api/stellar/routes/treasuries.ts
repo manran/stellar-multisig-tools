@@ -7,8 +7,8 @@ import {
   requireAgentAccess,
 } from '../server/agentCredentialService.js';
 import { noStoreJson } from '../server/httpResponse.js';
-import { loadAccountsForSigner } from '../../../../src/stellar/signerAccounts.js';
-import { hasSharedSigningControl } from '../../../../src/stellar/treasuryModel.js';
+import { loadAccountsForSigner } from '../../../../packages/stellar-core/src/signerAccounts.js';
+import { hasSharedSigningControl } from '../../../../packages/stellar-core/src/treasuryModel.js';
 import { treasuryBoxRef } from '../server/boxService.js';
 
 function bearerToken(request: Request): string {

@@ -8,7 +8,7 @@ import {
   TransactionBuilder,
   hash,
 } from '@stellar/stellar-sdk/base';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import type { AuthStore } from './authStore.js';
 
 const DEFAULT_CHALLENGE_TTL_SECONDS = 5 * 60;

@@ -1,4 +1,4 @@
-import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
+import type { StellarAccountSnapshot } from '../../../../packages/stellar-core/src/types.js';
 
 export function canViewTreasuryActivity(
   account: StellarAccountSnapshot,

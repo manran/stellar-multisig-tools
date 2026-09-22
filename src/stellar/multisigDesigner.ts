@@ -1,4 +1,4 @@
-import type { StellarAccountSnapshot, StellarSigner, StellarThresholds } from './types.js';
+import type { StellarAccountSnapshot, StellarSigner, StellarThresholds } from '../../packages/stellar-core/src/types.js';
 
 export interface ExactMultisigPolicyInput {
   additionalSignerKeys: string[];

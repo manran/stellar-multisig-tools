@@ -2,7 +2,7 @@ import StellarDashboardApp from './StellarDashboardApp';
 import StellarLandingApp from './StellarLandingApp';
 import StellarTestnetLandingApp from './StellarTestnetLandingApp';
 import { useStellarWallet } from './StellarWalletContext';
-import { fixedClientStellarDeploymentNetwork } from './stellar/deploymentNetwork';
+import { fixedClientStellarDeploymentNetwork } from '../packages/stellar-core/src/deploymentNetwork';
 
 export default function StellarHomeApp() {
   const { sessionAddress } = useStellarWallet();

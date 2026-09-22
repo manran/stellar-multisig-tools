@@ -6,7 +6,7 @@ import {
   Operation,
   TransactionBuilder,
 } from '@stellar/stellar-sdk';
-import { loadAccount, submitTransactionXdr } from '../src/stellar/horizon';
+import { loadAccount, submitTransactionXdr } from '../packages/stellar-core/src/horizon';
 import { assessSetupSource, designExactMultisigPolicy } from '../src/stellar/multisigDesigner';
 import { buildMultisigSetupXdr } from '../src/stellar/multisigSetupXdr';
 

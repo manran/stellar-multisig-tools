@@ -1,5 +1,5 @@
-import { paymentAssetChoices } from './paymentAsset.js';
-import type { StellarAccountSnapshot } from './types.js';
+import { paymentAssetChoices } from '../../packages/stellar-core/src/paymentAsset.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 export type AssetPresentationKind = 'native' | 'credit';
 

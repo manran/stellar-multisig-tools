@@ -9,10 +9,10 @@ import {
   xdr,
 } from '@stellar/stellar-sdk/base';
 import { Spec } from '@stellar/stellar-sdk/contract';
-import { describeContractSpec } from '../../../../src/stellar/contractSpec.js';
-import { materializeSorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
-import { emptySorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
-import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
+import { describeContractSpec } from '../../../../packages/stellar-core/src/contractSpec.js';
+import { materializeSorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
+import { emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
+import type { StellarAccountSnapshot } from '../../../../packages/stellar-core/src/types.js';
 import type { ConfiguredIntegrationCredential } from './integrationCredentialService.js';
 import { assertIntegrationSorobanExecutionAccount, createIntegrationSorobanIntent, resolveAndBindIntegrationSorobanExecutor } from './integrationSorobanIntentService.js';
 import { getSorobanIntentAuthorization } from './sorobanIntentAuthorizationService.js';
@@ -103,7 +103,7 @@ async function fixture() {
     hostFunctionXdr: func.toXdr('base64'),
     intentDigest: '',
   };
-  const builtModule = await import('../../../../src/stellar/sorobanIntent.js');
+  const builtModule = await import('../../../../packages/stellar-core/src/sorobanIntent.js');
   const canonicalIntent = builtModule.createSorobanIntent('testnet', func);
   const assembled = materializeSorobanIntent({
     intent: canonicalIntent,

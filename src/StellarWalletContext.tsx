@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { fixedClientStellarDeploymentNetwork } from './stellar/deploymentNetwork';
-import type { StellarNetwork } from './stellar/types';
+import { fixedClientStellarDeploymentNetwork } from '../packages/stellar-core/src/deploymentNetwork';
+import type { StellarNetwork } from '../packages/stellar-core/src/types';
 import { explicitNetworkFromSearch, resolveNetworklessWalletContext } from './stellar/networkContext';
 import {
   connectWalletIdentity,

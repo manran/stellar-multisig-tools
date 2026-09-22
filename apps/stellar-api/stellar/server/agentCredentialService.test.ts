@@ -13,7 +13,7 @@ import type {
   StoredAgentIdempotencyClaim,
   StoredSignerAgentCredential,
 } from './agentCredentialStore.js';
-import type { SignerPrincipalRef } from '../../../../src/stellar/agentAccessTypes.js';
+import type { SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 
 class MemoryAgentStore implements AgentCredentialStore {
   credentials = new Map<string, StoredSignerAgentCredential>();

@@ -1,7 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { StrKey } from '@stellar/stellar-sdk/base';
-import type { ServiceCallerProvenance } from '../../../../src/stellar/coordinationActorTypes.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import type { ServiceCallerProvenance } from '../../../../packages/stellar-core/src/coordinationActorTypes.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
 const INTEGRATION_KEY_PREFIX = 'msi';
 const SERVICE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;

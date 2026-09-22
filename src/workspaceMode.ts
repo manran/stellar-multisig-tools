@@ -1,4 +1,4 @@
-import type { StellarNetwork } from './stellar/types.js';
+import type { StellarNetwork } from '../packages/stellar-core/src/types.js';
 import { normalizedStellarWorkspacePath, stellarWorkspaceRouteForPath } from './workspaceRoutes.js';
 
 export type WorkspaceMode = 'sign' | 'setup';

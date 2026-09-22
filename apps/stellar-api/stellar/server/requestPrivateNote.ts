@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { normalizePrivateNote } from '../../../../src/stellar/privateNote.js';
-import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
+import { normalizePrivateNote } from '../../../../packages/stellar-core/src/privateNote.js';
+import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
 import { SigningRequestServiceError } from './requestService.js';
 import type { SigningRequestStore, StoredSigningRequest } from './requestStore.js';
 

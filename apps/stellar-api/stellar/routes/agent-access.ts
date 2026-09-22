@@ -18,7 +18,7 @@ import {
   SemanticRateLimitError,
   semanticRateLimitKey,
 } from '../server/semanticRateLimit.js';
-import { privateSessionAddressFromRequest } from '../../../../src/stellar/privateSessionTransport.js';
+import { privateSessionAddressFromRequest } from '../../../../packages/stellar-core/src/privateSessionTransport.js';
 
 const MAX_BODY_BYTES = 16 * 1024;
 

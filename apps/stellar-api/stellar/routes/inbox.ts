@@ -15,7 +15,7 @@ import {
 import { listSignerInbox, projectHumanInboxRequests } from '../server/requestInbox.js';
 import { listSorobanIntentInbox } from '../server/sorobanIntentInbox.js';
 import { noStoreJson } from '../server/httpResponse.js';
-import { summarizeInboxActions } from '../../../../src/stellar/inboxPresentation.js';
+import { summarizeInboxActions } from '../../../../packages/stellar-core/src/inboxPresentation.js';
 
 const signingRequestStore = runtimeSigningRequestStore();
 const sorobanIntentStore = runtimeSorobanIntentStore();

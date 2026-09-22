@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { CircleAlert, LoaderCircle, ShieldCheck, X } from 'lucide-react';
 import { useStellarWallet } from './StellarWalletContext';
-import type { SigningRequestStatus } from './stellar/requestTypes';
-import type { StellarNetwork } from './stellar/types';
+import type { SigningRequestStatus } from '../packages/stellar-core/src/requestTypes';
+import type { StellarNetwork } from '../packages/stellar-core/src/types';
 import { isWalletUserRejected } from './stellar/walletKit';
 
 interface Props {

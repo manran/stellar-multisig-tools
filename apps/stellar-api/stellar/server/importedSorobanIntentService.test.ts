@@ -12,9 +12,9 @@ import {
   nativeToScVal,
   xdr,
 } from '@stellar/stellar-sdk/base';
-import { initializeSorobanGAccountAuthorizationWindow } from '../../../../src/stellar/sorobanAuthorization.js';
-import { createSorobanIntent, materializeSorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
-import { emptySorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
+import { initializeSorobanGAccountAuthorizationWindow } from '../../../../packages/stellar-core/src/sorobanAuthorization.js';
+import { createSorobanIntent, materializeSorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
+import { emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import { createImportedSorobanIntent } from './importedSorobanIntentService.js';
 import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';
 

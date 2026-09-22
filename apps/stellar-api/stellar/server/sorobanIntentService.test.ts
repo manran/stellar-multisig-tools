@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Contract, Keypair, nativeToScVal, xdr } from '@stellar/stellar-sdk/base';
-import { createSorobanAuthorizationPlan } from '../../../../src/stellar/sorobanAuthorizationPlan.js';
-import { emptySorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
-import { createSorobanIntent, materializeSorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
+import { createSorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import { emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
+import { createSorobanIntent, materializeSorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
 import { createStoredSorobanIntent, SorobanIntentServiceError } from './sorobanIntentService.js';
 import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';
 

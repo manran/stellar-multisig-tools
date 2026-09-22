@@ -9,9 +9,9 @@ import {
   xdr,
 } from '@stellar/stellar-sdk/base';
 import { Spec } from '@stellar/stellar-sdk/contract';
-import { describeContractSpec } from '../../../../src/stellar/contractSpec.js';
-import { materializeSorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
-import { emptySorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
+import { describeContractSpec } from '../../../../packages/stellar-core/src/contractSpec.js';
+import { materializeSorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
+import { emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import { buildContractIntent } from './contractIntentService.js';
 import { createHumanSorobanIntent } from './humanSorobanIntentService.js';
 import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';

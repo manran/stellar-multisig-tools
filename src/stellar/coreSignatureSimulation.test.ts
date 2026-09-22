@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { simulateCoreSignatureCheck } from './coreSignatureSimulation.js';
+import { simulateCoreSignatureCheck } from '../../packages/stellar-core/src/coreSignatureSimulation.js';
 
 test('stops as soon as the needed weight is reached', () => {
   const result = simulateCoreSignatureCheck([

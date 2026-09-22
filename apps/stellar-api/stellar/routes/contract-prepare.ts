@@ -1,12 +1,12 @@
 import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import { publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import {
   enforcePreparedSorobanTransaction,
   simulateSorobanTransaction,
   SorobanSimulationError,
-} from '../../../../src/stellar/sorobanRpc.js';
+} from '../../../../packages/stellar-core/src/sorobanRpc.js';
 
 const MAX_BODY_BYTES = 300 * 1024;
 const METHODS = 'POST, OPTIONS';

@@ -1,4 +1,4 @@
-import { isValidStellarAccountId } from './horizon';
+import { isValidStellarAccountId } from '../../packages/stellar-core/src/horizon';
 
 export interface SignerInputAnalysis {
   normalized: string[];

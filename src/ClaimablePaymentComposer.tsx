@@ -17,17 +17,17 @@ import {
   claimWindowLabel,
   createRecoverableClaimableBalanceOperation,
 } from './stellar/claimablePayment';
-import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from './stellar/horizon';
-import type { StellarNetworkParameters } from './stellar/horizon';
-import { paymentAssetChoices } from './stellar/paymentAsset';
-import { assessPaymentSpendability } from './stellar/paymentPreflight';
-import { MAX_PRIVATE_NOTE_BYTES, normalizePrivateNote, privateNoteByteLength } from './stellar/privateNote';
+import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../packages/stellar-core/src/horizon';
+import type { StellarNetworkParameters } from '../packages/stellar-core/src/horizon';
+import { paymentAssetChoices } from '../packages/stellar-core/src/paymentAsset';
+import { assessPaymentSpendability } from '../packages/stellar-core/src/paymentPreflight';
+import { MAX_PRIVATE_NOTE_BYTES, normalizePrivateNote, privateNoteByteLength } from '../packages/stellar-core/src/privateNote';
 import { writeReviewHandoff } from './stellar/reviewHandoff';
-import { resolveAddressToken } from './stellar/structuredTransfers';
+import { resolveAddressToken } from '../packages/stellar-core/src/structuredTransfers';
 import { clearTransactionTemplateDraft, loadTransactionTemplateDraft, saveTransactionTemplateDraft } from './stellar/transactionTemplateDraft';
-import { getDefaultTransactionLifetime, transactionLifetimeLabel } from './stellar/transactionPreferences';
-import { hasSharedSigningControl } from './stellar/treasuryModel';
-import type { StellarAccountSnapshot, StellarNetwork } from './stellar/types';
+import { getDefaultTransactionLifetime, transactionLifetimeLabel } from '../packages/stellar-core/src/transactionPreferences';
+import { hasSharedSigningControl } from '../packages/stellar-core/src/treasuryModel';
+import type { StellarAccountSnapshot, StellarNetwork } from '../packages/stellar-core/src/types';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
 
 interface Props {

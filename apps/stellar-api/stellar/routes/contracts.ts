@@ -18,8 +18,8 @@ import {
 } from '../server/contractWorkspaceService.js';
 import { publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
-import type { SignerPrincipalRef } from '../../../../src/stellar/agentAccessTypes.js';
-import type { AgentAccessLevel } from '../../../../src/stellar/agentAccessTypes.js';
+import type { SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
+import type { AgentAccessLevel } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 
 const MAX_BODY_BYTES = 8 * 1024;
 const METHODS = 'GET, PUT, DELETE, OPTIONS';

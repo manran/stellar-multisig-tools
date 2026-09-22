@@ -6,9 +6,9 @@ import {
   Operation,
   TransactionBuilder,
 } from '@stellar/stellar-sdk';
-import { loadAccount, loadNetworkParameters, submitTransactionXdr } from '../src/stellar/horizon';
-import { assessTransactionPreconditions } from '../src/stellar/transactionPreconditions';
-import { inspectTransactionXdr } from '../src/stellar/transactionXdr';
+import { loadAccount, loadNetworkParameters, submitTransactionXdr } from '../packages/stellar-core/src/horizon';
+import { assessTransactionPreconditions } from '../packages/stellar-core/src/transactionPreconditions';
+import { inspectTransactionXdr } from '../packages/stellar-core/src/transactionXdr';
 
 const network = 'testnet' as const;
 

@@ -17,8 +17,8 @@ import {
   normalizePrivateCommitmentText,
   privateCommitmentMatchesHash,
   privateCommitmentPayloadByteLength,
-} from './privateCommitment.js';
-import { inspectTransactionXdr } from './transactionXdr.js';
+} from '../../packages/stellar-core/src/privateCommitment.js';
+import { inspectTransactionXdr } from '../../packages/stellar-core/src/transactionXdr.js';
 
 const VECTOR_SALT = '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f';
 const VECTOR_HASH = '190635ec5f6ee4f8b16eed2065e9f6e13183b3ebbf04681e9ab89e363f547fe7';

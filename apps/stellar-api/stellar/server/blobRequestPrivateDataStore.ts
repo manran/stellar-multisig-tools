@@ -1,5 +1,5 @@
 import { get, list, put } from '@vercel/blob';
-import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
+import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
 import { withBlobStorage } from './blobRequestStore.js';
 import type {
   RequestPrivateDataStore,

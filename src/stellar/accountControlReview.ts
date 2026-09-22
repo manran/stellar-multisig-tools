@@ -4,9 +4,9 @@ import {
   TransactionBuilder,
   extractBaseAddress,
 } from '@stellar/stellar-sdk/base';
-import { analyzeAccountAuthorization } from './authorization.js';
+import { analyzeAccountAuthorization } from '../../packages/stellar-core/src/authorization.js';
 import { approvalPowerLabel, humanAuthorizationLevelLabel, humanAuthorizationRequirement } from './authorizationPresentation.js';
-import type { StellarAccountSnapshot, StellarNetwork, StellarSigner, ThresholdLevel } from './types.js';
+import type { StellarAccountSnapshot, StellarNetwork, StellarSigner, ThresholdLevel } from '../../packages/stellar-core/src/types.js';
 
 export interface AccountControlReviewChange {
   key: string;

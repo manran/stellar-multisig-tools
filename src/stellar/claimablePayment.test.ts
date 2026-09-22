@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Account, Keypair, Networks, TransactionBuilder } from '@stellar/stellar-sdk/base';
 import { CLAIMABLE_RECOVERY_RESERVE_UNITS, claimableSourceIssue, createRecoverableClaimableBalanceOperation, DEFAULT_CLAIM_WINDOW_SECONDS } from './claimablePayment.js';
-import type { StellarNetworkParameters } from './horizon.js';
-import type { PaymentAssetChoice } from './paymentAsset.js';
-import type { StellarAccountSnapshot } from './types.js';
+import type { StellarNetworkParameters } from '../../packages/stellar-core/src/horizon.js';
+import type { PaymentAssetChoice } from '../../packages/stellar-core/src/paymentAsset.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 const SOURCE = Keypair.random().publicKey();
 const DESTINATION = Keypair.random().publicKey();

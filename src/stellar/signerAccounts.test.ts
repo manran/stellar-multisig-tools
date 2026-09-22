@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Keypair } from '@stellar/stellar-sdk';
-import { invalidateSignerAccountsCache, loadAccountsForSigner, peekAccountsForSigner } from './signerAccounts.js';
+import { invalidateSignerAccountsCache, loadAccountsForSigner, peekAccountsForSigner } from '../../packages/stellar-core/src/signerAccounts.js';
 
 function accountResponse(accountId: string, signer: string, weight: number) {
   return {

@@ -1,7 +1,7 @@
 import StellarAccountControl from './StellarAccountControl';
 import MultiSigBrandMark from './MultiSigBrandMark';
 import { NetworkBadge } from './MultiSigUi';
-import { fixedClientStellarDeploymentNetwork } from './stellar/deploymentNetwork';
+import { fixedClientStellarDeploymentNetwork } from '../packages/stellar-core/src/deploymentNetwork';
 import { stellarHref } from './workspaceNavigation';
 
 interface Props {

@@ -1,9 +1,9 @@
 import {
   computePrivateCommitmentFromHex,
   PRIVATE_COMMITMENT_VERSION,
-} from '../../../../src/stellar/privateCommitment.js';
-import type { PrivateCommitmentRecord } from '../../../../src/stellar/privateCommitment.js';
-import type { InspectedMemo } from '../../../../src/stellar/transactionXdr.js';
+} from '../../../../packages/stellar-core/src/privateCommitment.js';
+import type { PrivateCommitmentRecord } from '../../../../packages/stellar-core/src/privateCommitment.js';
+import type { InspectedMemo } from '../../../../packages/stellar-core/src/transactionXdr.js';
 
 export class PrivateCommitmentValidationError extends Error {
   constructor(message: string) {

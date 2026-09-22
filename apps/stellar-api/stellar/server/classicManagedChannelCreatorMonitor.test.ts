@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { StellarNetworkParameters } from '../../../../src/stellar/horizon.js';
-import type { StellarAccountSnapshot, StellarNetwork } from '../../../../src/stellar/types.js';
+import type { StellarNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
+import type { StellarAccountSnapshot, StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import type { ClassicManagedChannelAlert } from './classicManagedChannelCreatorMonitor.js';
 import { observeClassicManagedChannelCreator, sendClassicManagedChannelAlertWebhook } from './classicManagedChannelCreatorMonitor.js';
 import type { ClassicManagedChannelCreatorMonitorStore, StoredClassicManagedChannelCreatorMonitor } from './classicManagedChannelCreatorMonitorStore.js';

@@ -1,9 +1,9 @@
 import {
   fixedStellarDeploymentNetwork,
   parseStellarDeploymentNetwork,
-} from '../../../../src/stellar/deploymentNetwork.js';
-import type { StellarDeploymentNetwork } from '../../../../src/stellar/deploymentNetwork.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+} from '../../../../packages/stellar-core/src/deploymentNetwork.js';
+import type { StellarDeploymentNetwork } from '../../../../packages/stellar-core/src/deploymentNetwork.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
 export class DeploymentNetworkPolicyError extends Error {
   constructor(

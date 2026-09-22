@@ -18,8 +18,8 @@ import {
   initializeSorobanGAccountAuthorizationWindow,
   mergeSorobanGAccountSignature,
   sorobanAuthorizationPreimageXdr,
-} from './sorobanAuthorization.js';
-import type { StellarAccountSnapshot } from './types.js';
+} from '../../packages/stellar-core/src/sorobanAuthorization.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 const CONTRACT_ID = 'CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE';
 

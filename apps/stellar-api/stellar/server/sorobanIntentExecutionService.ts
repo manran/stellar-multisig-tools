@@ -4,18 +4,18 @@ import {
   isValidStellarAccountId,
   loadAccount,
   loadNetworkParameters,
-} from '../../../../src/stellar/horizon.js';
-import { materializeSorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
-import { compareSorobanEffects, type SorobanEffectsDiff, type SorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
+} from '../../../../packages/stellar-core/src/horizon.js';
+import { materializeSorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
+import { compareSorobanEffects, type SorobanEffectsDiff, type SorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import {
   prepareEnforcedSorobanTransaction,
   SorobanSimulationError,
-} from '../../../../src/stellar/sorobanRpc.js';
+} from '../../../../packages/stellar-core/src/sorobanRpc.js';
 import {
   getSorobanIntentAuthorization,
   type SorobanIntentAuthorizationSnapshot,
 } from './sorobanIntentAuthorizationService.js';
-import type { MachineCallerProvenance } from '../../../../src/stellar/coordinationActorTypes.js';
+import type { MachineCallerProvenance } from '../../../../packages/stellar-core/src/coordinationActorTypes.js';
 import type { SorobanIntentStore, StoredSorobanIntentExecutionPreparation } from './sorobanIntentStore.js';
 
 export class SorobanIntentExecutionServiceError extends Error {

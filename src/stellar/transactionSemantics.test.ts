@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { InspectedOperation, TransactionXdrInspection } from './transactionXdr.js';
+import type { InspectedOperation, TransactionXdrInspection } from '../../packages/stellar-core/src/transactionXdr.js';
 import { projectTransactionSemantics } from './transactionSemantics.js';
 
 const SOURCE = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';

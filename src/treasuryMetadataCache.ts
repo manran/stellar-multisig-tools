@@ -1,5 +1,5 @@
-import type { StellarNetwork } from './stellar/types.js';
-import { privateSessionAddressHeaders } from './stellar/privateSessionTransport.js';
+import type { StellarNetwork } from '../packages/stellar-core/src/types.js';
+import { privateSessionAddressHeaders } from '../packages/stellar-core/src/privateSessionTransport.js';
 
 const CACHE_PREFIX = 'multisig-tools.treasury-name.v2';
 const CACHE_TTL_MS = 5 * 60_000;

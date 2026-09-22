@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isValidStellarTextMemo, stellarTextMemoByteLength } from './memo.js';
+import { isValidStellarTextMemo, stellarTextMemoByteLength } from '../../packages/stellar-core/src/memo.js';
 
 test('accepts an empty or 28-byte Stellar text memo', () => {
   assert.equal(isValidStellarTextMemo(''), true);

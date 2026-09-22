@@ -1,6 +1,6 @@
-import { stellarAmountToStroops, stroopsToStellarAmount } from '../../../../src/stellar/reserve.js';
-import type { StellarNetworkParameters } from '../../../../src/stellar/horizon.js';
-import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
+import { stellarAmountToStroops, stroopsToStellarAmount } from '../../../../packages/stellar-core/src/reserve.js';
+import type { StellarNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
+import type { StellarAccountSnapshot } from '../../../../packages/stellar-core/src/types.js';
 import {
   configuredClassicManagedChannelCreatorBalanceThresholds,
   configuredClassicManagedChannelInitialBalance,

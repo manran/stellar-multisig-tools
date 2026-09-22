@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Eye, EyeOff, FileText, LoaderCircle, LockKeyhole } from 'lucide-react';
-import { MAX_PRIVATE_NOTE_BYTES, privateNoteByteLength } from './stellar/privateNote';
-import type { PrivateNoteRevision } from './stellar/privateNote';
+import { MAX_PRIVATE_NOTE_BYTES, privateNoteByteLength } from '../packages/stellar-core/src/privateNote';
+import type { PrivateNoteRevision } from '../packages/stellar-core/src/privateNote';
 
 interface Props {
   note: PrivateNoteRevision | null;

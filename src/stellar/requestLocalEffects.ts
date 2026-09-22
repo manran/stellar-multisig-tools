@@ -1,5 +1,5 @@
 import { loadAdoptedTreasuryAccountIds, saveAdoptedTreasuryAccountIds } from './treasuryPreferences.js';
-import type { StellarNetwork } from './types.js';
+import type { StellarNetwork } from '../../packages/stellar-core/src/types.js';
 
 const REQUEST_LOCAL_EFFECTS_PREFIX = 'multisig-tools.stellar.request-local-effects.v1.';
 

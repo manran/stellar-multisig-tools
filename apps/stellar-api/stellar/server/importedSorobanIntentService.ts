@@ -3,13 +3,13 @@ import {
   Networks,
   TransactionBuilder,
 } from '@stellar/stellar-sdk/base';
-import { assertSorobanTransactionPreparedForFreeze, initializeSorobanGAccountAuthorizationWindow } from '../../../../src/stellar/sorobanAuthorization.js';
-import { createSorobanAuthorizationPlan } from '../../../../src/stellar/sorobanAuthorizationPlan.js';
-import { createSorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
-import { initializeSorobanContractAccountAuthorizationWindow } from '../../../../src/stellar/sorobanCustomAuthorization.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
-import { simulateSorobanTransaction, SorobanSimulationError } from '../../../../src/stellar/sorobanRpc.js';
-import { loadAccount, loadNetworkParameters } from '../../../../src/stellar/horizon.js';
+import { assertSorobanTransactionPreparedForFreeze, initializeSorobanGAccountAuthorizationWindow } from '../../../../packages/stellar-core/src/sorobanAuthorization.js';
+import { createSorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import { createSorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
+import { initializeSorobanContractAccountAuthorizationWindow } from '../../../../packages/stellar-core/src/sorobanCustomAuthorization.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import { simulateSorobanTransaction, SorobanSimulationError } from '../../../../packages/stellar-core/src/sorobanRpc.js';
+import { loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
 import { discoverSorobanIntentSignerKeys } from './sorobanIntentPlanningService.js';
 import {
   createStoredSorobanIntent,

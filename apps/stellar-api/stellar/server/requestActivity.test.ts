@@ -9,9 +9,9 @@ import {
   TimeoutInfinite,
   TransactionBuilder,
 } from '@stellar/stellar-sdk/base';
-import type { ActivityEvent } from '../../../../src/stellar/activityTypes.js';
-import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
-import { inspectTransactionXdr } from '../../../../src/stellar/transactionXdr.js';
+import type { ActivityEvent } from '../../../../packages/stellar-core/src/activityTypes.js';
+import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
+import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 import {
   getSignerActivityItemForRequest,
   listSignerActivity,

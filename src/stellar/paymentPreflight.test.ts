@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { StellarNetworkParameters } from './horizon.js';
-import type { PaymentAssetChoice } from './paymentAsset.js';
-import { assessPaymentSpendability, paymentSourceIssue } from './paymentPreflight.js';
-import type { StellarAccountSnapshot } from './types.js';
+import type { StellarNetworkParameters } from '../../packages/stellar-core/src/horizon.js';
+import type { PaymentAssetChoice } from '../../packages/stellar-core/src/paymentAsset.js';
+import { assessPaymentSpendability, paymentSourceIssue } from '../../packages/stellar-core/src/paymentPreflight.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 const MASTER = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 const ISSUER = 'GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';

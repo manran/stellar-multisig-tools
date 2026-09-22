@@ -9,13 +9,13 @@ import { useStellarWallet } from './StellarWalletContext';
 import {
   inboxViewerActionNeedsAction,
   inboxViewerActionPresentation,
-} from './stellar/inboxPresentation';
-import type { InboxActionCounts, InboxRequestSnapshot } from './stellar/inboxPresentation';
+} from '../packages/stellar-core/src/inboxPresentation';
+import type { InboxActionCounts, InboxRequestSnapshot } from '../packages/stellar-core/src/inboxPresentation';
 import { describeInboxRequest, inboxDeadlineLabel } from './stellar/inboxRequestPresentation';
 import { intentAuthorizationWindowLabel, intentViewerActionNeedsAction, intentViewerActionPresentation } from './stellar/sorobanIntentPresentation';
-import type { InboxSorobanIntentSnapshot } from './stellar/sorobanIntentApiTypes';
+import type { InboxSorobanIntentSnapshot } from '../packages/stellar-core/src/sorobanIntentApiTypes';
 import type { InboxRequestDescription } from './stellar/inboxRequestPresentation';
-import type { StellarNetwork } from './stellar/types';
+import type { StellarNetwork } from '../packages/stellar-core/src/types';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
 
 interface InboxResponse {

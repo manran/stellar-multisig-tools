@@ -1,7 +1,7 @@
 import { projectTransactionSemantics } from './stellar/transactionSemantics';
 import { inspectedAssetIdentity } from './stellar/assetPresentation';
 import type { PortableEvidenceHistoryEvent, PortableEvidenceRecord } from './stellar/portableEvidence';
-import type { TransactionXdrInspection } from './stellar/transactionXdr';
+import type { TransactionXdrInspection } from '../packages/stellar-core/src/transactionXdr';
 
 function displayRequestId(id: string) { return id.match(/.{1,4}/g)?.join('-') ?? id; }
 

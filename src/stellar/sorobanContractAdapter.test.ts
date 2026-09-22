@@ -17,11 +17,11 @@ import {
   configuredSimpleEd25519ContractAccountAdapter,
   resolveSimpleEd25519ContractAccountAdapter,
   simpleEd25519ContractCredentialContribution,
-} from './sorobanContractAdapter.js';
+} from '../../packages/stellar-core/src/sorobanContractAdapter.js';
 import {
   createSorobanContractAuthorizationChallenge,
   stageSorobanContractCredentialContribution,
-} from './sorobanCustomAuthorization.js';
+} from '../../packages/stellar-core/src/sorobanCustomAuthorization.js';
 
 const CONTRACT_ID = 'CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE';
 const CONTRACT_ACCOUNT = 'CBUGCD3J6RCTJ5RVK7SGDV63JKV7E5YMULD5HAXQ7BGHNLB5DYVVZIEH';

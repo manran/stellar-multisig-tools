@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { summarizeOperation } from './operationSummary.js';
+import { summarizeOperation } from '../../packages/stellar-core/src/operationSummary.js';
 
 const usdc = { code: 'USDC', issuer: 'GISSUER' };
 

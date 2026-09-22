@@ -16,7 +16,7 @@ import type {
   StoredSigningRequest,
   StoredSubmissionResult,
 } from './requestStore.js';
-import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
+import type { StellarAccountSnapshot } from '../../../../packages/stellar-core/src/types.js';
 
 class MemoryRequestStore implements SigningRequestStore {
   requests = new Map<string, StoredSigningRequest>();

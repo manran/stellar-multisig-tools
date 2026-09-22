@@ -1,8 +1,8 @@
 import {
   STELLAR_PUBLIC_DOCS_BASE,
   stellarApiBaseForDeployment,
-} from '../../../../src/stellar/apiOrigins.js';
-import { HEADLESS_OPERATION_CATALOG } from '../../../../src/stellar/headlessOperations.js';
+} from '../../../../packages/stellar-core/src/apiOrigins.js';
+import { HEADLESS_OPERATION_CATALOG } from '../../../../packages/stellar-core/src/headlessOperations.js';
 import { configuredDeploymentNetwork } from '../server/deploymentNetworkPolicy.js';
 import { publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
 

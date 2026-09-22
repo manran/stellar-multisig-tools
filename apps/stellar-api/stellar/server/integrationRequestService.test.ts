@@ -23,7 +23,7 @@ import type {
   StoredSigningRequest,
   StoredSubmissionResult,
 } from './requestStore.js';
-import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
+import type { StellarAccountSnapshot } from '../../../../packages/stellar-core/src/types.js';
 
 class MemoryChannelStore implements ClassicManagedChannelLeaseStore {
   leases = new Map<string, StoredClassicManagedChannelLease>();

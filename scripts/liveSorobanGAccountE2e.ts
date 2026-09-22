@@ -20,17 +20,17 @@ import type {
   StoredSigningRequest,
   StoredSubmissionResult,
 } from '../apps/stellar-api/stellar/server/requestStore';
-import { loadAccount, loadNetworkParameters } from '../src/stellar/horizon';
+import { loadAccount, loadNetworkParameters } from '../packages/stellar-core/src/horizon';
 import {
   analyzeSorobanGAccountAuthorization,
   mergeSorobanGAccountSignature,
   sorobanAuthorizationPreimageXdr,
-} from '../src/stellar/sorobanAuthorization';
+} from '../packages/stellar-core/src/sorobanAuthorization';
 import {
   enforcePreparedSorobanTransaction,
   simulateSorobanTransaction,
   SorobanSimulationError,
-} from '../src/stellar/sorobanRpc';
+} from '../packages/stellar-core/src/sorobanRpc';
 
 const network = 'testnet' as const;
 

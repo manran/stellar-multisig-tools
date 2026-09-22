@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Address, Keypair, nativeToScVal, xdr } from '@stellar/stellar-sdk/base';
-import { compareSorobanEffects, sorobanEffectsSnapshot } from './sorobanEffects.js';
+import { compareSorobanEffects, sorobanEffectsSnapshot } from '../../packages/stellar-core/src/sorobanEffects.js';
 
 const CONTRACT = 'CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE';
 

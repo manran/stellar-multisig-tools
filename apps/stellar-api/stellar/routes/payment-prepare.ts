@@ -12,7 +12,7 @@ import {
 import {
   ClassicPaymentPrepareError,
   prepareClassicPayment,
-} from '../../../../src/stellar/classicPaymentPrepare.js';
+} from '../../../../packages/stellar-core/src/classicPaymentPrepare.js';
 import {
   IntegrationCredentialServiceError,
 } from '../server/integrationCredentialService.js';
@@ -20,8 +20,8 @@ import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server
 import { noStoreJson } from '../server/httpResponse.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import { signerCanAccessTransaction } from '../server/requestAccess.js';
-import { loadAccount } from '../../../../src/stellar/horizon.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import { loadAccount } from '../../../../packages/stellar-core/src/horizon.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 

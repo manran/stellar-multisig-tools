@@ -1,5 +1,5 @@
 import { StrKey } from '@stellar/stellar-sdk/base';
-import type { SignerPrincipalRef } from '../../../../src/stellar/agentAccessTypes.js';
+import type { SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 import type { ContractWorkspaceStore, StoredContractWorkspace } from './contractWorkspaceStore.js';
 
 export class ContractWorkspaceServiceError extends Error {

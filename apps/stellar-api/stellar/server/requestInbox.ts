@@ -1,14 +1,14 @@
-import { loadAccount, loadNetworkParameters } from '../../../../src/stellar/horizon.js';
-import type { StellarNetworkParameters } from '../../../../src/stellar/horizon.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
-import type { InboxRequestSnapshot } from '../../../../src/stellar/inboxPresentation.js';
-import { projectInboxViewerAction } from '../../../../src/stellar/inboxPresentation.js';
-import type { SigningRequestSnapshot } from '../../../../src/stellar/requestTypes.js';
+import { loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
+import type { StellarNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import type { InboxRequestSnapshot } from '../../../../packages/stellar-core/src/inboxPresentation.js';
+import { projectInboxViewerAction } from '../../../../packages/stellar-core/src/inboxPresentation.js';
+import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
 import { isValidSigningRequestId } from './requestLocator.js';
 import type { SigningRequestStore, StoredSigningRequest } from './requestStore.js';
 import { getSigningRequest } from './requestService.js';
 import { signerCanAccessTransaction, signerHasSignedTransaction } from './requestAccess.js';
-import { inspectTransactionXdr } from '../../../../src/stellar/transactionXdr.js';
+import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 
 interface InboxOptions {
   now?: Date;

@@ -7,7 +7,7 @@ import {
   ContractCallServiceError,
   inspectContractInterface,
 } from './contractCallService.js';
-import { describeContractSpec } from '../../../../src/stellar/contractSpec.js';
+import { describeContractSpec } from '../../../../packages/stellar-core/src/contractSpec.js';
 
 const SOURCE = Keypair.random().publicKey();
 const CONTRACT_ID = 'CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE';

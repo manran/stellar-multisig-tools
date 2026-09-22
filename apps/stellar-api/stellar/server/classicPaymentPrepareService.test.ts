@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { FeeBumpTransaction, Keypair, Networks, TransactionBuilder } from '@stellar/stellar-sdk/base';
-import { AccountNotFoundError, type StellarNetworkParameters } from '../../../../src/stellar/horizon.js';
-import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
-import { ClassicPaymentPrepareError, prepareClassicPayment } from '../../../../src/stellar/classicPaymentPrepare.js';
+import { AccountNotFoundError, type StellarNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
+import type { StellarAccountSnapshot } from '../../../../packages/stellar-core/src/types.js';
+import { ClassicPaymentPrepareError, prepareClassicPayment } from '../../../../packages/stellar-core/src/classicPaymentPrepare.js';
 
 const SOURCE = Keypair.random().publicKey();
 const A = Keypair.random().publicKey();

@@ -12,11 +12,11 @@ import {
   Trash2,
   WalletCards,
 } from 'lucide-react';
-import { analyzeAccountAuthorization } from './stellar/authorization';
-import { isValidContractId } from './stellar/contractSpec';
-import { isValidStellarAccountId, loadAccount } from './stellar/horizon';
+import { analyzeAccountAuthorization } from '../packages/stellar-core/src/authorization';
+import { isValidContractId } from '../packages/stellar-core/src/contractSpec';
+import { isValidStellarAccountId, loadAccount } from '../packages/stellar-core/src/horizon';
 import { buildIntegrationAdminConfiguration } from './stellar/integrationProvisioning';
-import type { AccountAuthorizationAnalysis, StellarAccountSnapshot, StellarNetwork } from './stellar/types';
+import type { AccountAuthorizationAnalysis, StellarAccountSnapshot, StellarNetwork } from '../packages/stellar-core/src/types';
 
 type AuthorizationExperience = 'hosted' | 'native' | 'headless';
 type ExecutionOwner = 'multisigtools' | 'integration';

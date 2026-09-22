@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { paymentAssetChoices, paymentDestinationIssue } from './paymentAsset.js';
-import type { StellarAccountSnapshot } from './types.js';
+import { paymentAssetChoices, paymentDestinationIssue } from '../../packages/stellar-core/src/paymentAsset.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 function account(overrides: Partial<StellarAccountSnapshot> = {}): StellarAccountSnapshot {
   return {

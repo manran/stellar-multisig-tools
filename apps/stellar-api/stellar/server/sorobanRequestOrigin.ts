@@ -1,5 +1,5 @@
-import type { SorobanRequestOrigin } from '../../../../src/stellar/requestTypes.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import type { SorobanRequestOrigin } from '../../../../packages/stellar-core/src/requestTypes.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { isValidSigningRequestId } from './requestLocator.js';
 import type { SorobanIntentStore } from './sorobanIntentStore.js';
 

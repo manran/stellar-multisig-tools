@@ -1,18 +1,18 @@
 import { StrKey, inspectAuthEntry } from '@stellar/stellar-sdk/base';
-import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../../../../src/stellar/horizon.js';
+import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
 import {
   analyzeSorobanGAccountAuthorizationEntries,
   initializeSorobanGAccountAuthorizationWindow,
-} from '../../../../src/stellar/sorobanAuthorization.js';
+} from '../../../../packages/stellar-core/src/sorobanAuthorization.js';
 import {
   authorizationEntriesFromPlan,
   createSorobanAuthorizationPlan,
   type SorobanAuthorizationPlan,
-} from '../../../../src/stellar/sorobanAuthorizationPlan.js';
-import { materializeSorobanIntent, type SorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
-import { analyzeKnownSorobanContractAuthorizationEntries } from '../../../../src/stellar/sorobanContractAdapter.js';
-import { initializeSorobanContractAccountAuthorizationWindow } from '../../../../src/stellar/sorobanCustomAuthorization.js';
-import { simulateSorobanTransaction } from '../../../../src/stellar/sorobanRpc.js';
+} from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import { materializeSorobanIntent, type SorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
+import { analyzeKnownSorobanContractAuthorizationEntries } from '../../../../packages/stellar-core/src/sorobanContractAdapter.js';
+import { initializeSorobanContractAccountAuthorizationWindow } from '../../../../packages/stellar-core/src/sorobanCustomAuthorization.js';
+import { simulateSorobanTransaction } from '../../../../packages/stellar-core/src/sorobanRpc.js';
 
 export class SorobanIntentPlanningError extends Error {
   constructor(message: string, readonly code: string) {

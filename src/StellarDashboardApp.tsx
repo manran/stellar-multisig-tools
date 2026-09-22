@@ -5,11 +5,11 @@ import { NetworkBadge, PageHeader, StatusBadge } from './MultiSigUi';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
 import { isWalletUserRejected } from './stellar/walletKit';
-import { inboxActionCountPresentations, inboxViewerActionNeedsAction, inboxViewerActionPresentation } from './stellar/inboxPresentation';
-import type { InboxActionCounts, InboxRequestSnapshot } from './stellar/inboxPresentation';
+import { inboxActionCountPresentations, inboxViewerActionNeedsAction, inboxViewerActionPresentation } from '../packages/stellar-core/src/inboxPresentation';
+import type { InboxActionCounts, InboxRequestSnapshot } from '../packages/stellar-core/src/inboxPresentation';
 import { describeInboxRequest, inboxDeadlineLabel } from './stellar/inboxRequestPresentation';
 import { intentAuthorizationWindowLabel, intentViewerActionNeedsAction, intentViewerActionPresentation } from './stellar/sorobanIntentPresentation';
-import type { InboxSorobanIntentSnapshot } from './stellar/sorobanIntentApiTypes';
+import type { InboxSorobanIntentSnapshot } from '../packages/stellar-core/src/sorobanIntentApiTypes';
 import { navigateWorkspace, stellarHref, stellarHrefWithSearch } from './workspaceNavigation';
 
 interface InboxCountResponse {

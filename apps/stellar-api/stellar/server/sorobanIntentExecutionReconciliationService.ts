@@ -1,7 +1,7 @@
 import {
   loadTransactionByHash,
   type TransactionSubmissionResult,
-} from '../../../../src/stellar/horizon.js';
+} from '../../../../packages/stellar-core/src/horizon.js';
 import type {
   SorobanIntentStore,
   StoredSorobanIntentExecutionObservation,

@@ -1,7 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { xdr } from '@stellar/stellar-sdk/base';
-import { isValidStellarAccountId } from '../../../../src/stellar/horizon.js';
-import { sorobanAuthorizationEntryPreimageXdr } from '../../../../src/stellar/sorobanAuthorization.js';
+import { isValidStellarAccountId } from '../../../../packages/stellar-core/src/horizon.js';
+import { sorobanAuthorizationEntryPreimageXdr } from '../../../../packages/stellar-core/src/sorobanAuthorization.js';
 import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
 import type { StoredSorobanIntent } from './sorobanIntentStore.js';
 import type {

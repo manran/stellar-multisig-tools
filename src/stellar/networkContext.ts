@@ -1,5 +1,5 @@
-import { fixedClientStellarDeploymentNetwork } from './deploymentNetwork.js';
-import type { StellarNetwork } from './types.js';
+import { fixedClientStellarDeploymentNetwork } from '../../packages/stellar-core/src/deploymentNetwork.js';
+import type { StellarNetwork } from '../../packages/stellar-core/src/types.js';
 
 export function explicitNetworkFromSearch(search: string): StellarNetwork | null {
   const fixed = fixedClientStellarDeploymentNetwork();

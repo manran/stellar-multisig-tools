@@ -2,7 +2,7 @@ import {
   HEADLESS_OPERATION_CATALOG,
   type HeadlessOperationAccess,
   type HeadlessOperationDescriptor,
-} from '../../../../src/stellar/headlessOperations.js';
+} from '../../../../packages/stellar-core/src/headlessOperations.js';
 
 type OpenApiObject = Record<string, unknown>;
 

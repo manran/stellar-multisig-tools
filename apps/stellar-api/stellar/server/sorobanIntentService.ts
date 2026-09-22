@@ -1,10 +1,10 @@
-import type { MachineCallerProvenance } from '../../../../src/stellar/coordinationActorTypes.js';
-import type { SorobanIntentIntegrationContext } from '../../../../src/stellar/integrationTypes.js';
-import type { ExecutionPolicy } from '../../../../src/stellar/executionPolicy.js';
-import { normalizePrivateNote } from '../../../../src/stellar/privateNote.js';
-import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
-import type { SorobanAuthorizationPlan } from '../../../../src/stellar/sorobanAuthorizationPlan.js';
-import type { SorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
+import type { MachineCallerProvenance } from '../../../../packages/stellar-core/src/coordinationActorTypes.js';
+import type { SorobanIntentIntegrationContext } from '../../../../packages/stellar-core/src/integrationTypes.js';
+import type { ExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
+import { normalizePrivateNote } from '../../../../packages/stellar-core/src/privateNote.js';
+import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
+import type { SorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import type { SorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
 import { normalizeExternalReference } from './boxService.js';
 import { createSigningRequestId } from './requestLocator.js';
 import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';

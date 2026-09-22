@@ -1,5 +1,5 @@
-import type { SorobanIntentWorkActivityItem } from '../../../../src/stellar/workActivityTypes.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import type { SorobanIntentWorkActivityItem } from '../../../../packages/stellar-core/src/workActivityTypes.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { projectSorobanIntentEvidence } from './sorobanIntentEvidence.js';
 import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';
 

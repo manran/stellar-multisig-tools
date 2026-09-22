@@ -1,4 +1,4 @@
-import type { PaymentAssetChoice } from './paymentAsset.js';
+import type { PaymentAssetChoice } from '../../packages/stellar-core/src/paymentAsset.js';
 
 export interface BatchPromotionDraft {
   source: string;

@@ -15,16 +15,16 @@ import type { SorobanAuthorizationPreparationInput } from './SorobanAuthorizatio
 import type {
   SorobanAuthorizationEntryInspection,
   SorobanInvocationInspection,
-} from './stellar/sorobanInspection';
+} from '../packages/stellar-core/src/sorobanInspection';
 import {
   SorobanSimulationError,
   sorobanSimulationEligibility,
   stellarRpcUrl,
-} from './stellar/sorobanRpc';
-import type { SorobanSimulationSummary } from './stellar/sorobanRpc';
-import type { TransactionXdrInspection } from './stellar/transactionXdr';
-import { loadNetworkParameters } from './stellar/horizon';
-import { assertSorobanTransactionPreparedForFreeze } from './stellar/sorobanAuthorization';
+} from '../packages/stellar-core/src/sorobanRpc';
+import type { SorobanSimulationSummary } from '../packages/stellar-core/src/sorobanRpc';
+import type { TransactionXdrInspection } from '../packages/stellar-core/src/transactionXdr';
+import { loadNetworkParameters } from '../packages/stellar-core/src/horizon';
+import { assertSorobanTransactionPreparedForFreeze } from '../packages/stellar-core/src/sorobanAuthorization';
 
 interface Props {
   inspection: TransactionXdrInspection;

@@ -1,10 +1,10 @@
-import { analyzeEnvelopeSignatures } from '../../../../src/stellar/signatureAnalysis.js';
-import { mergeSignedTransactionXdr } from '../../../../src/stellar/signatureMerge.js';
-import { inspectTransactionXdr } from '../../../../src/stellar/transactionXdr.js';
-import type { ActivityEvent, ActivityFactEvent, ActivityFactType, ActivityRequestItem } from '../../../../src/stellar/activityTypes.js';
-import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
-import type { SigningRequestSnapshot } from '../../../../src/stellar/requestTypes.js';
-import type { StellarNetwork, StellarSigner } from '../../../../src/stellar/types.js';
+import { analyzeEnvelopeSignatures } from '../../../../packages/stellar-core/src/signatureAnalysis.js';
+import { mergeSignedTransactionXdr } from '../../../../packages/stellar-core/src/signatureMerge.js';
+import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
+import type { ActivityEvent, ActivityFactEvent, ActivityFactType, ActivityRequestItem } from '../../../../packages/stellar-core/src/activityTypes.js';
+import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
+import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
+import type { StellarNetwork, StellarSigner } from '../../../../packages/stellar-core/src/types.js';
 import { isValidSigningRequestId } from './requestLocator.js';
 import type {
   SigningRequestStore,

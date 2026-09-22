@@ -1,5 +1,5 @@
-import type { SignerPrincipalRef } from '../../../../src/stellar/agentAccessTypes.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import type { SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
 export interface StoredContractWorkspace {
   version: 1;

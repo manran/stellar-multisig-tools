@@ -1,6 +1,6 @@
-import type { ActivityRequestItem } from '../../../../src/stellar/activityTypes.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
-import type { WorkActivityItem } from '../../../../src/stellar/workActivityTypes.js';
+import type { ActivityRequestItem } from '../../../../packages/stellar-core/src/activityTypes.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import type { WorkActivityItem } from '../../../../packages/stellar-core/src/workActivityTypes.js';
 import { isValidSigningRequestId } from './requestLocator.js';
 import { listSignerActivityItems } from './requestActivity.js';
 import type { SigningRequestStore } from './requestStore.js';

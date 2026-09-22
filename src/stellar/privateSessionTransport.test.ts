@@ -4,7 +4,7 @@ import {
   PRIVATE_SESSION_ADDRESS_HEADER,
   privateSessionAddressFromRequest,
   privateSessionAddressHeaders,
-} from './privateSessionTransport.js';
+} from '../../packages/stellar-core/src/privateSessionTransport.js';
 
 const ADDRESS = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 

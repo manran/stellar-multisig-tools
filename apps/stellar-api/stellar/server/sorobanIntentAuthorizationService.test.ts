@@ -12,11 +12,11 @@ import {
 import {
   initializeSorobanGAccountAuthorizationWindow,
   sorobanAuthorizationEntryPreimageXdr,
-} from '../../../../src/stellar/sorobanAuthorization.js';
-import { createSorobanAuthorizationPlan, authorizationEntriesFromPlan } from '../../../../src/stellar/sorobanAuthorizationPlan.js';
-import { emptySorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
-import { initializeSorobanContractAccountAuthorizationWindow } from '../../../../src/stellar/sorobanCustomAuthorization.js';
-import { createSorobanIntent, materializeSorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
+} from '../../../../packages/stellar-core/src/sorobanAuthorization.js';
+import { createSorobanAuthorizationPlan, authorizationEntriesFromPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import { emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
+import { initializeSorobanContractAccountAuthorizationWindow } from '../../../../packages/stellar-core/src/sorobanCustomAuthorization.js';
+import { createSorobanIntent, materializeSorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
 import { createStoredSorobanIntent } from './sorobanIntentService.js';
 import {
   contributeSorobanIntentAuthorization,

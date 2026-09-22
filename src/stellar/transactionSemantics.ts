@@ -1,4 +1,4 @@
-import type { InspectedOperation, TransactionXdrInspection } from './transactionXdr.js';
+import type { InspectedOperation, TransactionXdrInspection } from '../../packages/stellar-core/src/transactionXdr.js';
 
 export type TransactionSemanticKind = 'signing_change' | 'payment' | 'batch_payment' | 'multi_party' | 'claimable_payment' | 'single_operation' | 'multi_operation';
 

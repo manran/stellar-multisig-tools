@@ -23,18 +23,18 @@ import { useStellarWallet } from './StellarWalletContext';
 import TransactionAuthorizationResults from './TransactionAuthorizationResults';
 import TransactionInspectorSummary from './TransactionInspectorSummary';
 import XdrQrCode from './XdrQrCode';
-import { horizonTransactionUrl } from './stellar/horizon';
+import { horizonTransactionUrl } from '../packages/stellar-core/src/horizon';
 import { isWalletUserRejected } from './stellar/walletKit';
-import type { PrivateCommitmentRecord } from './stellar/privateCommitment';
-import type { PrivateNoteRevision } from './stellar/privateNote';
-import { privateSessionAddressHeaders } from './stellar/privateSessionTransport';
+import type { PrivateCommitmentRecord } from '../packages/stellar-core/src/privateCommitment';
+import type { PrivateNoteRevision } from '../packages/stellar-core/src/privateNote';
+import { privateSessionAddressHeaders } from '../packages/stellar-core/src/privateSessionTransport';
 import {
   loadTransactionSourceAnalyses,
   projectTransactionReviewAuthorizationStatus,
-} from './stellar/transactionReviewAnalysis';
-import type { SourceAnalysis } from './stellar/transactionReviewAnalysis';
+} from '../packages/stellar-core/src/transactionReviewAnalysis';
+import type { SourceAnalysis } from '../packages/stellar-core/src/transactionReviewAnalysis';
 import { applyRequestLocalEffects } from './stellar/requestLocalEffects';
-import { invalidateSignerAccountsCache } from './stellar/signerAccounts';
+import { invalidateSignerAccountsCache } from '../packages/stellar-core/src/signerAccounts';
 import type {
   ContributeSigningRequestResponse,
   CreateSigningRequestResponse,
@@ -42,13 +42,13 @@ import type {
   SigningRequestSnapshot,
   SigningRequestStatus,
   SubmitSigningRequestResponse,
-} from './stellar/requestTypes';
-import type { StellarNetwork } from './stellar/types';
-import type { SorobanEffectsDiff } from './stellar/sorobanEffects';
-import { analyzeTransactionAuthorization } from './stellar/transactionAuthorization';
-import { inspectTransactionXdr } from './stellar/transactionXdr';
+} from '../packages/stellar-core/src/requestTypes';
+import type { StellarNetwork } from '../packages/stellar-core/src/types';
+import type { SorobanEffectsDiff } from '../packages/stellar-core/src/sorobanEffects';
+import { analyzeTransactionAuthorization } from '../packages/stellar-core/src/transactionAuthorization';
+import { inspectTransactionXdr } from '../packages/stellar-core/src/transactionXdr';
 import { proposalWorkflowStage } from './stellar/humanWorkflow';
-import type { TransactionXdrInspection } from './stellar/transactionXdr';
+import type { TransactionXdrInspection } from '../packages/stellar-core/src/transactionXdr';
 import { isCurrentWorkspaceNavigationState, navigateWorkspace, stellarHref } from './workspaceNavigation';
 
 const REQUEST_POLL_INTERVAL_MS = 30_000;

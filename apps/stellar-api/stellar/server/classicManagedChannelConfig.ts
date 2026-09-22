@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { Keypair } from '@stellar/stellar-sdk/base';
-import { stellarAmountToStroops } from '../../../../src/stellar/reserve.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import { stellarAmountToStroops } from '../../../../packages/stellar-core/src/reserve.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
 const DEFAULT_CHANNEL_COUNT = 4;
 export const DEFAULT_CHANNEL_SOFT_LIMIT = 64;

@@ -18,7 +18,7 @@ import {
 import type { StoredAddressAlias } from '../server/addressBookStore.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import { publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
-import type { AgentAccessLevel } from '../../../../src/stellar/agentAccessTypes.js';
+import type { AgentAccessLevel } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 
 const MAX_BODY_BYTES = 8 * 1024;
 const CORS_METHODS = 'GET, PUT, DELETE, OPTIONS';

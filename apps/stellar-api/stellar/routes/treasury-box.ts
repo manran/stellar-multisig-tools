@@ -22,9 +22,9 @@ import {
   semanticRateLimitKey,
 } from '../server/semanticRateLimit.js';
 import { canViewTreasuryActivity } from '../server/treasuryActivityAccess.js';
-import { AccountNotFoundError, isValidStellarAccountId, loadAccount } from '../../../../src/stellar/horizon.js';
-import { privateSessionAddressFromRequest } from '../../../../src/stellar/privateSessionTransport.js';
-import { loadAccountsForSigner } from '../../../../src/stellar/signerAccounts.js';
+import { AccountNotFoundError, isValidStellarAccountId, loadAccount } from '../../../../packages/stellar-core/src/horizon.js';
+import { privateSessionAddressFromRequest } from '../../../../packages/stellar-core/src/privateSessionTransport.js';
+import { loadAccountsForSigner } from '../../../../packages/stellar-core/src/signerAccounts.js';
 
 const MAX_BODY_BYTES = 32 * 1024;
 const MAX_BATCH_TREASURY_ACCOUNTS = 50;

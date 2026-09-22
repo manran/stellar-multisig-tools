@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
-import { normalizePrivateNote } from '../../../../src/stellar/privateNote.js';
-import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
-import type { SigningRequestSnapshot } from '../../../../src/stellar/requestTypes.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
-import { inspectTransactionXdr } from '../../../../src/stellar/transactionXdr.js';
+import { normalizePrivateNote } from '../../../../packages/stellar-core/src/privateNote.js';
+import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
+import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 import {
   agentActorForCredential,
   AgentCredentialServiceError,

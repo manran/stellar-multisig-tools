@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { SigningRequestSnapshot } from '../../../../src/stellar/requestTypes.js';
-import { emptySorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
+import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
+import { emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
 import type { SigningRequestStore, StoredSigningRequest } from './requestStore.js';
 import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';

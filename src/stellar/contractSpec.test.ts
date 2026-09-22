@@ -8,7 +8,7 @@ import {
   contractTypeLabel,
   describeContractAbi,
   describeContractSpec,
-} from './contractSpec.js';
+} from '../../packages/stellar-core/src/contractSpec.js';
 
 const CONTRACT_ID = 'CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE';
 

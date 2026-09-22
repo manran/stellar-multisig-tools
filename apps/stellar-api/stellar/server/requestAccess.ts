@@ -1,8 +1,8 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { loadAccount } from '../../../../src/stellar/horizon.js';
-import { analyzeEnvelopeSignatures } from '../../../../src/stellar/signatureAnalysis.js';
-import type { StellarAccountSnapshot, StellarNetwork } from '../../../../src/stellar/types.js';
-import { inspectTransactionXdr } from '../../../../src/stellar/transactionXdr.js';
+import { loadAccount } from '../../../../packages/stellar-core/src/horizon.js';
+import { analyzeEnvelopeSignatures } from '../../../../packages/stellar-core/src/signatureAnalysis.js';
+import type { StellarAccountSnapshot, StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 import type { StoredSigningRequest } from './requestStore.js';
 
 export type RequestAccountLoader = (

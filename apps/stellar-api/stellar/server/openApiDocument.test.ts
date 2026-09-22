@@ -6,8 +6,8 @@ import { GET as getOperations } from '../routes/operations.js';
 import {
   STELLAR_PUBLIC_DOCS_BASE,
   STELLAR_TESTNET_API_BASE,
-} from '../../../../src/stellar/apiOrigins.js';
-import { HEADLESS_OPERATION_CATALOG } from '../../../../src/stellar/headlessOperations.js';
+} from '../../../../packages/stellar-core/src/apiOrigins.js';
+import { HEADLESS_OPERATION_CATALOG } from '../../../../packages/stellar-core/src/headlessOperations.js';
 import { createOpenApiDocument } from './openApiDocument.js';
 
 type JsonObject = Record<string, unknown>;

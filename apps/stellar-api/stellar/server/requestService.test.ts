@@ -29,13 +29,13 @@ import type {
   StoredSigningRequest,
   StoredSubmissionResult,
 } from './requestStore.js';
-import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
-import type { SorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
-import type { ActivityFactEvent } from '../../../../src/stellar/activityTypes.js';
+import type { StellarAccountSnapshot } from '../../../../packages/stellar-core/src/types.js';
+import type { SorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
+import type { ActivityFactEvent } from '../../../../packages/stellar-core/src/activityTypes.js';
 import {
   mergeSorobanGAccountSignature,
   sorobanAuthorizationPreimageXdr,
-} from '../../../../src/stellar/sorobanAuthorization.js';
+} from '../../../../packages/stellar-core/src/sorobanAuthorization.js';
 
 class MemoryStore implements SigningRequestStore {
   requests = new Map<string, StoredSigningRequest>();

@@ -3,11 +3,11 @@ import {
   contractCallHostFunction,
   isValidContractId,
   loadContractInterface,
-} from '../../../../src/stellar/contractSpec.js';
-import type { LoadedContractInterface } from '../../../../src/stellar/contractSpec.js';
-import { createSorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
-import type { SorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+} from '../../../../packages/stellar-core/src/contractSpec.js';
+import type { LoadedContractInterface } from '../../../../packages/stellar-core/src/contractSpec.js';
+import { createSorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
+import type { SorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
 export class ContractIntentServiceError extends Error {
   constructor(message: string, readonly status: number, readonly code: string) {

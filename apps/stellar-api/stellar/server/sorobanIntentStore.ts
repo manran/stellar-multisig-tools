@@ -1,11 +1,11 @@
-import type { AgentActorProvenance } from '../../../../src/stellar/agentAccessTypes.js';
-import type { MachineCallerProvenance } from '../../../../src/stellar/coordinationActorTypes.js';
-import type { SorobanIntentIntegrationContext } from '../../../../src/stellar/integrationTypes.js';
-import type { SorobanExecutionPolicy } from '../../../../src/stellar/executionPolicy.js';
-import type { SorobanAuthorizationPlan } from '../../../../src/stellar/sorobanAuthorizationPlan.js';
-import type { SorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
-import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import type { AgentActorProvenance } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
+import type { MachineCallerProvenance } from '../../../../packages/stellar-core/src/coordinationActorTypes.js';
+import type { SorobanIntentIntegrationContext } from '../../../../packages/stellar-core/src/integrationTypes.js';
+import type { SorobanExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
+import type { SorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import type { SorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
+import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
 export type SorobanIntentStoreConflictCode =
   | 'authorization_plan_changed'

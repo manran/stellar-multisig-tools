@@ -1,9 +1,9 @@
 import { CheckCircle2, CircleAlert, ShieldCheck } from 'lucide-react';
 import { useAddressBook } from './AddressBookContext';
 import { humanAuthorizationRequirement } from './stellar/authorizationPresentation';
-import type { TransactionAuthorizationStatus } from './stellar/transactionAuthorization';
-import type { SourceAnalysis } from './stellar/transactionReviewAnalysis';
-import type { TransactionXdrInspection } from './stellar/transactionXdr';
+import type { TransactionAuthorizationStatus } from '../packages/stellar-core/src/transactionAuthorization';
+import type { SourceAnalysis } from '../packages/stellar-core/src/transactionReviewAnalysis';
+import type { TransactionXdrInspection } from '../packages/stellar-core/src/transactionXdr';
 
 interface Props {
   inspection: TransactionXdrInspection;

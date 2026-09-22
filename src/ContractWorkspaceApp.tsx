@@ -5,9 +5,9 @@ import { NetworkBadge } from './MultiSigUi';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useContractWorkspaces } from './ContractWorkspaceContext';
 import { inspectContractOperation, keepContractOperation } from './contractOperationsClient';
-import type { ContractMethodDescriptor } from './stellar/contractSpec';
+import type { ContractMethodDescriptor } from '../packages/stellar-core/src/contractSpec';
 import { resolveStellarNetwork } from './stellar/networkPreference';
-import type { StellarNetwork } from './stellar/types';
+import type { StellarNetwork } from '../packages/stellar-core/src/types';
 import { useStellarWallet } from './StellarWalletContext';
 import { navigateWorkspace, stellarHref, stellarHrefWithSearch } from './workspaceNavigation';
 

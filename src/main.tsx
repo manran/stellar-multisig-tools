@@ -25,7 +25,7 @@ import TreasuryApp from './TreasuryApp';
 import TreasuryBoxSettingsApp from './TreasuryBoxSettingsApp';
 import TransactionReceiptApp from './TransactionReceiptApp';
 import { canonicalStellarContentLocationForLocation, canonicalStellarRuntimeLocationForLocation, navigateWorkspace, WORKSPACE_NAVIGATION_EVENT } from './workspaceNavigation';
-import { fixedClientStellarDeploymentNetwork } from './stellar/deploymentNetwork';
+import { fixedClientStellarDeploymentNetwork } from '../packages/stellar-core/src/deploymentNetwork';
 import { isCanonicalStellarContentPath, isStellarWorkspaceHost, stellarWorkspaceRouteForPath } from './workspaceRoutes';
 import type { StellarWorkspaceRouteKind } from './workspaceRoutes';
 

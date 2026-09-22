@@ -1,7 +1,7 @@
 import { ArrowRight, FlaskConical } from 'lucide-react';
 import StellarHeader from './StellarHeader';
-import { STELLAR_PUBLIC_DOCS_BASE } from './stellar/apiOrigins';
-import { STELLAR_MAINNET_ORIGIN } from './stellar/deploymentOrigins';
+import { STELLAR_PUBLIC_DOCS_BASE } from '../packages/stellar-core/src/apiOrigins';
+import { STELLAR_MAINNET_ORIGIN } from '../packages/stellar-core/src/deploymentOrigins';
 import { stellarHref } from './workspaceNavigation';
 
 const BOUNDARY_FACTS = [

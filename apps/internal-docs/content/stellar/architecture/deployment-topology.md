@@ -124,9 +124,13 @@ Public documentation must not depend on Mainnet Human App availability.
 
 ### Internal
 
+Target custom domain:
+
 ```text
 https://internal.multisig.tools/stellar
 ```
+
+The custom domain is not currently bound. Internal documentation is served from the private `multisig-tools-internal-docs` Vercel production deployment until that domain is explicitly configured.
 
 Internal documentation is a separate private deployment.
 
@@ -147,11 +151,18 @@ apps/
   internal-docs/
 ```
 
-Do not create speculative cross-protocol packages before real reuse exists.
+Shared, non-deployable protocol runtime:
+
+```text
+packages/
+  stellar-core/
+```
+
+`packages/stellar-core` contains Stellar runtime modules that are consumed by both Human Web and the Stellar API. It contains no React or browser-only ownership and is not a Vercel project. This package exists because reuse is already proven in both deployables; do not create speculative cross-protocol packages before equivalent real reuse exists.
 
 Shared packages are introduced only when code is actually consumed by more than one deployable.
 
-A monorepo does not require every app to share one package manager lockfile during migration. Each Vercel project may build from its own Root Directory while the existing Web/API root is migrated incrementally.
+A monorepo does not require every deployable to share one lockfile. The root npm workspace currently owns `apps/web`, `apps/stellar-api`, and `packages/stellar-core`; the self-contained Next.js apps keep their own install boundaries. Every Vercel project builds from its explicit app Root Directory.
 
 ## 7. Vercel project model
 
@@ -164,7 +175,8 @@ apps/docs
   -> docs.multisig.tools
 
 apps/internal-docs
-  -> internal.multisig.tools (private/deployment protected)
+  -> private Vercel production alias
+  -> target: internal.multisig.tools
 
 apps/api-gateway
   -> api-testnet.multisig.tools

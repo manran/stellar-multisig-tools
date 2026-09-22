@@ -1,4 +1,4 @@
-import type { StellarNetwork } from './types.js';
+import type { StellarNetwork } from '../../packages/stellar-core/src/types.js';
 
 const TREASURY_STORAGE_PREFIX = 'multisig-tools.stellar.treasuries.v1';
 const TREASURY_ONBOARDING_DISMISSED_PREFIX = 'multisig-tools.stellar.treasury-onboarding-dismissed.v1';

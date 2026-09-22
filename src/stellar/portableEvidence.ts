@@ -1,7 +1,7 @@
-import type { ActivityFactType, ActivityRequestItem } from './activityTypes';
-import type { SigningRequestSnapshot } from './requestTypes';
-import type { SourceAnalysis } from './transactionReviewAnalysis';
-import type { TransactionXdrInspection } from './transactionXdr';
+import type { ActivityFactType, ActivityRequestItem } from '../../packages/stellar-core/src/activityTypes';
+import type { SigningRequestSnapshot } from '../../packages/stellar-core/src/requestTypes';
+import type { SourceAnalysis } from '../../packages/stellar-core/src/transactionReviewAnalysis';
+import type { TransactionXdrInspection } from '../../packages/stellar-core/src/transactionXdr';
 
 export type PortableEvidenceSignerRole = 'account_key' | 'signer';
 export type PortableEvidenceDecision = 'signed' | 'declined' | 'none';

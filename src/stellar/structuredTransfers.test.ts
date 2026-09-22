@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Keypair } from '@stellar/stellar-sdk/base';
-import { parseStructuredTransfers, resolveAssetToken, transferTotals, validateTransferRows } from './structuredTransfers.js';
-import type { StellarAccountSnapshot } from './types.js';
+import { parseStructuredTransfers, resolveAssetToken, transferTotals, validateTransferRows } from '../../packages/stellar-core/src/structuredTransfers.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 const ALICE = Keypair.random().publicKey();
 const BOB = Keypair.random().publicKey();

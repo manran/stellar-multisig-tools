@@ -1,7 +1,7 @@
 import type {
   AgentAccessLevel,
   SignerPrincipalRef,
-} from '../../../../src/stellar/agentAccessTypes.js';
+} from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 
 export interface StoredSignerAgentCredential {
   version: 1;

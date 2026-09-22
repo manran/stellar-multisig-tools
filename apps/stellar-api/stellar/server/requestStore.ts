@@ -1,13 +1,13 @@
-import type { ActivityEvent, ActivityFactEvent } from '../../../../src/stellar/activityTypes.js';
-import type { AgentActorProvenance } from '../../../../src/stellar/agentAccessTypes.js';
-import type { MachineCallerProvenance } from '../../../../src/stellar/coordinationActorTypes.js';
-import type { RequestIntegrationContext } from '../../../../src/stellar/integrationTypes.js';
-import type { ExecutionPolicy } from '../../../../src/stellar/executionPolicy.js';
-import type { PrivateCommitmentRecord } from '../../../../src/stellar/privateCommitment.js';
-import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
-import type { SorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
-import type { SorobanRequestOrigin } from '../../../../src/stellar/requestTypes.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import type { ActivityEvent, ActivityFactEvent } from '../../../../packages/stellar-core/src/activityTypes.js';
+import type { AgentActorProvenance } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
+import type { MachineCallerProvenance } from '../../../../packages/stellar-core/src/coordinationActorTypes.js';
+import type { RequestIntegrationContext } from '../../../../packages/stellar-core/src/integrationTypes.js';
+import type { ExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
+import type { PrivateCommitmentRecord } from '../../../../packages/stellar-core/src/privateCommitment.js';
+import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
+import type { SorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
+import type { SorobanRequestOrigin } from '../../../../packages/stellar-core/src/requestTypes.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
 export interface StoredSigningRequest {
   version: 1;

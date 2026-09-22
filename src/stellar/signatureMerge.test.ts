@@ -8,7 +8,7 @@ import {
   Operation,
   TransactionBuilder,
 } from '@stellar/stellar-sdk/base';
-import { mergeSignedTransactionXdr } from './signatureMerge.js';
+import { mergeSignedTransactionXdr } from '../../packages/stellar-core/src/signatureMerge.js';
 
 function unsignedPayment(amount = '1') {
   const source = Keypair.random();

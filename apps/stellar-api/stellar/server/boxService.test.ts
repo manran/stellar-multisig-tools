@@ -25,7 +25,7 @@ import {
   type BoxAuditEvent,
   type TreasuryBoxMetadata,
   type TreasuryBoxRef,
-} from '../../../../src/stellar/boxTypes.js';
+} from '../../../../packages/stellar-core/src/boxTypes.js';
 
 class MemoryBoxStore implements BoxStore {
   metadata = new Map<string, TreasuryBoxMetadata>();

@@ -1,4 +1,4 @@
-import type { SorobanIntentEvidenceEvent } from '../../../../src/stellar/sorobanIntentApiTypes.js';
+import type { SorobanIntentEvidenceEvent } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 import type {
   StoredSorobanIntent,
   StoredSorobanIntentAuthorizationContribution,

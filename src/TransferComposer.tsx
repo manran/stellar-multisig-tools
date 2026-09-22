@@ -4,19 +4,19 @@ import { useAddressBook } from './AddressBookContext';
 import SigningAccountPicker from './SigningAccountPicker';
 import { useStellarWallet } from './StellarWalletContext';
 import { NetworkBadge, TransactionLifetimePicker, WorkflowProgress } from './MultiSigUi';
-import { AccountNotFoundError, isValidStellarAccountId, loadAccount, loadNetworkParameters } from './stellar/horizon';
+import { AccountNotFoundError, isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../packages/stellar-core/src/horizon';
 import { appendBatchRecipientRow, batchRecipientRowsFromInput, batchRecipientRowsToInput, removeBatchRecipientRow } from './stellar/batchRecipientEditor';
 import type { BatchRecipientDraftRow } from './stellar/batchRecipientEditor';
-import { MAX_PRIVATE_NOTE_BYTES, normalizePrivateNote, privateNoteByteLength } from './stellar/privateNote';
-import { isValidStellarTextMemo, stellarTextMemoByteLength } from './stellar/memo';
+import { MAX_PRIVATE_NOTE_BYTES, normalizePrivateNote, privateNoteByteLength } from '../packages/stellar-core/src/privateNote';
+import { isValidStellarTextMemo, stellarTextMemoByteLength } from '../packages/stellar-core/src/memo';
 import { writeReviewHandoff } from './stellar/reviewHandoff';
-import { parseStructuredTransfers, validateTransferRows } from './stellar/structuredTransfers';
-import type { TransferIssue } from './stellar/structuredTransfers';
-import { buildTransferTransaction, transferDestinationIssues, transferFundingIssues } from './stellar/transferTransactions';
+import { parseStructuredTransfers, validateTransferRows } from '../packages/stellar-core/src/structuredTransfers';
+import type { TransferIssue } from '../packages/stellar-core/src/structuredTransfers';
+import { buildTransferTransaction, transferDestinationIssues, transferFundingIssues } from '../packages/stellar-core/src/transferTransactions';
 import { clearTransactionTemplateDraft, loadTransactionTemplateDraft, saveTransactionTemplateDraft } from './stellar/transactionTemplateDraft';
-import { getDefaultTransactionLifetime } from './stellar/transactionPreferences';
-import { hasSharedSigningControl } from './stellar/treasuryModel';
-import type { StellarAccountSnapshot, StellarNetwork } from './stellar/types';
+import { getDefaultTransactionLifetime } from '../packages/stellar-core/src/transactionPreferences';
+import { hasSharedSigningControl } from '../packages/stellar-core/src/treasuryModel';
+import type { StellarAccountSnapshot, StellarNetwork } from '../packages/stellar-core/src/types';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
 
 interface Props {

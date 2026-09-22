@@ -6,7 +6,7 @@ import {
   loadTransactionByHash,
   submitTransactionXdr,
   TransactionSubmissionError,
-} from './horizon.js';
+} from '../../packages/stellar-core/src/horizon.js';
 
 const ACCOUNT = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 

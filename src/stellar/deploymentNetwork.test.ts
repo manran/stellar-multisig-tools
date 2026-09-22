@@ -5,7 +5,7 @@ import {
   fixedStellarDeploymentNetwork,
   parseStellarDeploymentNetwork,
   resolveDeploymentNetwork,
-} from './deploymentNetwork.js';
+} from '../../packages/stellar-core/src/deploymentNetwork.js';
 
 test('deployment network policy defaults safely to Mainnet and keeps dual explicit', () => {
   assert.equal(parseStellarDeploymentNetwork(undefined), 'public');
@@ -30,7 +30,7 @@ test('dual compatibility mode keeps the prior explicit-wallet-default order', ()
 });
 
 test('client deployment policy keeps the direct Vite-replaceable environment access', () => {
-  const source = readFileSync(new URL('./deploymentNetwork.ts', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../../packages/stellar-core/src/deploymentNetwork.ts', import.meta.url), 'utf8');
   assert.match(source, /import\.meta\.env\?\.VITE_STELLAR_DEPLOYMENT_NETWORK/);
   assert.doesNotMatch(source, /const metadata = import\.meta/);
 });

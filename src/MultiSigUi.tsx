@@ -1,9 +1,9 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { CheckCircle2 } from 'lucide-react';
-import type { SigningRequestStatus } from './stellar/requestTypes';
-import { TRANSACTION_LIFETIME_OPTIONS } from './stellar/transactionPreferences';
-import { fixedClientStellarDeploymentNetwork } from './stellar/deploymentNetwork';
-import type { StellarNetwork } from './stellar/types';
+import type { SigningRequestStatus } from '../packages/stellar-core/src/requestTypes';
+import { TRANSACTION_LIFETIME_OPTIONS } from '../packages/stellar-core/src/transactionPreferences';
+import { fixedClientStellarDeploymentNetwork } from '../packages/stellar-core/src/deploymentNetwork';
+import type { StellarNetwork } from '../packages/stellar-core/src/types';
 import {
   HUMAN_WORKFLOW_STEPS,
   requestStatusPresentation,

@@ -2,7 +2,7 @@ import type {
   BoxAuditEvent,
   TreasuryBoxMetadata,
   TreasuryBoxRef,
-} from '../../../../src/stellar/boxTypes.js';
+} from '../../../../packages/stellar-core/src/boxTypes.js';
 
 export interface StoredTreasuryAuditKey {
   version: 1;

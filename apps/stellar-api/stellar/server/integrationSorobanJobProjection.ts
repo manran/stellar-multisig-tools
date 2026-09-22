@@ -1,4 +1,4 @@
-import type { IntegrationSorobanJobProjection } from '../../../../src/stellar/sorobanIntentApiTypes.js';
+import type { IntegrationSorobanJobProjection } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
 import type {
   StoredSorobanIntent,

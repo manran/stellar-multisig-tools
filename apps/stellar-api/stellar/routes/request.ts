@@ -26,7 +26,7 @@ import { CallerAuthenticationError, machineCallerFromRequest, verifiedSignerSess
 import { createIntegrationPaymentSigningRequest, createIntegrationSigningRequest } from '../server/integrationRequestService.js';
 import { ClassicManagedChannelServiceError } from '../server/classicManagedChannelService.js';
 import { ClassicManagedChannelConfigurationError } from '../server/classicManagedChannelConfig.js';
-import { ClassicPaymentPrepareError, type ClassicPaymentInstruction } from '../../../../src/stellar/classicPaymentPrepare.js';
+import { ClassicPaymentPrepareError, type ClassicPaymentInstruction } from '../../../../packages/stellar-core/src/classicPaymentPrepare.js';
 import { BoxServiceError } from '../server/boxService.js';
 import {
   contributionGrantCookie,
@@ -59,18 +59,18 @@ import {
   SigningRequestServiceError,
   submitSigningRequest,
 } from '../server/requestService.js';
-import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../../../../src/stellar/horizon.js';
-import { normalizePrivateNote } from '../../../../src/stellar/privateNote.js';
-import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
-import type { SigningRequestApiError, SigningRequestStatus } from '../../../../src/stellar/requestTypes.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
-import { loadTransactionSourceAnalyses } from '../../../../src/stellar/transactionReviewAnalysis.js';
-import { inspectTransactionXdr } from '../../../../src/stellar/transactionXdr.js';
-import { transactionHashHex } from '../../../../src/stellar/signatureMerge.js';
+import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
+import { normalizePrivateNote } from '../../../../packages/stellar-core/src/privateNote.js';
+import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
+import type { SigningRequestApiError, SigningRequestStatus } from '../../../../packages/stellar-core/src/requestTypes.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import { loadTransactionSourceAnalyses } from '../../../../packages/stellar-core/src/transactionReviewAnalysis.js';
+import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
+import { transactionHashHex } from '../../../../packages/stellar-core/src/signatureMerge.js';
 import {
   enforcePreparedSorobanTransaction,
   SorobanSimulationError,
-} from '../../../../src/stellar/sorobanRpc.js';
+} from '../../../../packages/stellar-core/src/sorobanRpc.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import { noStoreJson } from '../server/httpResponse.js';

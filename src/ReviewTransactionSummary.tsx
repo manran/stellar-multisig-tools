@@ -6,13 +6,13 @@ import PrivateCommitmentDisclosure from './PrivateCommitmentDisclosure';
 import { useStellarWallet } from './StellarWalletContext';
 import { summarizeAccountControlReview } from './stellar/accountControlReview';
 import { compactAssetIssuer, inspectedAssetIdentity } from './stellar/assetPresentation';
-import type { PrivateCommitmentDraft, PrivateCommitmentRecord } from './stellar/privateCommitment';
+import type { PrivateCommitmentDraft, PrivateCommitmentRecord } from '../packages/stellar-core/src/privateCommitment';
 import { projectTransactionSemantics } from './stellar/transactionSemantics';
 import type { PaymentSemanticFacts } from './stellar/transactionSemantics';
-import { stellarAmountToStroops, stroopsToStellarAmount } from './stellar/reserve';
-import type { TransactionXdrInspection } from './stellar/transactionXdr';
-import { hasSharedSigningControl } from './stellar/treasuryModel';
-import type { StellarAccountSnapshot } from './stellar/types';
+import { stellarAmountToStroops, stroopsToStellarAmount } from '../packages/stellar-core/src/reserve';
+import type { TransactionXdrInspection } from '../packages/stellar-core/src/transactionXdr';
+import { hasSharedSigningControl } from '../packages/stellar-core/src/treasuryModel';
+import type { StellarAccountSnapshot } from '../packages/stellar-core/src/types';
 import { cachedTreasuryName, loadSharedTreasuryNames } from './treasuryMetadataCache';
 import { treasuryDisplayLabel } from './treasuryDisplay';
 

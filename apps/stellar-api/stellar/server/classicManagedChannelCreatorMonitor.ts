@@ -1,6 +1,6 @@
-import { stellarAmountToStroops } from '../../../../src/stellar/reserve.js';
-import type { StellarNetworkParameters } from '../../../../src/stellar/horizon.js';
-import type { StellarAccountSnapshot, StellarNetwork } from '../../../../src/stellar/types.js';
+import { stellarAmountToStroops } from '../../../../packages/stellar-core/src/reserve.js';
+import type { StellarNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
+import type { StellarAccountSnapshot, StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { assessClassicManagedChannelCreatorCapacity, type ClassicManagedChannelCreatorCapacity, type ClassicManagedChannelCreatorState } from './classicManagedChannelCapacity.js';
 import type { ClassicManagedChannelCreatorMonitorStore } from './classicManagedChannelCreatorMonitorStore.js';
 

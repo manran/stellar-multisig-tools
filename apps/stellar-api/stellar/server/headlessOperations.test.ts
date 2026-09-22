@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { HEADLESS_OPERATION_CATALOG } from '../../../../src/stellar/headlessOperations.js';
+import { HEADLESS_OPERATION_CATALOG } from '../../../../packages/stellar-core/src/headlessOperations.js';
 
 test('headless operation ids are unique and explicitly versioned', () => {
   const ids = HEADLESS_OPERATION_CATALOG.map((operation) => operation.id);

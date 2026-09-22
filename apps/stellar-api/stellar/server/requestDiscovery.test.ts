@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { requestDiscoverySignerKeys, requestDiscoverySubjectsForInspection } from './requestDiscovery.js';
-import type { TransactionXdrInspection } from '../../../../src/stellar/transactionXdr.js';
-import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
+import type { TransactionXdrInspection } from '../../../../packages/stellar-core/src/transactionXdr.js';
+import type { StellarAccountSnapshot } from '../../../../packages/stellar-core/src/types.js';
 
 const A = 'G'.padEnd(56, 'A');
 const B = 'G'.padEnd(56, 'B');

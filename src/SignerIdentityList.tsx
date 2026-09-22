@@ -3,7 +3,7 @@ import { Trash2 } from 'lucide-react';
 import AddressAliasEditor from './AddressAliasEditor';
 import { useAddressBook } from './AddressBookContext';
 import { useStellarWallet } from './StellarWalletContext';
-import { isValidStellarAccountId } from './stellar/horizon';
+import { isValidStellarAccountId } from '../packages/stellar-core/src/horizon';
 import { addSavedSignerRow, removeSignerInputRow, updateSignerInputRows } from './stellar/signerInputs';
 
 interface Props {

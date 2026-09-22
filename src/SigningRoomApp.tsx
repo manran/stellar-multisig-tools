@@ -20,30 +20,30 @@ import TransactionAuthorizationResults from './TransactionAuthorizationResults';
 import TransactionInspectorSummary from './TransactionInspectorSummary';
 import XdrQrCode from './XdrQrCode';
 import { accountSigningReviewOutcome } from './stellar/accountSigningFlow';
-import { loadNetworkParameters, submitTransactionXdr } from './stellar/horizon';
-import type { StellarNetworkParameters, TransactionSubmissionResult } from './stellar/horizon';
+import { loadNetworkParameters, submitTransactionXdr } from '../packages/stellar-core/src/horizon';
+import type { StellarNetworkParameters, TransactionSubmissionResult } from '../packages/stellar-core/src/horizon';
 import {
   canSubmitReviewedTransactionDirectly,
   loadTransactionSourceAnalyses,
   projectTransactionReviewAuthorizationStatus,
-} from './stellar/transactionReviewAnalysis';
-import type { SourceAnalysis } from './stellar/transactionReviewAnalysis';
-import { privateCommitmentMatchesHash } from './stellar/privateCommitment';
-import type { PrivateCommitmentDraft } from './stellar/privateCommitment';
+} from '../packages/stellar-core/src/transactionReviewAnalysis';
+import type { SourceAnalysis } from '../packages/stellar-core/src/transactionReviewAnalysis';
+import { privateCommitmentMatchesHash } from '../packages/stellar-core/src/privateCommitment';
+import type { PrivateCommitmentDraft } from '../packages/stellar-core/src/privateCommitment';
 import { resolveStellarNetwork } from './stellar/networkPreference';
 import { clearPaymentDraft } from './stellar/paymentDraft';
 import { takeReviewHandoff } from './stellar/reviewHandoff';
-import { analyzeTransactionAuthorization } from './stellar/transactionAuthorization';
-import { assessTransactionPreconditions } from './stellar/transactionPreconditions';
-import { inspectTransactionXdr } from './stellar/transactionXdr';
-import type { TransactionXdrInspection } from './stellar/transactionXdr';
-import { privateSessionAddressHeaders } from './stellar/privateSessionTransport';
+import { analyzeTransactionAuthorization } from '../packages/stellar-core/src/transactionAuthorization';
+import { assessTransactionPreconditions } from '../packages/stellar-core/src/transactionPreconditions';
+import { inspectTransactionXdr } from '../packages/stellar-core/src/transactionXdr';
+import type { TransactionXdrInspection } from '../packages/stellar-core/src/transactionXdr';
+import { privateSessionAddressHeaders } from '../packages/stellar-core/src/privateSessionTransport';
 import { saveRequestLocalEffects } from './stellar/requestLocalEffects';
-import { mergeSignedTransactionXdr } from './stellar/signatureMerge';
-import type { CreateSigningRequestResponse, SigningRequestSnapshot } from './stellar/requestTypes';
-import type { StellarNetwork } from './stellar/types';
-import { compareSorobanEffects } from './stellar/sorobanEffects';
-import type { SorobanEffectsDiff } from './stellar/sorobanEffects';
+import { mergeSignedTransactionXdr } from '../packages/stellar-core/src/signatureMerge';
+import type { CreateSigningRequestResponse, SigningRequestSnapshot } from '../packages/stellar-core/src/requestTypes';
+import type { StellarNetwork } from '../packages/stellar-core/src/types';
+import { compareSorobanEffects } from '../packages/stellar-core/src/sorobanEffects';
+import type { SorobanEffectsDiff } from '../packages/stellar-core/src/sorobanEffects';
 import { verifyPreparedContractCallOperation } from './contractOperationsClient';
 import { isCurrentWorkspaceNavigationState, navigateWorkspace, stellarHref } from './workspaceNavigation';
 

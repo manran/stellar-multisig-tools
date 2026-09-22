@@ -1,8 +1,8 @@
-import { fixedStellarDeploymentNetwork } from '../../../../src/stellar/deploymentNetwork.js';
+import { fixedStellarDeploymentNetwork } from '../../../../packages/stellar-core/src/deploymentNetwork.js';
 import {
   STELLAR_MAINNET_ORIGIN,
   STELLAR_TESTNET_ORIGIN,
-} from '../../../../src/stellar/deploymentOrigins.js';
+} from '../../../../packages/stellar-core/src/deploymentOrigins.js';
 import { configuredDeploymentNetwork } from './deploymentNetworkPolicy.js';
 
 export interface RequestAuthConfig {

@@ -11,8 +11,8 @@ import {
   nativeToScVal,
   xdr,
 } from '@stellar/stellar-sdk/base';
-import { inspectSorobanAuthorizationEntry, previewSorobanValue } from './sorobanInspection.js';
-import { inspectTransactionXdr } from './transactionXdr.js';
+import { inspectSorobanAuthorizationEntry, previewSorobanValue } from '../../packages/stellar-core/src/sorobanInspection.js';
+import { inspectTransactionXdr } from '../../packages/stellar-core/src/transactionXdr.js';
 
 const CONTRACT_ID = 'CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE';
 

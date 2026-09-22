@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { del, get, list, put } from '@vercel/blob';
-import type { SignerPrincipalRef } from '../../../../src/stellar/agentAccessTypes.js';
+import type { SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 import type { ContractWorkspaceStore, StoredContractWorkspace } from './contractWorkspaceStore.js';
 import { withBlobStorage } from './blobRequestStore.js';
 

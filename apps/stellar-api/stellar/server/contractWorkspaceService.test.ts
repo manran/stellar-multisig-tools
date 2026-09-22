@@ -8,7 +8,7 @@ import {
   listContractWorkspaces,
 } from './contractWorkspaceService.js';
 import type { ContractWorkspaceStore, StoredContractWorkspace } from './contractWorkspaceStore.js';
-import type { SignerPrincipalRef } from '../../../../src/stellar/agentAccessTypes.js';
+import type { SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 
 const CONTRACT_A = 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4';
 const CONTRACT_B = 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM';

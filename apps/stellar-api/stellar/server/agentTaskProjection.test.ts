@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { SigningRequestSnapshot } from '../../../../src/stellar/requestTypes.js';
+import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
 import type { StoredSorobanIntent } from './sorobanIntentStore.js';
 import {

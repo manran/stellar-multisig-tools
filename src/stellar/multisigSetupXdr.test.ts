@@ -3,7 +3,7 @@ import test from 'node:test';
 import { Keypair, Networks, TransactionBuilder } from '@stellar/stellar-sdk';
 import { designExactMultisigPolicy, designExistingMultisigPolicy } from './multisigDesigner.js';
 import { buildMultisigSetupXdr, DEFAULT_MULTISIG_SETUP_TIMEOUT_SECONDS } from './multisigSetupXdr.js';
-import type { StellarAccountSnapshot } from './types.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 function accountFor(master: Keypair): StellarAccountSnapshot {
   return {

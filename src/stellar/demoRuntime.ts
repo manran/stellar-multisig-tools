@@ -1,6 +1,6 @@
 import { Account, Asset, Memo, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
-import { inspectTransactionXdr } from './transactionXdr.js';
-import type { StellarAccountSnapshot, StellarNetwork } from './types.js';
+import { inspectTransactionXdr } from '../../packages/stellar-core/src/transactionXdr.js';
+import type { StellarAccountSnapshot, StellarNetwork } from '../../packages/stellar-core/src/types.js';
 
 export const DEMO_NETWORK: StellarNetwork = 'testnet';
 export const DEMO_TREASURY_ADDRESS = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';

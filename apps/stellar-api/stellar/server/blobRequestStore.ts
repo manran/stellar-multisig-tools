@@ -1,8 +1,8 @@
 import { BlobError, get, list, put } from '@vercel/blob';
-import { AccountNotFoundError, isValidStellarAccountId, loadAccount } from '../../../../src/stellar/horizon.js';
-import type { ActivityEvent, ActivityFactEvent } from '../../../../src/stellar/activityTypes.js';
-import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
-import type { StellarAccountSnapshot, StellarNetwork } from '../../../../src/stellar/types.js';
+import { AccountNotFoundError, isValidStellarAccountId, loadAccount } from '../../../../packages/stellar-core/src/horizon.js';
+import type { ActivityEvent, ActivityFactEvent } from '../../../../packages/stellar-core/src/activityTypes.js';
+import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
+import type { StellarAccountSnapshot, StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { requestDiscoverySignerKeys, requestDiscoverySubjects } from './requestDiscovery.js';
 import { isValidSigningRequestId } from './requestLocator.js';
 import type {

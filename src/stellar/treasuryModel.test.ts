@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { classifyTreasuryRelationship, hasSharedSigningControl } from './treasuryModel.js';
-import type { StellarAccountSnapshot } from './types.js';
+import { classifyTreasuryRelationship, hasSharedSigningControl } from '../../packages/stellar-core/src/treasuryModel.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 const WALLET = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 const B = 'GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBWCF';

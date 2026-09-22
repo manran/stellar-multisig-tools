@@ -1,7 +1,7 @@
-import type { PrivateCommitmentDraft } from './privateCommitment.js';
+import type { PrivateCommitmentDraft } from '../../packages/stellar-core/src/privateCommitment.js';
 import type { AccountSigningIntent } from './accountSigningFlow.js';
-import type { StellarNetwork } from './types.js';
-import type { SorobanEffectsSnapshot } from './sorobanEffects.js';
+import type { StellarNetwork } from '../../packages/stellar-core/src/types.js';
+import type { SorobanEffectsSnapshot } from '../../packages/stellar-core/src/sorobanEffects.js';
 
 const REVIEW_HANDOFF_XDR_KEY = 'multisig-tools.stellar.review-handoff.xdr';
 const REVIEW_HANDOFF_NETWORK_KEY = 'multisig-tools.stellar.review-handoff.network';

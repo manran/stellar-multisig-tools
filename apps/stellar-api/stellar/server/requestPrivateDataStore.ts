@@ -1,5 +1,5 @@
-import type { PrivateCommitmentRecord } from '../../../../src/stellar/privateCommitment.js';
-import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
+import type { PrivateCommitmentRecord } from '../../../../packages/stellar-core/src/privateCommitment.js';
+import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
 
 export interface StoredRequestPrivateData {
   version: 1;

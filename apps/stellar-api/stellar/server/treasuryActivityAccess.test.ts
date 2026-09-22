@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { canViewTreasuryActivity } from './treasuryActivityAccess.js';
-import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
+import type { StellarAccountSnapshot } from '../../../../packages/stellar-core/src/types.js';
 
 const TREASURY = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 const ACTIVE = 'GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBWCF';

@@ -1,5 +1,5 @@
-import type { SigningRequestStatus } from './requestTypes.js';
-import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentApiTypes.js';
+import type { SigningRequestStatus } from '../../packages/stellar-core/src/requestTypes.js';
+import type { SorobanIntentAuthorizationSnapshot } from '../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 
 export type CoordinationWorkflowPhase =
   | 'authorization'

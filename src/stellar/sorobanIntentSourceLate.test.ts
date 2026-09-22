@@ -19,8 +19,8 @@ import {
   initializeSorobanGAccountAuthorizationWindow,
   mergeSorobanGAccountSignature,
   sorobanAuthorizationPreimageXdr,
-} from './sorobanAuthorization.js';
-import type { StellarAccountSnapshot } from './types.js';
+} from '../../packages/stellar-core/src/sorobanAuthorization.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 function snapshot(
   accountId: string,
   signers: Array<{ key: string; weight: number }>,

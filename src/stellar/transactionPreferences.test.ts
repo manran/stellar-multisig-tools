@@ -5,7 +5,7 @@ import {
   getDefaultTransactionLifetime,
   setDefaultTransactionLifetime,
   transactionLifetimeLabel,
-} from './transactionPreferences.js';
+} from '../../packages/stellar-core/src/transactionPreferences.js';
 
 function memoryStorage(initial: string | null = null) {
   let value = initial;

@@ -8,7 +8,7 @@ import {
   Operation,
   TransactionBuilder,
 } from '@stellar/stellar-sdk/base';
-import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
+import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
 import { applyCoordinationMigrations } from './migrate.js';
 import { closeCoordinationPool, coordinationPool } from './postgres.js';
 import { createPostgresSigningRequestStore } from './postgresSigningRequestStore.js';

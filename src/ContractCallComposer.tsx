@@ -5,12 +5,12 @@ import { NetworkBadge, WorkflowProgress } from './MultiSigUi';
 import { useContractWorkspaces } from './ContractWorkspaceContext';
 import { inspectContractOperation, keepContractOperation } from './contractOperationsClient';
 import { useStellarWallet } from './StellarWalletContext';
-import { isValidContractId } from './stellar/contractSpec';
-import type { ContractInputDescriptor, ContractMethodDescriptor } from './stellar/contractSpec';
-import { MAX_PRIVATE_NOTE_BYTES, normalizePrivateNote, privateNoteByteLength } from './stellar/privateNote';
-import { privateSessionAddressHeaders } from './stellar/privateSessionTransport';
-import type { SorobanIntentResponse } from './stellar/sorobanIntentApiTypes';
-import type { StellarNetwork } from './stellar/types';
+import { isValidContractId } from '../packages/stellar-core/src/contractSpec';
+import type { ContractInputDescriptor, ContractMethodDescriptor } from '../packages/stellar-core/src/contractSpec';
+import { MAX_PRIVATE_NOTE_BYTES, normalizePrivateNote, privateNoteByteLength } from '../packages/stellar-core/src/privateNote';
+import { privateSessionAddressHeaders } from '../packages/stellar-core/src/privateSessionTransport';
+import type { SorobanIntentResponse } from '../packages/stellar-core/src/sorobanIntentApiTypes';
+import type { StellarNetwork } from '../packages/stellar-core/src/types';
 import { navigateWorkspace, stellarHref, stellarHrefWithSearch } from './workspaceNavigation';
 
 interface Props {

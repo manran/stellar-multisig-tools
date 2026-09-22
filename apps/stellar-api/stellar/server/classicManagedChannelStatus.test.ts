@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { AccountNotFoundError } from '../../../../src/stellar/horizon.js';
-import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
+import { AccountNotFoundError } from '../../../../packages/stellar-core/src/horizon.js';
+import type { StellarAccountSnapshot } from '../../../../packages/stellar-core/src/types.js';
 import type {
   ClassicManagedChannelLeaseStore,
   StoredClassicManagedChannelLease,

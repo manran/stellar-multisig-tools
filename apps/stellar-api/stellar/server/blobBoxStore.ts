@@ -1,5 +1,5 @@
 import { get, list, put } from '@vercel/blob';
-import type { BoxAuditEvent, TreasuryBoxMetadata, TreasuryBoxRef } from '../../../../src/stellar/boxTypes.js';
+import type { BoxAuditEvent, TreasuryBoxMetadata, TreasuryBoxRef } from '../../../../packages/stellar-core/src/boxTypes.js';
 import { withBlobStorage } from './blobRequestStore.js';
 import type { BoxStore, StoredTreasuryAuditKey } from './boxStore.js';
 

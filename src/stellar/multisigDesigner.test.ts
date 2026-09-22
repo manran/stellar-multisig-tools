@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { assessExistingMultisigSource, assessSetupSource, designExactMultisigPolicy, designExistingMultisigPolicy } from './multisigDesigner.js';
-import type { StellarAccountSnapshot } from './types.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 const MASTER = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 const B = 'GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBWCF';

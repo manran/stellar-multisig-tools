@@ -21,7 +21,7 @@ import {
   prepareEnforcedSorobanTransaction,
   simulateSorobanTransaction,
   stellarRpcUrl,
-} from './sorobanRpc.js';
+} from '../../packages/stellar-core/src/sorobanRpc.js';
 
 const CONTRACT_ID = 'CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE';
 

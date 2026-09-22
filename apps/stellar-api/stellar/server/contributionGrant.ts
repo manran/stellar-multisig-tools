@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AuthStore } from './authStore.js';
 import { getOrCreateAuthServerKeypair } from './authService.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
 export const CONTRIBUTION_GRANT_TTL_SECONDS = 15 * 60;
 const COOKIE_NAME = 'mst_contribution';

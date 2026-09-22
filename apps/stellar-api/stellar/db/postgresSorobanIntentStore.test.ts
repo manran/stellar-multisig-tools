@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
-import type { SorobanExecutionPolicy } from '../../../../src/stellar/executionPolicy.js';
-import { emptySorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
-import type { SorobanAuthorizationPlan } from '../../../../src/stellar/sorobanAuthorizationPlan.js';
-import type { SorobanIntent } from '../../../../src/stellar/sorobanIntent.js';
+import type { SorobanExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
+import { emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
+import type { SorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import type { SorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
 import { applyCoordinationMigrations } from './migrate.js';
 import { closeCoordinationPool, coordinationPool } from './postgres.js';
 import { createPostgresSorobanIntentStore } from './postgresSorobanIntentStore.js';

@@ -1,6 +1,6 @@
-import type { InboxSorobanIntentSnapshot } from '../../../../src/stellar/sorobanIntentApiTypes.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
-import { loadAccount, loadNetworkParameters } from '../../../../src/stellar/horizon.js';
+import type { InboxSorobanIntentSnapshot } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import { loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
 import { getSorobanIntentAuthorization } from './sorobanIntentAuthorizationService.js';
 import type {
   SorobanIntentStore,

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { accountAssetPresentations, assetBalanceParts, compactAssetIssuer, inspectedAssetIdentity } from './assetPresentation.js';
-import type { StellarAccountSnapshot } from './types.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 const ISSUER_A = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 const ISSUER_B = 'GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBXJ';

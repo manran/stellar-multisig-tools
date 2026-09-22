@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { StellarNetworkParameters } from '../../../../src/stellar/horizon.js';
-import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
+import type { StellarNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
+import type { StellarAccountSnapshot } from '../../../../packages/stellar-core/src/types.js';
 import { assessClassicManagedChannelCreatorCapacity } from './classicManagedChannelCapacity.js';
 
 const parameters: StellarNetworkParameters = {

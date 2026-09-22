@@ -1,4 +1,4 @@
-import type { PrivateNoteRevision } from '../../../../src/stellar/privateNote.js';
+import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
 
 export interface StoredSorobanIntentPrivateData {
   version: 1;

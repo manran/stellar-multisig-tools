@@ -1,8 +1,8 @@
 import { CheckCircle2, ChevronDown, CircleAlert } from 'lucide-react';
 import { useState } from 'react';
-import { horizonTransactionUrl } from './stellar/horizon';
-import type { SorobanIntentEvidenceEvent } from './stellar/sorobanIntentApiTypes';
-import type { SorobanIntentWorkActivityItem } from './stellar/workActivityTypes';
+import { horizonTransactionUrl } from '../packages/stellar-core/src/horizon';
+import type { SorobanIntentEvidenceEvent } from '../packages/stellar-core/src/sorobanIntentApiTypes';
+import type { SorobanIntentWorkActivityItem } from '../packages/stellar-core/src/workActivityTypes';
 import { stellarHref } from './workspaceNavigation';
 
 function eventCopy(event: SorobanIntentEvidenceEvent, currentAddress: string) {

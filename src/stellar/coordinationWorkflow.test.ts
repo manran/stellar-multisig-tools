@@ -4,7 +4,7 @@ import {
   requestCoordinationPhase,
   sorobanCoordinationPhase,
 } from './coordinationWorkflow.js';
-import { sorobanExecutionRoutes } from './executionPolicy.js';
+import { sorobanExecutionRoutes } from '../../packages/stellar-core/src/executionPolicy.js';
 
 test('Classic Request and Soroban Intent project onto the same post-Review phases', () => {
   assert.equal(requestCoordinationPhase('awaiting_signatures'), 'authorization');

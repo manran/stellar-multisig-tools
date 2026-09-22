@@ -8,9 +8,9 @@ import {
   Operation,
   TransactionBuilder,
 } from '@stellar/stellar-sdk/base';
-import { analyzeTransactionAuthorization } from './transactionAuthorization.js';
-import { inspectTransactionXdr } from './transactionXdr.js';
-import type { StellarAccountSnapshot } from './types.js';
+import { analyzeTransactionAuthorization } from '../../packages/stellar-core/src/transactionAuthorization.js';
+import { inspectTransactionXdr } from '../../packages/stellar-core/src/transactionXdr.js';
+import type { StellarAccountSnapshot } from '../../packages/stellar-core/src/types.js';
 
 function accountSnapshot(
   accountId: string,

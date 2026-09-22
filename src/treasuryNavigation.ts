@@ -1,4 +1,4 @@
-import type { StellarNetwork } from './stellar/types.js';
+import type { StellarNetwork } from '../packages/stellar-core/src/types.js';
 import { stellarHrefForLocation } from './workspaceNavigation.js';
 
 export interface TreasuryRouteContext {

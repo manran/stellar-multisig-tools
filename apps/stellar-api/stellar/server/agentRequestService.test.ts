@@ -23,8 +23,8 @@ import type {
   StoredSigningRequest,
   StoredSubmissionResult,
 } from './requestStore.js';
-import type { SignerPrincipalRef } from '../../../../src/stellar/agentAccessTypes.js';
-import type { StellarAccountSnapshot } from '../../../../src/stellar/types.js';
+import type { SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
+import type { StellarAccountSnapshot } from '../../../../packages/stellar-core/src/types.js';
 
 class MemoryAgentStore implements AgentCredentialStore {
   credentials = new Map<string, StoredSignerAgentCredential>();

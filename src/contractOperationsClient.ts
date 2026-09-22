@@ -1,8 +1,8 @@
-import type { ContractAbiDescriptor, ContractMethodDescriptor } from './stellar/contractSpec';
-import { SorobanSimulationError } from './stellar/sorobanRpc';
-import type { SorobanSimulationSummary } from './stellar/sorobanRpc';
-import type { SorobanEffectsSnapshot } from './stellar/sorobanEffects';
-import type { StellarNetwork } from './stellar/types';
+import type { ContractAbiDescriptor, ContractMethodDescriptor } from '../packages/stellar-core/src/contractSpec';
+import { SorobanSimulationError } from '../packages/stellar-core/src/sorobanRpc';
+import type { SorobanSimulationSummary } from '../packages/stellar-core/src/sorobanRpc';
+import type { SorobanEffectsSnapshot } from '../packages/stellar-core/src/sorobanEffects';
+import type { StellarNetwork } from '../packages/stellar-core/src/types';
 
 export interface ContractWorkspaceRef {
   contractId: string;

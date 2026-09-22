@@ -9,10 +9,10 @@ import type { NetworkFallbackChoiceSource } from './MultiSigUi';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
 import { writeReviewHandoff } from './stellar/reviewHandoff';
-import { isValidStellarAccountId } from './stellar/horizon';
+import { isValidStellarAccountId } from '../packages/stellar-core/src/horizon';
 import { resolveStellarNetwork } from './stellar/networkPreference';
-import { inspectTransactionXdr } from './stellar/transactionXdr';
-import type { StellarNetwork } from './stellar/types';
+import { inspectTransactionXdr } from '../packages/stellar-core/src/transactionXdr';
+import type { StellarNetwork } from '../packages/stellar-core/src/types';
 import { navigateWorkspace, stellarHref, stellarHrefWithSearch } from './workspaceNavigation';
 import { parseTreasuryRoute } from './treasuryNavigation';
 

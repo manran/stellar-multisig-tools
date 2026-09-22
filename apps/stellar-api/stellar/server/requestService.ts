@@ -1,36 +1,36 @@
 import { createHash } from 'node:crypto';
-import type { AgentActorProvenance } from '../../../../src/stellar/agentAccessTypes.js';
+import type { AgentActorProvenance } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 import { FeeBumpTransaction, Networks, TransactionBuilder } from '@stellar/stellar-sdk/base';
 import {
   loadAccount,
   loadTransactionByHash,
   submitTransactionXdr,
   TransactionSubmissionError,
-} from '../../../../src/stellar/horizon.js';
-import type { StellarNetworkParameters, TransactionSubmissionResult } from '../../../../src/stellar/horizon.js';
-import { assessTransactionPreconditions } from '../../../../src/stellar/transactionPreconditions.js';
-import { analyzeEnvelopeSignatures } from '../../../../src/stellar/signatureAnalysis.js';
-import { mergeSignedTransactionXdr, transactionHashHex } from '../../../../src/stellar/signatureMerge.js';
-import { analyzeTransactionAuthorization } from '../../../../src/stellar/transactionAuthorization.js';
+} from '../../../../packages/stellar-core/src/horizon.js';
+import type { StellarNetworkParameters, TransactionSubmissionResult } from '../../../../packages/stellar-core/src/horizon.js';
+import { assessTransactionPreconditions } from '../../../../packages/stellar-core/src/transactionPreconditions.js';
+import { analyzeEnvelopeSignatures } from '../../../../packages/stellar-core/src/signatureAnalysis.js';
+import { mergeSignedTransactionXdr, transactionHashHex } from '../../../../packages/stellar-core/src/signatureMerge.js';
+import { analyzeTransactionAuthorization } from '../../../../packages/stellar-core/src/transactionAuthorization.js';
 import type {
   AccountLookupResult,
   TransactionAuthorizationStatus,
-} from '../../../../src/stellar/transactionAuthorization.js';
-import { inspectTransactionXdr } from '../../../../src/stellar/transactionXdr.js';
+} from '../../../../packages/stellar-core/src/transactionAuthorization.js';
+import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 import {
   analyzeSorobanGAccountAuthorization,
   assertSorobanTransactionPreparedForFreeze,
-} from '../../../../src/stellar/sorobanAuthorization.js';
-import { analyzeKnownSorobanContractAuthorization } from '../../../../src/stellar/sorobanContractAdapter.js';
-import { compareSorobanEffects, type SorobanEffectsSnapshot } from '../../../../src/stellar/sorobanEffects.js';
-import type { TransactionXdrInspection } from '../../../../src/stellar/transactionXdr.js';
+} from '../../../../packages/stellar-core/src/sorobanAuthorization.js';
+import { analyzeKnownSorobanContractAuthorization } from '../../../../packages/stellar-core/src/sorobanContractAdapter.js';
+import { compareSorobanEffects, type SorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
+import type { TransactionXdrInspection } from '../../../../packages/stellar-core/src/transactionXdr.js';
 import type {
   SigningRequestSnapshot,
   SigningRequestStatusReason,
   SigningRequestSubmission,
   SorobanRequestOrigin,
-} from '../../../../src/stellar/requestTypes.js';
-import type { StellarAccountSnapshot, StellarNetwork, StellarSigner } from '../../../../src/stellar/types.js';
+} from '../../../../packages/stellar-core/src/requestTypes.js';
+import type { StellarAccountSnapshot, StellarNetwork, StellarSigner } from '../../../../packages/stellar-core/src/types.js';
 import { createSigningRequestId, isValidSigningRequestId } from './requestLocator.js';
 import { requestDiscoverySignerKeys } from './requestDiscovery.js';
 import { recordSubmittedActivity } from './requestActivity.js';

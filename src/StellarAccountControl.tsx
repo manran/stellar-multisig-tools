@@ -1,8 +1,8 @@
 import { ChevronDown, Globe2, KeyRound, LoaderCircle, Lock, LogOut, ShieldCheck, WalletCards } from 'lucide-react';
 import { useAddressBook } from './AddressBookContext';
 import { useStellarWallet } from './StellarWalletContext';
-import { fixedClientStellarDeploymentNetwork } from './stellar/deploymentNetwork';
-import type { StellarNetwork } from './stellar/types';
+import { fixedClientStellarDeploymentNetwork } from '../packages/stellar-core/src/deploymentNetwork';
+import type { StellarNetwork } from '../packages/stellar-core/src/types';
 import type { WalletNetworkSource } from './stellar/walletKit';
 import { navigateWorkspace } from './workspaceNavigation';
 

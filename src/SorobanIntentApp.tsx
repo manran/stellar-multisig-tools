@@ -7,7 +7,7 @@ import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
 import {
   sorobanAuthorizationEntryPreimageXdr,
-} from './stellar/sorobanAuthorization';
+} from '../packages/stellar-core/src/sorobanAuthorization';
 import type {
   SorobanIntentAuthorizationSnapshot,
   SorobanIntentCancelResponse,
@@ -18,13 +18,13 @@ import type {
   SorobanIntentReplanResponse,
   SorobanIntentResponse,
   StoredSorobanIntentSnapshot,
-} from './stellar/sorobanIntentApiTypes';
-import { inspectSorobanAuthorizationEntry, type SorobanInvocationInspection } from './stellar/sorobanInspection';
-import type { SorobanEffectsDiff, SorobanEffectsSnapshot } from './stellar/sorobanEffects';
-import { horizonTransactionUrl, isValidStellarAccountId } from './stellar/horizon';
-import { sorobanExecutionRoutes, type SorobanExecutionRoute } from './stellar/executionPolicy';
+} from '../packages/stellar-core/src/sorobanIntentApiTypes';
+import { inspectSorobanAuthorizationEntry, type SorobanInvocationInspection } from '../packages/stellar-core/src/sorobanInspection';
+import type { SorobanEffectsDiff, SorobanEffectsSnapshot } from '../packages/stellar-core/src/sorobanEffects';
+import { horizonTransactionUrl, isValidStellarAccountId } from '../packages/stellar-core/src/horizon';
+import { sorobanExecutionRoutes, type SorobanExecutionRoute } from '../packages/stellar-core/src/executionPolicy';
 import { sorobanAuthorizationStatusPresentation, sorobanIntentWorkflowStage } from './stellar/humanWorkflow';
-import { privateSessionAddressHeaders } from './stellar/privateSessionTransport';
+import { privateSessionAddressHeaders } from '../packages/stellar-core/src/privateSessionTransport';
 import { writeReviewHandoff } from './stellar/reviewHandoff';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
 

@@ -1,9 +1,9 @@
-import type { AgentAccessLevel } from '../../../../src/stellar/agentAccessTypes.js';
+import type { AgentAccessLevel } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 import type {
   AgentTaskAction,
   AgentTaskProjection,
-} from '../../../../src/stellar/agentTaskTypes.js';
-import type { SigningRequestSnapshot } from '../../../../src/stellar/requestTypes.js';
+} from '../../../../packages/stellar-core/src/agentTaskTypes.js';
+import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
 import type {
   StoredSorobanIntent,

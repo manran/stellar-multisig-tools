@@ -1,5 +1,5 @@
-import { AccountNotFoundError, loadAccount, loadNetworkParameters } from '../../../../src/stellar/horizon.js';
-import type { StellarAccountSnapshot, StellarNetwork } from '../../../../src/stellar/types.js';
+import { AccountNotFoundError, loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
+import type { StellarAccountSnapshot, StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import {
   configuredClassicManagedChannelCreatorBalanceThresholds,
   effectiveClassicManagedChannelSoftLimit,

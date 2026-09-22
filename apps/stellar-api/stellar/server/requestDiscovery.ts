@@ -1,6 +1,6 @@
-import { inspectTransactionXdr } from '../../../../src/stellar/transactionXdr.js';
-import type { TransactionXdrInspection } from '../../../../src/stellar/transactionXdr.js';
-import type { StellarAccountSnapshot, StellarNetwork } from '../../../../src/stellar/types.js';
+import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
+import type { TransactionXdrInspection } from '../../../../packages/stellar-core/src/transactionXdr.js';
+import type { StellarAccountSnapshot, StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
 export interface RequestDiscoverySubjects {
   sourceAccountIds: string[];

@@ -7,7 +7,7 @@ import {
   TransactionBuilder,
 } from '@stellar/stellar-sdk';
 import type { ExactMultisigDesign } from './multisigDesigner.js';
-import type { StellarAccountSnapshot, StellarNetwork } from './types.js';
+import type { StellarAccountSnapshot, StellarNetwork } from '../../packages/stellar-core/src/types.js';
 
 function networkPassphrase(network: StellarNetwork): string {
   return network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC;

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, ShieldCheck } from 'lucide-react';
-import { privateCommitmentMatchesHash } from './stellar/privateCommitment';
-import type { PrivateCommitmentDraft, PrivateCommitmentRecord } from './stellar/privateCommitment';
-import type { CreateSigningRequestResponse } from './stellar/requestTypes';
-import type { TransactionXdrInspection } from './stellar/transactionXdr';
+import { privateCommitmentMatchesHash } from '../packages/stellar-core/src/privateCommitment';
+import type { PrivateCommitmentDraft, PrivateCommitmentRecord } from '../packages/stellar-core/src/privateCommitment';
+import type { CreateSigningRequestResponse } from '../packages/stellar-core/src/requestTypes';
+import type { TransactionXdrInspection } from '../packages/stellar-core/src/transactionXdr';
 
 const REQUEST_ID_LENGTH = 16;
 const CAPABILITY_LENGTH = 26;

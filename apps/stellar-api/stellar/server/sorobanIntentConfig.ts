@@ -1,5 +1,5 @@
-import { isValidStellarAccountId } from '../../../../src/stellar/horizon.js';
-import type { StellarNetwork } from '../../../../src/stellar/types.js';
+import { isValidStellarAccountId } from '../../../../packages/stellar-core/src/horizon.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { SorobanIntentPlanningError } from './sorobanIntentPlanningService.js';
 
 function environmentName(network: StellarNetwork): string {
