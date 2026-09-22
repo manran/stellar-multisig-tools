@@ -8,11 +8,9 @@ on:
     paths:
       - 'src/**'
       - 'apps/**'
-      - 'api/**'
       - 'scripts/**'
       - 'package.json'
       - 'package-lock.json'
-      - 'vite.config.ts'
       - 'tsconfig.json'
       - 'tsconfig.api.json'
       - 'tsconfig.stellar.json'

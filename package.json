@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "multisig-tools",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -11,11 +11,11 @@
     "node": "24.19.0"
   },
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "tsc -p tsconfig.stellar.json && tsc -p tsconfig.api.json && vite build",
+    "dev": "npm run dev -w @multisig-tools/web",
+    "build": "tsc -p tsconfig.stellar.json && tsc -p tsconfig.api.json && npm run build -w @multisig-tools/web",
     "live:e2e:request": "tsx scripts/liveRequestServiceE2e.ts",
-    "preview": "vite preview",
-    "clean": "rm -rf dist",
+    "preview": "npm run preview -w @multisig-tools/web",
+    "clean": "rm -rf dist apps/web/dist",
     "lint": "tsc --noEmit",
     "test": "tsx --test src/stellar/*.test.ts apps/stellar-api/stellar/server/*.test.ts apps/stellar-api/stellar/platform/vercel/*.test.ts",
     "integration:credential": "tsx scripts/createIntegrationCredential.ts",
