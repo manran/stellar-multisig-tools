@@ -132,7 +132,7 @@ The project is a multi-page app. One locked design system applies across all pag
 Source of truth:
 
 - `design.md`
-- `tokens.css`
+- `apps/web/tokens.css`
 - `apps/internal-docs/content/stellar/product/ux-design-system.md` for Human workflow semantics
 
 Do not give each page an independent theme.
@@ -188,7 +188,7 @@ No production route/component deletion without explicit approval.
    - Direction: treat Testnet as an environment notice/workbench entrance, with one compact boundary-facts list.
 
 6. **Token drift**
-   - changed page files still use many raw hex / Tailwind color literals despite an existing semantic `tokens.css`.
+   - changed page files still use many raw hex / Tailwind color literals despite an existing semantic `apps/web/tokens.css`.
    - Direction: new/redesigned surfaces consume semantic tokens; migrate only touched files, do not churn unrelated components.
 
 ### Minor
@@ -202,7 +202,7 @@ No production route/component deletion without explicit approval.
 ### Phase A — system + entry surfaces
 
 - lock `design.md`;
-- normalize `tokens.css`;
+- normalize `apps/web/tokens.css`;
 - redesign Mainnet landing;
 - redesign Testnet landing;
 - simplify shared marketing Header/Footer.

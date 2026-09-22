@@ -11,7 +11,6 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, repositoryRoot, '');
   return {
     plugins: [react(), tailwindcss()],
-    publicDir: path.resolve(repositoryRoot, 'public'),
     envDir: repositoryRoot,
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),

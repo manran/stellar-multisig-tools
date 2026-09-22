@@ -196,7 +196,7 @@ Verify 320 / 375 / 414 / 768 and 1280x800 where relevant.
 
 ### tokens.css
 
-The canonical runtime values live in project-root `tokens.css`. It must include all semantic color, font, spacing, type, easing, duration, rule and radius tokens used by redesigned surfaces.
+The canonical Human Web runtime values live in `apps/web/tokens.css`. It must include all semantic color, font, spacing, type, easing, duration, rule and radius tokens used by redesigned Human surfaces.
 
 ### Tailwind v4 @theme
 
@@ -204,7 +204,7 @@ Tailwind consumes semantic tokens through `src/index.css`. New Hallmark surfaces
 
 ### DTCG tokens.json
 
-No separate DTCG file is emitted in this phase. If MultiSig Tools begins sharing tokens with another product/runtime, export directly from the canonical `tokens.css` values rather than manually maintaining a divergent palette.
+No separate DTCG file is emitted in this phase. If MultiSig Tools begins sharing tokens with another product/runtime, export directly from the canonical `apps/web/tokens.css` values rather than manually maintaining a divergent palette.
 
 ### shadcn/ui variables
 
