@@ -25,11 +25,11 @@ test('Vercel deployment exposes one Queue consumer and an hourly outbox sweep', 
   }]);
 
   const dispatch = readFileSync(
-    new URL('../../../../../api/integration-webhook-dispatch.ts', import.meta.url),
+    new URL('../../../api/integration-webhook-dispatch.ts', import.meta.url),
     'utf8',
   );
   const sweep = readFileSync(
-    new URL('../../../../../api/integration-webhook-sweep.ts', import.meta.url),
+    new URL('../../../api/integration-webhook-sweep.ts', import.meta.url),
     'utf8',
   );
   assert.match(dispatch, /vercelIntegrationWebhookQueueHandler as POST/);

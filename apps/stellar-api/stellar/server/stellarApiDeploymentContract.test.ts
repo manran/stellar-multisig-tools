@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
 
 const apiFiles = [
@@ -29,16 +29,11 @@ const apiFiles = [
   'treasury-box.ts',
 ] as const;
 
-test('standalone Stellar API exposes the same Vercel entrypoint set as the compatibility root API', () => {
-  for (const filename of apiFiles) {
-    const root = readFileSync(new URL(`../../../../api/${filename}`, import.meta.url), 'utf8');
-    const standalone = readFileSync(new URL(`../../api/${filename}`, import.meta.url), 'utf8');
-    assert.equal(
-      standalone,
-      root.replaceAll('../apps/stellar-api/stellar/', '../stellar/'),
-      filename,
-    );
-  }
+test('standalone Stellar API owns the complete Vercel entrypoint set', () => {
+  const entrypoints = readdirSync(new URL('../../api/', import.meta.url))
+    .filter((name) => name.endsWith('.ts'))
+    .sort();
+  assert.deepEqual(entrypoints, [...apiFiles].sort());
 });
 
 test('standalone Stellar API owns OpenAPI, Queue, and Cron deployment wiring', () => {
