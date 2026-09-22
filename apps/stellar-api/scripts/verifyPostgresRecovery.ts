@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { Pool } from 'pg';
-import { normalizePostgresConnectionString } from '../apps/stellar-api/stellar/db/postgres.js';
+import { normalizePostgresConnectionString } from '../stellar/db/postgres.js';
 
 const MIGRATION_FILE = /^([0-9]{4}_[a-z0-9_]+)\.sql$/;
 

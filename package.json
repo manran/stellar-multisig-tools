@@ -18,11 +18,11 @@
     "clean": "rm -rf dist apps/web/dist",
     "lint": "tsc --noEmit",
     "test": "tsx --test src/stellar/*.test.ts apps/stellar-api/stellar/server/*.test.ts apps/stellar-api/stellar/platform/vercel/*.test.ts",
-    "integration:credential": "tsx scripts/createIntegrationCredential.ts",
-    "integration:admin-secret": "tsx scripts/createIntegrationAdminSecret.ts",
-    "db:migrate": "tsx scripts/applyPostgresMigrations.ts",
-    "db:backfill": "tsx scripts/backfillPostgresCoordination.ts",
-    "db:verify-recovery": "tsx scripts/verifyPostgresRecovery.ts",
+    "integration:credential": "tsx apps/stellar-api/scripts/createIntegrationCredential.ts",
+    "integration:admin-secret": "tsx apps/stellar-api/scripts/createIntegrationAdminSecret.ts",
+    "db:migrate": "tsx apps/stellar-api/scripts/applyPostgresMigrations.ts",
+    "db:backfill": "tsx apps/stellar-api/scripts/backfillPostgresCoordination.ts",
+    "db:verify-recovery": "tsx apps/stellar-api/scripts/verifyPostgresRecovery.ts",
     "test:postgres": "tsx --test --test-concurrency=1 apps/stellar-api/stellar/db/*.test.ts"
   },
   "dependencies": {

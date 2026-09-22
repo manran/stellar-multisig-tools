@@ -1,5 +1,5 @@
-import { applyCoordinationMigrations } from '../apps/stellar-api/stellar/db/migrate.js';
-import { closeCoordinationPool } from '../apps/stellar-api/stellar/db/postgres.js';
+import { applyCoordinationMigrations } from '../stellar/db/migrate.js';
+import { closeCoordinationPool } from '../stellar/db/postgres.js';
 
 const unpooledUrl = process.env.DATABASE_URL_UNPOOLED?.trim();
 if (unpooledUrl) process.env.DATABASE_URL = unpooledUrl;

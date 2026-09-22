@@ -1,6 +1,6 @@
-import { closeCoordinationPool } from '../apps/stellar-api/stellar/db/postgres.js';
-import { runRuntimeCoordinationBackfill } from '../apps/stellar-api/stellar/db/postgresBackfillRuntime.js';
-import type { StellarNetwork } from '../src/stellar/types.js';
+import { closeCoordinationPool } from '../stellar/db/postgres.js';
+import { runRuntimeCoordinationBackfill } from '../stellar/db/postgresBackfillRuntime.js';
+import type { StellarNetwork } from '../../../src/stellar/types.js';
 
 function requestedNetwork(): StellarNetwork {
   const value = process.env.MST_COORDINATION_BACKFILL_NETWORK?.trim();

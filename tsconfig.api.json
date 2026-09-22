@@ -7,6 +7,7 @@
   },
   "include": [
     "apps/stellar-api/api/**/*.ts",
+    "apps/stellar-api/scripts/**/*.ts",
     "apps/stellar-api/stellar/**/*.ts"
   ]
 }
