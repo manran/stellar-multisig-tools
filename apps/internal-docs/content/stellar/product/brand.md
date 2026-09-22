@@ -1,4 +1,8 @@
-# MultiSig Tools brand direction
+---
+title: "Brand Direction"
+description: "Product name, mark semantics, descriptor, and brand constraints."
+---
+
 
 **Status:** product name stable; descriptor under discussion.
 

@@ -1,4 +1,8 @@
-# MultiSig Tools — Transaction Context and Progressive Product Model
+---
+title: "Transaction Context"
+description: "Progressive transaction context model for users, Treasuries, and integrations."
+---
+
 
 Status: product decision / implementation guidance
 

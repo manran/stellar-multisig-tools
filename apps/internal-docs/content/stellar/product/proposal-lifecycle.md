@@ -1,4 +1,8 @@
-# MultiSigTools Proposal Lifecycle
+---
+title: "Proposal Lifecycle"
+description: "Proposal freeze, signing, submission, expiry, and evidence lifecycle."
+---
+
 
 **Status:** product and authorization contract  
 **Date:** 2026-09-01

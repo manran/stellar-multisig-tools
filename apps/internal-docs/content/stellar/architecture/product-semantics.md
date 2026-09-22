@@ -54,7 +54,7 @@ Done
   Transaction Receipt + Activity = retained history / evidence
 ```
 
-`Proposal` is an object spanning Sign and Submit, not a sixth step. `Transaction Receipt` and `Activity` are history/evidence views of Done, not workflow steps. See `UX_DESIGN_SYSTEM.md` for the shared progress and color presentation contract.
+`Proposal` is an object spanning Sign and Submit, not a sixth step. `Transaction Receipt` and `Activity` are history/evidence views of Done, not workflow steps. See `apps/internal-docs/content/stellar/product/ux-design-system.md` for the shared progress and color presentation contract.
 
 ### Soroban authorization boundary
 

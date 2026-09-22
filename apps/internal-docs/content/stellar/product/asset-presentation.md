@@ -1,4 +1,8 @@
-# Asset Presentation
+---
+title: "Asset Presentation"
+description: "Canonical Stellar asset identity and presentation rules."
+---
+
 
 MultiSig Tools must not decide which Stellar assets a Treasury is allowed to see by maintaining a product allowlist.
 

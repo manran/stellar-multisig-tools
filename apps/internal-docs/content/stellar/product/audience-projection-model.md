@@ -1,4 +1,8 @@
-# MultiSigTools Audience Projection Model
+---
+title: "Audience Projection Model"
+description: "Human, Agent, and Integration projections over one coordination fact model."
+---
+
 
 Status: active product/architecture guidance
 Date: 2026-09-17
@@ -172,7 +176,7 @@ Phase B — Agent Task projection:
 - add pure Classic and Soroban Task projectors;
 - expose `task` additively on Agent-owned create/inspect/action responses;
 - include required access + availability rather than forcing the Agent to infer credential capability;
-- document in OpenAPI and `AGENT_API.md`.
+- document in OpenAPI and `apps/internal-docs/content/stellar/development/agent-api-v1.md`.
 
 Phase C — event/SDK ergonomics:
 - Integration gets reliable webhook/outbox with PostgreSQL;

@@ -1,8 +1,12 @@
-# Workspace UX, Language, and Discovery
+---
+title: "Workspace UX, Language, and Discovery"
+description: "Implemented navigation, language hierarchy, and discovery contract."
+---
+
 
 **Status:** implemented product contract for the Stellar web app
 
-For navigation, current product naming, language hierarchy, Treasury information architecture, footer/header behavior, Inbox discovery, and machine-access ownership, this document supersedes older wording in `PRODUCT.md` until that larger historical contract is consolidated.
+For navigation, current product naming, language hierarchy, Treasury information architecture, footer/header behavior, Inbox discovery, and machine-access ownership, this document supersedes older wording in `apps/internal-docs/content/stellar/product/human-product-contract.md` until that larger historical contract is consolidated.
 
 ## Navigation contract
 
@@ -34,7 +38,7 @@ Settings pages entered for a specific Treasury retain a clear path back to that 
 
 ## Shared Human presentation
 
-The canonical transaction lifecycle, status colors, network colors, and shared Human UI primitives are defined in `UX_DESIGN_SYSTEM.md`. Demo and Production must use that same presentation contract.
+The canonical transaction lifecycle, status colors, network colors, and shared Human UI primitives are defined in `apps/internal-docs/content/stellar/product/ux-design-system.md`. Demo and Production must use that same presentation contract.
 
 Signer actions use **Sign / Signed / signature(s)**. **Approval(s)** remains valid for quorum/policy language such as payment approvals or account-control approvals; it is not a second signer action verb.
 
@@ -89,7 +93,7 @@ Use exact integration vocabulary:
 - Request status / `statusReason`
 - HTTP errors
 
-The public developer entry point is `/developers`; `AGENT_API.md` is the detailed repository contract. Ordinary Agent access is signer-owned and uses the same Request resource as the Human product.
+The public developer entry point is `https://docs.multisig.tools/stellar/developers`; `apps/internal-docs/content/stellar/development/agent-api-v1.md` is the detailed repository contract. Ordinary Agent access is signer-owned and uses the same Request resource as the Human product.
 
 ## Signer Agent access UX
 
@@ -103,9 +107,9 @@ The complete `msa_...` secret is shown only once. Server storage keeps a verifie
 
 A Sign Agent credential contains no Stellar private key and does not itself satisfy a threshold. MultiSigTools separately verifies the transaction, current Stellar signer relationship, and every newly contributed signature.
 
-Agent access should link to `/docs/automation` for Agent-specific protocol details; `/developers` remains the broader Integration entry point. Human-facing controls should say **Agent access**, not force users to learn MCP, Skill, Box, or Automation terminology.
+Agent access should link to `https://docs.multisig.tools/stellar/developers/agent-api` for Agent-specific protocol details; `https://docs.multisig.tools/stellar/developers` remains the broader Integration entry point. Human-facing controls should say **Agent access**, not force users to learn MCP, Skill, Box, or Automation terminology.
 
-Agent machine responses should prefer the typed `task` projection for current action/capability decisions. Human text is not a machine contract. Shared facts with Human and Integration projections are defined in `AUDIENCE_PROJECTION_MODEL.md`.
+Agent machine responses should prefer the typed `task` projection for current action/capability decisions. Human text is not a machine contract. Shared facts with Human and Integration projections are defined in `apps/internal-docs/content/stellar/product/audience-projection-model.md`.
 
 ## Treasury Audit access UX
 

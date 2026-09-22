@@ -1,4 +1,8 @@
-# Demo Runtime Contract
+---
+title: "Demo Runtime Contract"
+description: "Non-authorizing interactive Demo behavior and acceptance boundaries."
+---
+
 
 **Status:** v123 product/architecture contract
 
@@ -11,7 +15,7 @@ The Demo has two jobs:
 1. teach the product through a real interactive flow rather than only an animation;
 2. provide a deterministic browser-acceptance path for the Human workflow that does not depend on wallet login.
 
-It is not an authentication shortcut and it is not a special kind of production account. Demo follows the same five-step Human presentation and color system as Production; see `UX_DESIGN_SYSTEM.md`.
+It is not an authentication shortcut and it is not a special kind of production account. Demo follows the same five-step Human presentation and color system as Production; see `apps/internal-docs/content/stellar/product/ux-design-system.md`.
 
 ## Naming
 

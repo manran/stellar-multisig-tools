@@ -1,6 +1,8 @@
 {
   "title": "Development",
   "pages": [
+    "agent-api-v1",
+    "private-commitment-v1",
     "platform-extension-points",
     "soroban-abi-product-model",
     "soroban-authorization",

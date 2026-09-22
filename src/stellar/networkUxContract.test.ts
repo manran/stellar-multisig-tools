@@ -22,8 +22,8 @@ const treasury = source('../TreasuryApp.tsx');
 const activity = source('../ActivityApp.tsx');
 const treasurySettings = source('../TreasuryBoxSettingsApp.tsx');
 const workspaceShell = source('../StellarWorkspaceShell.tsx');
-const product = source('../../PRODUCT.md');
-const uxDesignSystem = source('../../UX_DESIGN_SYSTEM.md');
+const product = source('../../apps/internal-docs/content/stellar/product/human-product-contract.md');
+const uxDesignSystem = source('../../apps/internal-docs/content/stellar/product/ux-design-system.md');
 
 const symmetricNetworkToggle = /\(\['public', 'testnet'\] as StellarNetwork\[\]\)\.map/;
 

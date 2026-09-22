@@ -1,10 +1,20 @@
-# MultiSigTools Agent API v1
+---
+title: "Agent API v1"
+description: "Detailed signer-owned Agent integration contract and examples."
+---
 
-**Status:** beta integration contract  
-**Base origin:** `https://stellar.multisig.tools`  
-**Developer hub:** `https://stellar.multisig.tools/developers`
 
-**Agent API guide:** `https://stellar.multisig.tools/docs/automation`
+**Status:** beta integration contract
+
+**Mainnet API base:** `https://api.multisig.tools/stellar`
+
+**Testnet API base:** `https://api-testnet.multisig.tools/stellar`
+
+**Developer hub:** `https://docs.multisig.tools/stellar/developers`
+
+**Agent API guide:** `https://docs.multisig.tools/stellar/developers/agent-api`
+
+All relative API paths below resolve against the selected network-bound API base. Human Web same-origin `/api/*` is a transport proxy, not the public Agent API namespace.
 
 MultiSigTools exposes one signer-oriented API shared by a Human and the Agents they explicitly delegate. A Treasury is a resource the signer may access; it is not the normal machine principal.
 
@@ -37,13 +47,13 @@ A Sign credential contains no Stellar secret key. It authorizes API operations c
 Human and Agent clients use the same Request resource:
 
 ```text
-POST  /api/request   create
-GET   /api/request   read
-PATCH /api/request   decline or contribute signature
-PUT   /api/request   final Stellar submission (Human only in v1)
+POST  /request   create
+GET   /request   read
+PATCH /request   decline or contribute signature
+PUT   /request   final Stellar submission (Human only in v1)
 ```
 
-There is no separate `/api/automation` product endpoint.
+There is no separate `/automation` product endpoint.
 
 Agent authentication:
 
@@ -56,7 +66,7 @@ Existing Human private-session/capability authentication continues on the same R
 ## Create a Request
 
 ```text
-POST /api/request
+POST /request
 Authorization: Bearer <Agent credential>
 Content-Type: application/json
 Idempotency-Key: <stable business identifier>
@@ -86,7 +96,7 @@ The Agent credential is not bound to one Treasury. One signer may participate in
 
 Agent responses also expose a typed `task` projection. Normal Agent orchestration should consume `task.state` and `task.nextActions` before interpreting Request/Intent lifecycle internals. Each action reports `requiredAccess` and whether the current `msa_...` credential has that capability. `available=false` means the signer Principal may need the action even though this credential cannot perform it; it does not grant or simulate authority. The underlying Request/Intent status, authorization and evidence fields remain available for diagnostics and compatibility.
 
-The stable Agent Task states are `action_required`, `waiting`, `completed`, `expired`, and `failed`. Current action codes are `contribute_signature`, `contribute_authorization`, `decline`, `prepare_execution`, `refresh_execution`, and `replan`. Human-facing copy is not a machine contract. See `AUDIENCE_PROJECTION_MODEL.md`.
+The stable Agent Task states are `action_required`, `waiting`, `completed`, `expired`, and `failed`. Current action codes are `contribute_signature`, `contribute_authorization`, `decline`, `prepare_execution`, `refresh_execution`, and `replan`. Human-facing copy is not a machine contract. See `apps/internal-docs/content/stellar/product/audience-projection-model.md`.
 
 Response uses the normal Request projection plus Agent retry metadata:
 
@@ -111,7 +121,7 @@ Response uses the normal Request projection plus Agent retry metadata:
 
 ## Idempotency
 
-Agent `POST /api/request` requires `Idempotency-Key`.
+Agent `POST /request` requires `Idempotency-Key`.
 
 ```text
 Agent credential + Idempotency-Key -> exactly one Signing Request
@@ -128,7 +138,7 @@ This is the v131 financial no-duplicate invariant carried into the signer-owned 
 ## Read one Request
 
 ```text
-GET /api/request
+GET /request
 Authorization: Bearer <Agent credential>
 x-multisig-request-id: 0123456789ABCDEF
 ```
@@ -156,7 +166,7 @@ Unknown future values require a fresh read or Human review rather than parsing E
 ## Decline
 
 ```text
-PATCH /api/request
+PATCH /request
 Authorization: Bearer <Write-or-Sign Agent credential>
 x-multisig-request-id: 0123456789ABCDEF
 Content-Type: application/json
@@ -171,7 +181,7 @@ Decline is non-cryptographic collaboration state. It requires **Write**, does no
 ## Contribute a signature
 
 ```text
-PATCH /api/request
+PATCH /request
 Authorization: Bearer <Sign Agent credential>
 x-multisig-request-id: 0123456789ABCDEF
 Content-Type: application/json
@@ -196,7 +206,7 @@ Agent contributions do not mint browser Contribution Grants.
 
 ## Final Stellar submission
 
-Agent credentials cannot `PUT /api/request` in v1.
+Agent credentials cannot `PUT /request` in v1.
 
 `Sign` means **contribute Stellar authorization as the Principal**, not "execute everything". Final network submission remains a separate Human action. Agent submission attempts receive `agent_submit_denied`.
 
@@ -207,22 +217,20 @@ A future execution permission should be introduced only for a concrete policy-co
 Machine discovery, the operation catalog, and deployment network policy are public:
 
 ```text
-HEAD /                         # Link: rel="service-desc" and rel="service-doc"
-GET  /openapi.json             # OpenAPI 3.1 transport contract
-GET  /api/operations           # stable business-operation catalog
-GET  /api/runtime-config       # deployment-owned network
-GET  /developers               # Human-readable integration and authority model
+GET /openapi.json       # OpenAPI 3.1 transport contract
+GET /operations         # stable business-operation catalog
+GET /runtime-config     # deployment-owned network
 ```
 
-The root HTML repeats the same `service-desc` and `service-doc` links for DOM-only clients. Every catalog operation points to its OpenAPI path and method.
+API responses advertise `service-desc` and `service-doc` links. Human-readable integration guidance lives at `https://docs.multisig.tools/stellar/developers`. Every catalog operation points to its OpenAPI path and method.
 
 A production domain owns exactly one Stellar network. Clients should discover it once and send only matching operation input; a cross-deployment request fails with HTTP 409 and `deployment_network_mismatch`.
 
 Classic business Prepare is explicit rather than inferred from destination state:
 
 ```text
-POST /api/payment-prepare         # Payment/batch; destination accounts must already be active
-POST /api/account-create-prepare  # CreateAccount; destination must still be inactive
+POST /payment-prepare         # Payment/batch; destination accounts must already be active
+POST /account-create-prepare  # CreateAccount; destination must still be inactive
 ```
 
 Both operations accept Human sessions, signer-Agent credentials, or scoped Integration credentials and return exact unsigned XDR after fresh Stellar validation. They share the same source-account authorization checks used by the Request lifecycle. Payment and CreateAccount never auto-convert into each other. A Human composer may switch between the two while preserving compatible form fields; an Agent or Service chooses the operation explicitly. Both support either a text memo or a 32-byte `memoHashHex`, never both.
@@ -230,11 +238,11 @@ Both operations accept Human sessions, signer-Agent credentials, or scoped Integ
 The canonical Soroban Agent workflow is Intent-first:
 
 ```text
-GET   /api/contract-interface  # public interface discovery
-POST  /api/intent              # Write + Idempotency-Key; semantic contract Intent
-GET   /api/intent              # Read + X-MultiSig-Intent-Id
-PATCH /api/intent              # Sign; contribute detached Soroban AUTH
-PUT   /api/intent              # Write; prepare execution, reconcile prepared hash, or replan
+GET   /contract-interface  # public interface discovery
+POST  /intent              # Write + Idempotency-Key; semantic contract Intent
+GET   /intent              # Read + X-MultiSig-Intent-Id
+PATCH /intent              # Sign; contribute detached Soroban AUTH
+PUT   /intent              # Write; prepare execution, reconcile prepared hash, or replan
 ```
 
 Example semantic creation:
@@ -253,7 +261,7 @@ Example semantic creation:
 }
 ```
 
-`GET /api/contract-interface` exposes the recursive `fresnica-soroban-abi-v1` model and a `composition` decision for every input. `typed_json` inputs are `guided=true` and may include recursively typed `Option`, `Vec`, `Map`, `Tuple`, `BytesN`, and supported UDT struct/union/enum values. MultiSig Tools validates the complete JSON shape against the deployed Contract Spec before delegating ScVal encoding to the official Stellar SDK. For optional inputs, omission or JSON `null` encodes `None`. `dynamic_scval_json`, `scval_xdr_success_only`, `unsupported`, and any unknown future composition mode are not semantic guided input and fail closed rather than being guessed.
+`GET /contract-interface` exposes the recursive `fresnica-soroban-abi-v1` model and a `composition` decision for every input. `typed_json` inputs are `guided=true` and may include recursively typed `Option`, `Vec`, `Map`, `Tuple`, `BytesN`, and supported UDT struct/union/enum values. MultiSig Tools validates the complete JSON shape against the deployed Contract Spec before delegating ScVal encoding to the official Stellar SDK. For optional inputs, omission or JSON `null` encodes `None`. `dynamic_scval_json`, `scval_xdr_success_only`, `unsupported`, and any unknown future composition mode are not semantic guided input and fail closed rather than being guessed.
 
 
 A generic ABI description explains how to call a contract, not what a protocol action means. For example, ABI support can safely compose Blend-style `Vec<Request>` values without knowing that a particular `request_type` means Supply or Borrow. Protocol/domain knowledge is an additive product layer used for richer Human explanations and stable Agent semantics; recognizing a familiar protocol never relaxes AUTH, effects comparison, executor scope, revalidation, or signature requirements. See `apps/internal-docs/content/stellar/development/soroban-abi-product-model.md`.
@@ -273,7 +281,9 @@ Creation stores no transaction sequence, fee, lifetime, or envelope. Recording s
 
 ### Integration Service provisioning
 
-Integration Service credentials are operator-provisioned, not self-service. The controlled runtime surface is `/admin/integrations`; it is intentionally absent from ordinary product navigation and requires a separate deployment operator secret (`mia_...`). Generate that secret once with `npm run integration:admin-secret` and configure only its SHA-256 verifier as `MULTISIG_INTEGRATION_ADMIN_SECRET_HASH`. The plaintext operator secret is never stored by the application.
+Mainnet/operator-managed Integration administration uses the controlled `/admin/integrations` runtime surface. It is intentionally absent from ordinary product navigation and requires a separate deployment operator secret (`mia_...`). Generate that secret once with `npm run integration:admin-secret` and configure only its SHA-256 verifier as `MULTISIG_INTEGRATION_ADMIN_SECRET_HASH`. The plaintext operator secret is never stored by the application.
+
+Testnet also exposes a deliberately bounded self-service creation path at `https://stellar-testnet.multisig.tools/developers/integrations/new` and `POST https://api-testnet.multisig.tools/stellar/integration-testnet`. It can create only enabled Testnet profiles and grants no Mainnet entitlement or Stellar signer authority.
 
 The admin surface creates or rotates `msi_...` credentials, enables/disables a Service, and edits network, Classic-account, Soroban contract/method, executor allowlist, and default-executor scope. A new or rotated `msi_...` value is returned once; durable storage retains only its verifier hash. `MULTISIG_INTEGRATION_CREDENTIALS_JSON` remains a bootstrap source. A durable record with the same `serviceId` overrides bootstrap configuration, including an explicit disabled state. Configuring `MULTISIG_INTEGRATION_ADMIN_SECRET_HASH` enables the durable registry contract for that deployment; from that point, durable credential storage must be readable and Service authentication fails closed rather than reviving bootstrap credentials. Deployments that have not enabled Integration administration keep the legacy env-only bootstrap path.
 
@@ -331,28 +341,28 @@ The execution response is a complete JSON package, not a bare XDR. It includes a
 
 `executionSource` remains accepted as a deprecated alias for `executor` on PUT for compatibility. New Service integrations should use `executor`.
 
-For diagnostics and advanced tooling, `POST /api/contract-call` and `POST /api/contract-prepare` remain public low-level transaction construction / recording-simulation primitives. They do not replace the Intent coordination model. Human Import XDR may convert an unsigned, prepared single InvokeHostFunction transaction into an Intent; Agent clients should create semantic Intents directly.
+For diagnostics and advanced tooling, `POST /contract-call` and `POST /contract-prepare` remain public low-level transaction construction / recording-simulation primitives. They do not replace the Intent coordination model. Human Import XDR may convert an unsigned, prepared single InvokeHostFunction transaction into an Intent; Agent clients should create semantic Intents directly.
 
 Fresnica CLI, scripts, bots, Agents, and the Web UI are peer consumers of these operations. They must not reproduce a UI click sequence or invent a Contract-only Request lifecycle. Clients branch on typed error `code` values.
 
-`GET /api/activity?view=work` is an additive personal-history projection for Human or signer-Agent callers. It returns one cursor-ordered `workItems[]` stream with `kind=request` or `kind=soroban_intent`; the default `/api/activity` response remains transaction-only for compatibility, and Treasury Activity keeps its existing source-account scope. Soroban Intent history is visible only when the Principal created the Intent or actually contributed detached AUTH; discovery-index membership alone never grants history access.
+`GET /activity?view=work` is an additive personal-history projection for Human or signer-Agent callers. It returns one cursor-ordered `workItems[]` stream with `kind=request` or `kind=soroban_intent`; the default `/activity` response remains transaction-only for compatibility, and Treasury Activity keeps its existing source-account scope. Soroban Intent history is visible only when the Principal created the Intent or actually contributed detached AUTH; discovery-index membership alone never grants history access.
 
 ## Signer workspace endpoints
 
 Use the same Bearer credential across the Principal's workspace:
 
 ```text
-GET /api/treasuries
-GET /api/address-book
-PUT /api/address-book       # Write or Sign
-DELETE /api/address-book    # Write or Sign
-GET /api/contracts
-PUT /api/contracts          # Write or Sign
-DELETE /api/contracts       # Write or Sign
-GET /api/inbox
-GET /api/activity
-GET /api/activity?view=work  # opt-in unified Request + Soroban Intent history for this signer Principal
-GET/PATCH/POST /api/request
+GET /treasuries
+GET /address-book
+PUT /address-book       # Write or Sign
+DELETE /address-book    # Write or Sign
+GET /contracts
+PUT /contracts          # Write or Sign
+DELETE /contracts       # Write or Sign
+GET /inbox
+GET /activity
+GET /activity?view=work  # opt-in unified Request + Soroban Intent history for this signer Principal
+GET/PATCH/POST /request
 ```
 
 ### Inbox
@@ -369,7 +379,7 @@ It does not belong to a Treasury or to the Agent itself.
 
 ### Saved contracts
 
-`/api/contracts` exposes the Principal's private Contract workspace references. Read lists; Write/Sign may keep or forget a C-address. The optional request network must match the credential Principal.
+`/contracts` exposes the Principal's private Contract workspace references. Read lists; Write/Sign may keep or forget a C-address. The optional request network must match the credential Principal.
 
 ```json
 { "network": "testnet", "contractId": "C..." }
@@ -379,9 +389,9 @@ Saving a contract records work context only. It does not grant contract authorit
 
 ### Contacts and Treasury names
 
-`/api/address-book` exposes the Principal's private personal aliases. Read lists; Write/Sign may create, update and delete.
+`/address-book` exposes the Principal's private personal aliases. Read lists; Write/Sign may create, update and delete.
 
-`/api/treasuries` discovers accounts the Principal currently controls and returns shared Treasury metadata, including shared names. Live Stellar signer state remains authorization truth.
+`/treasuries` discovers accounts the Principal currently controls and returns shared Treasury metadata, including shared names. Live Stellar signer state remains authorization truth.
 
 A future shared company/Box Contacts directory is a separate resource. One signer's personal Address Book must never be automatically promoted into shared company data.
 

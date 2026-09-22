@@ -1,4 +1,8 @@
-# MultiSigTools Human UX Design System
+---
+title: "Human UX Design System"
+description: "Canonical Human workflow stages, status language, and visual semantics."
+---
+
 
 **Status:** canonical Human experience contract
 **Scope:** Stellar Human UI; Demo and Production share the same presentation language.
@@ -222,7 +226,7 @@ Default Human UI uses `Limited account actions`, `Standard transactions`, and `C
 When signer weights are equal and analysis proves an exact N-of-M policy, show `2 of 3 approvals`. Otherwise show the actual weighted requirement as approval power, for example `3 approval power required · 5 available`. Never translate medium/high thresholds into transaction amount bands.
 
 
-`HUMAN_UX_ARCHITECTURE.md` is the canonical contract for Dashboard-first navigation, quiet action-bound wallet proof, one `New proposal` entry, protocol-language translation, and mobile approval priority. Internal route families may remain separate, but Human UI must not expose `Sign mode` / `Manage mode` as a required identity choice.
+`apps/internal-docs/content/stellar/product/human-ux-architecture.md` is the canonical contract for Dashboard-first navigation, quiet action-bound wallet proof, one `New proposal` entry, protocol-language translation, and mobile approval priority. Internal route families may remain separate, but Human UI must not expose `Sign mode` / `Manage mode` as a required identity choice.
 
 ## 10. Ordinary Human protocol-language boundary
 

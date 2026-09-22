@@ -1,4 +1,8 @@
-# MultiSig Tools — Workspace Emergence and Activity Scopes
+---
+title: "Workspace Model"
+description: "Workspace emergence and Activity scope product model."
+---
+
 
 Status: product/architecture decision baseline
 Date: 2026-08-30

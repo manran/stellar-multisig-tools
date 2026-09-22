@@ -7,7 +7,7 @@ description: "Internal contract for the public MultiSig Tools Stellar documentat
 
 **Updated:** 2026-09-22
 
-This file defines the public documentation structure for MultiSig Tools on the dedicated Stellar documentation site. It is the documentation counterpart to `apps/internal-docs/content/stellar/architecture/product-semantics.md`, `UX_DESIGN_SYSTEM.md`, `apps/internal-docs/content/stellar/architecture/integration-product-model.md`, and the running Headless API.
+This file defines the public documentation structure for MultiSig Tools on the dedicated Stellar documentation site. It is the documentation counterpart to `apps/internal-docs/content/stellar/architecture/product-semantics.md`, `apps/internal-docs/content/stellar/product/ux-design-system.md`, `apps/internal-docs/content/stellar/architecture/integration-product-model.md`, and the running Headless API.
 
 ## 1. Purpose
 

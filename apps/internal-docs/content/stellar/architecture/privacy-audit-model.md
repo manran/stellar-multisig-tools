@@ -8,7 +8,7 @@ Date: 2026-08-30
 
 This document defines how MultiSig Tools can retain useful transaction context and Activity history without equating auditability with public readability.
 
-It complements `TRANSACTION_CONTEXT.md`.
+It complements `apps/internal-docs/content/stellar/product/transaction-context.md`.
 
 ## 1. Core principle
 

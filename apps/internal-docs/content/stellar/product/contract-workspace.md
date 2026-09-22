@@ -1,4 +1,8 @@
-# Contract Workspace
+---
+title: "Contract Workspace"
+description: "Human workspace semantics and authority boundaries for Soroban contracts."
+---
+
 
 Status: architecture baseline
 

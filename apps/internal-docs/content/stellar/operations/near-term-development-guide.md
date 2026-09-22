@@ -1,4 +1,8 @@
-# MultiSig Tools — Near-Term Development Guide
+---
+title: "Near-Term Development Guide"
+description: "Frozen engineering priorities for the current productization phase."
+---
+
 
 **Frozen:** 2026-09-20
 **Status:** current product engineering baseline
@@ -129,7 +133,7 @@ Source of truth:
 
 - `design.md`
 - `tokens.css`
-- `UX_DESIGN_SYSTEM.md` for Human workflow semantics
+- `apps/internal-docs/content/stellar/product/ux-design-system.md` for Human workflow semantics
 
 Do not give each page an independent theme.
 

@@ -14,7 +14,7 @@ const workspaceShell = readFileSync(new URL('../StellarWorkspaceShell.tsx', impo
 const accountControl = readFileSync(new URL('../StellarAccountControl.tsx', import.meta.url), 'utf8');
 const inbox = readFileSync(new URL('../InboxApp.tsx', import.meta.url), 'utf8');
 const request = readFileSync(new URL('../RequestApp.tsx', import.meta.url), 'utf8');
-const uxDesignSystem = readFileSync(new URL('../../UX_DESIGN_SYSTEM.md', import.meta.url), 'utf8');
+const uxDesignSystem = readFileSync(new URL('../../apps/internal-docs/content/stellar/product/ux-design-system.md', import.meta.url), 'utf8');
 
 test('wallet identity is event-driven with bounded focus/visibility reconciliation', () => {
   assert.match(walletContext, /subscribeWalletIdentity/);

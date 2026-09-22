@@ -22,14 +22,14 @@ The service is non-custodial. It never asks for or stores Stellar seed phrases o
 - **Operation catalog:** `https://api.multisig.tools/stellar/operations`
 - Stellar API responses advertise OpenAPI with the standard HTTP `service-desc` link relation and developer documentation with `service-doc`.
 - [`documentation-information-architecture.md`](apps/internal-docs/content/stellar/architecture/documentation-information-architecture.md) — public Docs information architecture, vocabulary, progressive-disclosure, and growth contract.
-- [`UX_LANGUAGE_AND_DISCOVERY.md`](UX_LANGUAGE_AND_DISCOVERY.md) — current workspace navigation, language hierarchy, and Inbox discovery contract.
-- [`PRODUCT.md`](PRODUCT.md) — broader historical Human product contract; the UX document supersedes older naming/navigation wording where they conflict.
-- [`BRAND.md`](BRAND.md) — product-name, mark semantics, descriptor discussion, and the professionally bounded 虎符 / tiger-tally historical analogy.
-- [`apps/internal-docs/content/stellar/development/soroban-authorization.md`](apps/internal-docs/content/stellar/development/soroban-authorization.md) — current Intent-first Soroban AUTH, configured C-account adapter, and late Execution boundary.
-- [`AGENT_API.md`](AGENT_API.md) — current signer-owned machine integration contract and examples.
-- [`apps/internal-docs/content/stellar/architecture/operation-architecture.md`](apps/internal-docs/content/stellar/architecture/operation-architecture.md) — operation-first product rule and composition contract for every consumer.
-- [`CONTRACT_WORKSPACE.md`](CONTRACT_WORKSPACE.md) — Contract workspace, discovery, and authority boundaries.
-- [`TRANSACTION_CONTEXT.md`](TRANSACTION_CONTEXT.md) — Stellar Memo / Private Note / Private Commitment model.
+- [Workspace UX, Language, and Discovery](apps/internal-docs/content/stellar/product/ux-language-and-discovery.md) — current workspace navigation, language hierarchy, and Inbox discovery contract.
+- [Human Product Contract](apps/internal-docs/content/stellar/product/human-product-contract.md) — broader historical Human product contract; the UX document supersedes older naming/navigation wording where they conflict.
+- [Brand Direction](apps/internal-docs/content/stellar/product/brand.md) — product-name, mark semantics, descriptor discussion, and the professionally bounded 虎符 / tiger-tally historical analogy.
+- [Soroban Authorization](apps/internal-docs/content/stellar/development/soroban-authorization.md) — current Intent-first Soroban AUTH, configured C-account adapter, and late Execution boundary.
+- [Agent API v1](apps/internal-docs/content/stellar/development/agent-api-v1.md) — current signer-owned machine integration contract and examples.
+- [Operation Architecture](apps/internal-docs/content/stellar/architecture/operation-architecture.md) — operation-first product rule and composition contract for every consumer.
+- [Contract Workspace](apps/internal-docs/content/stellar/product/contract-workspace.md) — Contract workspace, discovery, and authority boundaries.
+- [Transaction Context](apps/internal-docs/content/stellar/product/transaction-context.md) — Stellar Memo / Private Note / Private Commitment model.
 - [`PRIVACY.md`](PRIVACY.md) — beta privacy notice.
 - [`TERMS.md`](TERMS.md) — beta terms of service.
 

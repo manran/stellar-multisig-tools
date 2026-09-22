@@ -584,7 +584,7 @@ The first production slice keeps existing authority semantics and changes the pr
 12. Webhook remains optional and orthogonal.
 13. Existing `MSI_*` creation/rotation semantics remain unchanged.
 14. Existing durable Integration records remain readable; missing profile metadata defaults to the most permissive disclosure view for operators, not to weaker runtime authority.
-15. Partner self-service login is a later delivery concern. This first slice validates the provisioning model on the existing protected Integration administration surface.
+15. Testnet self-service provisioning is live as a bounded public path: it creates enabled Testnet-only Integration Profiles and one-time `msi_*` credentials without granting Mainnet entitlement or signer authority. Protected operator administration remains authoritative for Mainnet/operator-managed provisioning and privileged changes.
 
 ## 11. Delivered baseline and remaining ergonomics
 
@@ -599,12 +599,13 @@ The first production slice keeps existing authority semantics and changes the pr
 - managed semantic Classic Payment through the channel-account pool;
 - signer/origin/current-plan scoped Browser authorization for Soroban Native Authorization;
 - operator Integration administration for credentials, scope, execution routing and webhook configuration;
+- bounded public Testnet Integration self-service at `/developers/integrations/new` and `POST /api/integration-testnet`;
 - stable Headless operation/OpenAPI discovery shared by Human, Agent and Integration clients.
 
 ### Remaining ergonomics — not new authority
 
 - optional thin SDK/components over the same API, never as an ability boundary;
-- broader partner-facing self-service only when the existing operator model has enough deployment evidence;
+- broader Mainnet/partner self-service only when the existing operator model has enough deployment evidence;
 - richer Service Activity/operational views where current API projections are insufficient;
 - optional auto-replan or execution fallback only after concrete operational evidence and explicit policy design.
 

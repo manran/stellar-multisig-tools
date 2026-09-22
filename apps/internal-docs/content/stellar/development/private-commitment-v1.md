@@ -1,4 +1,8 @@
-# Private Commitment v1
+---
+title: "Private Commitment v1"
+description: "Canonical Private Commitment encoding and verification specification."
+---
+
 
 Status: implementation specification
 

@@ -7,7 +7,7 @@ description: "Internal MultiSig Tools engineering documentation."
 **Date:** 2026-09-03  
 **Updated:** 2026-09-08 — durable facts separated from time/ledger state projections
 **Scope:** Proposal/Request history, signer participation, Transaction Receipt, Activity, future Audit.
-**Related:** `PRODUCT_SEMANTICS.md`, `PRIVACY_AUDIT_MODEL.md`, `PROPOSAL_LIFECYCLE.md`, `WORKSPACE_MODEL.md`.
+**Related:** `PRODUCT_SEMANTICS.md`, `PRIVACY_AUDIT_MODEL.md`, `apps/internal-docs/content/stellar/product/proposal-lifecycle.md`, `apps/internal-docs/content/stellar/product/workspace-model.md`.
 
 ## 1. Decision
 

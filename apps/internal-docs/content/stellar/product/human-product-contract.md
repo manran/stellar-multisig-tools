@@ -1,4 +1,8 @@
-# MultiSig Tools — Human product contract
+---
+title: "Human Product Contract"
+description: "Human-facing product behavior, information architecture, language, and safety boundaries."
+---
+
 
 This document defines the Human-facing product behavior, information architecture, UX language, and safety boundaries for `stellar.multisig.tools`.
 
