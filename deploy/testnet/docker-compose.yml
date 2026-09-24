@@ -1,0 +1,91 @@
+name: mst-testnet-api
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mst_testnet}
+      POSTGRES_USER: ${POSTGRES_USER:-mst}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mst} -d ${POSTGRES_DB:-mst_testnet}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - data
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: apps/stellar-api/Dockerfile
+    restart: "no"
+    command: ["./node_modules/.bin/tsx", "apps/stellar-api/scripts/applyPostgresMigrations.ts"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}
+      DATABASE_URL_UNPOOLED: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+
+  stellar-api:
+    build:
+      context: ../..
+      dockerfile: apps/stellar-api/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - path: ${MST_ENV_FILE:-./testnet.env}
+        required: false
+    environment:
+      PORT: "3000"
+      VITE_STELLAR_DEPLOYMENT_NETWORK: testnet
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}
+      DATABASE_URL_UNPOOLED: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}
+      MULTISIG_COORDINATION_STORAGE: postgres
+      MULTISIG_COORDINATION_WRITE_FREEZE: ${MULTISIG_COORDINATION_WRITE_FREEZE:-1}
+      MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED: ${MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED:-false}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - edge
+      - data
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.1
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    command:
+      - tunnel
+      - --no-autoupdate
+      - run
+      - --token
+      - ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}
+    depends_on:
+      stellar-api:
+        condition: service_healthy
+    networks:
+      - edge
+
+volumes:
+  postgres_data:
+
+networks:
+  edge:
+    internal: true
+  data:
+    internal: true
