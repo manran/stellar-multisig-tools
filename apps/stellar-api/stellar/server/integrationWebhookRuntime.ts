@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import type { Pool } from 'pg';
 import { STELLAR_MAINNET_ORIGIN, STELLAR_TESTNET_ORIGIN } from '../../../../packages/stellar-core/src/deploymentOrigins.js';
 import { coordinationPool } from '../db/postgres.js';
@@ -47,7 +48,9 @@ export function createRuntimeIntegrationWebhookPayloadBuilder(pool: Pool = coord
 
 function runtimeIntegrationWebhookTransport() {
   const relayUrl = process.env.MULTISIG_WEBHOOK_RELAY_URL?.trim();
-  const relaySecret = process.env.MULTISIG_WEBHOOK_RELAY_SECRET?.trim();
+  const relaySecretFile = process.env.MULTISIG_WEBHOOK_RELAY_SECRET_FILE?.trim();
+  const relaySecret = process.env.MULTISIG_WEBHOOK_RELAY_SECRET?.trim()
+    || (relaySecretFile ? readFileSync(relaySecretFile, 'utf8').trim() : undefined);
   if (!relayUrl && !relaySecret) return new NodeIntegrationWebhookHttpTransport();
   if (!relayUrl || !relaySecret) {
     throw new Error('Integration webhook relay configuration is incomplete.');
