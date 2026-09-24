@@ -1,4 +1,4 @@
-import { del, get, list, put } from '@vercel/blob';
+import { del, get, list, put } from './privateObjectStorage.js';
 import type { SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 import { withBlobStorage } from './blobRequestStore.js';
 import type {
