@@ -61,12 +61,8 @@ services:
       MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED: ${MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED:-false}
       MULTISIG_PRIVATE_OBJECT_STORAGE: filesystem
       MULTISIG_PRIVATE_OBJECT_ROOT: /var/lib/mst/private
-      MULTISIG_WEBHOOK_RELAY_URL: https://api-testnet.multisig.tools/_relay/webhook
-      MULTISIG_WEBHOOK_RELAY_SECRET_FILE: /run/secrets/webhook_relay_secret
     volumes:
       - private_data:/var/lib/mst/private
-    secrets:
-      - webhook_relay_secret
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -100,8 +96,12 @@ services:
       MULTISIG_COORDINATION_STORAGE: postgres
       MULTISIG_PRIVATE_OBJECT_STORAGE: filesystem
       MULTISIG_PRIVATE_OBJECT_ROOT: /var/lib/mst/private
+      MULTISIG_WEBHOOK_RELAY_URL: https://api-testnet.multisig.tools/_relay/webhook
+      MULTISIG_WEBHOOK_RELAY_SECRET_FILE: /run/secrets/webhook_relay_secret
     volumes:
       - private_data:/var/lib/mst/private
+    secrets:
+      - webhook_relay_secret
     depends_on:
       migrate:
         condition: service_completed_successfully
