@@ -1,4 +1,4 @@
-import { get, list, put } from '@vercel/blob';
+import { get, list, put } from './privateObjectStorage.js';
 import type { BoxAuditEvent, TreasuryBoxMetadata, TreasuryBoxRef } from '../../../../packages/stellar-core/src/boxTypes.js';
 import { withBlobStorage } from './blobRequestStore.js';
 import type { BoxStore, StoredTreasuryAuditKey } from './boxStore.js';
