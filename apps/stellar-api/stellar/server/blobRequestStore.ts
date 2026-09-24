@@ -1,4 +1,4 @@
-import { BlobError, get, list, put } from '@vercel/blob';
+import { BlobError, get, list, put } from './privateObjectStorage.js';
 import { AccountNotFoundError, isValidStellarAccountId, loadAccount } from '../../../../packages/stellar-core/src/horizon.js';
 import type { ActivityEvent, ActivityFactEvent } from '../../../../packages/stellar-core/src/activityTypes.js';
 import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
