@@ -1,4 +1,4 @@
-import { get, list, put } from '@vercel/blob';
+import { get, list, put } from './privateObjectStorage.js';
 import { withBlobStorage } from './blobRequestStore.js';
 import type { SorobanExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
