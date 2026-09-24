@@ -49,6 +49,10 @@ services:
       MULTISIG_COORDINATION_STORAGE: postgres
       MULTISIG_COORDINATION_WRITE_FREEZE: ${MULTISIG_COORDINATION_WRITE_FREEZE:-1}
       MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED: ${MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED:-false}
+      MULTISIG_PRIVATE_OBJECT_STORAGE: filesystem
+      MULTISIG_PRIVATE_OBJECT_ROOT: /var/lib/mst/private
+    volumes:
+      - private_data:/var/lib/mst/private
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -83,6 +87,7 @@ services:
 
 volumes:
   postgres_data_v2:
+  private_data:
 
 networks:
   edge:
