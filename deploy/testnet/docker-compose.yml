@@ -81,6 +81,32 @@ services:
       - edge
       - data
 
+  webhook-worker:
+    build:
+      context: ../..
+      dockerfile: apps/stellar-api/Dockerfile
+    restart: unless-stopped
+    command: ["./node_modules/.bin/tsx", "apps/stellar-api/stellar/platform/node/webhookWorker.ts"]
+    env_file:
+      - path: ${MST_ENV_FILE:-./testnet.env}
+        required: false
+    environment:
+      VITE_STELLAR_DEPLOYMENT_NETWORK: testnet
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}
+      MULTISIG_COORDINATION_STORAGE: postgres
+      MULTISIG_PRIVATE_OBJECT_STORAGE: filesystem
+      MULTISIG_PRIVATE_OBJECT_ROOT: /var/lib/mst/private
+    volumes:
+      - private_data:/var/lib/mst/private
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      private-init:
+        condition: service_completed_successfully
+    networks:
+      - edge
+      - data
+
   cloudflared:
     image: cloudflare/cloudflared:2026.9.1
     restart: unless-stopped
