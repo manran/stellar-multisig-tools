@@ -9,8 +9,7 @@ function quoteToml(value: string): string {
 export async function GET(request: Request): Promise<Response> {
   const config = authConfigForRequest(request);
   const signingKey = (await getOrCreateAuthServerKeypair(blobAuthStore)).publicKey();
-  const url = new URL(request.url);
-  const endpoint = `${url.origin}/api/auth`;
+  const endpoint = config.issuer;
   const body = [
     'VERSION="2.7.0"',
     `WEB_AUTH_ENDPOINT=${quoteToml(endpoint)}`,
