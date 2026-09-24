@@ -1,4 +1,4 @@
-import { get, list, put } from '@vercel/blob';
+import { get, list, put } from './privateObjectStorage.js';
 import { withBlobStorage } from './blobRequestStore.js';
 import type { IntegrationCredentialStore, StoredIntegrationCredential } from './integrationCredentialStore.js';
 
