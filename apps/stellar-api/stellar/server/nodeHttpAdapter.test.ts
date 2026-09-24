@@ -24,10 +24,10 @@ test('node adapter exposes a private health endpoint', async () => {
 });
 
 test('node adapter maps /stellar/runtime-config to the existing route handler', async () => {
-  const previousNetwork = process.env.STELLAR_DEPLOYMENT_NETWORK;
+  const previousNetwork = process.env.VITE_STELLAR_DEPLOYMENT_NETWORK;
   const previousManaged = process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED;
   const previousMaster = process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET;
-  process.env.STELLAR_DEPLOYMENT_NETWORK = 'testnet';
+  process.env.VITE_STELLAR_DEPLOYMENT_NETWORK = 'testnet';
   process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED = 'false';
   delete process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET;
   try {
@@ -43,8 +43,8 @@ test('node adapter maps /stellar/runtime-config to the existing route handler', 
     assert.equal(body.capabilities.classicManagedExecution.testnet, false);
     assert.equal(body.capabilities.classicManagedExecution.public, false);
   } finally {
-    if (previousNetwork === undefined) delete process.env.STELLAR_DEPLOYMENT_NETWORK;
-    else process.env.STELLAR_DEPLOYMENT_NETWORK = previousNetwork;
+    if (previousNetwork === undefined) delete process.env.VITE_STELLAR_DEPLOYMENT_NETWORK;
+    else process.env.VITE_STELLAR_DEPLOYMENT_NETWORK = previousNetwork;
     if (previousManaged === undefined) delete process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED;
     else process.env.MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED = previousManaged;
     if (previousMaster === undefined) delete process.env.MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET;
