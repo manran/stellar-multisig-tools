@@ -4,7 +4,7 @@ description: "Internal MultiSig Tools engineering documentation."
 ---
 
 **Status:** Approved architecture
-**Updated:** 2026-09-22
+**Updated:** 2026-09-24
 
 This document is the canonical deployment-boundary contract for MultiSig Tools.
 
@@ -72,11 +72,15 @@ Conceptually:
 ```text
 api(-testnet).multisig.tools/stellar/*
                      |
+             Cloudflare path gateway
+                     |
                      v
-              Stellar API /*
+              Stellar API /stellar/*
 ```
 
-The gateway removes only the protocol namespace. The Stellar service owns the complete API contract, including:
+Cloudflare owns the public protocol-path routing and preserves the `/stellar` namespace when forwarding through Tunnel. The self-hosted Node adapter dispatches that namespace into the existing Stellar route handlers. The root discovery surface and `/stellar/*` currently share one API container, but remain logically separate protocol surfaces so a future `/ripple/*` can be routed to a sibling runtime without turning the Stellar service into a multi-protocol backend.
+
+The Stellar service owns the complete API contract, including:
 
 - operations discovery;
 - OpenAPI;
@@ -97,12 +101,14 @@ It must never select `testnet` versus `public` from a caller-controlled path, bo
 
 Testnet and Mainnet do not share PostgreSQL authority.
 
-Current target:
+Current topology:
 
 ```text
-Stellar Testnet API -> Neon PostgreSQL
-Stellar Mainnet API -> independent PostgreSQL
+Stellar Testnet API -> self-hosted PostgreSQL 18.6
+Stellar Mainnet API -> independent PostgreSQL (not yet provisioned)
 ```
+
+Testnet coordination authority is now held in the Compose-managed PostgreSQL volume. Private API objects use a separate self-hosted filesystem volume rather than Vercel Blob. Testnet was pre-copied from the previous Neon authority and deliberately accepted as a new Testnet baseline without a final delta because historical Testnet continuity is non-critical.
 
 Application code depends on PostgreSQL contracts and `DATABASE_URL`, not a provider-specific domain model.
 
@@ -164,36 +170,36 @@ Shared packages are introduced only when code is actually consumed by more than 
 
 A monorepo does not require every deployable to share one lockfile. The root npm workspace currently owns `apps/web`, `apps/stellar-api`, and `packages/stellar-core`; the self-contained Next.js apps keep their own install boundaries. Every Vercel project builds from its explicit app Root Directory.
 
-## 7. Vercel project model
+## 7. Deployment model
 
-One Git repository may back multiple Vercel projects.
+One Git repository backs multiple deployment targets, but Vercel is no longer the Testnet API runtime.
 
-Target projects:
+Current roles:
 
 ```text
 apps/docs
-  -> docs.multisig.tools
+  -> Vercel -> docs.multisig.tools
 
 apps/internal-docs
   -> private Vercel production alias
   -> target: internal.multisig.tools
 
-apps/api-gateway
-  -> api-testnet.multisig.tools
-  -> api.multisig.tools
+apps/web
+  -> Vercel -> stellar-testnet.multisig.tools
+  -> Vercel -> stellar.multisig.tools
 
 apps/stellar-api
-  -> Stellar Testnet API upstream
-  -> Stellar Mainnet API upstream
+  -> self-hosted Testnet Compose runtime behind Cloudflare Tunnel
+  -> isolated Mainnet Vercel skeleton remains prelaunch-only
 
-apps/web
-  -> stellar-testnet.multisig.tools
-  -> stellar.multisig.tools
+apps/api-gateway
+  -> no longer active in the Testnet request path
+  -> retained only for the existing Mainnet prelaunch skeleton / historical topology until cleanup
 ```
 
 ### Current Testnet mapping
 
-As of 2026-09-22, Testnet is physically split as follows:
+As of 2026-09-24, the active Testnet path is:
 
 ```text
 stellar-testnet.multisig.tools
@@ -203,23 +209,33 @@ stellar-testnet.multisig.tools
      -> https://api-testnet.multisig.tools/stellar/*
 
 api-testnet.multisig.tools
-  -> Vercel project: multisig-tools-api-gateway-testnet
-  -> Root Directory: apps/api-gateway
-  -> STELLAR_API_ORIGIN=https://multisig-tools-testnet.vercel.app/api
+  -> Cloudflare proxied DNS
+  -> named Cloudflare Tunnel: mst-testnet-api
+  -> Docker Compose edge network
+  -> stellar-api:3000
 
-multisig-tools-testnet.vercel.app
-  -> Vercel project: multisig-tools-testnet
-  -> Root Directory: apps/stellar-api
-  -> fixed Stellar Testnet backend
+stellar-api
+  -> fixed Testnet Node HTTP adapter
+  -> PostgreSQL 18.6 on private Docker data network
+  -> filesystem private-object volume
+
+webhook-worker
+  -> PostgreSQL outbox authority
+  -> Cloudflare Worker relay at api-testnet.multisig.tools/_relay*
+  -> external Integration webhook receiver
 ```
 
-The Testnet Stellar API project retains the existing deployment identity and therefore retains its Sensitive environment variables, Neon resource `multisig-tools-testnet-pg`, Vercel Blob store `multisig-tools-testnet`, Queue, and Cron configuration. The temporary proof project used during extraction was removed after cutover.
+Neither the Stellar API nor PostgreSQL publishes a host port. `cloudflared` is the only public API ingress path and establishes outbound Tunnel connections. PostgreSQL is attached only to the internal data network.
 
-The Human Web intentionally keeps browser calls on same-origin `/api/*`. Vercel rewrites those calls to the public Testnet Gateway. This preserves the existing HttpOnly `mst_auth` cookie and `SameSite=Lax` behavior while still forcing browser API traffic through the public Gateway.
+The Human Web intentionally keeps browser calls on same-origin `/api/*`. Vercel rewrites those calls to `https://api-testnet.multisig.tools/stellar/*`, preserving the existing HttpOnly `mst_auth` cookie and `SameSite=Lax` behavior while the API authority lives outside Vercel.
 
-Human authentication identity is deployment-bound, not backend-host-bound. Testnet challenges and session issuers remain tied to `stellar-testnet.multisig.tools` even when the request reaches the Stellar API through the Gateway or the backend's Vercel origin.
+Cloudflare is the protocol namespace gateway. `/stellar/*` is routed through Tunnel to the Stellar runtime without stripping the namespace; `/_relay*` is intercepted by the webhook relay Worker. The root discovery surface and `/stellar/*` currently share the same API container, but their logical protocol boundary is preserved.
 
-The external API contract is expressed relative to the protocol base (`/request`, `/intent`, `/operations`, and so on). Internal Vercel function paths under `/api/*` are implementation details and must not appear in public operation discovery or OpenAPI paths.
+Testnet coordination data was pre-copied from the previous Neon PostgreSQL authority into the self-hosted PostgreSQL 18.6 volume and verified across all 20 base tables at the copy point. A final Neon delta was intentionally not imported because historical Testnet continuity is non-critical. Previous Vercel Blob private objects were not made a cutover dependency; new Testnet private objects are authoritative in the self-hosted filesystem volume.
+
+Human authentication identity remains deployment-bound, not backend-host-bound. Testnet challenges and session issuers remain tied to `stellar-testnet.multisig.tools`.
+
+The external API contract is expressed relative to the protocol base (`/request`, `/intent`, `/operations`, and so on). Internal transport/runtime paths remain implementation details and must not appear in public operation discovery or OpenAPI paths.
 
 ### Current Mainnet prelaunch skeleton
 

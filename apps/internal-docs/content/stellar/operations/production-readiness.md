@@ -3,11 +3,11 @@ title: "MultiSig Tools Production Readiness"
 description: "Internal MultiSig Tools engineering documentation."
 ---
 
-**Status:** Testnet current topology ready; Mainnet prelaunch skeleton ready; Mainnet managed execution not ready
-**Current code baseline:** `c6c9e93` (`feat/monorepo-deployment-topology`)
-**Testnet topology:** Human Web -> Testnet API Gateway -> fixed-Testnet Stellar API
+**Status:** Testnet self-hosted API cutover ready; Mainnet prelaunch skeleton ready; Mainnet managed execution not ready
+**Current code baseline:** `f14e5b7` (`feat/monorepo-deployment-topology`)
+**Testnet topology:** Vercel Human Web -> Cloudflare path gateway/Tunnel -> self-hosted fixed-Testnet Stellar API -> self-hosted PostgreSQL
 **Mainnet topology:** isolated fixed-Mainnet Web/Gateway/API skeleton only; no public custom-domain cutover
-**Updated:** 2026-09-22
+**Updated:** 2026-09-24
 
 This document is the operational gate after the Hallmark/UI freeze. It does not redefine signer authority, Request/Intent semantics, or execution ownership.
 
@@ -17,15 +17,15 @@ This document is the operational gate after the Hallmark/UI freeze. It does not 
 
 Verified:
 
-- final application gate: **820 / 820 PASS**;
+- final application gate: **829 / 829 PASS**;
 - PostgreSQL integration gate: **29 / 29 PASS**;
-- production build PASS;
+- production/container build PASS;
 - `git diff --check` PASS;
-- Testnet Human Web, API Gateway, and Stellar API are physically separate READY deployments;
-- `stellar-testnet.multisig.tools` serves `apps/web` and keeps browser `/api/*` same-origin while forwarding through `api-testnet.multisig.tools/stellar`;
-- `api-testnet.multisig.tools/stellar` exposes 36 public operations with no internal `/api/*` paths in the published contract;
-- live runtime is fixed Testnet;
-- managed Classic requires both a configured channel master secret and explicit `MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED=true`; Testnet is enabled and public/Mainnet remains disabled;
+- Testnet Human Web remains on Vercel while the public API is now Cloudflare -> named Tunnel -> self-hosted Compose;
+- `stellar-testnet.multisig.tools` keeps browser `/api/*` same-origin while forwarding through `api-testnet.multisig.tools/stellar`;
+- `api-testnet.multisig.tools/stellar` exposes the existing public operation contract with no internal transport paths in the published contract;
+- live runtime is fixed Testnet and `MULTISIG_COORDINATION_WRITE_FREEZE=0` after cutover;
+- managed Classic still requires both a configured channel master secret and explicit `MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED=true`; the current self-hosted Testnet runtime has managed Classic explicitly disabled, and public/Mainnet remains disabled;
 - 20/20 non-mutating production browser smoke checks PASS at 375 and 1280;
 - Soroban Import -> Review -> live RPC simulation PASS without signing or submission;
 - public Testnet Integration self-service is live at `/developers/integrations/new` and `POST https://api-testnet.multisig.tools/stellar/integration-testnet`;
@@ -67,7 +67,7 @@ Do not enable Mainnet managed Classic until those items are closed.
 - Migration `DATABASE_URL_UNPOOLED` is configured in Testnet production.
 - `MULTISIG_COORDINATION_STORAGE` is configured.
 - Transactional outbox atomicity and repository behavior are covered by PostgreSQL integration tests.
-- Private note/private context remains outside relational coordination facts and uses the existing Blob private-store boundary.
+- Private note/private context remains outside relational coordination facts. The active Testnet runtime now uses a self-hosted filesystem private-object volume; the Vercel Blob implementation remains an adapter option / historical Testnet source rather than the active Testnet authority.
 
 ### Important rollback rule
 
@@ -87,7 +87,8 @@ Do not switch `MULTISIG_COORDINATION_STORAGE=blob` after PG-only writes have acc
 
 ### Recovery status / operator checks still required
 
-- Current Testnet PostgreSQL provider is **Neon**, verified from redacted Vercel production environment metadata without recording credentials.
+- Current Testnet PostgreSQL authority is **self-hosted PostgreSQL 18.6** in the private Compose data network. Neon is the previous Testnet provider and is no longer the canonical API database.
+- The Testnet cutover used a read-only Neon snapshot/pre-copy into the self-hosted PostgreSQL volume. Recovery verification preserved all 20 `mst_stellar` base tables and migrations `0001` through `0008`, with matching per-table counts at the copy point. A final Neon delta was intentionally not imported because historical Testnet continuity is non-critical.
 - Local PostgreSQL 18 application-layer restore proof is complete: native dump/restore preserved 20 `mst_stellar` tables, migrations `0001` through `0008`, exact per-table row counts/content digests, and the restored database reports no pending migrations.
 - A separate fresh-Mainnet provider-agnostic preflight completed on 2026-09-22: zero-state migrations `0001` through `0008`, **29 / 29** PostgreSQL integration tests, native `pg_dump -Fc` -> clean restore, recovery verifier PASS, and 20 / 20 table row counts identical between source and restore.
 - `npm run db:verify-recovery` is a read-only recovery verifier and fails closed on migration mismatch.
@@ -111,7 +112,7 @@ The local provider-agnostic PostgreSQL 18 proof closes application/schema compat
 - managed Classic runtime requires both `MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET` and explicit `MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED=true`; a copied/configured master secret alone cannot enable execution;
 - channel keypairs are deterministically derived from `MULTISIG_CLASSIC_CHANNEL_MASTER_SECRET`;
 - a **separate deterministic creator account** is derived from the same deployment master with a different domain tag; it exists only to create/fund managed channel accounts and is not a Treasury signer or transaction-source channel;
-- Testnet production has the master secret configured and the creator account active;
+- the migrated Testnet runtime still has the managed-channel master secret available, and the historical Testnet creator account remains active, but `MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED=false` in the current self-hosted runtime; historical creator/channel evidence remains proof of the mechanism, not evidence that the capability is currently enabled;
 - `MULTISIG_CLASSIC_CHANNEL_POOL_SIZE` is not explicitly set, so the configured **baseline is 4 channels**;
 - `MULTISIG_CLASSIC_CHANNEL_SOFT_LIMIT` starts at **64** and is a soft operational threshold, not a derivation cap; deterministic derivation is valid beyond it (tests cover index 64 and index 4096);
 - the effective soft limit follows a deterministic half-full doubling policy: 64 -> 128 when 32 slots have been allocated, 128 -> 256 at 64 allocated slots, and so on; no separate capacity state is persisted;
@@ -181,16 +182,15 @@ It deliberately does **not** expose channel seeds, Request ids, Service ids, sig
 Verification completed:
 
 - pure projection tests cover active/expired/free lease classification, balance ready/missing/unavailable states, creator capacity, 50/60 hysteresis, half-full soft-limit doubling, alert transition de-duplication, and capacity-exhaustion fail-closed behavior;
-- full suite: **820 / 820 PASS**;
+- full suite: **829 / 829 PASS** after the self-hosted API / Cloudflare relay cutover;
 - PostgreSQL integration suite: **29 / 29 PASS**;
-- production build PASS;
+- production/container build PASS;
 - `git diff --check` PASS;
-- current Testnet split topology is READY: `stellar-testnet.multisig.tools` -> Web -> `api-testnet.multisig.tools/stellar` -> `multisig-tools-testnet.vercel.app`;
-- live OpenAPI has no 64 maximum on `channelCount` and documents the current auto-doubling soft-limit policy;
-- live runtime remains fixed Testnet with managed Classic enabled only for Testnet;
-- live creator monitor smoke wrote/read the `ready` state through Horizon + PostgreSQL without creating a channel;
-- `MULTISIG_CLASSIC_CHANNEL_ALERT_WEBHOOK_URL` is intentionally absent; defaults for 2 XLM / 50 / 60 / base soft-limit 64 are active;
-- Vercel reported no runtime error clusters in the checked post-deploy window.
+- current Testnet topology is READY: `stellar-testnet.multisig.tools` (Vercel Web) -> `api-testnet.multisig.tools/stellar` (Cloudflare) -> named Tunnel -> self-hosted `stellar-api` -> self-hosted PostgreSQL;
+- live OpenAPI remains fixed Testnet and preserves the public protocol contract;
+- live runtime reports managed Classic disabled (`classicManagedExecution.testnet=false`); historical creator/channel proof is retained for future re-enablement work;
+- the named Tunnel is healthy with multiple active Cloudflare connections and neither API port 3000 nor PostgreSQL port 5432 is published on the host;
+- webhook delivery uses the Cloudflare Worker relay path `api-testnet.multisig.tools/_relay*`; the relay secret is mounted into the worker as a Compose secret file rather than an environment value.
 
 Operator verification completed manually on 2026-09-21: the authenticated deployment view showed live channel balances and lease state, including expired leases. For the current Testnet stage, this is sufficient evidence for the operator visibility slice.
 
@@ -221,7 +221,7 @@ Do not conflate semantic write-rate limits with spend control. The existing `req
 
 ### Implemented application boundary
 
-Semantic Vercel Firewall rate-limit checks exist for:
+Semantic rate-limit hooks exist for:
 
 - Request/Intent creation;
 - Treasury administration;
@@ -229,17 +229,11 @@ Semantic Vercel Firewall rate-limit checks exist for:
 
 The code uses verified identities as rate-limit keys and returns stable 429/503 errors.
 
-### Platform status — rules currently missing
+### Platform status — Testnet migration note
 
-The application deliberately treats a missing Vercel rate-limit rule as “not configured” and logs a warning rather than pretending the rule exists.
+The previous hooks were implemented against Vercel Firewall. The active Testnet API runtime is now self-hosted behind Cloudflare, so Vercel Firewall configuration is no longer an enforcement surface for `api-testnet.multisig.tools`. No equivalent Cloudflare semantic rule set has been declared as active during this cutover.
 
-A read-only Vercel Firewall configuration check on 2026-09-21 confirmed that all three application rule ids are currently missing from **both** the Testnet project and the canonical/public project:
-
-- `request-create` — missing;
-- `treasury-admin` — missing;
-- `agent-access-admin` — missing.
-
-Therefore the semantic rate-limit hook exists in application code but is **not currently enforcing a platform limit**. This is acceptable as an explicit Testnet limitation, but Mainnet launch requires the rules to be created with reviewed policy values. Do not invent those limits in code; they are an operator/product policy decision.
+Therefore the application hook must not be described as a currently enforced Testnet platform limit. Cloudflare WAF/rate-limit policy can be added later with reviewed product values; do not invent those limits in code. Mainnet policy remains a separate launch decision.
 
 ## 5. Integration credentials / operator admin
 
@@ -363,22 +357,27 @@ Do not introduce a second telemetry state machine; logs/metrics should reference
 
 ### Testnet
 
-Current split Testnet production topology:
+Current Testnet production topology:
 
-- Human Web: `dpl_9rW1be9vEmKYi3EuQGAAo5c8RCAr` -> `stellar-testnet.multisig.tools`;
-- API Gateway: `dpl_3fBm6UXBEdTQ9MyRMKxZbtdqmXk5` -> `api-testnet.multisig.tools`;
-- Stellar API backend: `dpl_QmbAobn5LRzv7YrsvrXYiFxUoRrP` -> `multisig-tools-testnet.vercel.app`;
-- backend runtime is fixed Testnet and reports `classicManagedExecution.testnet=true`, `public=false`.
+- Human Web remains on Vercel at `stellar-testnet.multisig.tools`;
+- `api-testnet.multisig.tools` is a proxied Cloudflare CNAME to the named `mst-testnet-api` Tunnel;
+- Cloudflare routes `/stellar/*` and the root discovery surface through Tunnel to the self-hosted `stellar-api` container;
+- Cloudflare routes `/_relay*` to the `mst-webhook-relay-testnet` Worker for outbound webhook relay;
+- Compose owns `stellar-api`, `webhook-worker`, PostgreSQL 18.6, private-object volume, migrations, and `cloudflared`;
+- backend runtime is fixed Testnet, coordination writes are enabled, and managed Classic is disabled.
 
-Each Vercel project retains prior READY deployments as project-local rollback candidates. Roll back the affected layer rather than treating the three-layer system as one deployment.
+The pre-cutover Vercel API DNS target is recorded server-side as a rollback reference. It is no longer the canonical Testnet API authority, and stale Vercel Blob coordination/private objects must not be treated as a current data rollback target.
 
-For an application-only regression:
+For an API application regression:
 
 ```text
-rollback/redeploy previous known-good Vercel deployment
--> keep PostgreSQL authority unchanged
--> run bounded read/smoke checks
+freeze writes if data integrity is uncertain
+-> roll back/redeploy the self-hosted API image while keeping PostgreSQL authority unchanged
+-> run bounded API + Vercel-Web same-origin smoke checks
+-> re-enable writes when verified
 ```
+
+For an edge-routing regression, restore the reviewed Cloudflare Tunnel/Worker route configuration or, only as an emergency transport rollback, restore the saved pre-cutover Vercel DNS target with explicit awareness that it is not current state authority.
 
 Historical Testnet application rollback drill completed on 2026-09-21 before the final Web/Gateway/API split:
 
