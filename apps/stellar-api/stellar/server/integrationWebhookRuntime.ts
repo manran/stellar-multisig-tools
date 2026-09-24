@@ -7,7 +7,8 @@ import { blobIntegrationCredentialStore } from './blobIntegrationCredentialStore
 import type { RequestPrivateDataStore } from './requestPrivateDataStore.js';
 import type { SorobanIntentPrivateDataStore } from './sorobanIntentPrivateDataStore.js';
 import { dispatchIntegrationWebhookEvent } from './integrationWebhookDispatcher.js';
-import { CloudflareRelayIntegrationWebhookHttpTransport } from './cloudflareRelayIntegrationWebhookHttpTransport.js';\nimport { NodeIntegrationWebhookHttpTransport } from './nodeIntegrationWebhookHttpTransport.js';
+import { CloudflareRelayIntegrationWebhookHttpTransport } from './cloudflareRelayIntegrationWebhookHttpTransport.js';
+import { NodeIntegrationWebhookHttpTransport } from './nodeIntegrationWebhookHttpTransport.js';
 import { createIntegrationWebhookPayloadBuilder } from './integrationWebhookPayload.js';
 
 const redactedRequestPrivateStore: RequestPrivateDataStore = {
@@ -42,6 +43,16 @@ export function createRuntimeIntegrationWebhookPayloadBuilder(pool: Pool = coord
     intents,
     reviewOriginFor: integrationWebhookReviewOrigin,
   });
+}
+
+function runtimeIntegrationWebhookTransport() {
+  const relayUrl = process.env.MULTISIG_WEBHOOK_RELAY_URL?.trim();
+  const relaySecret = process.env.MULTISIG_WEBHOOK_RELAY_SECRET?.trim();
+  if (!relayUrl && !relaySecret) return new NodeIntegrationWebhookHttpTransport();
+  if (!relayUrl || !relaySecret) {
+    throw new Error('Integration webhook relay configuration is incomplete.');
+  }
+  return new CloudflareRelayIntegrationWebhookHttpTransport(relayUrl, relaySecret);
 }
 
 export function dispatchRuntimeIntegrationWebhookEvent(

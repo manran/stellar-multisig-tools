@@ -29,7 +29,7 @@ test('relay transport preserves standard webhook headers and never connects to t
   const transport = new CloudflareRelayIntegrationWebhookHttpTransport(
     'https://relay.example.test/deliver',
     SECRET,
-    async () => [{ address: '203.0.113.10', family: 4 }],
+    async () => [{ address: '8.8.8.8', family: 4 }],
     async (input, init) => {
       calls.push({ url: String(input), init });
       return new Response(null, { status: 204 });
