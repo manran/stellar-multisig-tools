@@ -7,7 +7,7 @@ import { blobIntegrationCredentialStore } from './blobIntegrationCredentialStore
 import type { RequestPrivateDataStore } from './requestPrivateDataStore.js';
 import type { SorobanIntentPrivateDataStore } from './sorobanIntentPrivateDataStore.js';
 import { dispatchIntegrationWebhookEvent } from './integrationWebhookDispatcher.js';
-import { NodeIntegrationWebhookHttpTransport } from './nodeIntegrationWebhookHttpTransport.js';
+import { CloudflareRelayIntegrationWebhookHttpTransport } from './cloudflareRelayIntegrationWebhookHttpTransport.js';\nimport { NodeIntegrationWebhookHttpTransport } from './nodeIntegrationWebhookHttpTransport.js';
 import { createIntegrationWebhookPayloadBuilder } from './integrationWebhookPayload.js';
 
 const redactedRequestPrivateStore: RequestPrivateDataStore = {
@@ -55,7 +55,7 @@ export function dispatchRuntimeIntegrationWebhookEvent(
   const pool = options.pool ?? coordinationPool();
   return dispatchIntegrationWebhookEvent(eventId, {
     credentials: blobIntegrationCredentialStore,
-    transport: new NodeIntegrationWebhookHttpTransport(),
+    transport: runtimeIntegrationWebhookTransport(),
     payloadBuilder: createRuntimeIntegrationWebhookPayloadBuilder(pool),
     pool,
     ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
