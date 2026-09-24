@@ -1,4 +1,4 @@
-import { get, put } from '@vercel/blob';
+import { get, put } from './privateObjectStorage.js';
 import { withBlobStorage } from './blobRequestStore.js';
 import type {
   SorobanIntentPrivateDataStore,
