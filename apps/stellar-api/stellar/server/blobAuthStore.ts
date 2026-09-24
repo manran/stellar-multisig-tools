@@ -1,4 +1,4 @@
-import { get, put } from '@vercel/blob';
+import { get, put } from './privateObjectStorage.js';
 import type { AuthStore, StoredAuthServerKey, StoredRedeemedChallenge } from './authStore.js';
 import { withBlobStorage } from './blobRequestStore.js';
 
