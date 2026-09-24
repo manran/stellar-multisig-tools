@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { del, get, list, put } from '@vercel/blob';
+import { del, get, list, put } from './privateObjectStorage.js';
 import type { AddressAliasSubjectType, AddressBookStore, StoredAddressAlias } from './addressBookStore.js';
 import { withBlobStorage } from './blobRequestStore.js';
 
