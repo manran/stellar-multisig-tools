@@ -33,6 +33,16 @@ services:
     networks:
       - data
 
+  private-init:
+    build:
+      context: ../..
+      dockerfile: apps/stellar-api/Dockerfile
+    user: "0:0"
+    restart: "no"
+    command: ["chown", "-R", "1000:1000", "/var/lib/mst/private"]
+    volumes:
+      - private_data:/var/lib/mst/private
+
   stellar-api:
     build:
       context: ../..
@@ -55,6 +65,8 @@ services:
       - private_data:/var/lib/mst/private
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      private-init:
         condition: service_completed_successfully
     healthcheck:
       test:
