@@ -1,37 +1,58 @@
 ---
 title: "Brand Direction"
-description: "Product name, mark semantics, descriptor, and brand constraints."
+description: "Product name, sealed-envelope mark semantics, palette, and brand constraints."
 ---
 
-
-**Status:** product name stable; descriptor under discussion.
+**Status:** product name and primary mark locked.
 
 ## Name
 
 - Product / brand: **MultiSig Tools**
 - Domain expression: `multisig.tools`
-- Current candidate descriptor: **Stellar multisig tooling**
+- Stellar product: `stellar.multisig.tools`
+- Descriptor remains subordinate to the product name.
 
-The descriptor is intentionally not promoted to the product name. `Tooling` is accurate for an advanced Stellar audience but reads as a category more than a brand; keep it subordinate unless later positioning work proves otherwise.
+## Primary mark
 
-## Mark
+The primary mark is a sealed envelope.
 
-The existing mark uses three linked signer nodes with two visually active and one pending/outlined. Preserve that semantic core: linked authorities, partial completion, and threshold progress. Do not make a literal tiger the primary icon.
+- **Envelope** — a transaction, request, or intent awaiting authorization.
+- **Wax seal** — approval, signing, and authority.
+- **Inner ring and nodes** — shared authorization by multiple independent authorities.
+- **Central square** — the authority core / completed authorization state.
+
+The mark is intentionally simple enough to remain recognizable in monochrome and at small sizes. The favicon retains the inner seal ring so it reads as a seal rather than a coin.
+
+Do not redraw the master geometry for routine product use. Use the checked-in SVG assets.
+
+## Palette
+
+- Deep teal: `#075E59`
+- Seal gold: `#D8A23A`
+- App icon background: `#043C39`
+
+The primary mark uses deep teal and seal gold. Monochrome variants are provided for constrained surfaces.
+
+## Assets
+
+Canonical assets live in `public/brand/`:
+
+- `mst-primary.svg` — primary two-color mark.
+- `mst-mono.svg` — monochrome mark using `currentColor`.
+- `mst-mono-dark.svg` — dark monochrome preset.
+- `mst-mono-light.svg` — light monochrome preset.
+- `mst-favicon.svg` — small-size browser mark with the inner seal ring preserved.
+- `mst-app-icon.svg` — square app-icon treatment.
+
+`public/favicon.png` remains the PNG fallback for browsers that do not use the SVG favicon.
 
 ## Historical brand story: 虎符 / tiger tally
 
-The useful historical analogy is authorization technology, not tiger imagery. Ancient Chinese tiger tallies were split credentials used to authenticate high-authority military orders. Surviving Qin/Han examples document complementary halves held by central authority and a commander/local authority; troop deployment required the halves to be matched. Details varied by period and object, so product copy should avoid pretending there was one universal implementation.
+The tiger-tally analogy remains useful as background brand history: independent authority is insufficient until the required authority is combined. It is no longer the visual basis of the primary mark.
 
-The analogy to multisig is conceptual:
+MultiSig Tools uses modern cryptographic signatures and Stellar threshold rules; it does **not** claim technical descent from the ancient system.
 
-```text
-one holder / one half        -> insufficient authority
-matching independent authority -> action may proceed
-```
-
-MultiSig Tools uses modern cryptographic signatures and Stellar threshold rules; it does **not** claim technical descent from the ancient system. The story belongs in brand/concepts material, not in the critical transaction workflow.
-
-For historical wording, prefer museum-backed descriptions (for example the Qin Yangling tiger tally and Han tiger tallies) over folklore retellings such as dramatic court stories.
+For historical wording, prefer museum-backed descriptions over folklore retellings.
 
 ## Historical references
 
