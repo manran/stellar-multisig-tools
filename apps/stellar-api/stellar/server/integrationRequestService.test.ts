@@ -290,6 +290,7 @@ test('Integration can create a Classic Request from semantic payment input witho
     if (accountId === channel.publicKey()) return channelSnapshot;
     throw new Error('unexpected account');
   };
+  const now = new Date('2026-09-15T09:00:00Z');
   const networkParametersLoader = async () => ({
     ledgerSequence: 1,
     ledgerClosedAt: '2026-09-15T09:00:00Z',
@@ -316,7 +317,7 @@ test('Integration can create a Classic Request from semantic payment input witho
       networkParametersLoader,
       managedChannelStoreFactory: () => channelStore,
       managedChannels: [channel],
-      now: new Date('2026-09-15T09:00:00Z'),
+      now,
     },
   );
   assert.equal(first.replayed, false);
@@ -341,6 +342,7 @@ test('Integration can create a Classic Request from semantic payment input witho
   const afterFirstSigner = await contributeSigningRequest(store, first.request.id, firstSignerXdr.toXDR(), {
     accountLoader,
     networkParametersLoader,
+    now,
   });
   assert.equal(afterFirstSigner.request.status, 'awaiting_signatures');
 
@@ -350,12 +352,14 @@ test('Integration can create a Classic Request from semantic payment input witho
   const afterSecondSigner = await contributeSigningRequest(store, first.request.id, secondSignerXdr.toXDR(), {
     accountLoader,
     networkParametersLoader,
+    now,
   });
   assert.equal(afterSecondSigner.request.status, 'ready');
 
   const submitted = await submitSigningRequest(store, first.request.id, {
     accountLoader,
     networkParametersLoader,
+    now,
     transactionLoader: async () => null,
     transactionSubmitter: async (xdr, network) => {
       assert.equal(network, 'testnet');
@@ -379,6 +383,7 @@ test('Integration can create a Classic Request from semantic payment input witho
         if (accountId === channel.publicKey()) return channelSnapshot;
         throw new Error('semantic replay must not rebuild destinations');
       },
+      now,
     },
   );
   assert.equal(replay.replayed, true);
@@ -395,7 +400,7 @@ test('Integration can create a Classic Request from semantic payment input witho
           payments: [{ destination, amount: '3', asset: { type: 'native' as const } }],
         },
       },
-      { accountLoader, networkParametersLoader },
+      { accountLoader, networkParametersLoader, now },
     ),
     (cause: unknown) => cause instanceof Error && 'code' in cause && cause.code === 'idempotency_conflict',
   );
@@ -406,7 +411,7 @@ test('Integration can create a Classic Request from semantic payment input witho
       store,
       integrationFor(source.publicKey(), true),
       input,
-      { accountLoader, networkParametersLoader },
+      { accountLoader, networkParametersLoader, now },
     ),
     (cause: unknown) => cause instanceof Error && 'code' in cause && cause.code === 'idempotency_conflict',
   );
