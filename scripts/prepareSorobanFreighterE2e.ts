@@ -10,7 +10,7 @@ import {
   nativeToScVal,
 } from '@stellar/stellar-sdk/base';
 import { writeFile } from 'node:fs/promises';
-import { loadAccount, submitTransactionXdr } from '../src/stellar/horizon';
+import { loadAccount, submitTransactionXdr } from '../packages/stellar-core/src/horizon';
 
 const network = 'testnet' as const;
 

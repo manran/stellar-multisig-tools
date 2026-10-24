@@ -1,0 +1,23 @@
+---
+title: Create a Treasury
+description: Configure shared authorization for a Stellar account.
+---
+
+A Treasury is a Stellar account controlled by a shared signing policy. MultiSig Tools helps you design the policy, review the exact account-control transaction, and collect the required signatures.
+
+## Shortest successful path
+
+1. **Choose the account.** Start from the Stellar account whose signing policy you want to change. Keep it funded for reserve and transaction fee requirements.
+2. **Choose the signers.** Add the people or signer addresses that should participate in payment and account-control decisions.
+3. **Set payment and control rules.** Payment authorization can be easier than changing the signing policy itself. The guided flow keeps account-control authorization at least as strong as payment authorization.
+4. **Review and sign the change.** The policy does not change because a form was filled in. Review the generated account-control transaction, collect the required signatures, then submit it.
+
+> **Keep recovery in mind**
+>
+> A signing policy can lock an account if its thresholds become unreachable. Treat signer removal and threshold changes as account-control operations, not ordinary payments.
+
+## Technical details
+
+Classic Stellar multisig is implemented with account signers and threshold values. The guided flow builds the necessary `SetOptions` operations and shows the before → after signing-policy effect during Review.
+
+The Treasury label is a Human workspace around that Stellar account; Stellar account authorization remains the cryptographic source of truth.

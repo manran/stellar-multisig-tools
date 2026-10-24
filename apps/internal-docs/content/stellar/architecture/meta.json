@@ -1,0 +1,16 @@
+{
+  "title": "Architecture",
+  "pages": [
+    "deployment-topology",
+    "documentation-information-architecture",
+    "product-semantics",
+    "workflow-architecture",
+    "operation-architecture",
+    "authority-graph",
+    "multi-authority-intents",
+    "integration-product-model",
+    "event-sourced-history-and-audit",
+    "privacy-audit-model",
+    "postgres-persistence-model"
+  ]
+}

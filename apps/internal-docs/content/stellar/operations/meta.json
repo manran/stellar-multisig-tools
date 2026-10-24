@@ -1,0 +1,10 @@
+{
+  "title": "Operations",
+  "pages": [
+    "near-term-development-guide",
+    "production-readiness",
+    "postgres-cutover-runbook",
+    "postgres-recovery-runbook",
+    "mainnet-smoke-plan"
+  ]
+}

@@ -1,0 +1,142 @@
+name: mst-testnet-api
+
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mst_testnet}
+      POSTGRES_USER: ${POSTGRES_USER:-mst}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data_v2:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mst} -d ${POSTGRES_DB:-mst_testnet}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - data
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: apps/stellar-api/Dockerfile
+    restart: "no"
+    command: ["./node_modules/.bin/tsx", "apps/stellar-api/scripts/applyPostgresMigrations.ts"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}
+      DATABASE_URL_UNPOOLED: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+
+  private-init:
+    build:
+      context: ../..
+      dockerfile: apps/stellar-api/Dockerfile
+    user: "0:0"
+    restart: "no"
+    command: ["chown", "-R", "1000:1000", "/var/lib/mst/private"]
+    volumes:
+      - private_data:/var/lib/mst/private
+
+  stellar-api:
+    build:
+      context: ../..
+      dockerfile: apps/stellar-api/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - path: ${MST_ENV_FILE:-./testnet.env}
+        required: false
+    environment:
+      PORT: "3000"
+      VITE_STELLAR_DEPLOYMENT_NETWORK: testnet
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}
+      DATABASE_URL_UNPOOLED: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}
+      MULTISIG_COORDINATION_STORAGE: postgres
+      MULTISIG_COORDINATION_WRITE_FREEZE: ${MULTISIG_COORDINATION_WRITE_FREEZE:-1}
+      MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED: ${MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED:-false}
+      MULTISIG_PRIVATE_OBJECT_STORAGE: filesystem
+      MULTISIG_PRIVATE_OBJECT_ROOT: /var/lib/mst/private
+    volumes:
+      - private_data:/var/lib/mst/private
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      private-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - edge
+      - data
+
+  webhook-worker:
+    build:
+      context: ../..
+      dockerfile: apps/stellar-api/Dockerfile
+    restart: unless-stopped
+    command: ["./node_modules/.bin/tsx", "apps/stellar-api/stellar/platform/node/webhookWorker.ts"]
+    env_file:
+      - path: ${MST_ENV_FILE:-./testnet.env}
+        required: false
+    environment:
+      VITE_STELLAR_DEPLOYMENT_NETWORK: testnet
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}
+      MULTISIG_COORDINATION_STORAGE: postgres
+      MULTISIG_PRIVATE_OBJECT_STORAGE: filesystem
+      MULTISIG_PRIVATE_OBJECT_ROOT: /var/lib/mst/private
+      MULTISIG_WEBHOOK_RELAY_URL: https://api-testnet.multisig.tools/_relay/webhook
+      MULTISIG_WEBHOOK_RELAY_SECRET_FILE: /run/secrets/webhook_relay_secret
+    volumes:
+      - private_data:/var/lib/mst/private
+    secrets:
+      - webhook_relay_secret
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      private-init:
+        condition: service_completed_successfully
+    networks:
+      - edge
+      - data
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.1
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    command:
+      - tunnel
+      - --no-autoupdate
+      - run
+      - --token
+      - ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      stellar-api:
+        condition: service_healthy
+    networks:
+      - edge
+
+volumes:
+  postgres_data_v2:
+  private_data:
+
+networks:
+  edge:
+  data:
+    internal: true
+
+
+secrets:
+  webhook_relay_secret:
+    file: ${MST_WEBHOOK_RELAY_SECRET_FILE:-/opt/MST/runtime/mst-testnet-api/webhook-relay.secret}

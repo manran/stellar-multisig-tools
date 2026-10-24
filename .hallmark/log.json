@@ -1,0 +1,24 @@
+[
+  {
+    "date": "2026-09-20",
+    "scope": "app",
+    "macrostructure": "Asymmetric Product Proof / Workbench / Long Document",
+    "theme": "design.md",
+    "enrichment": "existing workflow demo",
+    "brief": "Freeze the product design system, simplify core Human surfaces, and reorganize Developer documentation"
+  },
+  {
+    "date": "2026-09-19",
+    "macrostructure": "Workbench",
+    "theme": "existing-system",
+    "enrichment": "none",
+    "brief": "Integration Control Plane redesign with global Executor Pool and contract execution binding"
+  },
+  {
+    "date": "2026-09-19",
+    "macrostructure": "Narrative Workflow",
+    "theme": "existing-system",
+    "enrichment": "none",
+    "brief": "Guided Integration Profile provisioning and MSI issuance"
+  }
+]

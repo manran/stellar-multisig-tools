@@ -1,0 +1,17 @@
+{
+  "title": "Product",
+  "pages": [
+    "brand",
+    "human-product-contract",
+    "human-ux-architecture",
+    "ux-language-and-discovery",
+    "ux-design-system",
+    "audience-projection-model",
+    "proposal-lifecycle",
+    "transaction-context",
+    "workspace-model",
+    "contract-workspace",
+    "asset-presentation",
+    "demo-runtime"
+  ]
+}

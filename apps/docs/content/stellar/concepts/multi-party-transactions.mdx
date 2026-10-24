@@ -1,0 +1,20 @@
+---
+title: Multi-party transactions
+description: See how one transaction can require independent authorization from more than one account.
+---
+
+One Stellar transaction can contain operations controlled by different source accounts. MultiSig Tools keeps those authorization domains independent while coordinating one shared Proposal.
+
+For example, one transaction could move an asset from Account A while another operation moves a different asset from Account B. Both sides may need to authorize the same atomic transaction.
+
+The Proposal does not become “A's Proposal” or “B's Proposal”. It belongs to the transaction and may legitimately appear in more than one account or Treasury view.
+
+> **Authorization stays account-specific**
+>
+> A signer who can authorize Account A does not automatically authorize Account B. MultiSig Tools evaluates each source account against its own current Stellar signing policy.
+
+## Technical details
+
+Stellar operations may specify their own source account. MultiSig Tools derives a separate authorization requirement for each transaction/operation source and evaluates signatures against the relevant signer policy.
+
+Business labels never replace source-account and signer cryptographic truth.

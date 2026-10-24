@@ -1,0 +1,29 @@
+/* MultiSig Tools Internal Docs · canonical design tokens */
+:root {
+  --color-paper: oklch(0.975 0.007 150);
+  --color-paper-2: oklch(0.955 0.010 150);
+  --color-paper-3: oklch(0.925 0.014 150);
+  --color-ink: oklch(0.225 0.012 155);
+  --color-ink-2: oklch(0.42 0.014 155);
+  --color-muted: oklch(0.45 0.012 155);
+  --color-rule: oklch(0.84 0.015 155);
+  --color-accent: oklch(0.51 0.118 166);
+  --color-accent-hover: oklch(0.45 0.105 166);
+  --color-focus: oklch(0.61 0.145 166);
+  --font-display: "Bitstream Charter", "Iowan Old Style", Georgia, serif;
+  --font-body: Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.dark {
+  --color-paper: oklch(0.17 0.007 155);
+  --color-paper-2: oklch(0.205 0.009 155);
+  --color-paper-3: oklch(0.25 0.012 155);
+  --color-ink: oklch(0.94 0.008 150);
+  --color-ink-2: oklch(0.76 0.010 150);
+  --color-muted: oklch(0.72 0.010 150);
+  --color-rule: oklch(0.34 0.014 155);
+  --color-accent: oklch(0.69 0.17 162);
+  --color-accent-hover: oklch(0.75 0.15 162);
+  --color-focus: oklch(0.75 0.17 162);
+}

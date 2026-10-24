@@ -1,0 +1,31 @@
+{
+  "name": "@multisig-tools/stellar-api",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": "24.19.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test stellar/server/*.test.ts stellar/platform/vercel/*.test.ts",
+    "test:postgres": "tsx --test --test-concurrency=1 stellar/db/*.test.ts"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^17.0.1",
+    "@vercel/blob": "^2.8.0",
+    "@vercel/firewall": "1.2.5",
+    "@vercel/functions": "^3.9.8",
+    "@vercel/queue": "^0.6.0",
+    "ipaddr.js": "^2.5.0",
+    "pg": "^8.23.0",
+    "standardwebhooks": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2"
+  },
+  "packageManager": "npm@11.17.0"
+}

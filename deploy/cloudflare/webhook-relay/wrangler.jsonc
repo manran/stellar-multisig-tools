@@ -1,0 +1,7 @@
+{
+  "$schema": "../../../node_modules/wrangler/config-schema.json",
+  "name": "mst-webhook-relay-testnet",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-24",
+  "workers_dev": true
+}

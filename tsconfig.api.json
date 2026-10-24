@@ -6,7 +6,8 @@
     "moduleResolution": "NodeNext"
   },
   "include": [
-    "api/**/*.ts",
-    "server/**/*.ts"
+    "apps/stellar-api/api/**/*.ts",
+    "apps/stellar-api/scripts/**/*.ts",
+    "apps/stellar-api/stellar/**/*.ts"
   ]
 }

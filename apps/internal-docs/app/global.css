@@ -1,0 +1,37 @@
+/* Hallmark · macrostructure: Long Document · tone: modern-minimal · anchor hue: emerald */
+@import '../tokens.css';
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+html,
+body {
+  overflow-x: clip;
+}
+
+body {
+  min-height: 100vh;
+  font-family: var(--font-body);
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-style: normal;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}

@@ -1,0 +1,7 @@
+.next/
+.source/
+.vercel/
+node_modules/
+out/
+tsconfig.tsbuildinfo
+.env*

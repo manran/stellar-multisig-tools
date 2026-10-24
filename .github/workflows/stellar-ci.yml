@@ -6,17 +6,13 @@ on:
       - main
   pull_request:
     paths:
-      - 'src/**'
-      - 'server/**'
-      - 'api/**'
+      - 'apps/**'
       - 'scripts/**'
       - 'package.json'
       - 'package-lock.json'
-      - 'vite.config.ts'
       - 'tsconfig.json'
       - 'tsconfig.api.json'
       - 'tsconfig.stellar.json'
-      - 'vercel.json'
       - '.github/workflows/stellar-ci.yml'
 
 jobs:

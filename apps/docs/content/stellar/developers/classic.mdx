@@ -1,0 +1,32 @@
+---
+title: Classic integration
+description: Create semantic Classic payment Requests while keeping Treasury signer authority on Stellar.
+---
+
+For scoped Integration Services, semantic payment creation lets MultiSig Tools construct the exact transaction from current Stellar state instead of making your service own sequence, fee, and XDR mechanics by default.
+
+> **Treasury signer authority stays on Stellar**
+>
+> The Treasury remains the Payment operation source and its current Stellar signers/thresholds remain the authorization authority. An `msi_*` credential can create work only inside configured Treasury scope; it does not supply a Treasury signature.
+
+## Semantic creation
+
+```bash
+curl -sS -X POST https://api-testnet.multisig.tools/stellar/request \
+  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: payroll-test-001" \
+  -d @payment.json
+```
+
+The response is the ordinary Request/Proposal lifecycle used by Human flows.
+
+## Execution ownership
+
+**Managed Classic:** MultiSig Tools supplies a channel account as transaction source, sequence, fee, and submission path. The Treasury still owns the Payment operation and authorization.
+
+**Manage execution myself:** your service owns transaction source/sequence/submission for Treasuries explicitly configured for external execution.
+
+**No silent rewrite:** raw XDR is never silently rewritten into a managed-channel transaction. Managed reconstruction is available for semantic creation because the business intent is explicit.
+
+The managed channel is pre-authorized only for transaction-source authority. It never becomes a Treasury signer.

@@ -1,0 +1,67 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+
+const ui = readFileSync(new URL('../../../web/src/IntegrationAdminApp.tsx', import.meta.url), 'utf8');
+const wizard = readFileSync(new URL('../../../web/src/IntegrationProfileWizard.tsx', import.meta.url), 'utf8');
+const main = readFileSync(new URL('../../../web/src/main.tsx', import.meta.url), 'utf8');
+const shell = readFileSync(new URL('../../../web/src/StellarWorkspaceShell.tsx', import.meta.url), 'utf8');
+const api = readFileSync(new URL('../routes/integration-admin.ts', import.meta.url), 'utf8');
+
+test('Integration admin is an unlinked operator-only runtime surface', () => {
+  assert.match(main, /IntegrationAdminApp/);
+  assert.match(main, /integration-admin/);
+  assert.doesNotMatch(shell, /admin\/integrations|Integration administration/);
+  assert.doesNotMatch(ui, /localStorage|sessionStorage/);
+  assert.match(ui, /shown once/);
+  assert.match(ui, /Rotate MSI credential/);
+  assert.match(ui, /Default Soroban executor/);
+  assert.match(ui, /Webhook delivery/);
+  assert.match(ui, /Webhook URL/);
+  assert.match(ui, /configure_webhook/);
+  assert.match(ui, /Rotate webhook secret/);
+  assert.doesNotMatch(ui, /whsec_\*/);
+  assert.match(ui, /API credential — shown once/);
+  assert.match(ui, /Copy webhook secret/);
+  assert.match(ui, /Advanced configuration/);
+  assert.match(ui, /Managed Classic channels/);
+  assert.match(ui, /details=channels/);
+  assert.match(ui, /Baseline/);
+  assert.match(ui, /Soft limit/);
+  assert.match(ui, /Active leases/);
+  assert.match(ui, /Channel creator/);
+  assert.match(ui, /Low balance/);
+  assert.match(ui, /Capacity exhausted/);
+  assert.match(ui, /No signing secret is exposed here/);
+  assert.match(ui, /IntegrationProfileDetail/);
+  assert.match(wizard, /Define the profile before issuing a credential/);
+  assert.match(wizard, /Classic Treasuries/);
+  assert.match(wizard, /MultiSigTools manages transaction sources, sequence, fees and submission by default/);
+  assert.match(wizard, /Manage execution myself/);
+  assert.match(wizard, /Classic routing/);
+  assert.match(wizard, /Soroban executors/);
+  assert.match(wizard, /setContractExecutor/);
+  assert.match(wizard, /setExecutionManagement/);
+  assert.doesNotMatch(wizard, /Current runtime executor scope is Integration-wide/);
+  assert.match(wizard, /analyzeAccountAuthorization/);
+  assert.match(wizard, /\/api\/contract-interface/);
+  assert.match(wizard, /\/api\/runtime-config/);
+  assert.match(wizard, /On my site/);
+  assert.match(wizard, /Full Headless/);
+  assert.match(wizard, /Create profile & issue MSI/);
+  assert.match(wizard, /buildIntegrationAdminConfiguration/);
+  assert.doesNotMatch(wizard, /mic_/);
+});
+
+test('Integration admin API requires the independent operator bearer secret', () => {
+  assert.match(api, /authenticateIntegrationAdminSecret/);
+  assert.match(api, /Authorization|authorization/);
+  assert.match(api, /configure_webhook/);
+  assert.match(api, /rotate_webhook_secret/);
+  assert.match(api, /configureIntegrationAdminWebhook/);
+  assert.match(api, /rotateIntegrationAdminWebhookSecret/);
+  assert.match(api, /inspectManagedClassicChannels/);
+  assert.match(api, /details/);
+  assert.match(api, /runtimeClassicManagedChannelStore/);
+  assert.doesNotMatch(api, /publicCors/);
+});

@@ -10,15 +10,15 @@ import {
   nativeToScVal,
   xdr,
 } from '@stellar/stellar-sdk/base';
-import { loadAccount, loadNetworkParameters, submitTransactionXdr } from '../src/stellar/horizon';
+import { loadAccount, loadNetworkParameters, submitTransactionXdr } from '../packages/stellar-core/src/horizon';
 import {
   analyzeSorobanGAccountAuthorization,
   mergeSorobanGAccountSignature,
   sorobanAuthorizationPreimageXdr,
-} from '../src/stellar/sorobanAuthorization';
-import { createSorobanAuthorizationPlan } from '../src/stellar/sorobanAuthorizationPlan';
-import { createSorobanIntent, materializeSorobanIntent } from '../src/stellar/sorobanIntent';
-import { prepareEnforcedSorobanTransaction, simulateSorobanTransaction } from '../src/stellar/sorobanRpc';
+} from '../packages/stellar-core/src/sorobanAuthorization';
+import { createSorobanAuthorizationPlan } from '../packages/stellar-core/src/sorobanAuthorizationPlan';
+import { createSorobanIntent, materializeSorobanIntent } from '../packages/stellar-core/src/sorobanIntent';
+import { prepareEnforcedSorobanTransaction, simulateSorobanTransaction } from '../packages/stellar-core/src/sorobanRpc';
 
 const network = 'testnet' as const;
 function assert(condition: unknown, message: string): asserts condition {

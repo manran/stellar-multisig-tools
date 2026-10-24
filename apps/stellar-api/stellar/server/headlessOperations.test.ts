@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { HEADLESS_OPERATION_CATALOG } from '../../../../packages/stellar-core/src/headlessOperations.js';
+
+test('headless operation ids are unique and explicitly versioned', () => {
+  const ids = HEADLESS_OPERATION_CATALOG.map((operation) => operation.id);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(HEADLESS_OPERATION_CATALOG.every((operation) => operation.version === 1));
+});
+
+test('runtime policy and contract vertical slice are available to every transport consumer', () => {
+  const byId = new Map(HEADLESS_OPERATION_CATALOG.map((operation) => [operation.id, operation]));
+  assert.equal(byId.get('runtime.config.inspect')?.path, '/runtime-config');
+  assert.equal(byId.get('runtime.config.inspect')?.access, 'public');
+  assert.equal(byId.get('integration.testnet.create')?.path, '/integration-testnet');
+  assert.equal(byId.get('integration.testnet.create')?.access, 'public');
+  assert.equal(byId.get('integration.testnet.create')?.effect, 'private-state');
+  assert.equal(byId.get('contract.interface.inspect')?.access, 'public');
+  assert.equal(byId.get('contract.intent.create')?.path, '/intent');
+  assert.equal(byId.get('contract.intent.create')?.access, 'principal:write');
+  assert.equal(byId.get('contract.intent.inspect')?.access, 'principal:read');
+  assert.equal(byId.get('contract.intent.contribute')?.access, 'principal:sign');
+  assert.equal(byId.get('integration.intent.browser.issue')?.access, 'integration:write');
+  assert.equal(byId.get('integration.intent.browser.issue')?.effect, 'private-state');
+  assert.equal(byId.get('integration.intent.browser.inspect')?.access, 'browser:read');
+  assert.equal(byId.get('integration.intent.browser.contribute')?.access, 'browser:sign');
+  assert.equal(byId.get('contract.intent.execution.prepare')?.method, 'PUT');
+  assert.equal(byId.get('contract.intent.execution.prepare')?.effect, 'none');
+  assert.equal(byId.get('contract.intent.execution.reconcile')?.method, 'PUT');
+  assert.equal(byId.get('contract.intent.execution.reconcile')?.access, 'principal:write');
+  assert.equal(byId.get('contract.intent.execution.reconcile')?.effect, 'coordination-state');
+  assert.equal(byId.get('integration.intent.execution.reconcile')?.access, 'integration:write');
+  assert.equal(byId.get('contract.intent.replan')?.method, 'PUT');
+  assert.equal(byId.get('contract.intent.replan')?.access, 'principal:write');
+  assert.equal(byId.get('contract.intent.replan')?.effect, 'coordination-state');
+  assert.equal(byId.get('contract.intent.cancel')?.method, 'PUT');
+  assert.equal(byId.get('contract.intent.cancel')?.access, 'principal:write');
+  assert.equal(byId.get('contract.intent.cancel')?.effect, 'coordination-state');
+  assert.equal(byId.get('integration.intent.cancel')?.access, 'integration:write');
+  assert.equal(byId.get('contract.call.build')?.effect, 'none');
+  assert.equal(byId.get('contract.call.prepare')?.path, '/contract-prepare');
+  assert.equal(byId.has('contract.authorization.create'), false);
+  assert.equal(byId.get('contract.workspace.list')?.access, 'principal:read');
+  assert.equal(byId.get('contract.workspace.keep')?.access, 'principal:write');
+  assert.equal(byId.get('contract.workspace.forget')?.path, '/contracts');
+  assert.equal(byId.get('classic.payment.prepare')?.path, '/payment-prepare');
+  assert.equal(byId.get('classic.account.create.prepare')?.path, '/account-create-prepare');
+  assert.equal(byId.get('integration.execution.inspect')?.path, '/integration-execution');
+  assert.equal(byId.get('integration.execution.inspect')?.access, 'integration:read');
+  assert.equal(byId.get('integration.execution.inspect')?.effect, 'none');
+  assert.equal(byId.get('integration.classic.account.create.prepare')?.access, 'integration:write');
+  assert.equal(byId.get('integration.request.create')?.access, 'integration:write');
+  assert.equal(byId.get('integration.request.submit')?.access, 'integration:write');
+  assert.equal(byId.get('integration.request.submit')?.effect, 'network-submit');
+});

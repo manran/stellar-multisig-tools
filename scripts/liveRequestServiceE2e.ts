@@ -6,14 +6,14 @@ import {
   Operation,
   TransactionBuilder,
 } from '@stellar/stellar-sdk';
-import { blobSigningRequestStore } from '../server/blobRequestStore';
+import { blobSigningRequestStore } from '../apps/stellar-api/stellar/server/blobRequestStore';
 import {
   contributeSigningRequest,
   createSigningRequest,
   getSigningRequest,
   submitSigningRequest,
-} from '../server/requestService';
-import { loadAccount, loadNetworkParameters } from '../src/stellar/horizon';
+} from '../apps/stellar-api/stellar/server/requestService';
+import { loadAccount, loadNetworkParameters } from '../packages/stellar-core/src/horizon';
 
 const network = 'testnet' as const;
 const horizonUrl = 'https://horizon-testnet.stellar.org';

@@ -1,0 +1,21 @@
+---
+title: Create a multi-party transaction
+description: Combine payments controlled by different Stellar source accounts into one atomic transaction.
+---
+
+A multi-party transaction combines payments controlled by different Stellar source accounts while preserving each account's independent authorization.
+
+1. **Open New → Multi-party transaction.** Provide rows containing source, destination, amount, and asset. At least two independent source accounts are required.
+2. **Continue to Review.** MultiSig Tools resolves names, assets, balances, and destination requirements first.
+3. **Review the whole atomic action.** This is one transaction, not several loosely coordinated payment requests.
+4. **Collect the required signatures.** Authorization is evaluated separately for the transaction account and every operation source.
+
+> **One transaction, several authorities**
+>
+> Multi-party does not create a new MultiSig Tools approval system. It uses Stellar's operation-source model and the existing authorization analysis for every participating account.
+
+## Technical details
+
+Each payment operation carries its own Stellar `source`. The transaction source supplies the sequence number and must satisfy transaction-level authorization in addition to operation-source requirements.
+
+All operations are atomic.
