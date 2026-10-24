@@ -134,15 +134,12 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 md:h-16">
             <div className="flex items-center gap-2">
-              <div className="relative flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/20 text-white border border-white/10">
-                {/* Custom MultiSig Logo: A shield with 3 dots representing multiple signers */}
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                  <circle cx="12" cy="11" r="1.5" fill="currentColor" />
-                  <circle cx="7.5" cy="11" r="1.5" fill="currentColor" />
-                  <circle cx="16.5" cy="11" r="1.5" fill="currentColor" />
-                </svg>
-              </div>
+              <img
+                src="/brand/mst-app-icon.svg"
+                alt=""
+                aria-hidden="true"
+                className="h-8 w-8 shrink-0 rounded-xl md:h-9 md:w-9"
+              />
               <h1 className="text-lg md:text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-300">
                 MultiSig Tools
               </h1>
