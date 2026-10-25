@@ -9,6 +9,9 @@ export const metadata: Metadata = {
     template: '%s | MultiSig Tools',
   },
   description: 'Documentation for MultiSig Tools.',
+  icons: {
+    icon: '/brand/mst-favicon.svg',
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

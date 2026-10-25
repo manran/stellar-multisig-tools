@@ -9,6 +9,9 @@ export const metadata: Metadata = {
     template: '%s | MultiSig Tools Internal',
   },
   description: 'Private engineering and operations documentation for MultiSig Tools.',
+  icons: {
+    icon: '/brand/mst-favicon.svg',
+  },
   robots: {
     index: false,
     follow: false,
