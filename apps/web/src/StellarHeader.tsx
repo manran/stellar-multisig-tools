@@ -17,7 +17,7 @@ export default function StellarHeader({ landing = false, demo = false }: Props) 
     <header className="mst-header">
       <div className="mst-header__inner">
         <a href={stellarHref('')} className="mst-brand" aria-label={brandLabel}>
-          <MultiSigBrandMark className="h-9 w-10 shrink-0" />
+          <MultiSigBrandMark className="h-9 w-14 shrink-0" />
           <span className="mst-brand__name"><span className="mst-brand__accent">MultiSig</span> Tools</span>
         </a>
 
