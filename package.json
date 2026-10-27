@@ -5,6 +5,8 @@
   "type": "module",
   "workspaces": [
     "apps/stellar-api",
+    "apps/directory",
+    "apps/stellar-web",
     "apps/web",
     "packages/stellar-core"
   ],
