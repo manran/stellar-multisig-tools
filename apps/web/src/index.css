@@ -95,11 +95,52 @@ html.stellar-ui .opacity-70 { opacity: 0.84; }
 
 /* Network theme layer.
 
-   Mainnet uses the native emerald interaction palette. On Testnet, interactive
-   controls remap that same semantic palette to sky. Components therefore use
-   one set of interaction classes and the page network switches the theme in a
-   single place. Success, warning, and danger surfaces are intentionally not
-   remapped because they describe outcomes rather than network context. */
+   Mainnet uses the MST teal-and-gold brand palette. Testnet keeps its existing
+   sky environment palette. Components use one interaction vocabulary while
+   deployment network selects the palette. */
+html.stellar-ui [data-stellar-network="public"] {
+  --color-accent: #075e59;
+  --color-accent-hover: #043c39;
+  --color-accent-ink: #ffffff;
+  --color-focus: #d8a23a;
+
+  --color-emerald-50: #eff8f7;
+  --color-emerald-100: #d7eeeb;
+  --color-emerald-200: #aee0da;
+  --color-emerald-300: #78c9c0;
+  --color-emerald-400: #42ada3;
+  --color-emerald-500: #16877f;
+  --color-emerald-600: #0b706a;
+  --color-emerald-700: #075e59;
+  --color-emerald-800: #043c39;
+  --color-emerald-900: #043330;
+  --color-emerald-950: #021f1d;
+
+  --color-violet-50: var(--color-emerald-50);
+  --color-violet-100: var(--color-emerald-100);
+  --color-violet-200: var(--color-emerald-200);
+  --color-violet-300: var(--color-emerald-300);
+  --color-violet-400: var(--color-emerald-400);
+  --color-violet-500: var(--color-emerald-500);
+  --color-violet-600: var(--color-emerald-600);
+  --color-violet-700: var(--color-emerald-700);
+  --color-violet-800: var(--color-emerald-800);
+  --color-violet-900: var(--color-emerald-900);
+  --color-violet-950: var(--color-emerald-950);
+}
+
+.dark [data-stellar-network="public"] {
+  --color-accent: #78c9c0;
+  --color-accent-hover: #aee0da;
+  --color-accent-ink: #021f1d;
+  --color-focus: #d8a23a;
+}
+
+html.stellar-ui [data-stellar-network="public"] .mst-brand__accent,
+html.stellar-ui [data-stellar-network="public"] .mst-kicker {
+  color: #d8a23a;
+}
+
 html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textarea, select, [role="button"]) {
   --color-emerald-50: var(--color-sky-50);
   --color-emerald-100: var(--color-sky-100);
