@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import type { MouseEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
@@ -21,7 +22,7 @@ function useDragScroll() {
   const startX = useRef(0);
   const scrollLeft = useRef(0);
 
-  const onMouseDown = (e: React.MouseEvent) => {
+  const onMouseDown = (e: MouseEvent) => {
     if (!ref.current) return;
     isDown.current = true;
     isDragging.current = false;
@@ -40,7 +41,7 @@ function useDragScroll() {
     if (ref.current) ref.current.style.cursor = 'grab';
   };
 
-  const onMouseMove = (e: React.MouseEvent) => {
+  const onMouseMove = (e: MouseEvent) => {
     if (!isDown.current || !ref.current) return;
     e.preventDefault();
     const x = e.pageX - ref.current.offsetLeft;
@@ -51,7 +52,7 @@ function useDragScroll() {
     ref.current.scrollLeft = scrollLeft.current - walk;
   };
 
-  const onClickCapture = (e: React.MouseEvent) => {
+  const onClickCapture = (e: MouseEvent) => {
     if (isDragging.current) {
       e.stopPropagation();
       e.preventDefault();
