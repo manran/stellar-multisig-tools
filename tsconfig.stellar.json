@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "include": [
-    "apps/web/src/main.tsx",
-    "apps/web/src/stellar/**/*.ts"
+    "apps/stellar-web/src/main.tsx",
+    "apps/stellar-web/src/stellar/**/*.ts"
   ]
 }
