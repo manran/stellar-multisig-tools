@@ -6,6 +6,7 @@ import type { PrivateNoteRevision } from './privateNote.js';
 import type { SourceAnalysis } from './transactionReviewAnalysis.js';
 import type { SorobanEffectsDiff } from './sorobanEffects.js';
 import type { StellarNetwork } from './types.js';
+import type { ReusableTemplateRef } from './reusableTemplate.js';
 
 export type SigningRequestStatus =
   | 'awaiting_signatures'
@@ -65,6 +66,7 @@ export interface SigningRequestSnapshot {
   submission?: SigningRequestSubmission;
   execution?: RequestExecution;
   sorobanOrigin?: SorobanRequestOrigin;
+  template?: ReusableTemplateRef;
 }
 
 export interface SigningRequestAccess {

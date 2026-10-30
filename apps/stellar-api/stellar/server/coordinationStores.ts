@@ -10,6 +10,8 @@ import { createPostgresSorobanIntentStore } from '../db/postgresSorobanIntentSto
 import { createPostgresSorobanBrowserAuthorizationStore } from '../db/postgresSorobanBrowserAuthorizationStore.js';
 import { createPostgresClassicManagedChannelStore } from '../db/postgresClassicManagedChannelStore.js';
 import { createPostgresClassicManagedChannelCreatorMonitorStore } from '../db/postgresClassicManagedChannelCreatorMonitorStore.js';
+import type { ReusableTemplateStore } from './reusableTemplateStore.js';
+import { createPostgresReusableTemplateStore } from '../db/postgresReusableTemplateStore.js';
 
 export type CoordinationStorageMode = 'blob' | 'postgres';
 
@@ -36,6 +38,7 @@ let postgresIntentStore: SorobanIntentStore | null = null;
 let postgresBrowserAuthorizationStore: SorobanBrowserAuthorizationStore | null = null;
 let postgresClassicManagedChannelStore: ClassicManagedChannelLeaseStore | null = null;
 let postgresClassicManagedChannelCreatorMonitorStore: ClassicManagedChannelCreatorMonitorStore | null = null;
+let postgresReusableTemplateStore: ReusableTemplateStore | null = null;
 
 function overrideBoundMethod<T extends object>(
   target: T,
@@ -121,4 +124,22 @@ export function runtimeClassicManagedChannelCreatorMonitorStore(
   if (mode !== 'postgres') throw new ClassicManagedExecutionStorageUnavailableError();
   postgresClassicManagedChannelCreatorMonitorStore ??= createPostgresClassicManagedChannelCreatorMonitorStore();
   return postgresClassicManagedChannelCreatorMonitorStore;
+}
+
+
+export class ReusableTemplateStorageUnavailableError extends Error {
+  readonly status = 503;
+  readonly code = 'reusable_template_storage_unavailable';
+  constructor() {
+    super('Reusable Templates require PostgreSQL coordination storage.');
+    this.name = 'ReusableTemplateStorageUnavailableError';
+  }
+}
+
+export function runtimeReusableTemplateStore(
+  mode: CoordinationStorageMode = coordinationStorageMode(),
+): ReusableTemplateStore {
+  if (mode !== 'postgres') throw new ReusableTemplateStorageUnavailableError();
+  postgresReusableTemplateStore ??= createPostgresReusableTemplateStore();
+  return postgresReusableTemplateStore;
 }
