@@ -3,8 +3,10 @@ import { blobAuthStore } from '../server/blobAuthStore.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
 import {
   ClassicManagedExecutionStorageUnavailableError,
+  ReusableTemplateStorageUnavailableError,
   runtimeClassicManagedChannelCreatorMonitorStore,
   runtimeClassicManagedChannelStore,
+  runtimeReusableTemplateStore,
   runtimeSigningRequestStore,
   runtimeSorobanIntentStore,
   withSigningRequestCreate,
@@ -67,6 +69,7 @@ import type { StellarNetwork } from '../../../../packages/stellar-core/src/types
 import { loadTransactionSourceAnalyses } from '../../../../packages/stellar-core/src/transactionReviewAnalysis.js';
 import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 import { transactionHashHex } from '../../../../packages/stellar-core/src/signatureMerge.js';
+import { ReusableTemplateServiceError, resolveReusableTemplateReference } from '../server/reusableTemplateService.js';
 import {
   enforcePreparedSorobanTransaction,
   SorobanSimulationError,
@@ -147,6 +150,8 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof ClassicManagedChannelServiceError
     || cause instanceof ClassicManagedChannelConfigurationError
     || cause instanceof ClassicManagedExecutionStorageUnavailableError
+    || cause instanceof ReusableTemplateServiceError
+    || cause instanceof ReusableTemplateStorageUnavailableError
   ) {
     return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
   }
@@ -744,6 +749,9 @@ export async function POST(request: Request): Promise<Response> {
     const machineCaller = await machineCallerFromRequest(blobAgentCredentialStore, request);
     const integrationCredential = machineCaller?.kind === 'service' ? machineCaller.credential : null;
     const agentCredential = machineCaller?.kind === 'agent' ? machineCaller.credential : null;
+    if (machineCaller && body.template !== undefined) {
+      throw new SigningRequestServiceError('Reusable Template linkage is available only to the Human proposal workflow in this version.', 400, 'template_linkage_unsupported');
+    }
     if (integrationCredential) {
       if (body.sorobanIntentId !== undefined) {
         throw new SigningRequestServiceError('Soroban Intent Proposal linkage is available only through verified Human workflow handoff in this version.', 400, 'soroban_origin_unsupported');
@@ -924,6 +932,14 @@ export async function POST(request: Request): Promise<Response> {
         'request_creator_identity_required',
       );
     }
+    const templateRef = body.template !== undefined
+      ? await resolveReusableTemplateReference(
+          runtimeReusableTemplateStore(),
+          creatorSession.address,
+          requestNetwork,
+          body.template,
+        )
+      : undefined;
     const accountCache = new Map<string, ReturnType<typeof loadAccount>>();
     const accountLoader: typeof loadAccount = (accountId, network) => {
       const key = `${network}:${accountId}`;
@@ -966,6 +982,7 @@ export async function POST(request: Request): Promise<Response> {
         return signingRequestStore.createRequest({
           ...stored,
           creatorAddress: creatorSession.address,
+          ...(templateRef ? { templateRef } : {}),
           ...(privateNoteText ? { initialPrivateNote: initialPrivateNote(privateNoteText, stored.createdAt) } : {}),
           ...(privateCommitment ? { privateCommitment: { ...privateCommitment, createdAt: stored.createdAt } } : {}),
         });

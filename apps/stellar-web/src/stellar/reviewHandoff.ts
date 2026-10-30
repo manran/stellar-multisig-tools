@@ -2,6 +2,7 @@ import type { PrivateCommitmentDraft } from '../../../../packages/stellar-core/s
 import type { AccountSigningIntent } from './accountSigningFlow.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import type { SorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
+import type { ReusableTemplateRef } from '../../../../packages/stellar-core/src/reusableTemplate.js';
 
 const REVIEW_HANDOFF_XDR_KEY = 'multisig-tools.stellar.review-handoff.xdr';
 const REVIEW_HANDOFF_NETWORK_KEY = 'multisig-tools.stellar.review-handoff.network';
@@ -12,6 +13,7 @@ const ACCOUNT_SIGNING_INTENT_HANDOFF_KEY = 'multisig-tools.stellar.account-signi
 const SOROBAN_EFFECTS_HANDOFF_KEY = 'multisig-tools.stellar.soroban-effects-handoff';
 const SOROBAN_TRANSACTION_HASH_HANDOFF_KEY = 'multisig-tools.stellar.soroban-transaction-hash-handoff';
 const SOROBAN_INTENT_ID_HANDOFF_KEY = 'multisig-tools.stellar.soroban-intent-id-handoff';
+const REUSABLE_TEMPLATE_HANDOFF_KEY = 'multisig-tools.stellar.reusable-template-handoff';
 const REVIEW_HISTORY_STATE_KEY = '__multisigToolsReviewHandoff';
 
 export interface ReviewHandoff {
@@ -24,6 +26,7 @@ export interface ReviewHandoff {
   sorobanEffectsBaseline: SorobanEffectsSnapshot | null;
   sorobanTransactionHash: string | null;
   sorobanIntentId?: string | null;
+  templateRef?: ReusableTemplateRef | null;
 }
 
 export interface ReviewHandoffWrite {
@@ -36,6 +39,7 @@ export interface ReviewHandoffWrite {
   sorobanEffectsBaseline?: SorobanEffectsSnapshot | null;
   sorobanTransactionHash?: string | null;
   sorobanIntentId?: string | null;
+  templateRef?: ReusableTemplateRef | null;
 }
 
 export interface ReviewHistory {
@@ -80,6 +84,23 @@ function parseSorobanEffectsValue(value: unknown): SorobanEffectsSnapshot | null
   return record as SorobanEffectsSnapshot;
 }
 
+function parseTemplateRefValue(value: unknown): ReusableTemplateRef | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Partial<ReusableTemplateRef>;
+  if (typeof record.id !== 'string' || !/^tpl_[A-Za-z0-9_-]{16}$/.test(record.id)) return null;
+  if (typeof record.version !== 'number' || !Number.isInteger(record.version) || record.version < 1) return null;
+  return { id: record.id, version: record.version };
+}
+
+function parseTemplateRef(raw: string | null): ReusableTemplateRef | null {
+  if (!raw) return null;
+  try {
+    return parseTemplateRefValue(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
 function parseSorobanEffects(raw: string | null): SorobanEffectsSnapshot | null {
   if (!raw) return null;
   try {
@@ -116,6 +137,10 @@ function parseHistoryHandoff(value: unknown): ReviewHandoff | null {
     ...(typeof record.sorobanIntentId === 'string' && /^[0-9A-HJKMNP-TV-Z]{16}$/i.test(record.sorobanIntentId)
       ? { sorobanIntentId: record.sorobanIntentId.toUpperCase() }
       : {}),
+    ...(() => {
+      const templateRef = parseTemplateRefValue(record.templateRef);
+      return templateRef ? { templateRef } : {};
+    })(),
   };
 }
 
@@ -157,6 +182,7 @@ export function clearReviewHandoff(storage: Pick<Storage, 'removeItem'>): void {
   storage.removeItem(SOROBAN_EFFECTS_HANDOFF_KEY);
   storage.removeItem(SOROBAN_TRANSACTION_HASH_HANDOFF_KEY);
   storage.removeItem(SOROBAN_INTENT_ID_HANDOFF_KEY);
+  storage.removeItem(REUSABLE_TEMPLATE_HANDOFF_KEY);
 }
 
 export function writeReviewHandoff(storage: ReviewHandoffStorage, handoff: ReviewHandoffWrite): void {
@@ -176,6 +202,7 @@ export function writeReviewHandoff(storage: ReviewHandoffStorage, handoff: Revie
   writeOptional(storage, SOROBAN_EFFECTS_HANDOFF_KEY, handoff.sorobanEffectsBaseline ? JSON.stringify(handoff.sorobanEffectsBaseline) : null);
   writeOptional(storage, SOROBAN_TRANSACTION_HASH_HANDOFF_KEY, handoff.sorobanTransactionHash?.trim().toLowerCase() || null);
   writeOptional(storage, SOROBAN_INTENT_ID_HANDOFF_KEY, handoff.sorobanIntentId?.trim().toUpperCase() || null);
+  writeOptional(storage, REUSABLE_TEMPLATE_HANDOFF_KEY, handoff.templateRef ? JSON.stringify(handoff.templateRef) : null);
 }
 
 export function takeReviewHandoff(storage: ReviewHandoffStorage, history: ReviewHistory | null = browserReviewHistory()): ReviewHandoff {
@@ -201,6 +228,10 @@ export function takeReviewHandoff(storage: ReviewHandoffStorage, history: Review
     ...(() => {
       const value = storage.getItem(SOROBAN_INTENT_ID_HANDOFF_KEY)?.trim().toUpperCase() ?? '';
       return /^[0-9A-HJKMNP-TV-Z]{16}$/.test(value) ? { sorobanIntentId: value } : {};
+    })(),
+    ...(() => {
+      const templateRef = parseTemplateRef(storage.getItem(REUSABLE_TEMPLATE_HANDOFF_KEY));
+      return templateRef ? { templateRef } : {};
     })(),
   };
   clearReviewHandoff(storage);

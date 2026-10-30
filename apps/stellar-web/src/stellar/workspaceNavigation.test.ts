@@ -40,14 +40,14 @@ test('stellar runtime hosts canonicalize legacy /stellar URLs at startup', () =>
   );
 });
 
-test('directory-host hrefs use the /stellar prefix and canonical paths', () => {
+test('standalone Stellar navigation never reintroduces the retired /stellar prefix', () => {
   assert.equal(
     stellarHrefForLocation('/request', 'https://multisig.tools/stellar/inbox?view=ready'),
-    'https://multisig.tools/stellar/s',
+    'https://multisig.tools/s',
   );
   assert.equal(
     stellarHrefForLocation('/new/import', 'https://multisig.tools/stellar/inbox'),
-    'https://multisig.tools/stellar/new/import',
+    'https://multisig.tools/new/import',
   );
 });
 

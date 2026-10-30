@@ -8,6 +8,7 @@ import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/
 import type { SorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import type { SorobanRequestOrigin } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import type { ReusableTemplateRef } from '../../../../packages/stellar-core/src/reusableTemplate.js';
 
 export interface StoredSigningRequest {
   version: 1;
@@ -39,6 +40,8 @@ export interface StoredSigningRequest {
   sorobanEffectsBaseline?: SorobanEffectsSnapshot;
   /** Server-verified link to the exact Soroban Intent execution preparation that produced this transaction. */
   sorobanOrigin?: SorobanRequestOrigin;
+  /** Immutable reusable-template version used to prepare this Proposal, when applicable. */
+  templateRef?: ReusableTemplateRef;
 }
 
 export interface StoredAcceptedSignature {

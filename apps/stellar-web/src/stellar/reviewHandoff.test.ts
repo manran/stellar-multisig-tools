@@ -160,3 +160,17 @@ test('history handoff remains compatible when account signing intent predates th
   };
   assert.equal(takeReviewHandoff(storage, history).accountSigningIntent, null);
 });
+
+
+test('review handoff preserves a reusable template version reference', () => {
+  const storage = new MemoryStorage();
+  writeReviewHandoff(storage, {
+    xdr: 'AAAA',
+    network: 'testnet',
+    templateRef: { id: 'tpl_abcdefghijklmnop', version: 3 },
+  });
+  assert.deepEqual(takeReviewHandoff(storage, null).templateRef, {
+    id: 'tpl_abcdefghijklmnop',
+    version: 3,
+  });
+});

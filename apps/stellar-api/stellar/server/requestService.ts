@@ -748,6 +748,7 @@ async function buildSnapshot(
     contributionCount: merged.contributionCount,
     signatureCount: merged.signatureCount,
     ...(request.sorobanOrigin ? { sorobanOrigin: request.sorobanOrigin } : {}),
+    ...(request.templateRef ? { template: request.templateRef } : {}),
     ...(request.executionPolicy?.mode === 'external'
       ? { execution: {
           mode: 'external' as const,

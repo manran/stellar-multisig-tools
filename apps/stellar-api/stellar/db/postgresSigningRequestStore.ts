@@ -36,6 +36,8 @@ interface RequestRow {
   capability_hash: string | null;
   soroban_effects_baseline: SorobanEffectsSnapshot | null;
   soroban_origin: SorobanRequestOrigin | null;
+  reusable_template_id: string | null;
+  reusable_template_version: number | null;
   has_private_data: boolean;
 }
 
@@ -57,7 +59,8 @@ async function readRequest(
     `SELECT id, network, base_xdr, transaction_hash, created_at, expires_at,
             creator_address, creator_actor, integration_context, instruction_digest,
             execution_policy, discovery_signer_keys, capability_hash,
-            soroban_effects_baseline, soroban_origin, has_private_data
+            soroban_effects_baseline, soroban_origin,
+            reusable_template_id, reusable_template_version, has_private_data
        FROM mst_stellar.classic_requests
       WHERE id = $1`,
     [id],
@@ -88,6 +91,9 @@ async function readRequest(
     ...(privateData?.privateCommitment ? { privateCommitment: privateData.privateCommitment } : {}),
     ...(row.soroban_effects_baseline ? { sorobanEffectsBaseline: row.soroban_effects_baseline } : {}),
     ...(row.soroban_origin ? { sorobanOrigin: row.soroban_origin } : {}),
+    ...(row.reusable_template_id && row.reusable_template_version
+      ? { templateRef: { id: row.reusable_template_id, version: row.reusable_template_version } }
+      : {}),
   };
 }
 
@@ -207,11 +213,12 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
            id, network, base_xdr, transaction_hash, created_at, expires_at,
            creator_address, creator_actor, integration_service_id, integration_context,
            instruction_digest, execution_policy, discovery_signer_keys, capability_hash,
-           soroban_effects_baseline, soroban_origin, has_private_data
+           soroban_effects_baseline, soroban_origin,
+           reusable_template_id, reusable_template_version, has_private_data
          ) VALUES (
            $1, $2, $3, $4, $5, $6,
            $7, $8, $9, $10, $11, $12, $13, $14,
-           $15, $16, $17
+           $15, $16, $17, $18, $19
          )`,
         [
           request.id,
@@ -230,6 +237,8 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
           request.capabilityHash ?? null,
           request.sorobanEffectsBaseline ?? null,
           request.sorobanOrigin ?? null,
+          request.templateRef?.id ?? null,
+          request.templateRef?.version ?? null,
           Boolean(request.initialPrivateNote || request.privateCommitment),
         ],
       );

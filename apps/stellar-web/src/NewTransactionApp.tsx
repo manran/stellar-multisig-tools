@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Braces, Clock3, FileInput, KeyRound, Send, UserPlus, UsersRound } from 'lucide-react';
 import PaymentComposer from './PaymentComposer';
@@ -13,6 +13,8 @@ import { isValidStellarAccountId } from '../../../packages/stellar-core/src/hori
 import { resolveStellarNetwork } from './stellar/networkPreference';
 import { inspectTransactionXdr } from '../../../packages/stellar-core/src/transactionXdr';
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
+import type { ReusableTemplateSummary } from '../../../packages/stellar-core/src/reusableTemplate';
+import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
 import { navigateWorkspace, stellarHref, stellarHrefWithSearch } from './workspaceNavigation';
 import { parseTreasuryRoute } from './treasuryNavigation';
 
@@ -38,7 +40,8 @@ function ChoiceRow({ href, icon, title, description, network, badge }: { href: s
 }
 
 function NewTransactionChoices() {
-  const { sessionNetwork } = useStellarWallet();
+  const { sessionNetwork, sessionAddress, privateUnlocked } = useStellarWallet();
+  const [templates, setTemplates] = useState<ReusableTemplateSummary[]>([]);
   const route = parseTreasuryRoute(window.location.search);
   const proposalAccount = isValidStellarAccountId(route.accountId) ? route.accountId : '';
   const proposalNetwork = resolveStellarNetwork(route.network, sessionNetwork);
@@ -48,6 +51,28 @@ function NewTransactionChoices() {
     ? 'text-sky-700 dark:text-sky-300'
     : 'text-emerald-700 dark:text-emerald-300';
 
+  useEffect(() => {
+    if (!privateUnlocked || !sessionAddress) {
+      setTemplates([]);
+      return;
+    }
+    const controller = new AbortController();
+    void fetch(`/api/templates?network=${proposalNetwork}`, {
+      headers: privateSessionAddressHeaders(sessionAddress),
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const body = await response.json() as { templates?: ReusableTemplateSummary[] };
+        return response.ok && Array.isArray(body.templates) ? body.templates : [];
+      })
+      .then((items) => setTemplates(items))
+      .catch(() => {
+        if (!controller.signal.aborted) setTemplates([]);
+      });
+    return () => controller.abort();
+  }, [privateUnlocked, sessionAddress, proposalNetwork]);
+
   return (
     <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
       <div className="mx-auto max-w-5xl">
@@ -56,6 +81,36 @@ function NewTransactionChoices() {
           <p className="mt-1 max-w-2xl text-sm leading-6 text-neutral-600 dark:text-neutral-300">Start with the action you want to take. Every proposal goes to Review before anyone signs or submits it.</p>
           {proposalAccount && <div className="mt-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400">New proposal for <span className="font-mono">{proposalAccount}</span></div>}
         </div>
+
+        {templates.length > 0 && (
+          <section className="mt-7" aria-labelledby="saved-templates">
+            <div id="saved-templates" className="text-sm font-bold">Templates</div>
+            <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Start from a setup you use repeatedly, then enter this proposal's amounts and context.</p>
+            <div className="mst-work-list mt-3">
+              {templates.map((template) => (
+                <div key={template.id} className="mst-work-row">
+                  <div>
+                    <div className={'mst-work-row__meta ' + accentClass}>{template.kind === 'batch_payment' ? 'Batch payment' : 'Payment'}</div>
+                    <h2 className="mst-work-row__title">{template.name}</h2>
+                    <p className="mst-work-row__copy">{template.definition.recipients.length === 1
+                      ? 'Treasury, recipient, asset, and signing window are ready.'
+                      : `${template.definition.recipients.length} recipients, assets, treasury, and signing window are ready.`}</p>
+                  </div>
+                  <a
+                    href={stellarHrefWithSearch('/new/payment', {
+                      fresh: '1',
+                      template: template.id,
+                      network: proposalNetwork,
+                    })}
+                    className="mst-action-primary"
+                  >
+                    Use template <ArrowRight className="h-4 w-4" />
+                  </a>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="mt-7" aria-labelledby="primary-action">
           <div id="primary-action" className="text-sm font-bold">Most common</div>

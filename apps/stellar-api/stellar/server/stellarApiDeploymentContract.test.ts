@@ -25,6 +25,7 @@ const apiFiles = [
   'request.ts',
   'runtime-config.ts',
   'stellar-toml.ts',
+  'templates.ts',
   'treasuries.ts',
   'treasury-box.ts',
 ] as const;

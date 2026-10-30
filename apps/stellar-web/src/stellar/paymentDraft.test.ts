@@ -27,6 +27,7 @@ test('payment drafts round-trip one or many recipients in one unified shape', ()
     privateNote: 'internal approval context',
     addOnChainProof: false,
     signingWindowSeconds: 86400,
+    templateRef: { id: 'tpl_abcdefghijklmnop', version: 2, name: 'Pay ACME' },
   };
   savePaymentDraft(storage, owner, 'public', draft);
   assert.deepEqual(loadPaymentDraft(storage, owner, 'public'), draft);
