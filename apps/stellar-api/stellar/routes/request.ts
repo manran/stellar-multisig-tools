@@ -69,6 +69,7 @@ import type { StellarNetwork } from '../../../../packages/stellar-core/src/types
 import { loadTransactionSourceAnalyses } from '../../../../packages/stellar-core/src/transactionReviewAnalysis.js';
 import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 import { transactionHashHex } from '../../../../packages/stellar-core/src/signatureMerge.js';
+import { assignSigningRequest, RequestAssignmentServiceError } from '../server/requestAssignmentService.js';
 import { ReusableTemplateServiceError, resolveReusableTemplateReference } from '../server/reusableTemplateService.js';
 import {
   enforcePreparedSorobanTransaction,
@@ -152,6 +153,7 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof ClassicManagedExecutionStorageUnavailableError
     || cause instanceof ReusableTemplateServiceError
     || cause instanceof ReusableTemplateStorageUnavailableError
+    || cause instanceof RequestAssignmentServiceError
   ) {
     return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
   }
@@ -531,6 +533,14 @@ function initialPrivateNote(text: string, createdAt: string): PrivateNoteRevisio
   };
 }
 
+async function requestCoordination(requestId: string) {
+  return {
+    assignments: signingRequestStore.listRequestAssignments
+      ? await signingRequestStore.listRequestAssignments(requestId)
+      : [],
+  };
+}
+
 async function viewerDeclined(requestId: string, actorAddress?: string): Promise<boolean> {
   if (!actorAddress || !signingRequestStore.listActivityEvents) return false;
   const events = await signingRequestStore.listActivityEvents(requestId);
@@ -721,6 +731,7 @@ export async function GET(request: Request): Promise<Response> {
     }
     let privateNote = await privateNotePromise;
     if ((access.mode === 'agent' && !activityBound) || access.mode === 'service') privateNote = undefined;
+    const coordination = await requestCoordination(access.id);
     return noStoreJson({
       request: snapshot,
       access: {
@@ -734,6 +745,7 @@ export async function GET(request: Request): Promise<Response> {
         ...(access.privateCommitment ? { privateCommitment: access.privateCommitment } : {}),
       },
       ...(history ? { history } : {}),
+      coordination,
       ...(access.mode === 'agent' ? { task: agentRequestTask(access, snapshot, declined) } : {}),
     });
   } catch (cause) {
@@ -1050,6 +1062,32 @@ export async function PATCH(request: Request): Promise<Response> {
     if (access.mode === 'agent') {
       requireAgentPermission(access, body.decision === 'decline' ? 'write' : 'sign');
     }
+    if (body.assignSigner !== undefined) {
+      if (!access.actorAddress || !['session', 'capability'].includes(access.mode)) {
+        throw new RequestAssignmentServiceError(
+          'Confirm a current signer wallet before asking someone to sign.',
+          401,
+          'request_assignment_identity_required',
+        );
+      }
+      const assigned = await assignSigningRequest(
+        signingRequestStore,
+        access.id,
+        access.actorAddress,
+        body.assignSigner,
+        {
+          snapshotLoader: (store, requestId) => getSigningRequest(store, requestId, serviceOptions),
+        },
+      );
+      const snapshot = await getSigningRequest(signingRequestStore, access.id, serviceOptions);
+      return noStoreJson({
+        request: snapshot,
+        assignment: assigned.assignment,
+        created: assigned.created,
+        coordination: await requestCoordination(access.id),
+      });
+    }
+
     if (body.retainActivity === true) {
       if (!access.actorAddress || !['session', 'capability'].includes(access.mode)) {
         throw new SigningRequestServiceError(
