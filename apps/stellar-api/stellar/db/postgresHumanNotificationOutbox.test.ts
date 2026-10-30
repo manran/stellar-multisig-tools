@@ -4,10 +4,13 @@ import { applyCoordinationMigrations } from './migrate.js';
 import { closeCoordinationPool, coordinationPool } from './postgres.js';
 import {
   claimHumanNotificationEvent,
+  completeHumanNotificationDelivery,
   completeHumanNotificationEvent,
   enqueueSignatureRequestedNotification,
+  findSucceededHumanNotificationDelivery,
   listDueHumanNotificationEventIds,
   releaseHumanNotificationEvent,
+  startHumanNotificationDelivery,
 } from './postgresHumanNotificationOutbox.js';
 
 const TEST_URL = process.env.MST_POSTGRES_TEST_URL?.trim();
@@ -93,6 +96,20 @@ test('Human notification outbox is idempotent, leased, retryable, and scrubs ter
   assert.ok(retry);
   assert.equal(retry.record.attemptCount, 2);
 
+  const delivery = await startHumanNotificationDelivery({
+    eventId: first.eventId,
+    attempt: retry.record.attemptCount,
+    startedAt: new Date('2026-10-30T12:10:00Z'),
+  }, pool);
+  await completeHumanNotificationDelivery(delivery.deliveryId, {
+    outcome: 'succeeded',
+    completedAt: new Date('2026-10-30T12:10:01Z'),
+    providerMessageId: 'email-123',
+    httpStatus: 200,
+  }, pool);
+  const recovered = await findSucceededHumanNotificationDelivery(first.eventId, pool);
+  assert.equal(recovered?.providerMessageId, 'email-123');
+
   assert.equal(await completeHumanNotificationEvent(first.eventId, 'lease-2', {
     outcome: 'sent',
     completedAt: new Date('2026-10-30T12:10:01Z'),
@@ -101,17 +118,15 @@ test('Human notification outbox is idempotent, leased, retryable, and scrubs ter
 
   const stored = await pool.query<{
     destination_email: string | null;
-    destination_email_hash: string;
     outcome: string | null;
     provider_message_id: string | null;
   }>(
-    `SELECT destination_email, destination_email_hash, outcome, provider_message_id
+    `SELECT destination_email, outcome, provider_message_id
        FROM mst_stellar.human_notification_outbox
       WHERE event_id = $1`,
     [first.eventId],
   );
   assert.equal(stored.rows[0]?.destination_email, null);
-  assert.equal(stored.rows[0]?.destination_email_hash.length, 64);
   assert.equal(stored.rows[0]?.outcome, 'sent');
   assert.equal(stored.rows[0]?.provider_message_id, 'email-123');
 });

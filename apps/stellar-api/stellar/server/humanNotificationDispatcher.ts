@@ -4,6 +4,7 @@ import {
   claimHumanNotificationEvent,
   completeHumanNotificationDelivery,
   completeHumanNotificationEvent,
+  findSucceededHumanNotificationDelivery,
   releaseHumanNotificationEvent,
   startHumanNotificationDelivery,
 } from '../db/postgresHumanNotificationOutbox.js';
@@ -68,6 +69,19 @@ export async function dispatchHumanNotificationEvent(
   if (!claimed) return { status: 'not_claimed' };
 
   const { record, leaseToken } = claimed;
+  const previousSuccess = await findSucceededHumanNotificationDelivery(eventId, pool);
+  if (previousSuccess?.providerMessageId) {
+    const completedAt = now();
+    const completed = await completeHumanNotificationEvent(eventId, leaseToken, {
+      outcome: 'sent',
+      completedAt,
+      providerMessageId: previousSuccess.providerMessageId,
+    }, pool);
+    return completed
+      ? { status: 'sent', providerMessageId: previousSuccess.providerMessageId }
+      : { status: 'lease_lost' };
+  }
+
   const startedAt = now();
   const delivery = await startHumanNotificationDelivery({
     eventId,

@@ -7,7 +7,6 @@ CREATE TABLE mst_stellar.human_notification_outbox (
   recipient_signer_address text NOT NULL,
   actor_address text NOT NULL,
   destination_email text,
-  destination_email_hash text NOT NULL,
   created_at timestamptz NOT NULL,
   available_at timestamptz NOT NULL,
   attempt_count integer NOT NULL DEFAULT 0,

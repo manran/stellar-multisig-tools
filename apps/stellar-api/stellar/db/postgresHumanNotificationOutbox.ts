@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { coordinationPool, withPostgresTransaction } from './postgres.js';
@@ -103,10 +103,6 @@ export function signatureRequestedNotificationEventId(
   return `classic_request:${requestId}:signature_requested:${signerAddress}`;
 }
 
-export function notificationEmailHash(email: string): string {
-  return createHash('sha256').update(email.trim().toLowerCase()).digest('hex');
-}
-
 export async function enqueueSignatureRequestedNotification(
   input: {
     requestId: string;
@@ -122,8 +118,8 @@ export async function enqueueSignatureRequestedNotification(
   const result = await pool.query(
     `INSERT INTO mst_stellar.human_notification_outbox (
        event_id, event_type, request_id, recipient_signer_address, actor_address,
-       destination_email, destination_email_hash, created_at, available_at
-     ) VALUES ($1, 'signature_requested', $2, $3, $4, $5, $6, $7, $7)
+       destination_email, created_at, available_at
+     ) VALUES ($1, 'signature_requested', $2, $3, $4, $5, $6, $6)
      ON CONFLICT (event_id) DO NOTHING`,
     [
       eventId,
@@ -131,7 +127,6 @@ export async function enqueueSignatureRequestedNotification(
       input.recipientSignerAddress,
       input.actorAddress,
       input.destinationEmail,
-      notificationEmailHash(input.destinationEmail),
       createdAt,
     ],
   );
@@ -276,6 +271,25 @@ export async function startHumanNotificationDelivery(
   const row = result.rows[0];
   if (!row) throw new Error('Unable to persist Human notification delivery start.');
   return rowToDeliveryRecord(row);
+}
+
+export async function findSucceededHumanNotificationDelivery(
+  eventId: string,
+  pool: Pool = coordinationPool(),
+): Promise<HumanNotificationDeliveryRecord | null> {
+  const result = await pool.query<DeliveryRow>(
+    `SELECT delivery_id, event_id, attempt, started_at, completed_at, outcome,
+            provider_message_id, http_status, error_code, duration_ms
+       FROM mst_stellar.human_notification_deliveries
+      WHERE event_id = $1
+        AND outcome = 'succeeded'
+        AND provider_message_id IS NOT NULL
+      ORDER BY attempt DESC
+      LIMIT 1`,
+    [eventId],
+  );
+  const row = result.rows[0];
+  return row ? rowToDeliveryRecord(row) : null;
 }
 
 export async function completeHumanNotificationDelivery(
