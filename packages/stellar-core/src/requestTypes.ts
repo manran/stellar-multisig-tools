@@ -69,6 +69,17 @@ export interface SigningRequestSnapshot {
   template?: ReusableTemplateRef;
 }
 
+export interface SigningRequestAssignment {
+  version: 1;
+  signerAddress: string;
+  assignedByAddress: string;
+  assignedAt: string;
+}
+
+export interface SigningRequestCoordination {
+  assignments: SigningRequestAssignment[];
+}
+
 export interface SigningRequestAccess {
   shareable: boolean;
   activityBound?: boolean;
@@ -92,6 +103,7 @@ export interface CreateSigningRequestResponse {
   access?: SigningRequestAccess;
   context?: SigningRequestPrivateContext;
   history?: SigningRequestHistoryProjection;
+  coordination?: SigningRequestCoordination;
   task?: AgentTaskProjection;
 }
 
@@ -117,4 +129,12 @@ export interface SigningRequestApiError {
   network?: StellarNetwork;
   requestStatus?: SigningRequestStatus;
   details?: { effectsDiff?: SorobanEffectsDiff };
+}
+
+
+export interface AssignSigningRequestResponse {
+  request: SigningRequestSnapshot;
+  assignment: SigningRequestAssignment;
+  created: boolean;
+  coordination: SigningRequestCoordination;
 }

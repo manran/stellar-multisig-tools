@@ -12,6 +12,7 @@ import type { RequestPrivateDataStore } from '../server/requestPrivateDataStore.
 import { requestDiscoverySubjects } from '../server/requestDiscovery.js';
 import type {
   SigningRequestStore,
+  StoredRequestAssignment,
   StoredRequestParticipant,
   StoredSignatureContribution,
   StoredSigningRequest,
@@ -448,6 +449,78 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
         await insertSubjects(client, id, parent.network, 'activity', 'signer', [participant.address]);
       }
     });
+  }
+
+  async listRequestAssignments(id: string): Promise<StoredRequestAssignment[]> {
+    const result = await this.pool.query<{
+      signer_address: string;
+      assigned_by_address: string;
+      assigned_at: Date | string;
+    }>(
+      `SELECT signer_address, assigned_by_address, assigned_at
+         FROM mst_stellar.classic_request_assignments
+        WHERE request_id = $1
+        ORDER BY assigned_at, signer_address`,
+      [id],
+    );
+    return result.rows.map((row) => ({
+      version: 1,
+      signerAddress: row.signer_address,
+      assignedByAddress: row.assigned_by_address,
+      assignedAt: iso(row.assigned_at),
+    }));
+  }
+
+  async putRequestAssignment(
+    id: string,
+    assignment: StoredRequestAssignment,
+  ): Promise<{ assignment: StoredRequestAssignment; created: boolean }> {
+    const inserted = await this.pool.query<{
+      signer_address: string;
+      assigned_by_address: string;
+      assigned_at: Date | string;
+    }>(
+      `INSERT INTO mst_stellar.classic_request_assignments (
+         request_id, signer_address, assigned_by_address, assigned_at
+       ) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (request_id, signer_address) DO NOTHING
+       RETURNING signer_address, assigned_by_address, assigned_at`,
+      [id, assignment.signerAddress, assignment.assignedByAddress, assignment.assignedAt],
+    );
+    const row = inserted.rows[0];
+    if (row) {
+      return {
+        created: true,
+        assignment: {
+          version: 1,
+          signerAddress: row.signer_address,
+          assignedByAddress: row.assigned_by_address,
+          assignedAt: iso(row.assigned_at),
+        },
+      };
+    }
+
+    const existing = await this.pool.query<{
+      signer_address: string;
+      assigned_by_address: string;
+      assigned_at: Date | string;
+    }>(
+      `SELECT signer_address, assigned_by_address, assigned_at
+         FROM mst_stellar.classic_request_assignments
+        WHERE request_id = $1 AND signer_address = $2`,
+      [id, assignment.signerAddress],
+    );
+    const current = existing.rows[0];
+    if (!current) throw new Error('Request assignment conflict could not be resolved.');
+    return {
+      created: false,
+      assignment: {
+        version: 1,
+        signerAddress: current.signer_address,
+        assignedByAddress: current.assigned_by_address,
+        assignedAt: iso(current.assigned_at),
+      },
+    };
   }
 
   async listActivityEvents(id: string): Promise<ActivityEvent[]> {

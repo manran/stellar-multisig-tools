@@ -81,6 +81,13 @@ export interface StoredRequestParticipant {
   joinedAt: string;
 }
 
+export interface StoredRequestAssignment {
+  version: 1;
+  signerAddress: string;
+  assignedByAddress: string;
+  assignedAt: string;
+}
+
 export interface SigningRequestStore {
   createRequest(request: StoredSigningRequest): Promise<void>;
   getRequest(id: string): Promise<StoredSigningRequest | null>;
@@ -110,6 +117,11 @@ export interface SigningRequestStore {
   getRequestParticipant?(id: string, address: string): Promise<StoredRequestParticipant | null>;
   listRequestParticipants?(id: string): Promise<StoredRequestParticipant[]>;
   putRequestParticipant?(id: string, participant: StoredRequestParticipant): Promise<void>;
+  listRequestAssignments?(id: string): Promise<StoredRequestAssignment[]>;
+  putRequestAssignment?(
+    id: string,
+    assignment: StoredRequestAssignment,
+  ): Promise<{ assignment: StoredRequestAssignment; created: boolean }>;
   listActivityEvents?(id: string): Promise<ActivityEvent[]>;
   putActivityEvent?(id: string, event: ActivityFactEvent): Promise<void>;
   listPrivateNoteRevisions?(id: string): Promise<PrivateNoteRevision[]>;
