@@ -177,6 +177,7 @@ export default function SigningGuidance({
     if (signerAddress === walletAddress || !neededWalletKeys.has(signerAddress)) return null;
     const email = emailFor(signerAddress);
     const alias = labelFor(signerAddress, 'signer');
+    const askLabel = alias && alias.length <= 18 ? `Ask ${alias} to sign` : 'Ask to sign';
     const assigned = assignedSignerKeys.has(signerAddress);
     const notificationConfirmed = notifiedSigners.has(signerAddress);
 
@@ -210,12 +211,12 @@ export default function SigningGuidance({
             type="button"
             disabled={askBusy === signerAddress}
             onClick={() => void askSigner(signerAddress)}
-            className="shrink-0 rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/5 disabled:opacity-50 dark:text-emerald-300"
+            className="shrink-0 whitespace-nowrap rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 active:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-300"
           >
             {askBusy === signerAddress
               ? assigned ? 'Notifying…' : 'Asking…'
               : assigned ? (askError?.address === signerAddress ? 'Retry email' : 'Notify by email')
-                : alias ? `Ask ${alias} to sign` : 'Ask to sign'}
+                : askLabel}
           </button>
         )}
         {askError?.address === signerAddress && <span className="basis-full text-xs text-red-600 dark:text-red-400">{askError.message}</span>}
@@ -421,7 +422,7 @@ export default function SigningGuidance({
               )}
 
               {shouldShowShare && onShare && (
-                <button type="button" disabled={shareBusy} onClick={invokeShare} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-black/10 px-4 py-3 text-sm font-semibold text-neutral-700 hover:bg-black/[0.03] disabled:opacity-50 dark:border-white/10 dark:text-neutral-200 dark:hover:bg-white/[0.04]">
+                <button type="button" disabled={shareBusy} onClick={invokeShare} className="flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-black/10 px-4 py-3 text-sm font-semibold text-neutral-700 hover:bg-black/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 active:bg-black/[0.06] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-neutral-200 dark:hover:bg-white/[0.04] dark:active:bg-white/[0.08]">
                   {shareBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
                   Share private link
                 </button>
@@ -429,7 +430,7 @@ export default function SigningGuidance({
             </div>
 
             {walletAddress && walletAlreadySigned && <div className="mt-3 text-sm text-emerald-700 dark:text-emerald-300">{signedStateCopy}</div>}
-            {walletAddress && !walletCanSign && !walletAlreadySigned && <div className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">This wallet is not an authorized signer for this Proposal. Choose another signer wallet, or send the private link to someone who can sign.</div>}
+            {walletAddress && !walletCanSign && !walletAlreadySigned && <div className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">This wallet is not an authorized signer for this Proposal. Choose another signer wallet, ask a saved Contact, or share the private link.</div>}
             {walletError && <div className="mt-3 flex gap-2 text-sm text-red-600 dark:text-red-400"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{walletError}</div>}
             {shareError && <div className="mt-3 flex gap-2 text-sm text-red-600 dark:text-red-400"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{shareError}</div>}
           </div>

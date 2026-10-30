@@ -98,7 +98,7 @@ export default function AddressAliasEditor({
   }
 
   return (
-    <div className="transaction-evidence-human-label min-w-[220px]">
+    <div className={`transaction-evidence-human-label ${allowNotificationEmail ? 'w-full min-w-0 sm:w-auto sm:min-w-[220px]' : 'min-w-[220px]'}`}>
       <div className="flex items-start gap-1.5">
         <div className="min-w-0 flex-1 space-y-2">
           <input
