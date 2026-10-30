@@ -176,7 +176,7 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
     const previous = entries;
     const now = new Date().toISOString();
     const existing = newestEntry(previous.filter((entry) => entry.address === address));
-    const requestedEmail = notificationEmail === undefined ? existing?.notificationEmail : notificationEmail || undefined;
+    const requestedEmail = notificationEmail === undefined ? (emailFor(address) || undefined) : notificationEmail || undefined;
     const optimistic: AddressAliasEntry = {
       address,
       subjectType,
@@ -221,7 +221,7 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
       setError(message);
       throw new Error(message);
     }
-  }, [privateUnlocked, unlockedAddress, unlockedNetwork, entries, replaceEntries]);
+  }, [privateUnlocked, unlockedAddress, unlockedNetwork, entries, replaceEntries, emailFor]);
 
   const removeAlias = useCallback(async (address: string, subjectType: AddressAliasSubjectType) => {
     if (!privateUnlocked || !unlockedAddress || !unlockedNetwork) {
