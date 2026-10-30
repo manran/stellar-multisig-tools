@@ -77,6 +77,7 @@ export default function PaymentComposer({ network }: Props) {
   const [templateSaveOpen, setTemplateSaveOpen] = useState(false);
   const [templateSaveName, setTemplateSaveName] = useState('');
   const [templateSaving, setTemplateSaving] = useState(false);
+  const [templateApiAvailable, setTemplateApiAvailable] = useState(false);
 
   const sourceValid = useMemo(() => isValidStellarAccountId(source), [source]);
   const memoBytes = useMemo(() => stellarTextMemoByteLength(memo), [memo]);
@@ -135,6 +136,7 @@ export default function PaymentComposer({ network }: Props) {
     && actionShapeValid && !fundingState.error && !busy;
   const canSaveTemplate = action === 'payment'
     && privateUnlocked
+    && templateApiAvailable
     && Boolean(sessionAddress)
     && sourceValid
     && sourceHasSharedSigning
@@ -267,6 +269,26 @@ export default function PaymentComposer({ network }: Props) {
   }, [sessionAddress, network, hydratedDraftKey, action, source, recipients, memo, privateNote, addOnChainProof, signingWindowSeconds, activeTemplate]);
 
   useEffect(() => {
+    if (!privateUnlocked || !sessionAddress) {
+      setTemplateApiAvailable(false);
+      return;
+    }
+    const controller = new AbortController();
+    void fetch(`/api/templates?network=${network}`, {
+      headers: privateSessionAddressHeaders(sessionAddress),
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!controller.signal.aborted) setTemplateApiAvailable(response.ok);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setTemplateApiAvailable(false);
+      });
+    return () => controller.abort();
+  }, [privateUnlocked, sessionAddress, network]);
+
+  useEffect(() => {
     const requestedTemplateId = new URL(window.location.href).searchParams.get('template')?.trim() ?? '';
     if (!requestedTemplateId || !sessionAddress || !privateUnlocked) return;
     let cancelled = false;
@@ -297,6 +319,7 @@ export default function PaymentComposer({ network }: Props) {
         setAddOnChainProof(false);
         setSigningWindowSeconds(template.definition.signingWindowSeconds);
         setActiveTemplate({ id: template.id, version: template.currentVersion, name: template.name });
+        setTemplateApiAvailable(true);
         setError('');
         const current = new URL(window.location.href);
         current.searchParams.delete('template');
@@ -656,7 +679,7 @@ export default function PaymentComposer({ network }: Props) {
             </div>
           </div>
 
-          {action === 'payment' && privateUnlocked && (
+          {action === 'payment' && privateUnlocked && templateApiAvailable && (
             <section className="mst-transaction-section lg:col-span-2">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
