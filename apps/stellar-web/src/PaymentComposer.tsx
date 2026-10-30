@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, CircleAlert, LoaderCircle, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CircleAlert, LoaderCircle, Plus, Save, Trash2 } from 'lucide-react';
 import AddressAliasEditor from './AddressAliasEditor';
 import { useAddressBook } from './AddressBookContext';
 import PaymentAssetPicker from './PaymentAssetPicker';
@@ -26,6 +26,8 @@ import { hasSharedSigningControl } from '../../../packages/stellar-core/src/trea
 import { prepareClassicPayment } from '../../../packages/stellar-core/src/classicPaymentPrepare';
 import { prepareClassicCreateAccount } from '../../../packages/stellar-core/src/classicCreateAccountPrepare';
 import type { StellarAccountSnapshot, StellarNetwork } from '../../../packages/stellar-core/src/types';
+import type { ReusableTemplateRef, ReusableTemplateSummary } from '../../../packages/stellar-core/src/reusableTemplate';
+import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
 
 interface Props {
@@ -71,6 +73,10 @@ export default function PaymentComposer({ network }: Props) {
   const [hydratedDraftKey, setHydratedDraftKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [activeTemplate, setActiveTemplate] = useState<(ReusableTemplateRef & { name: string }) | null>(null);
+  const [templateSaveOpen, setTemplateSaveOpen] = useState(false);
+  const [templateSaveName, setTemplateSaveName] = useState('');
+  const [templateSaving, setTemplateSaving] = useState(false);
 
   const sourceValid = useMemo(() => isValidStellarAccountId(source), [source]);
   const memoBytes = useMemo(() => stellarTextMemoByteLength(memo), [memo]);
@@ -127,6 +133,14 @@ export default function PaymentComposer({ network }: Props) {
 
   const canContinue = sourceValid && sourceHasSharedSigning && recipientsValid && contextValid
     && actionShapeValid && !fundingState.error && !busy;
+  const canSaveTemplate = action === 'payment'
+    && privateUnlocked
+    && Boolean(sessionAddress)
+    && sourceValid
+    && sourceHasSharedSigning
+    && recipientDetails.length > 0
+    && recipientDetails.every((row) => row.destinationValid && Boolean(row.asset))
+    && !templateSaving;
   const testnet = network === 'testnet';
 
   function saveSelectedTransactionLifetimeAsDefault() {
@@ -141,12 +155,14 @@ export default function PaymentComposer({ network }: Props) {
       return;
     }
     setAction(next);
+    if (next !== 'payment') setActiveTemplate(null);
     setError('');
     const current = new URL(window.location.href);
     const target = new URL(stellarHref(next === 'create_account' ? '/new/create-account' : '/new/payment'));
     target.search = current.search;
     target.searchParams.delete('action');
     target.searchParams.delete('fresh');
+    if (next !== 'payment') target.searchParams.delete('template');
     window.history.replaceState(window.history.state, '', target.toString());
   }
 
@@ -229,6 +245,7 @@ export default function PaymentComposer({ network }: Props) {
     setPrivateNote(draft?.privateNote ?? '');
     setAddOnChainProof(draft?.addOnChainProof ?? false);
     setSigningWindowSeconds(draft?.signingWindowSeconds ?? getDefaultTransactionLifetime(localStorage));
+    setActiveTemplate(draft?.templateRef ?? null);
     setHydratedDraftKey(key);
   }, [sessionAddress, network]);
 
@@ -245,8 +262,56 @@ export default function PaymentComposer({ network }: Props) {
       privateNote,
       addOnChainProof,
       signingWindowSeconds,
+      ...(activeTemplate ? { templateRef: activeTemplate } : {}),
     });
-  }, [sessionAddress, network, hydratedDraftKey, action, source, recipients, memo, privateNote, addOnChainProof, signingWindowSeconds]);
+  }, [sessionAddress, network, hydratedDraftKey, action, source, recipients, memo, privateNote, addOnChainProof, signingWindowSeconds, activeTemplate]);
+
+  useEffect(() => {
+    const requestedTemplateId = new URL(window.location.href).searchParams.get('template')?.trim() ?? '';
+    if (!requestedTemplateId || !sessionAddress || !privateUnlocked) return;
+    let cancelled = false;
+    const controller = new AbortController();
+    void fetch(`/api/templates?network=${network}`, {
+      headers: privateSessionAddressHeaders(sessionAddress),
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const body = await response.json() as { templates?: ReusableTemplateSummary[]; error?: string };
+        if (!response.ok) throw new Error(body.error || 'Unable to load this template.');
+        const template = body.templates?.find((item) => item.id === requestedTemplateId);
+        if (!template) throw new Error('This template is no longer available.');
+        return template;
+      })
+      .then((template) => {
+        if (cancelled) return;
+        setAction('payment');
+        setSource(template.definition.source);
+        setRecipients(template.definition.recipients.map((recipient) => ({
+          destination: recipient.destination,
+          amount: '',
+          assetKey: recipient.assetKey,
+        })));
+        setMemo('');
+        setPrivateNote('');
+        setAddOnChainProof(false);
+        setSigningWindowSeconds(template.definition.signingWindowSeconds);
+        setActiveTemplate({ id: template.id, version: template.currentVersion, name: template.name });
+        setError('');
+        const current = new URL(window.location.href);
+        current.searchParams.delete('template');
+        window.history.replaceState(window.history.state, '', current.toString());
+      })
+      .catch((cause) => {
+        if (!cancelled && !controller.signal.aborted) {
+          setError(cause instanceof Error ? cause.message : 'Unable to load this template.');
+        }
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [sessionAddress, network, privateUnlocked]);
 
   useEffect(() => {
     if (!sourceValid) {
@@ -283,6 +348,53 @@ export default function PaymentComposer({ network }: Props) {
       });
     return () => { cancelled = true; controller.abort(); };
   }, [source, network, sourceValid]);
+
+  async function saveReusableTemplate() {
+    if (!canSaveTemplate || !sessionAddress) return;
+    const name = templateSaveName.trim();
+    if (!name) {
+      setError('Add a name for this template.');
+      return;
+    }
+    setTemplateSaving(true);
+    setError('');
+    try {
+      const response = await fetch('/api/templates', {
+        method: 'POST',
+        headers: {
+          ...privateSessionAddressHeaders(sessionAddress),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          network,
+          name,
+          kind: recipients.length > 1 ? 'batch_payment' : 'payment',
+          definition: {
+            version: 1,
+            source: source.trim(),
+            recipients: recipients.map((recipient) => ({
+              destination: recipient.destination.trim(),
+              assetKey: recipient.assetKey,
+            })),
+            signingWindowSeconds,
+          },
+        }),
+      });
+      const body = await response.json() as { template?: ReusableTemplateSummary; error?: string };
+      if (!response.ok || !body.template) throw new Error(body.error || 'Unable to save this template.');
+      setActiveTemplate({
+        id: body.template.id,
+        version: body.template.currentVersion,
+        name: body.template.name,
+      });
+      setTemplateSaveName('');
+      setTemplateSaveOpen(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to save this template.');
+    } finally {
+      setTemplateSaving(false);
+    }
+  }
 
   async function buildPayment(event: FormEvent) {
     event.preventDefault();
@@ -363,6 +475,7 @@ export default function PaymentComposer({ network }: Props) {
         network,
         privateNote: requestPrivateNote || null,
         privateCommitment,
+        ...(activeTemplate ? { templateRef: { id: activeTemplate.id, version: activeTemplate.version } } : {}),
       });
       navigateWorkspace('/signing-room', {
         state: {
@@ -387,6 +500,11 @@ export default function PaymentComposer({ network }: Props) {
           <button type="button" aria-pressed={action === 'create_account'} onClick={() => switchAction('create_account')} className="mst-transaction-choice">Create account</button>
         </div>
         <p className="mt-2 text-sm leading-6 text-neutral-500 dark:text-neutral-400">{action === 'create_account' ? 'CreateAccount is explicit: the destination must not exist yet and the starting balance is XLM. Switch back to Payment without losing these fields.' : 'Payment requires an active destination. For a new G-address, switch explicitly to Create account; MultiSig Tools will never change the operation automatically.'}</p>
+        {activeTemplate && action === 'payment' && (
+          <div className="mt-3 text-sm text-neutral-600 dark:text-neutral-300">
+            Using <span className="font-semibold">{activeTemplate.name}</span>. Enter the amount and proposal-specific context for this run.
+          </div>
+        )}
 
         <form onSubmit={buildPayment} className="mst-transaction-form mt-6">
           <div className="lg:col-span-2">
@@ -537,6 +655,33 @@ export default function PaymentComposer({ network }: Props) {
               )}
             </div>
           </div>
+
+          {action === 'payment' && privateUnlocked && (
+            <section className="mst-transaction-section lg:col-span-2">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-sm font-semibold">Reuse this setup</h2>
+                  <p className="mt-1 max-w-2xl text-xs leading-5 text-neutral-500 dark:text-neutral-400">Save the treasury, recipients, assets, and signing window. Amounts, memo, and private note stay proposal-specific.</p>
+                </div>
+                {!templateSaveOpen && (
+                  <button type="button" disabled={!canSaveTemplate} onClick={() => { setTemplateSaveOpen(true); setTemplateSaveName(activeTemplate?.name ?? ''); }} className="mst-action-secondary disabled:opacity-40"><Save className="h-4 w-4" />Save as template</button>
+                )}
+              </div>
+              {templateSaveOpen && (
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    value={templateSaveName}
+                    onChange={(event) => setTemplateSaveName(event.target.value)}
+                    maxLength={80}
+                    placeholder="e.g. Pay ACME"
+                    className="mst-transaction-control min-w-0 flex-1"
+                  />
+                  <button type="button" disabled={!canSaveTemplate || !templateSaveName.trim()} onClick={() => void saveReusableTemplate()} className="mst-action-primary disabled:opacity-40">{templateSaving && <LoaderCircle className="h-4 w-4 animate-spin" />}Save template</button>
+                  <button type="button" disabled={templateSaving} onClick={() => { setTemplateSaveOpen(false); setTemplateSaveName(''); }} className="mst-action-secondary">Cancel</button>
+                </div>
+              )}
+            </section>
+          )}
 
           {error && <div className="whitespace-pre-line rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-800 dark:text-red-200 lg:col-span-2"><div className="flex gap-2"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div></div>}
 

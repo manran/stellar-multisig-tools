@@ -1,5 +1,6 @@
 import { isTransactionLifetimeSeconds } from '../../../../packages/stellar-core/src/transactionPreferences.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import type { ReusableTemplateRef } from '../../../../packages/stellar-core/src/reusableTemplate.js';
 
 export interface PaymentRecipientDraft {
   destination: string;
@@ -18,6 +19,7 @@ export interface PaymentDraft {
   privateNote: string;
   addOnChainProof: boolean;
   signingWindowSeconds: number;
+  templateRef?: ReusableTemplateRef & { name: string };
 }
 
 function legacyPaymentDraftStorageKeyV1(ownerAddress: string, network: StellarNetwork): string {
@@ -42,6 +44,16 @@ function validRecipient(value: unknown): value is PaymentRecipientDraft {
   return typeof record.destination === 'string'
     && typeof record.amount === 'string'
     && typeof record.assetKey === 'string';
+}
+
+function templateRef(value: unknown): (ReusableTemplateRef & { name: string }) | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as Record<string, unknown>;
+  const id = typeof record.id === 'string' ? record.id.trim() : '';
+  const version = typeof record.version === 'number' && Number.isInteger(record.version) ? record.version : 0;
+  const name = typeof record.name === 'string' ? record.name.trim() : '';
+  if (!/^tpl_[A-Za-z0-9_-]{16}$/.test(id) || version < 1 || !name) return undefined;
+  return { id, version, name };
 }
 
 function commonContext(record: Record<string, unknown>) {
@@ -73,6 +85,10 @@ function parseDraft(value: unknown): PaymentDraft | null {
       ...common,
       recipients,
       privateNote: record.privateNote,
+      ...(() => {
+        const ref = templateRef(record.templateRef);
+        return ref ? { templateRef: ref } : {};
+      })(),
     };
   }
 
