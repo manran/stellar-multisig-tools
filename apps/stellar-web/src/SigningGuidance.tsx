@@ -8,6 +8,7 @@ import { treasuryDisplayLabel } from './treasuryDisplay';
 import { humanAuthorizationRequirement } from './stellar/authorizationPresentation';
 import type { SourceAnalysis } from '../../../packages/stellar-core/src/transactionReviewAnalysis';
 import type { TransactionAuthorizationStatus } from '../../../packages/stellar-core/src/transactionAuthorization';
+import type { SigningRequestAssignment } from '../../../packages/stellar-core/src/requestTypes';
 import type { TransactionXdrInspection } from '../../../packages/stellar-core/src/transactionXdr';
 
 interface Props {
@@ -20,6 +21,8 @@ interface Props {
   onConnectWallet: () => void;
   onSignWithWallet: () => void;
   onShare?: () => void | string | Promise<void | string>;
+  onAsk?: (signerAddress: string) => Promise<string>;
+  assignments?: readonly SigningRequestAssignment[];
   shareCreatesLink?: boolean;
   approvalPersisted?: boolean;
   knownComplete?: boolean;
@@ -35,6 +38,8 @@ export default function SigningGuidance({
   onConnectWallet,
   onSignWithWallet,
   onShare,
+  onAsk,
+  assignments = [],
   shareCreatesLink = false,
   approvalPersisted = true,
   knownComplete = false,
@@ -46,6 +51,7 @@ export default function SigningGuidance({
   const [shareLink, setShareLink] = useState('');
   const [shareError, setShareError] = useState('');
   const [shareCopied, setShareCopied] = useState(false);
+  const [askTarget, setAskTarget] = useState('');
   const allowNaming = Boolean(sessionAddress);
   const requirementAccountIds = inspection.sourceRequirements.map((requirement) => requirement.accountId);
   const requirementAccountKey = requirementAccountIds.join('|');
@@ -115,14 +121,35 @@ export default function SigningGuidance({
     : null;
   const shareTargets = [...neededWalletKeys].filter((key) => key !== walletAddress);
   const shouldShowShare = shareTargets.length > 0 || (!walletAddress && neededWalletKeys.size > 0);
+  const assignedSignerKeys = new Set(assignments.map((item) => item.signerAddress));
   const singleShareAlias = shareTargets.length === 1 ? labelFor(shareTargets[0], 'signer') : '';
   const shareActionLabel = singleShareAlias ? `Ask ${singleShareAlias} to sign` : 'Ask someone to sign';
+  const selectedAskTarget = shareTargets.length === 1 ? shareTargets[0] : askTarget;
+  const selectedAskAlias = selectedAskTarget ? labelFor(selectedAskTarget, 'signer') : '';
+  const selectedAskName = selectedAskAlias || (selectedAskTarget
+    ? `${selectedAskTarget.slice(0, 7)}…${selectedAskTarget.slice(-6)}`
+    : '');
+  const selectedAlreadyAsked = Boolean(selectedAskTarget && assignedSignerKeys.has(selectedAskTarget));
+  const askActionLabel = selectedAskTarget
+    ? selectedAlreadyAsked
+      ? `Copy link for ${selectedAskName}`
+      : `Ask ${selectedAskName} to sign`
+    : 'Choose signer';
   const remainingSignatureCopy = exactSignaturesRemaining === null
     ? 'More signatures are still needed.'
     : exactSignaturesRemaining === 1
       ? '1 more signer needs to sign.'
       : `${exactSignaturesRemaining} more signatures are needed.`;
   const signedStateCopy = `Signed${exactSignaturesRemaining ? ` · ${remainingSignatureCopy}` : ''}`;
+
+  useEffect(() => {
+    if (shareTargets.length <= 1) {
+      setAskTarget('');
+      return;
+    }
+    if (askTarget && shareTargets.includes(askTarget)) return;
+    setAskTarget('');
+  }, [shareTargets.join('|'), askTarget]);
 
   useEffect(() => {
     if (!shareCopied) return;
@@ -134,6 +161,22 @@ export default function SigningGuidance({
     if (!shareLink) return;
     await navigator.clipboard.writeText(shareLink);
     setShareCopied(true);
+  }
+
+  async function askAndCopy() {
+    if (!onAsk || !selectedAskTarget) return;
+    setShareBusy(true);
+    setShareError('');
+    setShareCopied(false);
+    try {
+      const link = await onAsk(selectedAskTarget);
+      await navigator.clipboard.writeText(link);
+      setShareCopied(true);
+    } catch (cause) {
+      setShareError(cause instanceof Error ? cause.message : 'Unable to ask this signer.');
+    } finally {
+      setShareBusy(false);
+    }
   }
 
   async function createShareLink() {
@@ -157,6 +200,10 @@ export default function SigningGuidance({
   }
 
   function invokeShare() {
+    if (onAsk) {
+      void askAndCopy();
+      return;
+    }
     if (!onShare) return;
     if (shareCreatesLink) void createShareLink();
     else void onShare();
@@ -276,6 +323,7 @@ export default function SigningGuidance({
                       {remainingSignerKeys.map((key) => (
                         <div key={key} className="mst-signer-candidate-row">
                           <AddressIdentity address={key} subjectType="signer" allowNaming={allowNaming} />
+                          {assignedSignerKeys.has(key) && <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">Asked</span>}
                         </div>
                       ))}
                     </div>
@@ -309,7 +357,7 @@ export default function SigningGuidance({
                 : <div className="text-neutral-500 dark:text-neutral-400">No signer connected.</div>}
             </div>
 
-            <div className={`mst-signing-action-grid mt-4 ${shouldShowShare && onShare ? 'mst-signing-action-grid--split' : ''}`}>
+            <div className={`mst-signing-action-grid mt-4 ${shouldShowShare && (onShare || onAsk) ? 'mst-signing-action-grid--split' : ''}`}>
               {walletAddress ? (
                 walletCanSign || walletAlreadySigned ? (
                   <button type="button" disabled={!walletCanSign || walletBusy} onClick={onSignWithWallet} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100 dark:disabled:bg-white/10 dark:disabled:text-neutral-500">
@@ -326,17 +374,35 @@ export default function SigningGuidance({
                 </button>
               )}
 
-              {shouldShowShare && onShare && (
-                <button type="button" disabled={shareBusy} onClick={invokeShare} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-500/5 disabled:opacity-50 dark:text-emerald-300">
-                  {shareBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
-                  {shareActionLabel}
-                </button>
+              {shouldShowShare && (onShare || onAsk) && (
+                <div className="flex min-w-0 flex-col gap-2">
+                  {onAsk && shareTargets.length > 1 && (
+                    <select
+                      aria-label="Signer to ask"
+                      value={askTarget}
+                      onChange={(event) => { setAskTarget(event.target.value); setShareError(''); setShareCopied(false); }}
+                      className="min-h-10 w-full rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm outline-none dark:border-white/10"
+                    >
+                      <option value="">Choose signer…</option>
+                      {shareTargets.map((key) => {
+                        const alias = labelFor(key, 'signer');
+                        const short = `${key.slice(0, 7)}…${key.slice(-6)}`;
+                        return <option key={key} value={key}>{alias ? `${alias} · ${short}` : short}{assignedSignerKeys.has(key) ? ' · Asked' : ''}</option>;
+                      })}
+                    </select>
+                  )}
+                  <button type="button" disabled={shareBusy || Boolean(onAsk && !selectedAskTarget)} onClick={invokeShare} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-500/5 disabled:opacity-50 dark:text-emerald-300">
+                    {shareBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+                    {onAsk ? (shareCopied ? `Asked ${selectedAskName} · link copied` : askActionLabel) : shareActionLabel}
+                  </button>
+                </div>
               )}
             </div>
 
             {walletAddress && walletAlreadySigned && <div className="mt-3 text-sm text-emerald-700 dark:text-emerald-300">{signedStateCopy}</div>}
             {walletAddress && !walletCanSign && !walletAlreadySigned && <div className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">This wallet is not an authorized signer for this Proposal. Choose another signer wallet, or send the private link to someone who can sign.</div>}
             {walletError && <div className="mt-3 flex gap-2 text-sm text-red-600 dark:text-red-400"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{walletError}</div>}
+            {shareError && <div className="mt-3 flex gap-2 text-sm text-red-600 dark:text-red-400"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{shareError}</div>}
           </div>
         </div>
       )}

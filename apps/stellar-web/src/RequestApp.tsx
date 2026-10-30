@@ -36,9 +36,11 @@ import type { SourceAnalysis } from '../../../packages/stellar-core/src/transact
 import { applyRequestLocalEffects } from './stellar/requestLocalEffects';
 import { invalidateSignerAccountsCache } from '../../../packages/stellar-core/src/signerAccounts';
 import type {
+  AssignSigningRequestResponse,
   ContributeSigningRequestResponse,
   CreateSigningRequestResponse,
   SigningRequestApiError,
+  SigningRequestAssignment,
   SigningRequestSnapshot,
   SigningRequestStatus,
   SubmitSigningRequestResponse,
@@ -209,6 +211,7 @@ export default function RequestApp() {
   const [shareable, setShareable] = useState(Boolean(initialRequest.capability));
   const [activityBound, setActivityBound] = useState(navigation.activityBound);
   const [shareJustCreated, setShareJustCreated] = useState(navigation.justCreated);
+  const [assignments, setAssignments] = useState<SigningRequestAssignment[]>([]);
   const [snapshot, setSnapshot] = useState<SigningRequestSnapshot | null>(initialPreview);
   const [privateNote, setPrivateNote] = useState<PrivateNoteRevision | null>(null);
   const [privateCommitment, setPrivateCommitment] = useState<PrivateCommitmentRecord | null>(null);
@@ -316,6 +319,7 @@ export default function RequestApp() {
     setInspection(null);
     setPrivateNote(null);
     setPrivateCommitment(null);
+    setAssignments([]);
     setSourceAnalyses([]);
   }
 
@@ -371,6 +375,7 @@ export default function RequestApp() {
       await applySnapshot(body.request);
       setPrivateNote(body.context?.privateNote ?? null);
       setPrivateCommitment(body.context?.privateCommitment ?? null);
+      setAssignments(body.coordination?.assignments ?? []);
       const normalized = requestLocatorString(body.request.id, locator.capability);
       setRequestLocator(normalized);
       setCapability(locator.capability);
@@ -469,6 +474,7 @@ export default function RequestApp() {
           else setSnapshot(body.request);
           setPrivateNote(body.context?.privateNote ?? null);
           setPrivateCommitment(body.context?.privateCommitment ?? null);
+          setAssignments(body.coordination?.assignments ?? []);
           if (body.access) {
             setShareable(body.access.shareable);
             setActivityBound(body.access.activityBound ?? false);
@@ -591,6 +597,19 @@ async function submitRequest(acceptedEffectsDigest?: string) {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function askSignerToSign(signerAddress: string): Promise<string> {
+    if (!snapshot || !shareable || !walletAddress || !privateReadyForRequest) {
+      throw new Error('Confirm your current signer wallet before asking someone to sign.');
+    }
+    const body = await apiJson<AssignSigningRequestResponse>(await fetch('/api/request', {
+      method: 'PATCH',
+      headers: requestHeaders(snapshot.id, capability, walletAddress, true),
+      body: JSON.stringify({ assignSigner: signerAddress }),
+    }));
+    setAssignments(body.coordination.assignments);
+    return requestUrl(snapshot.id, capability);
   }
 
   async function copyLink() {
@@ -780,6 +799,8 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                     onConnectWallet={() => void connectWallet()}
                     onSignWithWallet={() => void signRequestWithWallet()}
                     onShare={shareable ? () => requestUrl(snapshot.id, capability) : undefined}
+                    onAsk={shareable && privateReadyForRequest ? askSignerToSign : undefined}
+                    assignments={assignments}
                     shareCreatesLink={shareable}
                     knownComplete={signaturesComplete}
                   />
