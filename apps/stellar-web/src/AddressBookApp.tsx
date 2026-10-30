@@ -150,7 +150,7 @@ export default function AddressBookApp() {
           {address && !privateUnlocked && (
             <section className="mst-address-action-row mt-5">
               <div><div className="font-semibold">Saved contact details are private</div><p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Public account relationships are available now. Confirm this wallet when you want to load private names and signer notification emails.</p></div>
-              <button type="button" disabled={authBusy} onClick={() => void unlock()} className="mst-action-secondary shrink-0 disabled:opacity-50">{authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Show saved names</button>
+              <button type="button" disabled={authBusy} onClick={() => void unlock()} className="mst-action-secondary shrink-0 disabled:opacity-50">{authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Show contact details</button>
             </section>
           )}
 
