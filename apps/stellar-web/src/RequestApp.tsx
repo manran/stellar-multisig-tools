@@ -211,6 +211,7 @@ export default function RequestApp() {
   const [shareable, setShareable] = useState(Boolean(initialRequest.capability));
   const [activityBound, setActivityBound] = useState(navigation.activityBound);
   const [shareJustCreated, setShareJustCreated] = useState(navigation.justCreated);
+  const [assignmentApiAvailable, setAssignmentApiAvailable] = useState(false);
   const [assignments, setAssignments] = useState<SigningRequestAssignment[]>([]);
   const [snapshot, setSnapshot] = useState<SigningRequestSnapshot | null>(initialPreview);
   const [privateNote, setPrivateNote] = useState<PrivateNoteRevision | null>(null);
@@ -319,6 +320,7 @@ export default function RequestApp() {
     setInspection(null);
     setPrivateNote(null);
     setPrivateCommitment(null);
+    setAssignmentApiAvailable(false);
     setAssignments([]);
     setSourceAnalyses([]);
   }
@@ -375,6 +377,7 @@ export default function RequestApp() {
       await applySnapshot(body.request);
       setPrivateNote(body.context?.privateNote ?? null);
       setPrivateCommitment(body.context?.privateCommitment ?? null);
+      setAssignmentApiAvailable(Boolean(body.coordination));
       setAssignments(body.coordination?.assignments ?? []);
       const normalized = requestLocatorString(body.request.id, locator.capability);
       setRequestLocator(normalized);
@@ -474,6 +477,7 @@ export default function RequestApp() {
           else setSnapshot(body.request);
           setPrivateNote(body.context?.privateNote ?? null);
           setPrivateCommitment(body.context?.privateCommitment ?? null);
+          setAssignmentApiAvailable(Boolean(body.coordination));
           setAssignments(body.coordination?.assignments ?? []);
           if (body.access) {
             setShareable(body.access.shareable);
@@ -799,7 +803,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                     onConnectWallet={() => void connectWallet()}
                     onSignWithWallet={() => void signRequestWithWallet()}
                     onShare={shareable ? () => requestUrl(snapshot.id, capability) : undefined}
-                    onAsk={shareable && privateReadyForRequest ? askSignerToSign : undefined}
+                    onAsk={shareable && privateReadyForRequest && assignmentApiAvailable ? askSignerToSign : undefined}
                     assignments={assignments}
                     shareCreatesLink={shareable}
                     knownComplete={signaturesComplete}
