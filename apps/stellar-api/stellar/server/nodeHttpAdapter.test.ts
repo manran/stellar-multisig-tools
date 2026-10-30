@@ -62,3 +62,10 @@ test('node adapter rejects unknown paths and unsupported methods', async () => {
   assert.equal(wrongMethod.status, 405);
   assert.equal(wrongMethod.headers.get('allow'), 'GET, OPTIONS');
 });
+
+
+test('Node HTTP adapter exposes reusable templates through the Stellar namespace', async () => {
+  const response = await dispatchStellarHttpRequest(new Request('https://api-testnet.multisig.tools/stellar/templates?network=testnet'));
+  assert.notEqual(response.status, 404);
+  assert.notEqual(response.status, 405);
+});

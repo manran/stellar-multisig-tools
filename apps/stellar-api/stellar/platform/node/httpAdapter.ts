@@ -23,6 +23,7 @@ import * as runtimeConfig from '../../routes/runtime-config.js';
 import * as stellarToml from '../../routes/stellar-toml.js';
 import * as treasuries from '../../routes/treasuries.js';
 import * as treasuryBox from '../../routes/treasury-box.js';
+import * as templates from '../../routes/templates.js';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
 type RouteHandler = (request: Request) => Response | Promise<Response>;
@@ -51,6 +52,7 @@ const routes: Record<string, RouteModule> = {
   'stellar-toml': stellarToml,
   treasuries,
   'treasury-box': treasuryBox,
+  templates,
 };
 
 function json(body: unknown, status = 200, headers: HeadersInit = {}): Response {
