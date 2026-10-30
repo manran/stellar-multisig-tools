@@ -58,8 +58,8 @@ Testnet now has the first two productization slices:
 
 - **P0 foundation audit:** complete. Existing Request/Intent facts, Evidence, PostgreSQL and Integration webhook infrastructure remain the foundation; no universal Work/Event state machine was introduced.
 - **P1 Reusable Template:** Payment and Batch Payment Templates are implemented and deployed on Testnet. Templates save the stable recurring setup (treasury, recipients, assets and signing window), while amount, Memo and Private Note remain proposal-specific. Every Proposal still ends in exact transaction Review and signing.
-- **P2 Explicit Ask / Assignment:** implemented and deployed on Testnet. "Ask Bob to sign" now records that Human coordination fact instead of only copying a generic link. Assignment does not grant access or Stellar authority; the private capability link remains the access transport and current on-chain signer policy remains authorization truth.
-- **P3 Contact email + Human delivery:** in progress. Private signer notification-email metadata is implemented first; outbound delivery/provider integration remains separate so email never becomes identity or authorization.
+- **P2 Explicit Ask / Assignment:** implemented and deployed on Testnet. "Ask Bob to sign" now records that Human coordination fact instead of only copying a generic link. Assignment does not grant access or Stellar authority; access still requires an authenticated signer session or an independently issued private capability, and current on-chain signer policy remains authorization truth.
+- **P3 Contact email + Human delivery:** in progress. Private signer notification-email metadata and the first `signature_requested` delivery slice are implemented on the follow-up branch: a dedicated Human outbox/delivery history sends through Resend on Testnet. Email remains delivery only, never identity or authorization; provider delivery webhooks and later reminder/event types remain follow-up work.
 - **P4 Webhook productization:** follows after Human notification behavior is proven.
 
 Signer/threshold Reusable Templates remain a candidate, not a completeness requirement. Learn from real Payment/Batch Template use before expanding the Template catalog mechanically.
@@ -171,6 +171,8 @@ Do not create a Notification Center yet. Inbox already represents Human work tha
 **Done when:** Human and machine notifications no longer contain independent lifecycle logic.
 
 ## Phase 3 — Human email and reminders
+
+**Current implementation:** the first Testnet slice sends only `signature_requested`. It is triggered by an explicit Request assignment, persisted in a dedicated Human notification outbox with bounded retries and per-attempt history, and sent through Resend. The message links only to the non-secret Request locator; it never carries the private bearer capability. Resend credentials are mounted only into the notification worker as a Docker secret. Terminal queue records scrub the plaintext destination email while retaining delivery evidence. Provider delivery/bounce webhooks and reminders are not implemented yet.
 
 Email should be a Human handoff, not a URL transport.
 
