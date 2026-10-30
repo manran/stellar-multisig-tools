@@ -17,6 +17,41 @@ The product goal is:
 
 DocuSign/DocuSeal are useful as mature product references because they turn technical capabilities into reusable Human workflows. MultiSig Tools should learn from that pattern without importing enterprise complexity before it is needed.
 
+## Reference products
+
+### DocuSign — primary long-term product reference
+
+Use DocuSign as the main product benchmark for turning a technically complex multi-party authorization process into a Human workflow.
+
+Study especially:
+
+- reusable Templates;
+- participant/recipient roles;
+- clear next-action handoff;
+- Inbox and lifecycle presentation;
+- reminders and email coordination;
+- completion evidence and audit history;
+- integrations and webhook productization.
+
+Do not copy its enterprise surface area by default. SSO, complex organization policy, advanced workflow engines, compliance administration, white-label, and similar enterprise features remain demand-driven.
+
+The lesson to preserve is:
+
+> Users should experience the work they need to complete, not the protocol capabilities used to implement it.
+
+### DocuSeal — open-source implementation reference
+
+Use DocuSeal as a practical architecture and implementation reference where source code is useful.
+
+Study especially:
+
+- the Template -> participant -> submission -> completion model;
+- keeping Human UI, API, webhooks, and embedded clients around one domain authority;
+- simple deployment and mature storage boundaries;
+- product features implemented without prematurely decomposing the application into many services.
+
+DocuSeal is not a specification for MultiSig Tools and its signing semantics are different from Stellar authorization.
+
 ## Product rule
 
 Build for today's users; keep the foundation compatible with tomorrow's larger teams.
