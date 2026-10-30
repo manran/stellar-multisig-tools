@@ -52,6 +52,18 @@ Study especially:
 
 DocuSeal is not a specification for MultiSig Tools and its signing semantics are different from Stellar authorization.
 
+## Implementation status — 2026-10-30
+
+Testnet now has the first two productization slices:
+
+- **P0 foundation audit:** complete. Existing Request/Intent facts, Evidence, PostgreSQL and Integration webhook infrastructure remain the foundation; no universal Work/Event state machine was introduced.
+- **P1 Reusable Template:** Payment and Batch Payment Templates are implemented and deployed on Testnet. Templates save the stable recurring setup (treasury, recipients, assets and signing window), while amount, Memo and Private Note remain proposal-specific. Every Proposal still ends in exact transaction Review and signing.
+- **P2 Explicit Ask / Assignment:** implemented and deployed on Testnet. "Ask Bob to sign" now records that Human coordination fact instead of only copying a generic link. Assignment does not grant access or Stellar authority; the private capability link remains the access transport and current on-chain signer policy remains authorization truth.
+- **P3 Contact email + Human delivery:** next.
+- **P4 Webhook productization:** follows after Human notification behavior is proven.
+
+Signer/threshold Reusable Templates remain a candidate, not a completeness requirement. Learn from real Payment/Batch Template use before expanding the Template catalog mechanically.
+
 ## Product rule
 
 Build for today's users; keep the foundation compatible with tomorrow's larger teams.
@@ -116,11 +128,14 @@ Review Proposal, Intent, Inbox, Evidence, and webhook state for duplicated or te
 
 ## Phase 1 — Reusable Template v1
 
-Start with existing, well-understood primitives:
+Start with existing, well-understood primitives.
+
+Current Testnet v1 ships:
 
 - Payment;
-- Batch Payment;
-- signer / threshold changes.
+- Batch Payment.
+
+Signer / threshold changes are the next candidate only if reuse clearly improves that Human task. Do not expand the catalog merely to mirror every guided primitive.
 
 Keep v1 small. A user should be able to save a useful recurring setup and create a new Proposal from it with less repeated input.
 
@@ -137,6 +152,8 @@ Do not build a generic formula, conditional-rule, or workflow designer.
 **Done when:** a user can complete a recurring task the second time with materially less setup while still reviewing the exact Stellar action before signing.
 
 ## Phase 2 — Action and notification model
+
+**Current status:** the smallest durable Human action primitive is implemented: an explicit Ask / Assignment records who a signer intentionally asked to act. Broader channel delivery remains Phase 3/4.
 
 Treat "what should happen next?" as a product concept, not as email/webhook formatting.
 

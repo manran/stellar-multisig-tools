@@ -4,10 +4,10 @@ description: "Internal MultiSig Tools engineering documentation."
 ---
 
 **Status:** Testnet self-hosted API cutover ready; Mainnet prelaunch skeleton ready; Mainnet managed execution not ready
-**Current code baseline:** `f14e5b7` (`feat/monorepo-deployment-topology`)
+**Current code baseline:** `c994412` (Testnet productization rollout)
 **Testnet topology:** Vercel Human Web -> Cloudflare path gateway/Tunnel -> self-hosted fixed-Testnet Stellar API -> self-hosted PostgreSQL
 **Mainnet topology:** isolated fixed-Mainnet Web/Gateway/API skeleton only; no public custom-domain cutover
-**Updated:** 2026-09-24
+**Updated:** 2026-10-30
 
 This document is the operational gate after the Hallmark/UI freeze. It does not redefine signer authority, Request/Intent semantics, or execution ownership.
 
@@ -17,9 +17,9 @@ This document is the operational gate after the Hallmark/UI freeze. It does not 
 
 Verified:
 
-- final application gate: **829 / 829 PASS**;
-- PostgreSQL integration gate: **29 / 29 PASS**;
-- production/container build PASS;
+- current Stellar CI test suite PASS;
+- current full TypeScript/Vite build PASS;
+- production/container rebuild PASS;
 - `git diff --check` PASS;
 - Testnet Human Web remains on Vercel while the public API is now Cloudflare -> named Tunnel -> self-hosted Compose;
 - `stellar-testnet.multisig.tools` keeps browser `/api/*` same-origin while forwarding through `api-testnet.multisig.tools/stellar`;
@@ -29,7 +29,10 @@ Verified:
 - 20/20 non-mutating production browser smoke checks PASS at 375 and 1280;
 - Soroban Import -> Review -> live RPC simulation PASS without signing or submission;
 - public Testnet Integration self-service is live at `/developers/integrations/new` and `POST https://api-testnet.multisig.tools/stellar/integration-testnet`;
-- self-service returns a Testnet-only `msi_*` without `mia_*`, signer authority, or Mainnet entitlement.
+- self-service returns a Testnet-only `msi_*` without `mia_*`, signer authority, or Mainnet entitlement;
+- Reusable Payment/Batch Templates and explicit Classic Request signer assignments are deployed on Testnet;
+- migration `0009_reusable_templates` and `0010_request_assignments` are applied in the live Testnet PostgreSQL authority;
+- public `/stellar/templates` is live and authentication-gated; the Vercel Testnet Web at baseline `c994412` is READY and uses capability gates for staged API compatibility.
 
 The 2026-09-20 real-chain Managed Classic E2E remains authoritative for authority/execution behavior because the Hallmark RC did not change Request/Intent authority, managed-channel lease logic, PostgreSQL repositories, webhook delivery, or transaction submission core.
 
@@ -63,6 +66,8 @@ Do not enable Mainnet managed Classic until those items are closed.
   - `0006_classic_managed_channel_leases`
   - `0007_classic_managed_channel_index`
   - `0008_classic_managed_channel_creator_monitor`
+  - `0009_reusable_templates`
+  - `0010_request_assignments`
 - Runtime `DATABASE_URL` is configured in Testnet production.
 - Migration `DATABASE_URL_UNPOOLED` is configured in Testnet production.
 - `MULTISIG_COORDINATION_STORAGE` is configured.

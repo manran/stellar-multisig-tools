@@ -3,7 +3,7 @@ title: "Phase 0 Foundation Audit"
 description: "Code and persistence survey for Templates, Human notifications, reminders, and webhook productization."
 ---
 
-**Status:** survey complete; implementation not started  
+**Status:** survey complete; P1/P2 implemented and deployed on Testnet; P3 next  
 **Date:** 2026-10-30  
 **Scope:** Classic Request, Soroban Intent, Inbox/Activity/Evidence, identity/address book, PostgreSQL, and Integration webhooks
 
@@ -60,9 +60,9 @@ Do not replace this with a new queue or generic message bus.
 
 ## Product gaps
 
-### 1. Reusable Template does not exist
+### 1. Reusable Template — implemented for Payment / Batch Payment
 
-Current "Payment", "Batch Payment", and account-control templates are guided transaction primitives. There is no user-owned reusable business definition or immutable Template version reference.
+Current "Payment", "Batch Payment", and account-control templates remain guided transaction primitives. Testnet now also has a user-owned Reusable Template definition and immutable Template version reference for Payment / Batch Payment.
 
 Recommended Phase 1 shape:
 
@@ -74,7 +74,7 @@ Keep the definition JSON intentionally small and validate it with primitive-spec
 
 Template v1 is signer-owned. Do not add Workspace ownership until shared Templates are a real product requirement.
 
-### 2. "Who should act next?" is not durable
+### 2. "Who should act next?" — explicit Ask implemented
 
 Inbox already has a useful viewer-action projection such as:
 
@@ -94,9 +94,9 @@ On-chain signer eligibility != workflow assignment
 
 Do not email every eligible Stellar signer.
 
-When the user explicitly chooses **Ask Bob to sign**, persist a lightweight assignment for that Request/Intent. That assignment is coordination metadata only; it never changes Stellar authorization.
+When the user explicitly chooses **Ask Bob to sign**, Testnet now persists a lightweight Classic Request assignment. That assignment is coordination metadata only; it never changes Stellar authorization.
 
-This is the smallest durable product object needed for Human notifications and reminders. It is not a workflow engine.
+This is the smallest durable product object needed for Human notifications and reminders. It is deliberately not a workflow engine. Soroban assignment remains deferred until a concrete Human Soroban notification flow needs the same concept.
 
 ### 3. Contacts have names, not notification addresses
 
@@ -152,17 +152,17 @@ No schema change.
 - Keep Integration webhook delivery separate from Human notification delivery.
 - Keep Workspace out of the current product.
 
-### P1 — Reusable Template v1
+### P1 — Reusable Template v1 — Testnet implemented
 
-Add Template + immutable TemplateVersion persistence and optional Proposal/Request Template reference.
+Template + immutable TemplateVersion persistence and optional Proposal/Request Template reference are live on Testnet.
 
-Ship only with Payment, Batch Payment, and signer/threshold change.
+Current shipped scope is Payment and Batch Payment. Signer/threshold reuse remains a demand-driven follow-up.
 
 Success: the second occurrence of a recurring task requires materially less setup while the exact transaction still receives full Review.
 
-### P2 — Explicit Ask / Assignment
+### P2 — Explicit Ask / Assignment — Testnet implemented
 
-Persist a lightweight assignment only when a Human explicitly asks another signer to act.
+A lightweight Classic Request assignment is persisted only when a Human explicitly asks another signer to act.
 
 Reuse the current Inbox viewer-action semantics to determine the CTA at read/delivery time. Do not persist derived quorum/status labels.
 
@@ -200,8 +200,8 @@ Do not add in this foundation pass:
 - shared organization directory;
 - a second queue/message-bus abstraction.
 
-## First implementation target
+## Next implementation target
 
-Start with **Reusable Template v1**.
+Proceed with **P3 Contact email + Human delivery**.
 
-It is the highest user-visible gain and requires the least new coordination machinery. Assignment/Email can then attach to the same Proposal lifecycle without changing Template semantics.
+Use the existing private Address Book as contact metadata and the explicit Request assignment as recipient truth. Email must remain a delivery channel, never identity or authorization. Do not notify every eligible Stellar signer and do not build a Notification Center.
