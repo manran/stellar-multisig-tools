@@ -94,6 +94,8 @@ A Template is never authorization. The exact Proposal/transaction remains the ob
 
 ## Phase 0 — Strengthen the invisible foundation
 
+See also: [Phase 0 Foundation Audit](./phase-0-foundation-audit.md) for the code/database survey and proposed implementation slices.
+
 Prepare the domain model before adding product surface area.
 
 The implementation should leave clear homes for:
