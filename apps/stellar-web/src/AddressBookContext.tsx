@@ -153,7 +153,7 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
   const emails = useMemo(() => {
     const map = new Map<string, string>();
     for (const address of new Set(entries.map((entry) => entry.address))) {
-      const email = newestEntry(entries.filter((entry) => entry.address === address))?.notificationEmail;
+      const email = newestEntry(entries.filter((entry) => entry.address === address && entry.notificationEmail))?.notificationEmail;
       if (email) map.set(address, email);
     }
     return map;
