@@ -82,14 +82,14 @@ export default function AddressAliasEditor({
           onClick={() => { setDraft(currentLabel); setDraftEmail(currentEmail); setError(''); setEditing(true); }}
           className={`inline-flex items-center gap-1.5 rounded-lg text-neutral-500 transition hover:bg-black/5 hover:text-black disabled:opacity-50 dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-white ${compact ? 'p-1.5' : 'px-2.5 py-1.5 text-xs font-semibold'}`}
           aria-label={allowNotificationEmail
-            ? (currentLabel ? `Edit contact ${currentLabel}` : 'Name this signer and add a notification email')
+            ? (currentLabel || currentEmail ? `Edit contact ${currentLabel || address}` : 'Add this signer as a contact')
             : noteMode ? (currentLabel ? 'Edit personal note' : 'Add personal note') : (currentLabel ? `Rename ${currentLabel}` : `Name this ${subjectType}`)}
           title={allowNotificationEmail
-            ? 'Private signer contact details'
+            ? (currentLabel || currentEmail ? 'Edit private signer contact details' : 'Add private signer contact details')
             : noteMode ? 'Personal note visible only to you' : (currentLabel ? 'Rename' : `Give this ${subjectType} a private name`)}
         >
           <Pencil className="h-3.5 w-3.5" />
-          {!compact && <span>{allowNotificationEmail ? 'Edit contact' : noteMode ? (currentLabel ? 'Edit note' : 'Add note') : (currentLabel ? 'Rename' : 'Name this')}</span>}
+          {!compact && <span>{allowNotificationEmail ? (currentLabel || currentEmail ? 'Edit contact' : 'Add contact') : noteMode ? (currentLabel ? 'Edit note' : 'Add note') : (currentLabel ? 'Rename' : 'Name this')}</span>}
         </button>
         {allowNotificationEmail && currentEmail && <div className="mt-1 max-w-[240px] break-all text-[11px] text-neutral-400">{currentEmail}</div>}
         {error && <div className="mt-1 max-w-[240px] text-xs text-red-700 dark:text-red-300">{error}</div>}

@@ -2458,6 +2458,14 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
     border-bottom: var(--rule-hairline) solid var(--color-rule);
   }
 
+  .mst-signer-contact {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+
   .mst-signing-action-strip {
     padding-top: var(--space-lg);
     border-top: var(--rule-hairline) solid var(--color-rule);
