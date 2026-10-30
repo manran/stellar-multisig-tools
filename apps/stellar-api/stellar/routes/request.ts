@@ -1080,23 +1080,22 @@ export async function PATCH(request: Request): Promise<Response> {
           snapshotLoader: (store, requestId) => getSigningRequest(store, requestId, serviceOptions),
         },
       );
-      if (assigned.created) {
-        try {
-          await queueSignatureRequestedEmail({
-            requestId: access.id,
-            assignedByAddress: assigned.assignment.assignedByAddress,
-            signerAddress: assigned.assignment.signerAddress,
-            assignedAt: assigned.assignment.assignedAt,
-          });
-        } catch (cause) {
-          // Assignment is the canonical Human coordination fact. Notification
-          // delivery must not turn a successful Ask into a failed PATCH.
-          console.error('Signature-request notification enqueue failed', {
-            requestId: access.id,
-            signerAddress: assigned.assignment.signerAddress,
-            cause,
-          });
-        }
+      try {
+        await queueSignatureRequestedEmail({
+          requestId: access.id,
+          assignedByAddress: assigned.assignment.assignedByAddress,
+          signerAddress: assigned.assignment.signerAddress,
+          assignedAt: assigned.assignment.assignedAt,
+        });
+      } catch (cause) {
+        // Assignment is the canonical Human coordination fact. Notification
+        // enqueue is idempotent, so a repeated Ask can repair a transient
+        // enqueue failure without creating another email.
+        console.error('Signature-request notification enqueue failed', {
+          requestId: access.id,
+          signerAddress: assigned.assignment.signerAddress,
+          cause,
+        });
       }
       const snapshot = await getSigningRequest(signingRequestStore, access.id, serviceOptions);
       return noStoreJson({
