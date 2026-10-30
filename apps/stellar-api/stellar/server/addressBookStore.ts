@@ -5,6 +5,8 @@ export interface StoredAddressAlias {
   address: string;
   subjectType: AddressAliasSubjectType;
   label: string;
+  /** Private contact metadata only. Never identity or authorization evidence. */
+  notificationEmail?: string;
   createdAt: string;
   updatedAt: string;
 }

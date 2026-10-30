@@ -32,6 +32,7 @@ function publicEntry(entry: StoredAddressAlias) {
     address: entry.address,
     subject_type: entry.subjectType,
     label: entry.label,
+    ...(entry.notificationEmail ? { notification_email: entry.notificationEmail } : {}),
     created_at: entry.createdAt,
     updated_at: entry.updatedAt,
   };
@@ -88,6 +89,7 @@ export async function PUT(request: Request): Promise<Response> {
       address: typeof body.address === 'string' ? body.address : '',
       subjectType: typeof body.subject_type === 'string' ? body.subject_type : '',
       label: typeof body.label === 'string' ? body.label : '',
+      notificationEmail: body.notification_email,
     });
     return json({ entry: publicEntry(entry) });
   } catch (cause) {
