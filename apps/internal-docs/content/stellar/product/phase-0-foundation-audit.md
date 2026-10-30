@@ -169,7 +169,11 @@ Success: the system knows *Bob was asked*, not merely *Bob could sign*.
 
 ### P3 — Contact email + Human delivery
 
-Extend private signer-contact metadata with optional email. Add Human notification outbox/delivery records and an email adapter.
+Private signer-contact metadata now supports an optional notification email. Next add Human notification outbox/delivery records and one real email adapter after the provider is provisioned.
+
+Notification recipient truth comes from the explicit Request assignment, not from every on-chain eligible signer.
+
+Email CTA links must not embed the private bearer capability. A recipient can open the non-secret Request locator and authenticate with the assigned signer wallet. Therefore Human notification queues, delivery history, and provider payload metadata never need to persist the private capability token.
 
 Initial notifications:
 
