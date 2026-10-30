@@ -1,5 +1,5 @@
 import { isValidStellarAccountId } from '../../../../packages/stellar-core/src/horizon.js';
-import type { SigningRequestAssignment } from '../../../../packages/stellar-core/src/requestTypes.js';
+import type { SigningRequestAssignment, SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
 import { signerCanAccessTransaction, signerHasSignedTransaction } from './requestAccess.js';
 import { getSigningRequest } from './requestService.js';
 import type { SigningRequestStore } from './requestStore.js';
@@ -23,7 +23,7 @@ export async function assignSigningRequest(
   options: {
     now?: Date;
     signerAccess?: typeof signerCanAccessTransaction;
-    snapshotLoader?: typeof getSigningRequest;
+    snapshotLoader?: (store: SigningRequestStore, requestId: string) => Promise<SigningRequestSnapshot>;
   } = {},
 ): Promise<{ assignment: SigningRequestAssignment; created: boolean }> {
   if (!store.putRequestAssignment) {

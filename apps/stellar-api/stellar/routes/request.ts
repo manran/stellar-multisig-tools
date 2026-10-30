@@ -1075,6 +1075,9 @@ export async function PATCH(request: Request): Promise<Response> {
         access.id,
         access.actorAddress,
         body.assignSigner,
+        {
+          snapshotLoader: (store, requestId) => getSigningRequest(store, requestId, serviceOptions),
+        },
       );
       const snapshot = await getSigningRequest(signingRequestStore, access.id, serviceOptions);
       return noStoreJson({
