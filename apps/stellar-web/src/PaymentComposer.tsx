@@ -334,11 +334,11 @@ export default function PaymentComposer({ network }: Props) {
         if (cancelled) return;
         setSourceAccount(account);
         setSourceParameters(parameters);
-        const nextAssets = paymentAssetChoices(account);
-        setRecipients((current) => current.map((row) => ({
-          ...row,
-          assetKey: nextAssets.some((asset) => asset.key === row.assetKey) ? row.assetKey : 'native',
-        })));
+        // Keep the user's selected asset even when current account state no longer
+        // offers it. Silently replacing an unavailable template/draft asset with
+        // XLM would change transaction meaning. Validation below requires an
+        // explicit new asset choice instead.
+        paymentAssetChoices(account);
       })
       .catch(() => {
         if (!cancelled) {
@@ -570,10 +570,11 @@ export default function PaymentComposer({ network }: Props) {
                       </label>
                       <div>
                         <div className="mb-2 text-sm font-semibold">Asset</div>
-                        {action === 'create_account' ? <div className="mst-transaction-static-field">XLM <span className="ml-1 font-normal text-neutral-400">required for CreateAccount</span></div> : <PaymentAssetPicker assets={assets} value={asset?.key ?? 'native'} onChange={(assetKey) => updateRecipient(index, { assetKey })} disabled={!sourceAccount} ariaLabel={`Recipient ${index + 1} asset`} />}
+                        {action === 'create_account' ? <div className="mst-transaction-static-field">XLM <span className="ml-1 font-normal text-neutral-400">required for CreateAccount</span></div> : <PaymentAssetPicker assets={assets} value={recipient.assetKey} onChange={(assetKey) => updateRecipient(index, { assetKey })} disabled={!sourceAccount} ariaLabel={`Recipient ${index + 1} asset`} />}
                       </div>
                     </div>
                     {recipient.amount && !amountValid && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Enter an amount greater than 0 with up to 7 decimal places.</div>}
+                    {sourceAccount && action === 'payment' && !asset && <div className="mt-2 text-sm text-red-700 dark:text-red-300">This asset is no longer available from this treasury. Choose an available asset before continuing.</div>}
                   </div>
                 );
               })}
