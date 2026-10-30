@@ -585,14 +585,6 @@ export async function GET(request: Request): Promise<Response> {
     if (historyAccountId && !isValidStellarAccountId(historyAccountId)) {
       throw new SigningRequestServiceError('Enter a valid Stellar account.', 400, 'invalid_account');
     }
-    const templateRef = body.template !== undefined
-      ? await resolveReusableTemplateReference(
-          runtimeReusableTemplateStore(),
-          creatorSession.address,
-          requestNetwork,
-          body.template,
-        )
-      : undefined;
     const accountCache = new Map<string, ReturnType<typeof loadAccount>>();
     const accountLoader: typeof loadAccount = (accountId, network) => {
       const key = `${network}:${accountId}`;
@@ -940,6 +932,14 @@ export async function POST(request: Request): Promise<Response> {
         'request_creator_identity_required',
       );
     }
+    const templateRef = body.template !== undefined
+      ? await resolveReusableTemplateReference(
+          runtimeReusableTemplateStore(),
+          creatorSession.address,
+          requestNetwork,
+          body.template,
+        )
+      : undefined;
     const accountCache = new Map<string, ReturnType<typeof loadAccount>>();
     const accountLoader: typeof loadAccount = (accountId, network) => {
       const key = `${network}:${accountId}`;
