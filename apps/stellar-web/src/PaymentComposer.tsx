@@ -338,7 +338,6 @@ export default function PaymentComposer({ network }: Props) {
         // offers it. Silently replacing an unavailable template/draft asset with
         // XLM would change transaction meaning. Validation below requires an
         // explicit new asset choice instead.
-        paymentAssetChoices(account);
       })
       .catch(() => {
         if (!cancelled) {
