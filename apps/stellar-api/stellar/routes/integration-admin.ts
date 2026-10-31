@@ -29,6 +29,8 @@ import {
   DeploymentNetworkPolicyError,
 } from '../server/deploymentNetworkPolicy.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import { listRecentIntegrationWebhookDeliverySummaries } from '../db/postgresIntegrationWebhookDeliveryHistory.js';
+import { requeueIntegrationOutboxEvent } from '../db/postgresIntegrationOutboxDispatch.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -63,6 +65,19 @@ export async function GET(request: Request): Promise<Response> {
   try {
     authorize(request);
     const url = new URL(request.url);
+    if (url.searchParams.get('view') === 'webhook_deliveries') {
+      const serviceId = url.searchParams.get('serviceId')?.trim().toLowerCase() ?? '';
+      if (!serviceId) {
+        throw new IntegrationAdminServiceError(
+          'Integration Service id is required for webhook delivery history.',
+          400,
+          'integration_service_id_required',
+        );
+      }
+      return noStoreJson({
+        deliveries: await listRecentIntegrationWebhookDeliverySummaries(serviceId),
+      });
+    }
     if (url.searchParams.get('view') === 'managed_classic_execution') {
       const rawNetwork = url.searchParams.get('network');
       if (rawNetwork !== 'testnet' && rawNetwork !== 'public') {
@@ -139,6 +154,47 @@ export async function PATCH(request: Request): Promise<Response> {
         blobIntegrationCredentialStore,
         serviceId,
       ));
+    }
+    if (body.action === 'redeliver_webhook') {
+      const eventId = typeof body.eventId === 'string' ? body.eventId.trim() : '';
+      if (!eventId) {
+        throw new IntegrationAdminServiceError(
+          'Webhook event id is required for redelivery.',
+          400,
+          'integration_webhook_event_id_required',
+        );
+      }
+      const service = await blobIntegrationCredentialStore.getCredential(serviceId);
+      if (!service) {
+        throw new IntegrationAdminServiceError(
+          'Integration Service was not found.',
+          404,
+          'integration_service_not_found',
+        );
+      }
+      if (!service.enabled || !service.webhook?.enabled) {
+        throw new IntegrationAdminServiceError(
+          'Enable this Integration Service webhook before redelivery.',
+          409,
+          'integration_webhook_not_enabled',
+        );
+      }
+      const redelivery = await requeueIntegrationOutboxEvent(serviceId, eventId);
+      if (redelivery.status === 'not_found') {
+        throw new IntegrationAdminServiceError(
+          'Webhook event was not found for this Integration Service.',
+          404,
+          'integration_webhook_event_not_found',
+        );
+      }
+      if (redelivery.status === 'not_terminal') {
+        throw new IntegrationAdminServiceError(
+          'This webhook event is already pending or retrying.',
+          409,
+          'integration_webhook_event_not_terminal',
+        );
+      }
+      return noStoreJson({ redelivery: { eventId, status: 'requeued' as const } });
     }
     if (body.action !== undefined) {
       throw new IntegrationAdminServiceError('Unsupported Integration administration action.', 400, 'invalid_integration_admin_action');
