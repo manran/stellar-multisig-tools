@@ -32,12 +32,23 @@ function signingDeadline(value: string): string {
   return `${formatted} UTC`;
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function buildSignatureRequestedEmail(input: {
   requestId: string;
   network: StellarNetwork;
   expiresAt: string;
   webOrigin: string;
   actorAddress: string;
+  systemType: string;
+  businessLabel?: string;
 }): HumanNotificationEmail {
   const actionUrl = requestActionUrl(input.webOrigin, input.requestId);
   const networkLabel = input.network === 'testnet' ? 'Stellar Testnet' : 'Stellar Mainnet';
@@ -48,29 +59,38 @@ export function buildSignatureRequestedEmail(input: {
   const closesAt = signingDeadline(input.expiresAt);
   const inboxUrl = new URL('/inbox', input.webOrigin).toString();
 
+  const businessLabel = input.businessLabel?.trim();
+  const workLabel = businessLabel || input.systemType;
+  const actorHtml = escapeHtml(input.actorAddress);
+  const workLabelHtml = escapeHtml(workLabel);
+  const systemTypeHtml = escapeHtml(input.systemType);
+
   const text = [
-    'You\'ve been asked to review and sign a proposal in MultiSig Tools.',
+    `Signing closes: ${closesAt}`,
     '',
-    `Requested by: ${input.actorAddress}`,
+    `${input.actorAddress} invited you to review and sign:`,
+    businessLabel ? businessLabel : input.systemType,
+    ...(businessLabel ? [input.systemType] : []),
+    '',
     `Network: ${networkLabel}`,
     `Proposal ID: ${displayId}`,
-    `Signing closes: ${closesAt}`,
     '',
     `Review proposal: ${actionUrl}`,
     '',
-    'Prefer not to follow links in email? Open MultiSig Tools directly, confirm the assigned signer wallet, and check Inbox.',
+    'Or open MultiSig Tools directly, confirm the assigned signer wallet, and continue from Inbox.',
     `Inbox: ${inboxUrl}`,
-    `If needed, you can also open a shared transaction and enter Proposal ID ${displayId}.`,
+    `If needed, you can also enter Proposal ID ${displayId}.`,
     '',
     'Your Stellar wallet—not this email—determines signing access. This email does not grant signing authority.',
   ].join('\n');
 
   const html = [
-    '<p>You\'ve been asked to review and sign a proposal in MultiSig Tools.</p>',
-    `<p><strong>Requested by:</strong><br><span style="word-break:break-all">${input.actorAddress}</span></p>`,
-    `<p><strong>Network:</strong> ${networkLabel}<br><strong>Proposal ID:</strong> ${displayId}<br><strong>Signing closes:</strong> ${closesAt}</p>`,
+    `<p><strong>Signing closes:</strong> ${closesAt}</p>`,
+    `<p><span style="word-break:break-all">${actorHtml}</span> invited you to review and sign:</p>`,
+    `<p><strong>${workLabelHtml}</strong>${businessLabel ? `<br>${systemTypeHtml}` : ''}</p>`,
+    `<p><strong>Network:</strong> ${networkLabel}<br><strong>Proposal ID:</strong> ${displayId}</p>`,
     `<p><a href="${actionUrl}"><strong>Review proposal</strong></a></p>`,
-    `<p>Prefer not to follow links in email? Open <a href="${inboxUrl}">MultiSig Tools</a> directly, confirm the assigned signer wallet, and check <strong>Inbox</strong>. If needed, you can also open a shared transaction and enter Proposal ID <strong>${displayId}</strong>.</p>`,
+    `<p>Or open <a href="${inboxUrl}">MultiSig Tools</a> directly, confirm the assigned signer wallet, and continue from <strong>Inbox</strong>. If needed, enter Proposal ID <strong>${displayId}</strong>.</p>`,
     '<p>Your Stellar wallet—not this email—determines signing access. This email does not grant signing authority.</p>',
   ].join('');
 

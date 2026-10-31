@@ -319,6 +319,17 @@ A recipient does **not** need to register a MultiSig Tools account before signin
 
 Contacts are reusable. Once a signer address has a private name/email, later Proposals should recognize that signer automatically and offer the Human action directly.
 
+Reusable Template names provide the business label for recurring work. The creator chooses this name, for example `Monthly payroll` or `Supplier payment`. MultiSig Tools separately derives the system transaction type from the exact Proposal, for example `Payment`, `Batch payment`, or `Account signing change`. Human surfaces may show both:
+
+```text
+Monthly payroll
+Batch payment
+```
+
+The business label never replaces the system type or transaction review. A user cannot rename a Batch payment into a different Stellar transaction type. Personal Template names are signer-owned in the current product; do not introduce an administrator role merely to manage them. Shared/organization Template administration remains demand-driven.
+
+Signature-request Email and Inbox use the same presentation rule: business label first when a Reusable Template exists, system type as the factual secondary label. Email may disclose this semantic pair, requester, network, Proposal ID, and deadline, but not transaction values, destinations, memo, Private Note, XDR, or bearer capability.
+
 Manual private capability links remain a separate fallback/share mechanism. `Ask Bob to sign` must not silently copy or expose the private capability URL merely because both features exist on the same Proposal.
 
 Do not add a traditional account-registration system until a product requirement exists that cannot be satisfied by wallet identity plus private contact metadata.

@@ -194,5 +194,10 @@ export async function resolveReusableTemplateReference(
   ) {
     throw new ReusableTemplateServiceError('Template is unavailable for this signer and network.', 404, 'template_not_found');
   }
-  return { id, version };
+  return {
+    id,
+    version,
+    name: stored.template.name,
+    kind: stored.template.kind,
+  };
 }

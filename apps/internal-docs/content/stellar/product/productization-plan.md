@@ -144,6 +144,10 @@ Required properties:
 - stable Template identity;
 - versioned definitions;
 - historical Proposals keep the Template version used at creation;
+- the user-defined Template name is the recurring business label, such as `Monthly payroll` or `Supplier payment`;
+- MultiSig Tools derives and displays the factual system transaction type separately from the exact Proposal;
+- Email and Inbox may use `business label + system type` as shared Human presentation;
+- Template names are signer-owned in v1; do not add an Admin role for personal Template naming;
 - exact transaction review remains mandatory;
 - manual/guided creation remains available without a Template.
 
