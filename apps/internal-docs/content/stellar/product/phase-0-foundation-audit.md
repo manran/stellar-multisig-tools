@@ -3,7 +3,7 @@ title: "Phase 0 Foundation Audit"
 description: "Code and persistence survey for Templates, Human notifications, reminders, and webhook productization."
 ---
 
-**Status:** survey complete; P1/P2 implemented and deployed on Testnet; P3 next  
+**Status:** survey complete; P1/P2 deployed on Testnet; P3 first delivery slice implemented on follow-up branch
 **Date:** 2026-10-30  
 **Scope:** Classic Request, Soroban Intent, Inbox/Activity/Evidence, identity/address book, PostgreSQL, and Integration webhooks
 
@@ -109,7 +109,7 @@ Email remains contact metadata only:
 - it never changes Stellar authorization;
 - it stays in the existing private object-storage boundary.
 
-Outbound email delivery is deliberately a separate step. Do not hard-code a provider or make the existing Ask action claim that an email was sent until a real delivery integration is provisioned and verified.
+Outbound email delivery remains a separate step from contact storage and authorization. Testnet now has a concrete Resend transport for the first `signature_requested` slice; the existing Ask/Assignment fact remains canonical and does not claim provider delivery success.
 
 ### 4. Human notification delivery is a separate channel
 
@@ -169,9 +169,9 @@ Success: the system knows *Bob was asked*, not merely *Bob could sign*.
 
 ### P3 — Contact email + Human delivery
 
-Private signer-contact metadata now supports an optional notification email. Next add Human notification outbox/delivery records and one real email adapter after the provider is provisioned.
+Private signer-contact metadata supports an optional notification email. The first delivery slice adds a dedicated PostgreSQL Human notification outbox/delivery history and a Resend adapter for `signature_requested` on Testnet. Provider failures are retried from the durable outbox; notification enqueue/send failure never changes Stellar authorization or the already-recorded Assignment.
 
-Notification recipient truth comes from the explicit Request assignment, not from every on-chain eligible signer.
+Notification recipient truth comes from the explicit Request assignment, not from every on-chain eligible signer. The Resend API key is mounted only into the notification worker through a Docker secret, not exposed to the Web or general API process.
 
 Email CTA links must not embed the private bearer capability. A recipient can open the non-secret Request locator and authenticate with the assigned signer wallet. Therefore Human notification queues, delivery history, and provider payload metadata never need to persist the private capability token.
 
@@ -205,6 +205,6 @@ Do not add in this foundation pass:
 
 ## Next implementation target
 
-Proceed with **P3 Contact email + Human delivery**.
+Continue **P3 Contact email + Human delivery** after the initial `signature_requested` slice.
 
-Use the existing private Address Book as contact metadata and the explicit Request assignment as recipient truth. Email must remain a delivery channel, never identity or authorization. Do not notify every eligible Stellar signer and do not build a Notification Center.
+Next prove provider delivery/bounce evidence, then add only the reminder/lifecycle messages that real usage needs. Keep the existing private Address Book as contact metadata and explicit Request assignment as recipient truth. Email remains a delivery channel, never identity or authorization. Do not notify every eligible Stellar signer and do not build a Notification Center.

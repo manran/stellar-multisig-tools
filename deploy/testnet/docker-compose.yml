@@ -111,6 +111,27 @@ services:
       - edge
       - data
 
+  human-notification-worker:
+    build:
+      context: ../..
+      dockerfile: apps/stellar-api/Dockerfile
+    restart: unless-stopped
+    command: ["./node_modules/.bin/tsx", "apps/stellar-api/stellar/platform/node/humanNotificationWorker.ts"]
+    environment:
+      VITE_STELLAR_DEPLOYMENT_NETWORK: testnet
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}
+      MULTISIG_HUMAN_EMAIL_FROM: "MultiSig Tools Testnet <notifications@testnet.notify.multisig.tools>"
+      MULTISIG_HUMAN_WEB_ORIGIN: https://stellar-testnet.multisig.tools
+      RESEND_API_KEY_FILE: /run/secrets/resend_api_key
+    secrets:
+      - resend_api_key
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - edge
+      - data
+
   cloudflared:
     image: cloudflare/cloudflared:2026.9.1
     restart: unless-stopped
@@ -140,3 +161,5 @@ networks:
 secrets:
   webhook_relay_secret:
     file: ${MST_WEBHOOK_RELAY_SECRET_FILE:-/opt/MST/runtime/mst-testnet-api/webhook-relay.secret}
+  resend_api_key:
+    file: ${MST_RESEND_API_KEY_FILE:-/opt/MST/runtime/mst-testnet-api/resend-api-key.secret}
