@@ -177,6 +177,15 @@ test('signer coordination uses private Contacts before email Ask and keeps capab
   assert.doesNotMatch(askHandler, /requestUrl\(/);
   assert.match(requestApi, /status: 'enqueue_failed'/);
   assert.match(signingGuidance, /Retry email/);
+  assert.match(signingGuidance, /notifications\.find\(\(item\) => item\.signerAddress === signerAddress\)/);
+  assert.match(signingGuidance, /Email accepted/);
+  assert.match(signingGuidance, /Reminder accepted/);
+  assert.match(signingGuidance, /canRemind/);
+  assert.match(signingGuidance, /'Remind'/);
+  assert.doesNotMatch(signingGuidance, /notifiedSigners/);
+  assert.match(requestUi, /remindSigner: signerAddress/);
+  assert.match(requestApi, /requireSigningRequestReminder/);
+  assert.match(requestApi, /queueSignatureReminderEmail/);
 });
 
 test('frozen Private Note is visibly read-only without exposing lifecycle mechanics', () => {

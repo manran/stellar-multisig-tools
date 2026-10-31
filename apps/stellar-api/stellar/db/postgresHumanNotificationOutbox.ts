@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
+import type {
+  SigningRequestNotificationSummary,
+} from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { coordinationPool, withPostgresTransaction } from './postgres.js';
 
-export type HumanNotificationEventType = 'signature_requested';
+export type HumanNotificationEventType = 'signature_requested' | 'signature_reminder';
 export type HumanNotificationTerminalOutcome = 'sent' | 'permanent_failure';
 export type HumanNotificationDeliveryOutcome = 'succeeded' | 'retry' | 'permanent_failure';
 
@@ -109,7 +112,47 @@ export function signatureRequestedNotificationEventId(
   return `classic_request:${requestId}:signature_requested:${signerAddress}`;
 }
 
-export async function enqueueSignatureRequestedNotification(
+export function signatureReminderNotificationEventId(
+  requestId: string,
+  signerAddress: string,
+  nonce = randomUUID(),
+): string {
+  return `classic_request:${requestId}:signature_reminder:${signerAddress}:${nonce}`;
+}
+
+async function enqueueHumanNotification(
+  input: {
+    eventId: string;
+    eventType: HumanNotificationEventType;
+    requestId: string;
+    recipientSignerAddress: string;
+    actorAddress: string;
+    destinationEmail: string;
+    createdAt?: Date;
+  },
+  pool: Pool,
+): Promise<{ eventId: string; created: boolean }> {
+  const createdAt = (input.createdAt ?? new Date()).toISOString();
+  const result = await pool.query(
+    `INSERT INTO mst_stellar.human_notification_outbox (
+       event_id, event_type, request_id, recipient_signer_address, actor_address,
+       destination_email, created_at, available_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+     ON CONFLICT (event_id) DO NOTHING`,
+    [
+      input.eventId,
+      input.eventType,
+      input.requestId,
+      input.recipientSignerAddress,
+      input.actorAddress,
+      input.destinationEmail,
+      createdAt,
+    ],
+  );
+  return { eventId: input.eventId, created: result.rowCount === 1 };
+}
+
+export function enqueueSignatureRequestedNotification(
   input: {
     requestId: string;
     recipientSignerAddress: string;
@@ -119,24 +162,70 @@ export async function enqueueSignatureRequestedNotification(
   },
   pool: Pool = coordinationPool(),
 ): Promise<{ eventId: string; created: boolean }> {
-  const createdAt = (input.createdAt ?? new Date()).toISOString();
-  const eventId = signatureRequestedNotificationEventId(input.requestId, input.recipientSignerAddress);
-  const result = await pool.query(
-    `INSERT INTO mst_stellar.human_notification_outbox (
-       event_id, event_type, request_id, recipient_signer_address, actor_address,
-       destination_email, created_at, available_at
-     ) VALUES ($1, 'signature_requested', $2, $3, $4, $5, $6, $6)
-     ON CONFLICT (event_id) DO NOTHING`,
-    [
-      eventId,
-      input.requestId,
-      input.recipientSignerAddress,
-      input.actorAddress,
-      input.destinationEmail,
-      createdAt,
-    ],
+  return enqueueHumanNotification({
+    ...input,
+    eventId: signatureRequestedNotificationEventId(input.requestId, input.recipientSignerAddress),
+    eventType: 'signature_requested',
+  }, pool);
+}
+
+export function enqueueSignatureReminderNotification(
+  input: {
+    requestId: string;
+    recipientSignerAddress: string;
+    actorAddress: string;
+    destinationEmail: string;
+    createdAt?: Date;
+    eventId?: string;
+  },
+  pool: Pool = coordinationPool(),
+): Promise<{ eventId: string; created: boolean }> {
+  return enqueueHumanNotification({
+    ...input,
+    eventId: input.eventId ?? signatureReminderNotificationEventId(input.requestId, input.recipientSignerAddress),
+    eventType: 'signature_reminder',
+  }, pool);
+}
+
+interface NotificationSummaryRow {
+  event_type: HumanNotificationEventType;
+  recipient_signer_address: string;
+  actor_address: string;
+  created_at: Date | string;
+  last_attempt_at: Date | string | null;
+  completed_at: Date | string | null;
+  outcome: HumanNotificationTerminalOutcome | null;
+  terminal_error_code: string | null;
+}
+
+export async function listLatestHumanNotificationSummaries(
+  requestId: string,
+  pool: Pool = coordinationPool(),
+): Promise<SigningRequestNotificationSummary[]> {
+  const result = await pool.query<NotificationSummaryRow>(
+    `SELECT DISTINCT ON (recipient_signer_address)
+            event_type, recipient_signer_address, actor_address, created_at,
+            last_attempt_at, completed_at, outcome, terminal_error_code
+       FROM mst_stellar.human_notification_outbox
+      WHERE request_id = $1
+      ORDER BY recipient_signer_address, created_at DESC, event_id DESC`,
+    [requestId],
   );
-  return { eventId, created: result.rowCount === 1 };
+  return result.rows.map((row) => ({
+    channel: 'email' as const,
+    eventType: row.event_type,
+    signerAddress: row.recipient_signer_address,
+    actorAddress: row.actor_address,
+    state: row.outcome === 'sent'
+      ? 'provider_accepted' as const
+      : row.outcome === 'permanent_failure'
+        ? 'failed' as const
+        : 'queued' as const,
+    createdAt: iso(row.created_at),
+    ...(row.last_attempt_at ? { lastAttemptAt: iso(row.last_attempt_at) } : {}),
+    ...(row.completed_at ? { completedAt: iso(row.completed_at) } : {}),
+    ...(row.terminal_error_code ? { errorCode: row.terminal_error_code } : {}),
+  }));
 }
 
 export async function listDueHumanNotificationEventIds(

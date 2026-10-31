@@ -46,3 +46,21 @@ test('signature-request email escapes user-defined business labels in HTML', () 
   assert.match(email.html, /&lt;Monthly &amp; payroll&gt;/);
   assert.doesNotMatch(email.html, /<Monthly & payroll>/);
 });
+
+test('signature reminder is visibly a reminder without disclosing transaction values', () => {
+  const email = buildSignatureRequestedEmail({
+    requestId: '0123456789ABCDEF',
+    network: 'testnet',
+    expiresAt: '2026-10-31T12:00:00Z',
+    webOrigin: 'https://stellar-testnet.multisig.tools',
+    actorAddress: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+    systemType: 'Batch payment',
+    businessLabel: 'Monthly payroll',
+    eventType: 'signature_reminder',
+  });
+
+  assert.match(email.subject, /Reminder: Signature requested/);
+  assert.match(email.text, /reminded you to review and sign/);
+  assert.match(email.text, /Monthly payroll\nBatch payment/);
+  assert.doesNotMatch(email.text, /amount|destination|XDR|memo/i);
+});

@@ -76,8 +76,30 @@ export interface SigningRequestAssignment {
   assignedAt: string;
 }
 
+export type SigningRequestNotificationEventType =
+  | 'signature_requested'
+  | 'signature_reminder';
+
+export type SigningRequestNotificationDeliveryState =
+  | 'queued'
+  | 'provider_accepted'
+  | 'failed';
+
+export interface SigningRequestNotificationSummary {
+  channel: 'email';
+  eventType: SigningRequestNotificationEventType;
+  signerAddress: string;
+  actorAddress: string;
+  state: SigningRequestNotificationDeliveryState;
+  createdAt: string;
+  lastAttemptAt?: string;
+  completedAt?: string;
+  errorCode?: string;
+}
+
 export interface SigningRequestCoordination {
   assignments: SigningRequestAssignment[];
+  notifications: SigningRequestNotificationSummary[];
 }
 
 export interface SigningRequestAccess {
@@ -146,5 +168,14 @@ export interface AssignSigningRequestResponse {
   notification?: {
     channel: 'email';
     status: SigningRequestNotificationStatus;
+  };
+}
+
+export interface RemindSigningRequestResponse {
+  request: SigningRequestSnapshot;
+  coordination: SigningRequestCoordination;
+  notification: {
+    channel: 'email';
+    status: Exclude<SigningRequestNotificationStatus, 'already_queued'>;
   };
 }
