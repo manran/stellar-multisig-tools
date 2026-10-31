@@ -150,6 +150,7 @@ export async function dispatchHumanNotificationEvent(
     network: record.network,
     expiresAt: record.expiresAt,
     webOrigin,
+    actorAddress: record.actorAddress,
   });
   const sendEmail = dependencies.sendEmail ?? ((input) => sendResendEmail(input));
 

@@ -315,7 +315,7 @@ email notification is queued
 recipient opens the Proposal and confirms the assigned signer wallet
 ```
 
-A recipient does **not** need to register a MultiSig Tools account before signing. Opening an email CTA with a non-secret Request locator must still require wallet confirmation before private Proposal details are shown.
+A recipient does **not** need to register a MultiSig Tools account before signing. Opening an email CTA with a non-secret Request locator must still require wallet confirmation before private Proposal details are shown. If the recipient prefers not to follow an email link, the normal recovery path is to open MultiSig Tools directly, confirm the assigned signer wallet, and use **Inbox**. Manual Proposal ID entry is a secondary fallback.
 
 Contacts are reusable. Once a signer address has a private name/email, later Proposals should recognize that signer automatically and offer the Human action directly.
 
