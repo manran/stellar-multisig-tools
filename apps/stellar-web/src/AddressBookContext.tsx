@@ -9,6 +9,7 @@ export interface AddressAliasEntry {
   address: string;
   subjectType: AddressAliasSubjectType;
   label: string;
+  notificationEmail?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -18,7 +19,13 @@ interface AddressBookContextValue {
   loading: boolean;
   error: string;
   labelFor(address: string, subjectType: AddressAliasSubjectType): string;
-  saveAlias(address: string, subjectType: AddressAliasSubjectType, label: string): Promise<void>;
+  emailFor(address: string): string;
+  saveAlias(
+    address: string,
+    subjectType: AddressAliasSubjectType,
+    label: string,
+    notificationEmail?: string | null,
+  ): Promise<void>;
   removeAlias(address: string, subjectType: AddressAliasSubjectType): Promise<void>;
 }
 
@@ -33,12 +40,14 @@ function parseEntry(value: unknown): AddressAliasEntry | null {
   if (!value || typeof value !== 'object') return null;
   const record = value as Record<string, unknown>;
   const subjectType = record.subject_type ?? record.subjectType;
+  const notificationEmail = record.notification_email ?? record.notificationEmail;
   if (typeof record.address !== 'string' || typeof record.label !== 'string') return null;
   if (subjectType !== 'account' && subjectType !== 'signer') return null;
   return {
     address: record.address,
     subjectType,
     label: record.label,
+    ...(typeof notificationEmail === 'string' && notificationEmail ? { notificationEmail } : {}),
     createdAt: typeof record.created_at === 'string'
       ? record.created_at
       : typeof record.createdAt === 'string' ? record.createdAt : '',
@@ -141,7 +150,23 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
     [labels],
   );
 
-  const saveAlias = useCallback(async (address: string, subjectType: AddressAliasSubjectType, label: string) => {
+  const emails = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const address of new Set(entries.map((entry) => entry.address))) {
+      const email = newestEntry(entries.filter((entry) => entry.address === address && entry.notificationEmail))?.notificationEmail;
+      if (email) map.set(address, email);
+    }
+    return map;
+  }, [entries]);
+
+  const emailFor = useCallback((address: string) => emails.get(address) ?? '', [emails]);
+
+  const saveAlias = useCallback(async (
+    address: string,
+    subjectType: AddressAliasSubjectType,
+    label: string,
+    notificationEmail?: string | null,
+  ) => {
     if (!privateUnlocked || !unlockedAddress || !unlockedNetwork) {
       throw new Error('Unlock your private workspace to save private names.');
     }
@@ -151,10 +176,12 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
     const previous = entries;
     const now = new Date().toISOString();
     const existing = newestEntry(previous.filter((entry) => entry.address === address));
+    const requestedEmail = notificationEmail === undefined ? (emailFor(address) || undefined) : notificationEmail || undefined;
     const optimistic: AddressAliasEntry = {
       address,
       subjectType,
       label: value,
+      ...(requestedEmail ? { notificationEmail: requestedEmail } : {}),
       createdAt: existing?.createdAt || now,
       updatedAt: now,
     };
@@ -165,7 +192,14 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
       const response = await fetch('/api/address-book', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ address, subject_type: subjectType, label: value }),
+        body: JSON.stringify({
+          address,
+          subject_type: subjectType,
+          label: value,
+          ...(requestedEmail !== undefined || notificationEmail === null
+            ? { notification_email: notificationEmail === null ? null : requestedEmail }
+            : {}),
+        }),
       });
       const body = await response.json().catch(() => ({})) as { entry?: unknown; error?: string };
       if (!response.ok) throw new Error(body.error || `Unable to save name (${response.status}).`);
@@ -187,7 +221,7 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
       setError(message);
       throw new Error(message);
     }
-  }, [privateUnlocked, unlockedAddress, unlockedNetwork, entries, replaceEntries]);
+  }, [privateUnlocked, unlockedAddress, unlockedNetwork, entries, replaceEntries, emailFor]);
 
   const removeAlias = useCallback(async (address: string, subjectType: AddressAliasSubjectType) => {
     if (!privateUnlocked || !unlockedAddress || !unlockedNetwork) {
@@ -224,9 +258,10 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
     loading,
     error,
     labelFor,
+    emailFor,
     saveAlias,
     removeAlias,
-  }), [entries, loading, error, labelFor, saveAlias, removeAlias]);
+  }), [entries, loading, error, labelFor, emailFor, saveAlias, removeAlias]);
 
   return <AddressBookContext.Provider value={value}>{children}</AddressBookContext.Provider>;
 }

@@ -98,19 +98,18 @@ When the user explicitly chooses **Ask Bob to sign**, Testnet now persists a lig
 
 This is the smallest durable product object needed for Human notifications and reminders. It is deliberately not a workflow engine. Soroban assignment remains deferred until a concrete Human Soroban notification flow needs the same concept.
 
-### 3. Contacts have names, not notification addresses
+### 3. Contacts — notification email metadata added
 
-The private Address Book already has the right product location and privacy boundary, but entries contain only:
+The private Address Book is the product location and privacy boundary for signer contact details. Entries now support an optional private notification email in addition to the Stellar address and label.
 
-- Stellar address;
-- account/signer semantics;
-- private label.
+Email remains contact metadata only:
 
-There is no email model anywhere in the current codebase.
+- it never proves identity;
+- it never grants Request access;
+- it never changes Stellar authorization;
+- it stays in the existing private object-storage boundary.
 
-For Email, evolve the private contact record with an optional notification email rather than creating an enterprise user directory. Email is contact metadata, not identity proof and never authorization.
-
-Keep private contact data in the private object-storage boundary unless relational queries become necessary.
+Outbound email delivery is deliberately a separate step. Do not hard-code a provider or make the existing Ask action claim that an email was sent until a real delivery integration is provisioned and verified.
 
 ### 4. Human notification delivery is a separate channel
 
@@ -170,7 +169,11 @@ Success: the system knows *Bob was asked*, not merely *Bob could sign*.
 
 ### P3 — Contact email + Human delivery
 
-Extend private signer-contact metadata with optional email. Add Human notification outbox/delivery records and an email adapter.
+Private signer-contact metadata now supports an optional notification email. Next add Human notification outbox/delivery records and one real email adapter after the provider is provisioned.
+
+Notification recipient truth comes from the explicit Request assignment, not from every on-chain eligible signer.
+
+Email CTA links must not embed the private bearer capability. A recipient can open the non-secret Request locator and authenticate with the assigned signer wallet. Therefore Human notification queues, delivery history, and provider payload metadata never need to persist the private capability token.
 
 Initial notifications:
 

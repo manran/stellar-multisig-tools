@@ -2,6 +2,7 @@ import { Keypair } from '@stellar/stellar-sdk/base';
 import type { AddressAliasSubjectType, AddressBookStore, StoredAddressAlias } from './addressBookStore.js';
 
 const MAX_LABEL_LENGTH = 64;
+const MAX_NOTIFICATION_EMAIL_LENGTH = 254;
 
 export class AddressBookServiceError extends Error {
   readonly status: number;
@@ -42,6 +43,29 @@ function normalizeLabel(value: string): string {
   return label;
 }
 
+function normalizeNotificationEmail(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== 'string') {
+    throw new AddressBookServiceError('Notification email must be a valid email address.', 400, 'invalid_notification_email');
+  }
+  const email = value.trim();
+  if (!email) return null;
+  const at = email.indexOf('@');
+  const dot = email.lastIndexOf('.');
+  if (
+    email.length > MAX_NOTIFICATION_EMAIL_LENGTH
+    || /[\u0000-\u0020\u007f]/.test(email)
+    || at <= 0
+    || at !== email.lastIndexOf('@')
+    || dot <= at + 1
+    || dot === email.length - 1
+  ) {
+    throw new AddressBookServiceError('Notification email must be a valid email address.', 400, 'invalid_notification_email');
+  }
+  return email;
+}
+
 export async function listAddressAliases(
   store: AddressBookStore,
   ownerAddressValue: string,
@@ -58,20 +82,25 @@ export async function listAddressAliases(
 export async function upsertAddressAlias(
   store: AddressBookStore,
   ownerAddressValue: string,
-  input: { address: string; subjectType: string; label: string },
+  input: { address: string; subjectType: string; label: string; notificationEmail?: unknown },
   now = new Date(),
 ): Promise<StoredAddressAlias> {
   const ownerAddress = normalizeAddress(ownerAddressValue);
   const address = normalizeAddress(input.address);
   const subjectType = normalizeSubjectType(input.subjectType);
   const label = normalizeLabel(input.label);
+  const notificationEmailUpdate = normalizeNotificationEmail(input.notificationEmail);
   const existing = await store.get(ownerAddress, subjectType, address);
+  const notificationEmail = notificationEmailUpdate === undefined
+    ? existing?.notificationEmail
+    : notificationEmailUpdate ?? undefined;
   const timestamp = now.toISOString();
   const entry: StoredAddressAlias = {
     version: 1,
     address,
     subjectType,
     label,
+    ...(notificationEmail ? { notificationEmail } : {}),
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
   };

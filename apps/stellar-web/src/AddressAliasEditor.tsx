@@ -9,22 +9,34 @@ interface Props {
   subjectType: AddressAliasSubjectType;
   compact?: boolean;
   semantics?: 'name' | 'note';
+  allowNotificationEmail?: boolean;
 }
 
-export default function AddressAliasEditor({ address, subjectType, compact = false, semantics = 'name' }: Props) {
+export default function AddressAliasEditor({
+  address,
+  subjectType,
+  compact = false,
+  semantics = 'name',
+  allowNotificationEmail = false,
+}: Props) {
   const { privateUnlocked } = useStellarWallet();
-  const { labelFor, saveAlias, removeAlias } = useAddressBook();
+  const { labelFor, emailFor, saveAlias, removeAlias } = useAddressBook();
   const currentLabel = labelFor(address, subjectType);
+  const currentEmail = allowNotificationEmail ? emailFor(address) : '';
   const noteMode = semantics === 'note';
   const noun = noteMode ? 'note' : 'name';
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(currentLabel);
+  const [draftEmail, setDraftEmail] = useState(currentEmail);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!editing) setDraft(currentLabel);
-  }, [currentLabel, editing]);
+    if (!editing) {
+      setDraft(currentLabel);
+      setDraftEmail(currentEmail);
+    }
+  }, [currentLabel, currentEmail, editing]);
 
   function save() {
     const value = draft.trim();
@@ -32,7 +44,12 @@ export default function AddressAliasEditor({ address, subjectType, compact = fal
     setBusy(true);
     setError('');
     setEditing(false);
-    void saveAlias(address, subjectType, value)
+    void saveAlias(
+      address,
+      subjectType,
+      value,
+      allowNotificationEmail ? (draftEmail.trim() || null) : undefined,
+    )
       .catch((cause) => {
         setError(cause instanceof Error ? cause.message : `Unable to save ${noun}.`);
       })
@@ -46,6 +63,7 @@ export default function AddressAliasEditor({ address, subjectType, compact = fal
       await removeAlias(address, subjectType);
       setEditing(false);
       setDraft('');
+      setDraftEmail('');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : `Unable to remove ${noun}.`);
     } finally {
@@ -61,14 +79,19 @@ export default function AddressAliasEditor({ address, subjectType, compact = fal
         <button
           type="button"
           disabled={busy}
-          onClick={() => { setDraft(currentLabel); setError(''); setEditing(true); }}
+          onClick={() => { setDraft(currentLabel); setDraftEmail(currentEmail); setError(''); setEditing(true); }}
           className={`inline-flex items-center gap-1.5 rounded-lg text-neutral-500 transition hover:bg-black/5 hover:text-black disabled:opacity-50 dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-white ${compact ? 'p-1.5' : 'px-2.5 py-1.5 text-xs font-semibold'}`}
-          aria-label={noteMode ? (currentLabel ? 'Edit personal note' : 'Add personal note') : (currentLabel ? `Rename ${currentLabel}` : `Name this ${subjectType}`)}
-          title={noteMode ? 'Personal note visible only to you' : (currentLabel ? 'Rename' : `Give this ${subjectType} a private name`)}
+          aria-label={allowNotificationEmail
+            ? (currentLabel ? `Edit contact ${currentLabel}` : 'Name this signer and add a notification email')
+            : noteMode ? (currentLabel ? 'Edit personal note' : 'Add personal note') : (currentLabel ? `Rename ${currentLabel}` : `Name this ${subjectType}`)}
+          title={allowNotificationEmail
+            ? 'Private signer contact details'
+            : noteMode ? 'Personal note visible only to you' : (currentLabel ? 'Rename' : `Give this ${subjectType} a private name`)}
         >
           <Pencil className="h-3.5 w-3.5" />
-          {!compact && <span>{noteMode ? (currentLabel ? 'Edit note' : 'Add note') : (currentLabel ? 'Rename' : 'Name this')}</span>}
+          {!compact && <span>{allowNotificationEmail ? 'Edit contact' : noteMode ? (currentLabel ? 'Edit note' : 'Add note') : (currentLabel ? 'Rename' : 'Name this')}</span>}
         </button>
+        {allowNotificationEmail && currentEmail && <div className="mt-1 max-w-[240px] break-all text-[11px] text-neutral-400">{currentEmail}</div>}
         {error && <div className="mt-1 max-w-[240px] text-xs text-red-700 dark:text-red-300">{error}</div>}
       </div>
     );
@@ -76,25 +99,46 @@ export default function AddressAliasEditor({ address, subjectType, compact = fal
 
   return (
     <div className="transaction-evidence-human-label min-w-[220px]">
-      <div className="flex items-center gap-1.5">
-        <input
-          autoFocus
-          value={draft}
-          maxLength={64}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') { event.preventDefault(); save(); }
-            if (event.key === 'Escape') setEditing(false);
-          }}
-          placeholder={noteMode ? 'e.g. Payroll account' : subjectType === 'account' ? 'e.g. Vendor' : 'e.g. Bob'}
-          className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white px-2.5 py-2 text-sm outline-none focus:border-emerald-500 dark:border-white/10 dark:bg-[#151515]"
-        />
-        <button type="button" disabled={busy || !draft.trim()} onClick={save} className="rounded-lg p-2 text-emerald-700 hover:bg-emerald-500/10 disabled:opacity-40 dark:text-emerald-300" aria-label={noteMode ? 'Save note' : 'Save name'}><Check className="h-4 w-4" /></button>
-        <button type="button" disabled={busy} onClick={() => setEditing(false)} className="rounded-lg p-2 text-neutral-500 hover:bg-black/5 dark:hover:bg-white/10" aria-label={noteMode ? 'Cancel note' : 'Cancel naming'}><X className="h-4 w-4" /></button>
-        {currentLabel && <button type="button" disabled={busy} onClick={() => void remove()} className="rounded-lg p-2 text-red-600 hover:bg-red-500/10 disabled:opacity-40" aria-label={noteMode ? 'Remove note' : 'Remove name'}><Trash2 className="h-4 w-4" /></button>}
+      <div className="flex items-start gap-1.5">
+        <div className="min-w-0 flex-1 space-y-2">
+          <input
+            autoFocus
+            value={draft}
+            maxLength={64}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') { event.preventDefault(); save(); }
+              if (event.key === 'Escape') setEditing(false);
+            }}
+            placeholder={noteMode ? 'e.g. Payroll account' : subjectType === 'account' ? 'e.g. Vendor' : 'e.g. Bob'}
+            className="w-full rounded-lg border border-black/10 bg-white px-2.5 py-2 text-sm outline-none focus:border-emerald-500 dark:border-white/10 dark:bg-[#151515]"
+          />
+          {allowNotificationEmail && (
+            <input
+              type="email"
+              inputMode="email"
+              autoComplete="off"
+              value={draftEmail}
+              maxLength={254}
+              onChange={(event) => setDraftEmail(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') { event.preventDefault(); save(); }
+                if (event.key === 'Escape') setEditing(false);
+              }}
+              placeholder="Notification email (optional)"
+              aria-label="Notification email"
+              className="w-full rounded-lg border border-black/10 bg-white px-2.5 py-2 text-sm outline-none focus:border-emerald-500 dark:border-white/10 dark:bg-[#151515]"
+            />
+          )}
+        </div>
+        <button type="button" disabled={busy || !draft.trim()} onClick={save} className="rounded-lg p-2 text-emerald-700 hover:bg-emerald-500/10 disabled:opacity-40 dark:text-emerald-300" aria-label={allowNotificationEmail ? 'Save contact' : noteMode ? 'Save note' : 'Save name'}><Check className="h-4 w-4" /></button>
+        <button type="button" disabled={busy} onClick={() => setEditing(false)} className="rounded-lg p-2 text-neutral-500 hover:bg-black/5 dark:hover:bg-white/10" aria-label={allowNotificationEmail ? 'Cancel contact editing' : noteMode ? 'Cancel note' : 'Cancel naming'}><X className="h-4 w-4" /></button>
+        {currentLabel && <button type="button" disabled={busy} onClick={() => void remove()} className="rounded-lg p-2 text-red-600 hover:bg-red-500/10 disabled:opacity-40" aria-label={allowNotificationEmail ? 'Remove contact' : noteMode ? 'Remove note' : 'Remove name'}><Trash2 className="h-4 w-4" /></button>}
       </div>
       {error && <div className="mt-1.5 text-xs text-red-700 dark:text-red-300">{error}</div>}
-      <div className="mt-1 text-[11px] text-neutral-400">{noteMode ? 'Personal note · private to you. It never changes the shared Treasury name.' : 'Private to your MultiSig Tools address book.'}</div>
+      <div className="mt-1 text-[11px] text-neutral-400">{allowNotificationEmail
+        ? 'Private contact metadata only. Email never proves identity or signing authority.'
+        : noteMode ? 'Personal note · private to you. It never changes the shared Treasury name.' : 'Private to your MultiSig Tools address book.'}</div>
     </div>
   );
 }

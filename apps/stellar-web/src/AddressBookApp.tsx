@@ -130,7 +130,7 @@ export default function AddressBookApp() {
           <PageHeader
             icon={<BookUser className="h-6 w-6" />}
             title="Address Book"
-            description="Names follow an address wherever it appears in MultiSig Tools."
+            description="Keep private names and signer contact details with the Stellar addresses you already use."
             actions={privateUnlocked ? (
               <button type="button" onClick={() => { setAdding((value) => !value); setAddError(''); }} className="mst-action-secondary">
                 <Plus className="h-4 w-4" />Add contact
@@ -149,8 +149,8 @@ export default function AddressBookApp() {
 
           {address && !privateUnlocked && (
             <section className="mst-address-action-row mt-5">
-              <div><div className="font-semibold">Saved names are private</div><p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Public account relationships are available now. Confirm this wallet when you want to load your saved private names.</p></div>
-              <button type="button" disabled={authBusy} onClick={() => void unlock()} className="mst-action-secondary shrink-0 disabled:opacity-50">{authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Show saved names</button>
+              <div><div className="font-semibold">Saved contact details are private</div><p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Public account relationships are available now. Confirm this wallet when you want to load private names and signer notification emails.</p></div>
+              <button type="button" disabled={authBusy} onClick={() => void unlock()} className="mst-action-secondary shrink-0 disabled:opacity-50">{authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Show contact details</button>
             </section>
           )}
 
@@ -206,7 +206,7 @@ export default function AddressBookApp() {
                         <div className="flex flex-wrap items-center gap-2"><div className="font-bold">{displayName}</div>{signer.address === address && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">Current wallet</span>}</div>
                         <div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{signer.address}</div>
                       </div>
-                      {!treasuryMaster && <AddressAliasEditor address={signer.address} subjectType="signer" />}
+                      {!treasuryMaster && <AddressAliasEditor address={signer.address} subjectType="signer" allowNotificationEmail />}
                     </div>
                   );
                 })}

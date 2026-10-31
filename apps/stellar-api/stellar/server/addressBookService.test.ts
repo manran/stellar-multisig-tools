@@ -61,6 +61,45 @@ test('upsert trims names, preserves creation time, and delete is scoped', async 
   assert.equal((await listAddressAliases(store, otherOwner)).length, 1);
 });
 
+test('stores, preserves, clears, and validates a private notification email', async () => {
+  const owner = Keypair.random().publicKey();
+  const address = Keypair.random().publicKey();
+  const store = memoryStore();
+
+  const created = await upsertAddressAlias(
+    store,
+    owner,
+    { address, subjectType: 'signer', label: 'Alice', notificationEmail: ' alice@example.com ' },
+    new Date('2026-10-30T12:00:00Z'),
+  );
+  assert.equal(created.notificationEmail, 'alice@example.com');
+
+  const renamed = await upsertAddressAlias(
+    store,
+    owner,
+    { address, subjectType: 'signer', label: 'Alice signer' },
+    new Date('2026-10-30T12:01:00Z'),
+  );
+  assert.equal(renamed.notificationEmail, 'alice@example.com');
+
+  const cleared = await upsertAddressAlias(
+    store,
+    owner,
+    { address, subjectType: 'signer', label: 'Alice signer', notificationEmail: null },
+    new Date('2026-10-30T12:02:00Z'),
+  );
+  assert.equal(cleared.notificationEmail, undefined);
+
+  await assert.rejects(
+    () => upsertAddressAlias(
+      store,
+      owner,
+      { address, subjectType: 'signer', label: 'Alice', notificationEmail: 'not-an-email' },
+    ),
+    (cause: unknown) => cause instanceof AddressBookServiceError && cause.code === 'invalid_notification_email',
+  );
+});
+
 test('rejects invalid alias input', async () => {
   const owner = Keypair.random().publicKey();
   const address = Keypair.random().publicKey();
