@@ -603,7 +603,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
     }
   }
 
-  async function askSignerToSign(signerAddress: string): Promise<string> {
+  async function askSignerToSign(signerAddress: string): Promise<AssignSigningRequestResponse['notification']> {
     if (!snapshot || !shareable || !walletAddress || !privateReadyForRequest) {
       throw new Error('Confirm your current signer wallet before asking someone to sign.');
     }
@@ -613,7 +613,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
       body: JSON.stringify({ assignSigner: signerAddress }),
     }));
     setAssignments(body.coordination.assignments);
-    return requestUrl(snapshot.id, capability);
+    return body.notification;
   }
 
   async function copyLink() {

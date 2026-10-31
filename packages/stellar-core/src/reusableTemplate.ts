@@ -19,6 +19,8 @@ export type ReusableTemplateDefinition = ReusablePaymentTemplateDefinitionV1;
 export interface ReusableTemplateRef {
   id: string;
   version: number;
+  name?: string;
+  kind?: ReusableTemplateKind;
 }
 
 export interface ReusableTemplateSummary {

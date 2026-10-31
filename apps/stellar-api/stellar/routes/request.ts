@@ -64,7 +64,7 @@ import {
 import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
 import { normalizePrivateNote } from '../../../../packages/stellar-core/src/privateNote.js';
 import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
-import type { SigningRequestApiError, SigningRequestStatus } from '../../../../packages/stellar-core/src/requestTypes.js';
+import type { AssignSigningRequestResponse, SigningRequestApiError, SigningRequestStatus } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { loadTransactionSourceAnalyses } from '../../../../packages/stellar-core/src/transactionReviewAnalysis.js';
 import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
@@ -1080,17 +1080,23 @@ export async function PATCH(request: Request): Promise<Response> {
           snapshotLoader: (store, requestId) => getSigningRequest(store, requestId, serviceOptions),
         },
       );
+      let notification: AssignSigningRequestResponse['notification'];
       try {
-        await queueSignatureRequestedEmail({
+        const queued = await queueSignatureRequestedEmail({
           requestId: access.id,
           assignedByAddress: assigned.assignment.assignedByAddress,
           signerAddress: assigned.assignment.signerAddress,
           assignedAt: assigned.assignment.assignedAt,
         });
+        notification = {
+          channel: 'email',
+          status: queued.status === 'duplicate' ? 'already_queued' : queued.status,
+        };
       } catch (cause) {
         // Assignment is the canonical Human coordination fact. Notification
         // enqueue is idempotent, so a repeated Ask can repair a transient
         // enqueue failure without creating another email.
+        notification = { channel: 'email', status: 'enqueue_failed' };
         console.error('Signature-request notification enqueue failed', {
           requestId: access.id,
           signerAddress: assigned.assignment.signerAddress,
@@ -1103,7 +1109,8 @@ export async function PATCH(request: Request): Promise<Response> {
         assignment: assigned.assignment,
         created: assigned.created,
         coordination: await requestCoordination(access.id),
-      });
+        notification,
+      } satisfies AssignSigningRequestResponse);
     }
 
     if (body.retainActivity === true) {

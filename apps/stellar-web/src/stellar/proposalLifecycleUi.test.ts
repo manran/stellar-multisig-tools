@@ -155,12 +155,28 @@ test('exact N-of-M signing uses one discrete signer presentation without repeati
 
 test('human signing turns a connected wrong wallet into an actionable identity choice', () => {
   assert.doesNotMatch(signingGuidance, />Change<\/button>/);
-  assert.match(signingGuidance, /Ask someone to sign/);
   assert.match(signingGuidance, /Sign proposal/);
+  assert.match(signingGuidance, /Share private link/);
   assert.doesNotMatch(signingGuidance, /Signing as/);
   assert.match(signingGuidance, /Choose an authorized signer/);
   assert.match(signingGuidance, /This wallet is not an authorized signer for this Proposal/);
   assert.match(signingGuidance, /onClick=\{onConnectWallet\}/);
+});
+
+test('signer coordination uses private Contacts before email Ask and keeps capability sharing separate', () => {
+  assert.match(signingGuidance, /emailFor\(signerAddress\)/);
+  assert.match(signingGuidance, /AddressAliasEditor address=\{signerAddress\} subjectType="signer" allowNotificationEmail/);
+  assert.match(signingGuidance, /Add a private name and email to notify this signer/);
+  assert.match(signingGuidance, /Ask \$\{alias\} to sign/);
+  assert.match(signingGuidance, /Share private link/);
+  assert.doesNotMatch(signingGuidance, /navigator\.clipboard\.writeText\(link\)/);
+  const askHandler = requestUi.match(/async function askSignerToSign\(signerAddress: string\): Promise<AssignSigningRequestResponse\['notification'\]> \{([\s\S]*?)\n  \}/)?.[1] ?? '';
+  assert.ok(askHandler);
+  assert.match(askHandler, /assignSigner: signerAddress/);
+  assert.match(askHandler, /return body\.notification/);
+  assert.doesNotMatch(askHandler, /requestUrl\(/);
+  assert.match(requestApi, /status: 'enqueue_failed'/);
+  assert.match(signingGuidance, /Retry email/);
 });
 
 test('frozen Private Note is visibly read-only without exposing lifecycle mechanics', () => {

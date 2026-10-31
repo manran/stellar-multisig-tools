@@ -132,9 +132,19 @@ export interface SigningRequestApiError {
 }
 
 
+export type SigningRequestNotificationStatus =
+  | 'queued'
+  | 'already_queued'
+  | 'no_contact_email'
+  | 'enqueue_failed';
+
 export interface AssignSigningRequestResponse {
   request: SigningRequestSnapshot;
   assignment: SigningRequestAssignment;
   created: boolean;
   coordination: SigningRequestCoordination;
+  notification?: {
+    channel: 'email';
+    status: SigningRequestNotificationStatus;
+  };
 }

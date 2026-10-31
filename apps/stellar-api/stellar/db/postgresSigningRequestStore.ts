@@ -4,6 +4,7 @@ import type { MachineCallerProvenance } from '../../../../packages/stellar-core/
 import type { ExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
 import type { RequestIntegrationContext } from '../../../../packages/stellar-core/src/integrationTypes.js';
 import type { SorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
+import type { ReusableTemplateKind } from '../../../../packages/stellar-core/src/reusableTemplate.js';
 import type { SorobanRequestOrigin } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import type { Pool, PoolClient } from 'pg';
@@ -39,6 +40,8 @@ interface RequestRow {
   soroban_origin: SorobanRequestOrigin | null;
   reusable_template_id: string | null;
   reusable_template_version: number | null;
+  reusable_template_name: string | null;
+  reusable_template_kind: ReusableTemplateKind | null;
   has_private_data: boolean;
 }
 
@@ -57,13 +60,17 @@ async function readRequest(
   id: string,
 ): Promise<StoredSigningRequest | null> {
   const result = await db.query<RequestRow>(
-    `SELECT id, network, base_xdr, transaction_hash, created_at, expires_at,
-            creator_address, creator_actor, integration_context, instruction_digest,
-            execution_policy, discovery_signer_keys, capability_hash,
-            soroban_effects_baseline, soroban_origin,
-            reusable_template_id, reusable_template_version, has_private_data
-       FROM mst_stellar.classic_requests
-      WHERE id = $1`,
+    `SELECT r.id, r.network, r.base_xdr, r.transaction_hash, r.created_at, r.expires_at,
+            r.creator_address, r.creator_actor, r.integration_context, r.instruction_digest,
+            r.execution_policy, r.discovery_signer_keys, r.capability_hash,
+            r.soroban_effects_baseline, r.soroban_origin,
+            r.reusable_template_id, r.reusable_template_version,
+            t.name AS reusable_template_name, t.kind AS reusable_template_kind,
+            r.has_private_data
+       FROM mst_stellar.classic_requests r
+       LEFT JOIN mst_stellar.reusable_templates t
+         ON t.id = r.reusable_template_id
+      WHERE r.id = $1`,
     [id],
   );
   const row = result.rows[0];
@@ -93,7 +100,14 @@ async function readRequest(
     ...(row.soroban_effects_baseline ? { sorobanEffectsBaseline: row.soroban_effects_baseline } : {}),
     ...(row.soroban_origin ? { sorobanOrigin: row.soroban_origin } : {}),
     ...(row.reusable_template_id && row.reusable_template_version
-      ? { templateRef: { id: row.reusable_template_id, version: row.reusable_template_version } }
+      ? {
+          templateRef: {
+            id: row.reusable_template_id,
+            version: row.reusable_template_version,
+            ...(row.reusable_template_name ? { name: row.reusable_template_name } : {}),
+            ...(row.reusable_template_kind ? { kind: row.reusable_template_kind } : {}),
+          },
+        }
       : {}),
   };
 }

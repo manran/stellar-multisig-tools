@@ -12,6 +12,8 @@ import {
   classifyHumanNotificationHttpStatus,
   classifyHumanNotificationTransportFailure,
 } from './humanNotificationDeliveryPolicy.js';
+import { transactionSystemTypeLabel } from '../../../../packages/stellar-core/src/transactionPresentation.js';
+import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 import { buildSignatureRequestedEmail } from './humanNotificationEmail.js';
 import {
   ResendEmailTransportError,
@@ -145,11 +147,15 @@ export async function dispatchHumanNotificationEvent(
       : { status: 'lease_lost' };
   }
 
+  const inspection = inspectTransactionXdr(record.baseXdr, record.network);
   const email = buildSignatureRequestedEmail({
     requestId: record.requestId,
     network: record.network,
     expiresAt: record.expiresAt,
     webOrigin,
+    actorAddress: record.actorAddress,
+    systemType: transactionSystemTypeLabel(inspection),
+    ...(record.templateName ? { businessLabel: record.templateName } : {}),
   });
   const sendEmail = dependencies.sendEmail ?? ((input) => sendResendEmail(input));
 

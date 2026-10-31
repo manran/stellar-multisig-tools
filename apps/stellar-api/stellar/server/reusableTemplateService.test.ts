@@ -54,7 +54,12 @@ test('creates a signer-owned payment template with only reusable fields', async 
   assert.equal((await listReusableTemplates(store, owner, 'testnet')).length, 1);
   assert.deepEqual(
     await resolveReusableTemplateReference(store, owner, 'testnet', { id: created.id, version: 1 }),
-    { id: created.id, version: 1 },
+    {
+      id: created.id,
+      version: 1,
+      name: 'Pay ACME',
+      kind: 'payment',
+    },
   );
 });
 

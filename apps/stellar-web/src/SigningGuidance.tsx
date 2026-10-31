@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, CircleAlert, LoaderCircle, Share2, WalletCards, X } from 'lucide-react';
+import { CheckCircle2, CircleAlert, LoaderCircle, Mail, Share2, WalletCards, X } from 'lucide-react';
+import AddressAliasEditor from './AddressAliasEditor';
 import AddressIdentity from './AddressIdentity';
 import { useAddressBook } from './AddressBookContext';
 import { useStellarWallet } from './StellarWalletContext';
@@ -8,7 +9,7 @@ import { treasuryDisplayLabel } from './treasuryDisplay';
 import { humanAuthorizationRequirement } from './stellar/authorizationPresentation';
 import type { SourceAnalysis } from '../../../packages/stellar-core/src/transactionReviewAnalysis';
 import type { TransactionAuthorizationStatus } from '../../../packages/stellar-core/src/transactionAuthorization';
-import type { SigningRequestAssignment } from '../../../packages/stellar-core/src/requestTypes';
+import type { SigningRequestAssignment, SigningRequestNotificationStatus } from '../../../packages/stellar-core/src/requestTypes';
 import type { TransactionXdrInspection } from '../../../packages/stellar-core/src/transactionXdr';
 
 interface Props {
@@ -21,7 +22,7 @@ interface Props {
   onConnectWallet: () => void;
   onSignWithWallet: () => void;
   onShare?: () => void | string | Promise<void | string>;
-  onAsk?: (signerAddress: string) => Promise<string>;
+  onAsk?: (signerAddress: string) => Promise<{ channel: 'email'; status: SigningRequestNotificationStatus } | undefined>;
   assignments?: readonly SigningRequestAssignment[];
   shareCreatesLink?: boolean;
   approvalPersisted?: boolean;
@@ -44,14 +45,16 @@ export default function SigningGuidance({
   approvalPersisted = true,
   knownComplete = false,
 }: Props) {
-  const { labelFor } = useAddressBook();
+  const { labelFor, emailFor } = useAddressBook();
   const { sessionAddress, privateUnlocked } = useStellarWallet();
   const [shareBusy, setShareBusy] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareLink, setShareLink] = useState('');
   const [shareError, setShareError] = useState('');
   const [shareCopied, setShareCopied] = useState(false);
-  const [askTarget, setAskTarget] = useState('');
+  const [askBusy, setAskBusy] = useState('');
+  const [askError, setAskError] = useState<{ address: string; message: string } | null>(null);
+  const [notifiedSigners, setNotifiedSigners] = useState<Set<string>>(() => new Set());
   const allowNaming = Boolean(sessionAddress);
   const requirementAccountIds = inspection.sourceRequirements.map((requirement) => requirement.accountId);
   const requirementAccountKey = requirementAccountIds.join('|');
@@ -122,34 +125,12 @@ export default function SigningGuidance({
   const shareTargets = [...neededWalletKeys].filter((key) => key !== walletAddress);
   const shouldShowShare = shareTargets.length > 0 || (!walletAddress && neededWalletKeys.size > 0);
   const assignedSignerKeys = new Set(assignments.map((item) => item.signerAddress));
-  const singleShareAlias = shareTargets.length === 1 ? labelFor(shareTargets[0], 'signer') : '';
-  const shareActionLabel = singleShareAlias ? `Ask ${singleShareAlias} to sign` : 'Ask someone to sign';
-  const selectedAskTarget = shareTargets.length === 1 ? shareTargets[0] : askTarget;
-  const selectedAskAlias = selectedAskTarget ? labelFor(selectedAskTarget, 'signer') : '';
-  const selectedAskName = selectedAskAlias || (selectedAskTarget
-    ? `${selectedAskTarget.slice(0, 7)}…${selectedAskTarget.slice(-6)}`
-    : '');
-  const selectedAlreadyAsked = Boolean(selectedAskTarget && assignedSignerKeys.has(selectedAskTarget));
-  const askActionLabel = selectedAskTarget
-    ? selectedAlreadyAsked
-      ? `Copy link for ${selectedAskName}`
-      : `Ask ${selectedAskName} to sign`
-    : 'Choose signer';
   const remainingSignatureCopy = exactSignaturesRemaining === null
     ? 'More signatures are still needed.'
     : exactSignaturesRemaining === 1
       ? '1 more signer needs to sign.'
       : `${exactSignaturesRemaining} more signatures are needed.`;
   const signedStateCopy = `Signed${exactSignaturesRemaining ? ` · ${remainingSignatureCopy}` : ''}`;
-
-  useEffect(() => {
-    if (shareTargets.length <= 1) {
-      setAskTarget('');
-      return;
-    }
-    if (askTarget && shareTargets.includes(askTarget)) return;
-    setAskTarget('');
-  }, [shareTargets.join('|'), askTarget]);
 
   useEffect(() => {
     if (!shareCopied) return;
@@ -163,20 +144,84 @@ export default function SigningGuidance({
     setShareCopied(true);
   }
 
-  async function askAndCopy() {
-    if (!onAsk || !selectedAskTarget) return;
-    setShareBusy(true);
-    setShareError('');
-    setShareCopied(false);
+  async function askSigner(signerAddress: string) {
+    if (!onAsk || !emailFor(signerAddress)) return;
+    setAskBusy(signerAddress);
+    setAskError(null);
     try {
-      const link = await onAsk(selectedAskTarget);
-      await navigator.clipboard.writeText(link);
-      setShareCopied(true);
+      const notification = await onAsk(signerAddress);
+      if (notification?.status === 'queued' || notification?.status === 'already_queued') {
+        setNotifiedSigners((current) => new Set(current).add(signerAddress));
+      } else if (notification?.status === 'enqueue_failed') {
+        setAskError({
+          address: signerAddress,
+          message: 'Assignment saved, but the email notification could not be queued. Retry email.',
+        });
+      } else if (notification?.status === 'no_contact_email') {
+        setAskError({
+          address: signerAddress,
+          message: 'The server could not find this contact email. Re-save the contact and retry.',
+        });
+      }
     } catch (cause) {
-      setShareError(cause instanceof Error ? cause.message : 'Unable to ask this signer.');
+      setAskError({
+        address: signerAddress,
+        message: cause instanceof Error ? cause.message : 'Unable to ask this signer.',
+      });
     } finally {
-      setShareBusy(false);
+      setAskBusy('');
     }
+  }
+
+  function signerContactControl(signerAddress: string) {
+    if (signerAddress === walletAddress || !neededWalletKeys.has(signerAddress)) return null;
+    const email = emailFor(signerAddress);
+    const alias = labelFor(signerAddress, 'signer');
+    const askLabel = alias && alias.length <= 18 ? `Ask ${alias} to sign` : 'Ask to sign';
+    const assigned = assignedSignerKeys.has(signerAddress);
+    const notificationConfirmed = notifiedSigners.has(signerAddress);
+
+    if (!email) {
+      if (!privateUnlocked) return assigned
+        ? <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">Assigned</span>
+        : null;
+      return (
+        <div className="mst-signer-contact mt-2">
+          {assigned && <span className="shrink-0 rounded-full bg-neutral-500/10 px-2 py-0.5 text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">Assigned</span>}
+          <AddressAliasEditor address={signerAddress} subjectType="signer" allowNotificationEmail />
+          <span className="text-xs text-neutral-500 dark:text-neutral-400">Add a private name and email to notify this signer.</span>
+        </div>
+      );
+    }
+
+    const needsNotification = assigned && !notificationConfirmed;
+    return (
+      <div className="mst-signer-contact mt-2">
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+          <Mail className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate" title={email}>{email}</span>
+        </div>
+        {assigned && (
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${notificationConfirmed ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-neutral-500/10 text-neutral-600 dark:text-neutral-300'}`}>
+            {notificationConfirmed ? 'Asked' : 'Assigned'}
+          </span>
+        )}
+        {onAsk && (!assigned || needsNotification) && (
+          <button
+            type="button"
+            disabled={askBusy === signerAddress}
+            onClick={() => void askSigner(signerAddress)}
+            className="shrink-0 whitespace-nowrap rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 active:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-300"
+          >
+            {askBusy === signerAddress
+              ? assigned ? 'Notifying…' : 'Asking…'
+              : assigned ? (askError?.address === signerAddress ? 'Retry email' : 'Notify by email')
+                : askLabel}
+          </button>
+        )}
+        {askError?.address === signerAddress && <span className="basis-full text-xs text-red-600 dark:text-red-400">{askError.message}</span>}
+      </div>
+    );
   }
 
   async function createShareLink() {
@@ -200,10 +245,6 @@ export default function SigningGuidance({
   }
 
   function invokeShare() {
-    if (onAsk) {
-      void askAndCopy();
-      return;
-    }
     if (!onShare) return;
     if (shareCreatesLink) void createShareLink();
     else void onShare();
@@ -290,7 +331,10 @@ export default function SigningGuidance({
                             {signed
                               ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
                               : <span className={`h-3 w-3 shrink-0 rounded-sm border ${currentSigner ? 'border-amber-500 bg-amber-500/15' : 'border-neutral-300 dark:border-neutral-600'}`} aria-hidden="true" />}
-                            <div className="min-w-0 flex-1"><AddressIdentity address={key} subjectType="signer" /></div>
+                            <div className="min-w-0 flex-1">
+                              <AddressIdentity address={key} subjectType="signer" />
+                              {!signed && !currentSigner && signerContactControl(key)}
+                            </div>
                             <span className={`shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] ${signed ? 'text-emerald-700 dark:text-emerald-300' : currentSigner ? 'text-amber-700 dark:text-amber-300' : 'text-neutral-400'}`}>{signed ? 'Signed' : currentSigner ? 'You can sign' : 'Can sign'}</span>
                           </div>
                         );
@@ -308,12 +352,14 @@ export default function SigningGuidance({
                     <div className="font-semibold">Sign the new signing setup{accountDisplay ? ` for ${accountDisplay}` : ''}</div>
                     <p className="mt-2 text-sm leading-6 opacity-60">The account's current signing key must sign these changes before the new multisig rules take effect. The new signer keys do not need to sign this setup transaction.</p>
                     <AddressIdentity className="mt-3" address={remainingSignerKeys[0]} subjectType="signer" allowNaming={allowNaming} />
+                    {signerContactControl(remainingSignerKeys[0])}
                   </>
                 ) : currentAccountKeyOnly ? (
                   <>
                     <div className="font-semibold">Signature needed from {accountDisplay || 'this account'}</div>
                     <p className="mt-2 text-sm opacity-60">This transaction currently needs this account's signing key.</p>
                     <AddressIdentity className="mt-3" address={remainingSignerKeys[0]} subjectType="signer" allowNaming={allowNaming} />
+                    {signerContactControl(remainingSignerKeys[0])}
                   </>
                 ) : policy?.exactNOfM ? null : signaturesRemaining !== null ? (
                   <>
@@ -323,7 +369,7 @@ export default function SigningGuidance({
                       {remainingSignerKeys.map((key) => (
                         <div key={key} className="mst-signer-candidate-row">
                           <AddressIdentity address={key} subjectType="signer" allowNaming={allowNaming} />
-                          {assignedSignerKeys.has(key) && <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">Asked</span>}
+                          {signerContactControl(key)}
                         </div>
                       ))}
                     </div>
@@ -336,6 +382,7 @@ export default function SigningGuidance({
                       {remainingSignerKeys.map((key) => (
                         <div key={key} className="mst-signer-candidate-row">
                           <AddressIdentity address={key} subjectType="signer" allowNaming={allowNaming} />
+                          {signerContactControl(key)}
                         </div>
                       ))}
                     </div>
@@ -357,7 +404,7 @@ export default function SigningGuidance({
                 : <div className="text-neutral-500 dark:text-neutral-400">No signer connected.</div>}
             </div>
 
-            <div className={`mst-signing-action-grid mt-4 ${shouldShowShare && (onShare || onAsk) ? 'mst-signing-action-grid--split' : ''}`}>
+            <div className={`mst-signing-action-grid mt-4 ${shouldShowShare && onShare ? 'mst-signing-action-grid--split' : ''}`}>
               {walletAddress ? (
                 walletCanSign || walletAlreadySigned ? (
                   <button type="button" disabled={!walletCanSign || walletBusy} onClick={onSignWithWallet} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100 dark:disabled:bg-white/10 dark:disabled:text-neutral-500">
@@ -374,33 +421,16 @@ export default function SigningGuidance({
                 </button>
               )}
 
-              {shouldShowShare && (onShare || onAsk) && (
-                <div className="flex min-w-0 flex-col gap-2">
-                  {onAsk && shareTargets.length > 1 && (
-                    <select
-                      aria-label="Signer to ask"
-                      value={askTarget}
-                      onChange={(event) => { setAskTarget(event.target.value); setShareError(''); setShareCopied(false); }}
-                      className="min-h-10 w-full rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm outline-none dark:border-white/10"
-                    >
-                      <option value="">Choose signer…</option>
-                      {shareTargets.map((key) => {
-                        const alias = labelFor(key, 'signer');
-                        const short = `${key.slice(0, 7)}…${key.slice(-6)}`;
-                        return <option key={key} value={key}>{alias ? `${alias} · ${short}` : short}{assignedSignerKeys.has(key) ? ' · Asked' : ''}</option>;
-                      })}
-                    </select>
-                  )}
-                  <button type="button" disabled={shareBusy || Boolean(onAsk && !selectedAskTarget)} onClick={invokeShare} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-500/5 disabled:opacity-50 dark:text-emerald-300">
-                    {shareBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
-                    {onAsk ? (shareCopied ? `Asked ${selectedAskName} · link copied` : askActionLabel) : shareActionLabel}
-                  </button>
-                </div>
+              {shouldShowShare && onShare && (
+                <button type="button" disabled={shareBusy} onClick={invokeShare} className="flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-black/10 px-4 py-3 text-sm font-semibold text-neutral-700 hover:bg-black/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 active:bg-black/[0.06] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-neutral-200 dark:hover:bg-white/[0.04] dark:active:bg-white/[0.08]">
+                  {shareBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+                  Share private link
+                </button>
               )}
             </div>
 
             {walletAddress && walletAlreadySigned && <div className="mt-3 text-sm text-emerald-700 dark:text-emerald-300">{signedStateCopy}</div>}
-            {walletAddress && !walletCanSign && !walletAlreadySigned && <div className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">This wallet is not an authorized signer for this Proposal. Choose another signer wallet, or send the private link to someone who can sign.</div>}
+            {walletAddress && !walletCanSign && !walletAlreadySigned && <div className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">This wallet is not an authorized signer for this Proposal. Choose another signer wallet, ask a saved Contact, or share the private link.</div>}
             {walletError && <div className="mt-3 flex gap-2 text-sm text-red-600 dark:text-red-400"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{walletError}</div>}
             {shareError && <div className="mt-3 flex gap-2 text-sm text-red-600 dark:text-red-400"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{shareError}</div>}
           </div>

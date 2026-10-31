@@ -282,9 +282,57 @@ Use semantic identity wherever it reduces address reasoning:
 - transaction Review summaries, including payment source and destination;
 - approval guidance;
 - Inbox source-account metadata;
-- lightweight handoff copy such as `Ask Bob to approve` when Bob is the single remaining named candidate.
+- lightweight handoff copy such as `Ask Bob to sign` when Bob is a named remaining signer.
 
 Enterprise evolution may layer organization/shared address books, verified service identities, or domain-backed identity on top of this provider model without replacing the underlying Stellar authorization model.
+
+### 5.2 Contacts and Human recipients
+
+MultiSig Tools does not require a conventional email/password account merely to coordinate signatures.
+
+For the current Human product:
+
+- the **sender identity** is the wallet-authenticated Stellar signer session;
+- the **recipient identity** is the exact Stellar signer address required by the transaction policy;
+- a private Contact name makes that signer Human-readable;
+- a private Contact email is only a notification route;
+- email never proves identity, access, or Stellar signing authority.
+
+The Proposal already knows which signer addresses can satisfy the current Stellar authorization policy. Do not make the sender re-enter those addresses as a separate recipient list.
+
+The normal coordination flow is:
+
+```text
+Proposal derives eligible signers
+        ->
+known Contact: Ask Bob to sign
+unknown Contact: Add contact (name + email), then Ask
+        ->
+explicit Assignment is recorded
+        ->
+email notification is queued
+        ->
+recipient opens the Proposal and confirms the assigned signer wallet
+```
+
+A recipient does **not** need to register a MultiSig Tools account before signing. Opening an email CTA with a non-secret Request locator must still require wallet confirmation before private Proposal details are shown. If the recipient prefers not to follow an email link, the normal recovery path is to open MultiSig Tools directly, confirm the assigned signer wallet, and use **Inbox**. Manual Proposal ID entry is a secondary fallback.
+
+Contacts are reusable. Once a signer address has a private name/email, later Proposals should recognize that signer automatically and offer the Human action directly.
+
+Reusable Template names provide the business label for recurring work. The creator chooses this name, for example `Monthly payroll` or `Supplier payment`. MultiSig Tools separately derives the system transaction type from the exact Proposal, for example `Payment`, `Batch payment`, or `Account signing change`. Human surfaces may show both:
+
+```text
+Monthly payroll
+Batch payment
+```
+
+The business label never replaces the system type or transaction review. A user cannot rename a Batch payment into a different Stellar transaction type. Personal Template names are signer-owned in the current product; do not introduce an administrator role merely to manage them. Shared/organization Template administration remains demand-driven.
+
+Signature-request Email and Inbox use the same presentation rule: business label first when a Reusable Template exists, system type as the factual secondary label. Email may disclose this semantic pair, requester, network, Proposal ID, and deadline, but not transaction values, destinations, memo, Private Note, XDR, or bearer capability.
+
+Manual private capability links remain a separate fallback/share mechanism. `Ask Bob to sign` must not silently copy or expose the private capability URL merely because both features exist on the same Proposal.
+
+Do not add a traditional account-registration system until a product requirement exists that cannot be satisfied by wallet identity plus private contact metadata.
 
 ## 6. New transaction
 
@@ -416,9 +464,9 @@ Protocol and XDR detail remain available under Advanced.
 
 A **Shared Request is not a second product page**. Once a transaction is shared, its request id/capability/status are coordination state around the same transaction detail. The Human surface should remain inside the same MultiSig Tools workspace shell.
 
-When Share/Ask is explicitly chosen from Review, the exact current transaction may be promoted into a private Signing Request automatically; the user should not be asked to paste the same XDR again.
+When Share is explicitly chosen from Review, the exact current transaction may be promoted into a private Signing Request automatically; the user should not be asked to paste the same XDR again. When the private request is created, show `Private link ready` with an explicit Copy action.
 
-When creation of that private request finishes, immediately show a prominent `Private link ready` handoff with the Copy action. Do not make the user hunt for a small Copy button after watching a loading state.
+Ask is a different Human action. `Ask Bob to sign` records an explicit signer Assignment and, when Bob has a private Contact email, queues a Human notification. Ask must not silently reveal or copy the bearer capability link.
 
 ## 9. Authentication, wallet state, mode, and account chrome
 
@@ -462,16 +510,19 @@ For the common 2–3 person case:
 
 - show remaining eligible approvers by Human-readable name where known;
 - show full signer addresses when there is room and shorten only in constrained layouts;
-- if more authorization is needed, offer `Ask Bob to approve` or `Ask someone to approve`;
+- if more authorization is needed, offer `Ask Bob to sign` on the relevant signer row;
+- if the signer has no Contact email, offer `Add contact` before Ask;
 - if quorum is already satisfied, make `Submit` the next action instead;
 - if several signers could satisfy quorum, let the user choose rather than inventing a protocol-defined order.
 
 Current MVP routing is deliberately lightweight:
 
-- remaining candidates are derived from current Stellar signer state and the exact transaction's current approvals;
-- personal aliases make those candidates understandable;
-- `Ask Bob to approve` may create/copy the same private capability link used by the normal shared transaction flow;
-- the recipient choice is not yet persisted as a durable workflow assignment.
+- remaining candidates are derived from current Stellar signer state and the exact transaction's current signatures;
+- private Contact names make those candidates understandable;
+- explicit Ask persists a Classic Request signer Assignment;
+- if that Contact has an email, Ask queues a `signature_requested` Human notification;
+- email delivery is coordination only and never changes Stellar authorization;
+- the same Request/signer pair is idempotent, so retrying Ask can repair notification enqueue without creating duplicate Assignment semantics.
 
 Preserve this architecture distinction:
 
@@ -481,7 +532,7 @@ Onchain signer eligibility != workflow assignment
 
 A 2-of-3 account may have three eligible signers while only Alice and Bob are expected to handle one particular transaction.
 
-A future `ApprovalAssignment` may record who is expected to act next for a specific request without changing Stellar's authorization semantics.
+The current Classic Request Assignment records who was explicitly asked to act next without changing Stellar authorization semantics. Soroban Assignment remains deferred until a concrete Human Soroban coordination flow needs it.
 
 Enterprise evolution may add sequential/parallel approval stages, roles, shared address books, escalation, delegation, Agent approval, and audit trails. Do not build a generic BPM engine for the consumer MVP.
 
@@ -560,11 +611,12 @@ Current locator format uses:
 
 Human behavior:
 
-- explicit `Share` / `Ask ... to approve` may promote the exact reviewed transaction into a private Signing Request;
-- immediately after creation, surface `Private link ready` and a prominent Copy action;
+- explicit `Share private link` may promote the exact reviewed transaction into a private Signing Request and then surface `Private link ready` with a prominent Copy action;
+- explicit `Ask Bob to sign` records an Assignment and uses Bob's private Contact email when available; it does not copy the bearer capability;
+- Human notification CTA links contain the non-secret Request locator only; the recipient must confirm the assigned signer wallet before private Proposal data is shown;
 - the capability link is copyable only when the current browser actually possesses the private capability;
 - authenticated Inbox/session access must never synthesize a transferable capability;
-- a recipient opening a capability link reviews the same transaction-detail surface, not a separate protocol tool;
+- a recipient opening a capability link or authenticated Request locator reviews the same transaction-detail surface, not a separate protocol tool;
 - a personal/public name helps choose/understand a recipient but does not grant access and is not embedded into authorization.
 
 Do not expose capability tokens in logs, public lookup, or ordinary Inbox metadata.

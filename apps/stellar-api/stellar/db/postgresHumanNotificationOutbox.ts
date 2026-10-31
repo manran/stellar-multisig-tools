@@ -15,6 +15,8 @@ export interface HumanNotificationOutboxRecord {
   actorAddress: string;
   destinationEmail: string | null;
   network: StellarNetwork;
+  baseXdr: string;
+  templateName?: string;
   expiresAt: string;
   createdAt: string;
   availableAt: string;
@@ -32,6 +34,8 @@ interface OutboxRow {
   available_at: Date | string;
   attempt_count: number;
   network: StellarNetwork;
+  base_xdr: string;
+  reusable_template_name: string | null;
   expires_at: Date | string;
 }
 
@@ -74,6 +78,8 @@ function rowToOutboxRecord(row: OutboxRow): HumanNotificationOutboxRecord {
     actorAddress: row.actor_address,
     destinationEmail: row.destination_email,
     network: row.network,
+    baseXdr: row.base_xdr,
+    ...(row.reusable_template_name ? { templateName: row.reusable_template_name } : {}),
     expiresAt: iso(row.expires_at),
     createdAt: iso(row.created_at),
     availableAt: iso(row.available_at),
@@ -175,6 +181,8 @@ export async function claimHumanNotificationEvent(
               attempt_count = attempt_count + 1,
               last_attempt_at = $4
          FROM mst_stellar.classic_requests AS r
+         LEFT JOIN mst_stellar.reusable_templates AS t
+           ON t.id = r.reusable_template_id
         WHERE o.event_id = $1
           AND r.id = o.request_id
           AND o.completed_at IS NULL
@@ -182,7 +190,8 @@ export async function claimHumanNotificationEvent(
           AND (o.lease_until IS NULL OR o.lease_until <= $4)
       RETURNING o.event_id, o.event_type, o.request_id, o.recipient_signer_address,
                 o.actor_address, o.destination_email, o.created_at, o.available_at,
-                o.attempt_count, r.network, r.expires_at`,
+                o.attempt_count, r.network, r.base_xdr,
+                t.name AS reusable_template_name, r.expires_at`,
       [eventId, leaseToken, leaseUntil, now.toISOString()],
     );
     const row = result.rows[0];
