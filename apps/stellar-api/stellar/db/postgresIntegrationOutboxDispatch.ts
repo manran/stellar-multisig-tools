@@ -147,3 +147,39 @@ export async function releaseIntegrationOutboxEvent(
   );
   return result.rowCount === 1;
 }
+
+export type IntegrationWebhookRedeliveryResult =
+  | { status: 'requeued' }
+  | { status: 'not_found' }
+  | { status: 'not_terminal' };
+
+export async function requeueIntegrationOutboxEvent(
+  serviceId: string,
+  eventId: string,
+  options: { now?: Date; pool?: Pool } = {},
+): Promise<IntegrationWebhookRedeliveryResult> {
+  const pool = options.pool ?? coordinationPool();
+  const now = (options.now ?? new Date()).toISOString();
+  const updated = await pool.query(
+    `UPDATE mst_stellar.integration_outbox
+        SET published_at = NULL,
+            available_at = $3,
+            lease_token = NULL,
+            lease_until = NULL
+      WHERE event_id = $1
+        AND service_id = $2
+        AND published_at IS NOT NULL
+      RETURNING event_id`,
+    [eventId, serviceId, now],
+  );
+  if (updated.rowCount === 1) return { status: 'requeued' };
+
+  const existing = await pool.query<{ published_at: Date | string | null }>(
+    `SELECT published_at
+       FROM mst_stellar.integration_outbox
+      WHERE event_id = $1 AND service_id = $2`,
+    [eventId, serviceId],
+  );
+  if (!existing.rows[0]) return { status: 'not_found' };
+  return { status: 'not_terminal' };
+}

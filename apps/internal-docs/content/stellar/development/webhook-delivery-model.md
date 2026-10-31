@@ -3,7 +3,7 @@ title: "Integration Webhook Delivery Model"
 description: "Internal MultiSig Tools engineering documentation."
 ---
 
-**Status:** delivery foundation frozen; endpoint/signing contract pending
+**Status:** delivery foundation active; operator delivery history and manual redelivery productized
 **Date:** 2026-09-18
 **Scope:** Stellar Integration webhooks on the PostgreSQL coordination path
 
@@ -194,6 +194,10 @@ Testnet production also has `DATABASE_URL`, `MULTISIG_COORDINATION_STORAGE`, `MU
 ## 9. Current deployment status
 
 The delivery core, retry policy, redaction contract, Standard Webhooks signing, SSRF-safe Node transport, delivery history, Vercel Queue publisher/callback adapter and Cron sweeper adapter are implemented and active on Testnet.
+
+The Integration administration surface now projects recent delivery history for each Service from the existing outbox + per-attempt audit tables. It shows pending/retrying/delivered/failed/not-sent state, latest HTTP result and attempt metadata without exposing callback payloads, response bodies, secrets or raw endpoint history. `Not sent` is deliberately neutral because a terminal outbox row with no HTTP delivery record does not contain enough evidence to distinguish every pre-delivery failure from a disabled/unavailable webhook.
+
+A deployment operator may manually redeliver a terminal event. Redelivery requeues the **same** outbox event id and therefore sends the same Standard Webhooks `webhook-id`; it does not manufacture another business event. Pending/retrying events cannot be manually requeued. Automatic retry budget remains bounded; an event that already exhausted automatic retries gets one new delivery attempt per explicit redelivery action.
 
 Evidence already obtained:
 

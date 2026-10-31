@@ -9,6 +9,29 @@ interface ContractScope {
   execution?: { mode: 'multisigtools' } | { mode: 'external'; executor: string };
 }
 interface WebhookSummary { version: 1; url: string; enabled: boolean; secretVersion: number; }
+type WebhookDeliveryStatus = 'pending' | 'retrying' | 'delivered' | 'failed' | 'not_sent';
+interface WebhookDeliverySummary {
+  eventId: string;
+  serviceId: string;
+  resourceKind: 'classic_request' | 'soroban_intent';
+  resourceId: string;
+  eventType: string;
+  createdAt: string;
+  availableAt: string;
+  publishedAt?: string;
+  attemptCount: number;
+  lastAttemptAt?: string;
+  status: WebhookDeliveryStatus;
+  latestDelivery?: {
+    attempt: number;
+    startedAt: string;
+    completedAt?: string;
+    outcome?: 'succeeded' | 'retry' | 'permanent_failure';
+    httpStatus?: number;
+    errorCode?: string;
+    durationMs?: number;
+  };
+}
 interface ServiceSummary {
   serviceId: string; label: string; enabled: boolean; source: 'bootstrap' | 'durable';
   networks: Array<'public' | 'testnet'>;
@@ -143,6 +166,10 @@ export default function IntegrationAdminApp() {
   const [generatedWebhookSecret, setGeneratedWebhookSecret] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('');
   const [webhookEnabled, setWebhookEnabled] = useState(true);
+  const [webhookDeliveries, setWebhookDeliveries] = useState<WebhookDeliverySummary[]>([]);
+  const [webhookDeliveryBusy, setWebhookDeliveryBusy] = useState(false);
+  const [webhookDeliveryError, setWebhookDeliveryError] = useState('');
+  const [webhookRedelivering, setWebhookRedelivering] = useState('');
   const [copied, setCopied] = useState(false);
   const [webhookCopied, setWebhookCopied] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -156,6 +183,28 @@ export default function IntegrationAdminApp() {
   const editing = useMemo(() => services.find((item) => item.serviceId === editingId), [services, editingId]);
 
   const headers = () => ({ Authorization: `Bearer ${adminSecret.trim()}`, 'Content-Type': 'application/json' });
+
+  async function loadWebhookDeliveries(serviceId: string): Promise<void> {
+    if (!serviceId) {
+      setWebhookDeliveries([]);
+      setWebhookDeliveryError('');
+      return;
+    }
+    setWebhookDeliveryBusy(true);
+    setWebhookDeliveryError('');
+    try {
+      const body = await apiJson<{ deliveries: WebhookDeliverySummary[] }>(await fetch(
+        `/api/integration-admin?view=webhook_deliveries&serviceId=${encodeURIComponent(serviceId)}`,
+        { headers: { Authorization: `Bearer ${adminSecret.trim()}` }, cache: 'no-store' },
+      ));
+      setWebhookDeliveries(body.deliveries);
+    } catch (cause) {
+      setWebhookDeliveries([]);
+      setWebhookDeliveryError(cause instanceof Error ? cause.message : 'Unable to load webhook delivery history.');
+    } finally {
+      setWebhookDeliveryBusy(false);
+    }
+  }
 
   async function loadManagedClassicStatus(): Promise<void> {
     setManagedClassicBusy(true); setManagedClassicError('');
@@ -198,11 +247,12 @@ export default function IntegrationAdminApp() {
     setCreatingNew(false); setAdvancedOpen(false);
     setEditingId(service.serviceId); setDraft(draftFrom(service)); setGeneratedKey(''); setGeneratedWebhookSecret('');
     setWebhookUrl(service.webhook?.url ?? ''); setWebhookEnabled(service.webhook?.enabled ?? true); setError('');
+    void loadWebhookDeliveries(service.serviceId);
   }
 
   function createNew() {
     setCreatingNew(true); setAdvancedOpen(false); setEditingId(''); setDraft(emptyDraft); setGeneratedKey(''); setGeneratedWebhookSecret('');
-    setWebhookUrl(''); setWebhookEnabled(true); setError('');
+    setWebhookUrl(''); setWebhookEnabled(true); setWebhookDeliveries([]); setWebhookDeliveryError(''); setError('');
   }
 
   async function createdFromWizard(result: IntegrationProfileWizardResult) {
@@ -216,6 +266,7 @@ export default function IntegrationAdminApp() {
       setDraft(draftFrom(created));
       setWebhookUrl(created.webhook?.url ?? '');
       setWebhookEnabled(created.webhook?.enabled ?? true);
+      void loadWebhookDeliveries(created.serviceId);
     }
   }
 
@@ -255,6 +306,7 @@ export default function IntegrationAdminApp() {
       setGeneratedWebhookSecret(body.webhookSecret ?? '');
       setWebhookUrl(body.service.webhook?.url ?? ''); setWebhookEnabled(body.service.webhook?.enabled ?? true);
       await load(true);
+      await loadWebhookDeliveries(body.service.serviceId);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to configure webhook delivery.'); }
     finally { setBusy(false); }
   }
@@ -268,8 +320,27 @@ export default function IntegrationAdminApp() {
       }));
       setGeneratedWebhookSecret(body.webhookSecret);
       await load(true);
+      await loadWebhookDeliveries(body.service.serviceId);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to rotate webhook secret.'); }
     finally { setBusy(false); }
+  }
+
+  async function redeliverWebhook(eventId: string) {
+    if (!editingId) return;
+    setWebhookRedelivering(eventId);
+    setWebhookDeliveryError('');
+    try {
+      await apiJson<{ redelivery: { eventId: string; status: 'requeued' } }>(await fetch('/api/integration-admin', {
+        method: 'PATCH',
+        headers: headers(),
+        body: JSON.stringify({ action: 'redeliver_webhook', serviceId: editingId, eventId }),
+      }));
+      await loadWebhookDeliveries(editingId);
+    } catch (cause) {
+      setWebhookDeliveryError(cause instanceof Error ? cause.message : 'Unable to redeliver webhook event.');
+    } finally {
+      setWebhookRedelivering('');
+    }
   }
 
   async function copyKey() {
@@ -341,7 +412,18 @@ export default function IntegrationAdminApp() {
                   </button>
                 </div>
 
-                {!advancedOpen && <IntegrationProfileDetail service={editing} onRotate={() => void rotate()} busy={busy} />}
+                {!advancedOpen && <>
+                  <IntegrationProfileDetail service={editing} onRotate={() => void rotate()} busy={busy} />
+                  {(editing.webhook || webhookDeliveries.length > 0 || webhookDeliveryError) && <WebhookDeliveryPanel
+                    service={editing}
+                    deliveries={webhookDeliveries}
+                    busy={webhookDeliveryBusy}
+                    error={webhookDeliveryError}
+                    redeliveringEventId={webhookRedelivering}
+                    onRefresh={() => void loadWebhookDeliveries(editing.serviceId)}
+                    onRedeliver={(eventId) => void redeliverWebhook(eventId)}
+                  />}
+                </>}
 
                 {advancedOpen && <div className="mt-6 border-t border-black/10 pt-6 dark:border-white/10">
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -400,6 +482,96 @@ export default function IntegrationAdminApp() {
       </div>}
     </div>
   </main>;
+}
+
+function webhookDeliveryPresentation(status: WebhookDeliveryStatus): { label: string; className: string } {
+  switch (status) {
+    case 'delivered':
+      return { label: 'Delivered', className: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' };
+    case 'retrying':
+      return { label: 'Retry scheduled', className: 'bg-amber-500/10 text-amber-700 dark:text-amber-300' };
+    case 'failed':
+      return { label: 'Failed', className: 'bg-red-500/10 text-red-700 dark:text-red-300' };
+    case 'not_sent':
+      return { label: 'Not sent', className: 'bg-neutral-500/10 text-neutral-600 dark:text-neutral-300' };
+    default:
+      return { label: 'Pending', className: 'bg-neutral-500/10 text-neutral-600 dark:text-neutral-300' };
+  }
+}
+
+function WebhookDeliveryPanel({
+  service,
+  deliveries,
+  busy,
+  error,
+  redeliveringEventId,
+  onRefresh,
+  onRedeliver,
+}: {
+  service: ServiceSummary;
+  deliveries: WebhookDeliverySummary[];
+  busy: boolean;
+  error: string;
+  redeliveringEventId: string;
+  onRefresh: () => void;
+  onRedeliver: (eventId: string) => void;
+}) {
+  return <section className="ia-profile-section mt-4">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h3 className="ia-profile-section__title">Webhook delivery history</h3>
+        <p className="mt-1 text-xs leading-5 text-neutral-500">
+          Delivered means the configured receiver returned HTTP 2xx. Automatic retries remain bounded; manual redelivery resends the same webhook event id.
+        </p>
+      </div>
+      <button type="button" disabled={busy} onClick={onRefresh} className="ia-action">
+        <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin motion-reduce:animate-none' : ''}`} />Refresh
+      </button>
+    </div>
+
+    {error && <div className="mt-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
+    {!error && busy && deliveries.length === 0 && <div className="ia-muted py-4 text-sm">Loading webhook deliveries…</div>}
+    {!error && !busy && deliveries.length === 0 && <div className="ia-muted py-4 text-sm">No webhook events have been recorded for this Integration Service.</div>}
+
+    {deliveries.length > 0 && <div className="mt-3 divide-y divide-black/5 dark:divide-white/5">
+      {deliveries.map((delivery) => {
+        const presentation = webhookDeliveryPresentation(delivery.status);
+        const terminal = delivery.status === 'delivered' || delivery.status === 'failed' || delivery.status === 'not_sent';
+        const canRedeliver = terminal && service.enabled && service.webhook?.enabled === true;
+        const latest = delivery.latestDelivery;
+        const eventTime = latest?.completedAt ?? latest?.startedAt ?? delivery.lastAttemptAt ?? delivery.createdAt;
+        return <div key={delivery.eventId} className="py-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${presentation.className}`}>{presentation.label}</span>
+                <span className="text-xs font-semibold">{delivery.eventType}</span>
+              </div>
+              <div className="mt-2 break-all font-mono text-xs">{delivery.resourceKind === 'classic_request' ? 'Proposal' : 'Soroban Intent'} · {delivery.resourceId}</div>
+              <div className="mt-1 break-all font-mono text-[11px] text-neutral-400">{delivery.eventId}</div>
+              <div className="mt-2 text-xs text-neutral-500">
+                {new Date(eventTime).toLocaleString()}
+                {' · '}attempts {delivery.attemptCount}
+                {latest?.httpStatus ? ` · HTTP ${latest.httpStatus}` : ''}
+                {latest?.durationMs !== undefined ? ` · ${latest.durationMs} ms` : ''}
+                {latest?.errorCode ? ` · ${latest.errorCode}` : ''}
+              </div>
+            </div>
+            {terminal && <button
+              type="button"
+              disabled={!canRedeliver || redeliveringEventId === delivery.eventId}
+              onClick={() => onRedeliver(delivery.eventId)}
+              title={!service.enabled || service.webhook?.enabled !== true ? 'Enable the Integration Service and webhook before redelivery.' : undefined}
+              className="ia-action shrink-0"
+            >
+              <RefreshCw className={`h-4 w-4 ${redeliveringEventId === delivery.eventId ? 'animate-spin motion-reduce:animate-none' : ''}`} />
+              {redeliveringEventId === delivery.eventId ? 'Requeueing…' : 'Redeliver'}
+            </button>}
+          </div>
+        </div>;
+      })}
+    </div>}
+  </section>;
 }
 
 function ManagedClassicStatusPanel({
@@ -567,6 +739,7 @@ function IntegrationProfileDetail({ service, onRotate, busy }: { service: Servic
       {service.webhook
         ? <>
             <ProfileRow label="Webhook" value={service.webhook.enabled ? 'Enabled' : 'Disabled'} />
+            <ProfileRow label="Events" value="Coordination changes" />
             <div className="mt-2 break-all font-mono text-xs text-neutral-500">{service.webhook.url}</div>
             <div className="mt-1 text-xs text-neutral-400">Signing secret generation {service.webhook.secretVersion}</div>
           </>

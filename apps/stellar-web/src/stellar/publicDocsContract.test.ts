@@ -55,6 +55,8 @@ test('public API guidance treats webhook as notification over canonical state', 
   assert.match(apiDocs, /Branch on stable error codes, not message text/);
   assert.match(apiDocs, /standardwebhooks/);
   assert.match(apiDocs, /webhook-signature/);
+  assert.match(apiDocs, /Redelivery keeps the same `webhook-id` \/ event `id`/);
+  assert.match(apiDocs, /another delivery attempt of the same event, not a new business event/);
   assert.match(integrationModel, /durable outbox and delivery records/);
 });
 
