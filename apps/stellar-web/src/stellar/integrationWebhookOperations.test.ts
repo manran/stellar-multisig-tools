@@ -13,6 +13,7 @@ const deliveryHistory = source('../../../stellar-api/stellar/db/postgresIntegrat
 
 test('Integration webhook operations expose delivery evidence without inventing new business events', () => {
   assert.match(adminUi, /Webhook delivery history/);
+  assert.match(adminUi, /ProfileRow label="Events" value="Coordination changes"/);
   assert.match(adminUi, /Delivered means the configured receiver returned HTTP 2xx/);
   assert.match(adminUi, /manual redelivery resends the same webhook event id/);
   assert.match(adminUi, /Redeliver/);

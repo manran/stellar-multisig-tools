@@ -739,6 +739,7 @@ function IntegrationProfileDetail({ service, onRotate, busy }: { service: Servic
       {service.webhook
         ? <>
             <ProfileRow label="Webhook" value={service.webhook.enabled ? 'Enabled' : 'Disabled'} />
+            <ProfileRow label="Events" value="Coordination changes" />
             <div className="mt-2 break-all font-mono text-xs text-neutral-500">{service.webhook.url}</div>
             <div className="mt-1 text-xs text-neutral-400">Signing secret generation {service.webhook.secretVersion}</div>
           </>
