@@ -9,6 +9,7 @@ import type {
 } from './requestStore.js';
 import {
   assignSigningRequest,
+  requireSigningRequestReminder,
   RequestAssignmentServiceError,
 } from './requestAssignmentService.js';
 
@@ -139,5 +140,42 @@ test('rejects assignment after the proposal leaves signature collection', async 
     }),
     (cause: unknown) => cause instanceof RequestAssignmentServiceError
       && cause.code === 'request_assignment_not_pending',
+  );
+});
+
+test('only the signer who created the Ask can send its reminder', async () => {
+  const source = Keypair.random().publicKey();
+  const target = Keypair.random().publicKey();
+  const other = Keypair.random().publicKey();
+  const destination = Keypair.random().publicKey();
+  const request: StoredSigningRequest = {
+    version: 1,
+    id: '0123456789ABCDEF',
+    network: 'testnet',
+    baseXdr: unsignedPayment(source, destination),
+    transactionHash: 'd'.repeat(64),
+    createdAt: '2026-10-30T04:00:00Z',
+    expiresAt: '2026-10-31T04:00:00Z',
+  };
+  const store = storeFor(request);
+  await assignSigningRequest(store, request.id, source, target, {
+    signerAccess: async (address) => address === source || address === target || address === other,
+    snapshotLoader: async () => snapshot(request),
+  });
+
+  const assignment = await requireSigningRequestReminder(store, request.id, source, target, {
+    signerAccess: async (address) => address === source || address === target,
+    snapshotLoader: async () => snapshot(request),
+  });
+  assert.equal(assignment.assignedByAddress, source);
+  assert.equal(assignment.signerAddress, target);
+
+  await assert.rejects(
+    () => requireSigningRequestReminder(store, request.id, other, target, {
+      signerAccess: async () => true,
+      snapshotLoader: async () => snapshot(request),
+    }),
+    (cause: unknown) => cause instanceof RequestAssignmentServiceError
+      && cause.code === 'request_reminder_not_owner',
   );
 });

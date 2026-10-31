@@ -9,7 +9,11 @@ import { treasuryDisplayLabel } from './treasuryDisplay';
 import { humanAuthorizationRequirement } from './stellar/authorizationPresentation';
 import type { SourceAnalysis } from '../../../packages/stellar-core/src/transactionReviewAnalysis';
 import type { TransactionAuthorizationStatus } from '../../../packages/stellar-core/src/transactionAuthorization';
-import type { SigningRequestAssignment, SigningRequestNotificationStatus } from '../../../packages/stellar-core/src/requestTypes';
+import type {
+  SigningRequestAssignment,
+  SigningRequestNotificationStatus,
+  SigningRequestNotificationSummary,
+} from '../../../packages/stellar-core/src/requestTypes';
 import type { TransactionXdrInspection } from '../../../packages/stellar-core/src/transactionXdr';
 
 interface Props {
@@ -23,7 +27,9 @@ interface Props {
   onSignWithWallet: () => void;
   onShare?: () => void | string | Promise<void | string>;
   onAsk?: (signerAddress: string) => Promise<{ channel: 'email'; status: SigningRequestNotificationStatus } | undefined>;
+  onRemind?: (signerAddress: string) => Promise<{ channel: 'email'; status: Exclude<SigningRequestNotificationStatus, 'already_queued'> }>;
   assignments?: readonly SigningRequestAssignment[];
+  notifications?: readonly SigningRequestNotificationSummary[];
   shareCreatesLink?: boolean;
   approvalPersisted?: boolean;
   knownComplete?: boolean;
@@ -40,7 +46,9 @@ export default function SigningGuidance({
   onSignWithWallet,
   onShare,
   onAsk,
+  onRemind,
   assignments = [],
+  notifications = [],
   shareCreatesLink = false,
   approvalPersisted = true,
   knownComplete = false,
@@ -54,7 +62,6 @@ export default function SigningGuidance({
   const [shareCopied, setShareCopied] = useState(false);
   const [askBusy, setAskBusy] = useState('');
   const [askError, setAskError] = useState<{ address: string; message: string } | null>(null);
-  const [notifiedSigners, setNotifiedSigners] = useState<Set<string>>(() => new Set());
   const allowNaming = Boolean(sessionAddress);
   const requirementAccountIds = inspection.sourceRequirements.map((requirement) => requirement.accountId);
   const requirementAccountKey = requirementAccountIds.join('|');
@@ -124,7 +131,6 @@ export default function SigningGuidance({
     : null;
   const shareTargets = [...neededWalletKeys].filter((key) => key !== walletAddress);
   const shouldShowShare = shareTargets.length > 0 || (!walletAddress && neededWalletKeys.size > 0);
-  const assignedSignerKeys = new Set(assignments.map((item) => item.signerAddress));
   const remainingSignatureCopy = exactSignaturesRemaining === null
     ? 'More signatures are still needed.'
     : exactSignaturesRemaining === 1
@@ -150,9 +156,7 @@ export default function SigningGuidance({
     setAskError(null);
     try {
       const notification = await onAsk(signerAddress);
-      if (notification?.status === 'queued' || notification?.status === 'already_queued') {
-        setNotifiedSigners((current) => new Set(current).add(signerAddress));
-      } else if (notification?.status === 'enqueue_failed') {
+      if (notification?.status === 'enqueue_failed') {
         setAskError({
           address: signerAddress,
           message: 'Assignment saved, but the email notification could not be queued. Retry email.',
@@ -173,40 +177,85 @@ export default function SigningGuidance({
     }
   }
 
+  async function remindSigner(signerAddress: string) {
+    if (!onRemind) return;
+    setAskBusy(signerAddress);
+    setAskError(null);
+    try {
+      const notification = await onRemind(signerAddress);
+      if (notification.status === 'enqueue_failed') {
+        setAskError({
+          address: signerAddress,
+          message: 'The reminder could not be queued. Try again.',
+        });
+      } else if (notification.status === 'no_contact_email') {
+        setAskError({
+          address: signerAddress,
+          message: 'The saved contact no longer has an email address.',
+        });
+      }
+    } catch (cause) {
+      setAskError({
+        address: signerAddress,
+        message: cause instanceof Error ? cause.message : 'Unable to remind this signer.',
+      });
+    } finally {
+      setAskBusy('');
+    }
+  }
+
   function signerContactControl(signerAddress: string) {
     if (signerAddress === walletAddress || !neededWalletKeys.has(signerAddress)) return null;
     const email = emailFor(signerAddress);
     const alias = labelFor(signerAddress, 'signer');
     const askLabel = alias && alias.length <= 18 ? `Ask ${alias} to sign` : 'Ask to sign';
-    const assigned = assignedSignerKeys.has(signerAddress);
-    const notificationConfirmed = notifiedSigners.has(signerAddress);
+    const assignment = assignments.find((item) => item.signerAddress === signerAddress);
+    const assigned = Boolean(assignment);
+    const assignedByMe = Boolean(assignment && sessionAddress && assignment.assignedByAddress === sessionAddress);
+    const notification = notifications.find((item) => item.signerAddress === signerAddress);
+    const statusLabel = notification?.state === 'provider_accepted'
+      ? notification.eventType === 'signature_reminder' ? 'Reminder accepted' : 'Email accepted'
+      : notification?.state === 'queued'
+        ? notification.eventType === 'signature_reminder' ? 'Reminder queued' : 'Email queued'
+        : notification?.state === 'failed'
+          ? notification.eventType === 'signature_reminder' ? 'Reminder failed' : 'Email failed'
+          : assigned ? 'Assigned' : '';
 
     if (!email) {
       if (!privateUnlocked) return assigned
-        ? <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">Assigned</span>
+        ? <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">{statusLabel}</span>
         : null;
       return (
         <div className="mst-signer-contact mt-2">
-          {assigned && <span className="shrink-0 rounded-full bg-neutral-500/10 px-2 py-0.5 text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">Assigned</span>}
+          {assigned && <span className="shrink-0 rounded-full bg-neutral-500/10 px-2 py-0.5 text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">{statusLabel}</span>}
           <AddressAliasEditor address={signerAddress} subjectType="signer" allowNotificationEmail />
           <span className="text-xs text-neutral-500 dark:text-neutral-400">Add a private name and email to notify this signer.</span>
         </div>
       );
     }
 
-    const needsNotification = assigned && !notificationConfirmed;
+    const canRepairInitialEmail = assignedByMe && !notification;
+    const canRemind = assignedByMe && notification?.state === 'provider_accepted';
+    const canRetryFailed = assignedByMe && notification?.state === 'failed';
+
     return (
       <div className="mst-signer-contact mt-2">
         <div className="flex min-w-0 items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
           <Mail className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate" title={email}>{email}</span>
         </div>
-        {assigned && (
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${notificationConfirmed ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-neutral-500/10 text-neutral-600 dark:text-neutral-300'}`}>
-            {notificationConfirmed ? 'Asked' : 'Assigned'}
+        {statusLabel && (
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+            notification?.state === 'provider_accepted'
+              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+              : notification?.state === 'failed'
+                ? 'bg-red-500/10 text-red-700 dark:text-red-300'
+                : 'bg-neutral-500/10 text-neutral-600 dark:text-neutral-300'
+          }`}>
+            {statusLabel}
           </span>
         )}
-        {onAsk && (!assigned || needsNotification) && (
+        {onAsk && (!assigned || canRepairInitialEmail) && (
           <button
             type="button"
             disabled={askBusy === signerAddress}
@@ -215,8 +264,17 @@ export default function SigningGuidance({
           >
             {askBusy === signerAddress
               ? assigned ? 'Notifying…' : 'Asking…'
-              : assigned ? (askError?.address === signerAddress ? 'Retry email' : 'Notify by email')
-                : askLabel}
+              : assigned ? 'Notify by email' : askLabel}
+          </button>
+        )}
+        {onRemind && (canRemind || canRetryFailed) && (
+          <button
+            type="button"
+            disabled={askBusy === signerAddress}
+            onClick={() => void remindSigner(signerAddress)}
+            className="shrink-0 whitespace-nowrap rounded-lg border border-black/10 px-2.5 py-1.5 text-xs font-semibold hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/10"
+          >
+            {askBusy === signerAddress ? 'Sending…' : canRetryFailed ? 'Retry email' : 'Remind'}
           </button>
         )}
         {askError?.address === signerAddress && <span className="basis-full text-xs text-red-600 dark:text-red-400">{askError.message}</span>}

@@ -64,13 +64,25 @@ import {
 import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
 import { normalizePrivateNote } from '../../../../packages/stellar-core/src/privateNote.js';
 import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
-import type { AssignSigningRequestResponse, SigningRequestApiError, SigningRequestStatus } from '../../../../packages/stellar-core/src/requestTypes.js';
+import type {
+  AssignSigningRequestResponse,
+  RemindSigningRequestResponse,
+  SigningRequestApiError,
+  SigningRequestStatus,
+} from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { loadTransactionSourceAnalyses } from '../../../../packages/stellar-core/src/transactionReviewAnalysis.js';
 import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 import { transactionHashHex } from '../../../../packages/stellar-core/src/signatureMerge.js';
-import { assignSigningRequest, RequestAssignmentServiceError } from '../server/requestAssignmentService.js';
-import { queueSignatureRequestedEmail } from '../server/humanNotificationService.js';
+import {
+  assignSigningRequest,
+  requireSigningRequestReminder,
+  RequestAssignmentServiceError,
+} from '../server/requestAssignmentService.js';
+import {
+  queueSignatureReminderEmail,
+  queueSignatureRequestedEmail,
+} from '../server/humanNotificationService.js';
 import { ReusableTemplateServiceError, resolveReusableTemplateReference } from '../server/reusableTemplateService.js';
 import {
   enforcePreparedSorobanTransaction,
@@ -83,6 +95,7 @@ import {
   assertCoordinationWritesEnabled,
   CoordinationWriteFrozenError,
 } from '../server/coordinationWriteFreeze.js';
+import { listLatestHumanNotificationSummaries } from '../db/postgresHumanNotificationOutbox.js';
 import {
   beforeFirstDurableWrite,
   enforceSemanticRateLimit,
@@ -535,11 +548,13 @@ function initialPrivateNote(text: string, createdAt: string): PrivateNoteRevisio
 }
 
 async function requestCoordination(requestId: string) {
-  return {
-    assignments: signingRequestStore.listRequestAssignments
-      ? await signingRequestStore.listRequestAssignments(requestId)
-      : [],
-  };
+  const [assignments, notifications] = await Promise.all([
+    signingRequestStore.listRequestAssignments
+      ? signingRequestStore.listRequestAssignments(requestId)
+      : Promise.resolve([]),
+    listLatestHumanNotificationSummaries(requestId),
+  ]);
+  return { assignments, notifications };
 }
 
 async function viewerDeclined(requestId: string, actorAddress?: string): Promise<boolean> {
@@ -1062,6 +1077,46 @@ export async function PATCH(request: Request): Promise<Response> {
 
     if (access.mode === 'agent') {
       requireAgentPermission(access, body.decision === 'decline' ? 'write' : 'sign');
+    }
+    if (body.remindSigner !== undefined) {
+      if (!access.actorAddress || !['session', 'capability'].includes(access.mode)) {
+        throw new RequestAssignmentServiceError(
+          'Confirm the signer wallet that sent the original request before sending a reminder.',
+          401,
+          'request_reminder_identity_required',
+        );
+      }
+      const assignment = await requireSigningRequestReminder(
+        signingRequestStore,
+        access.id,
+        access.actorAddress,
+        body.remindSigner,
+        {
+          snapshotLoader: (store, requestId) => getSigningRequest(store, requestId, serviceOptions),
+        },
+      );
+      let notification: RemindSigningRequestResponse['notification'];
+      try {
+        const queued = await queueSignatureReminderEmail({
+          requestId: access.id,
+          remindedByAddress: assignment.assignedByAddress,
+          signerAddress: assignment.signerAddress,
+        });
+        notification = { channel: 'email', status: queued.status };
+      } catch (cause) {
+        notification = { channel: 'email', status: 'enqueue_failed' };
+        console.error('Signature reminder notification enqueue failed', {
+          requestId: access.id,
+          signerAddress: assignment.signerAddress,
+          cause,
+        });
+      }
+      const snapshot = await getSigningRequest(signingRequestStore, access.id, serviceOptions);
+      return noStoreJson({
+        request: snapshot,
+        coordination: await requestCoordination(access.id),
+        notification,
+      } satisfies RemindSigningRequestResponse);
     }
     if (body.assignSigner !== undefined) {
       if (!access.actorAddress || !['session', 'capability'].includes(access.mode)) {

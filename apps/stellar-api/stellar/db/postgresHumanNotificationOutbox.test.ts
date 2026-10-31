@@ -6,9 +6,11 @@ import {
   claimHumanNotificationEvent,
   completeHumanNotificationDelivery,
   completeHumanNotificationEvent,
+  enqueueSignatureReminderNotification,
   enqueueSignatureRequestedNotification,
   findSucceededHumanNotificationDelivery,
   listDueHumanNotificationEventIds,
+  listLatestHumanNotificationSummaries,
   releaseHumanNotificationEvent,
   startHumanNotificationDelivery,
 } from './postgresHumanNotificationOutbox.js';
@@ -129,4 +131,62 @@ test('Human notification outbox is idempotent, leased, retryable, and scrubs ter
   assert.equal(stored.rows[0]?.destination_email, null);
   assert.equal(stored.rows[0]?.outcome, 'sent');
   assert.equal(stored.rows[0]?.provider_message_id, 'email-123');
+});
+
+test('Human notification projection keeps latest reminder state distinct from the original Ask', {
+  skip: !TEST_URL || !RESET_ALLOWED,
+}, async () => {
+  const pool = coordinationPool();
+  const signer = 'GCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCM6';
+  const requested = await enqueueSignatureRequestedNotification({
+    requestId: '0123456789ABCDEF',
+    recipientSignerAddress: signer,
+    actorAddress: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+    destinationEmail: 'carol@example.com',
+    createdAt: new Date('2026-10-30T13:00:00Z'),
+  }, pool);
+  const askClaim = await claimHumanNotificationEvent(requested.eventId, {
+    now: new Date('2026-10-30T13:00:00Z'),
+    leaseToken: 'ask-lease',
+    pool,
+  });
+  assert.ok(askClaim);
+  assert.equal(await completeHumanNotificationEvent(requested.eventId, 'ask-lease', {
+    outcome: 'sent',
+    completedAt: new Date('2026-10-30T13:00:01Z'),
+    providerMessageId: 'ask-email',
+  }, pool), true);
+
+  const reminder = await enqueueSignatureReminderNotification({
+    requestId: '0123456789ABCDEF',
+    recipientSignerAddress: signer,
+    actorAddress: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+    destinationEmail: 'carol@example.com',
+    createdAt: new Date('2026-10-30T14:00:00Z'),
+    eventId: 'classic_request:0123456789ABCDEF:signature_reminder:test',
+  }, pool);
+  assert.equal(reminder.created, true);
+
+  let latest = (await listLatestHumanNotificationSummaries('0123456789ABCDEF', pool))
+    .find((item) => item.signerAddress === signer);
+  assert.equal(latest?.eventType, 'signature_reminder');
+  assert.equal(latest?.state, 'queued');
+
+  const reminderClaim = await claimHumanNotificationEvent(reminder.eventId, {
+    now: new Date('2026-10-30T14:00:00Z'),
+    leaseToken: 'reminder-lease',
+    pool,
+  });
+  assert.ok(reminderClaim);
+  assert.equal(reminderClaim.record.eventType, 'signature_reminder');
+  assert.equal(await completeHumanNotificationEvent(reminder.eventId, 'reminder-lease', {
+    outcome: 'sent',
+    completedAt: new Date('2026-10-30T14:00:01Z'),
+    providerMessageId: 'reminder-email',
+  }, pool), true);
+
+  latest = (await listLatestHumanNotificationSummaries('0123456789ABCDEF', pool))
+    .find((item) => item.signerAddress === signer);
+  assert.equal(latest?.state, 'provider_accepted');
+  assert.equal(latest?.completedAt, '2026-10-30T14:00:01.000Z');
 });
