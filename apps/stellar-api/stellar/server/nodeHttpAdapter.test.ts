@@ -64,6 +64,15 @@ test('node adapter rejects unknown paths and unsupported methods', async () => {
 });
 
 
+test('Node HTTP adapter exposes the Human email provider webhook route', async () => {
+  const response = await dispatchStellarHttpRequest(new Request(
+    'https://api-testnet.multisig.tools/stellar/human-email-events',
+    { method: 'POST', body: '{}' },
+  ));
+  assert.notEqual(response.status, 404);
+  assert.notEqual(response.status, 405);
+});
+
 test('Node HTTP adapter exposes reusable templates through the Stellar namespace', async () => {
   const response = await dispatchStellarHttpRequest(new Request('https://api-testnet.multisig.tools/stellar/templates?network=testnet'));
   assert.notEqual(response.status, 404);

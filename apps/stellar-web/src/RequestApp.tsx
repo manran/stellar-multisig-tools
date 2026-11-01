@@ -39,8 +39,10 @@ import type {
   AssignSigningRequestResponse,
   ContributeSigningRequestResponse,
   CreateSigningRequestResponse,
+  RemindSigningRequestResponse,
   SigningRequestApiError,
   SigningRequestAssignment,
+  SigningRequestNotificationSummary,
   SigningRequestSnapshot,
   SigningRequestStatus,
   SubmitSigningRequestResponse,
@@ -213,6 +215,7 @@ export default function RequestApp() {
   const [shareJustCreated, setShareJustCreated] = useState(navigation.justCreated);
   const [assignmentApiAvailable, setAssignmentApiAvailable] = useState(false);
   const [assignments, setAssignments] = useState<SigningRequestAssignment[]>([]);
+  const [notifications, setNotifications] = useState<SigningRequestNotificationSummary[]>([]);
   const [snapshot, setSnapshot] = useState<SigningRequestSnapshot | null>(initialPreview);
   const [privateNote, setPrivateNote] = useState<PrivateNoteRevision | null>(null);
   const [privateCommitment, setPrivateCommitment] = useState<PrivateCommitmentRecord | null>(null);
@@ -322,6 +325,7 @@ export default function RequestApp() {
     setPrivateCommitment(null);
     setAssignmentApiAvailable(false);
     setAssignments([]);
+    setNotifications([]);
     setSourceAnalyses([]);
   }
 
@@ -379,6 +383,7 @@ export default function RequestApp() {
       setPrivateCommitment(body.context?.privateCommitment ?? null);
       setAssignmentApiAvailable(Boolean(body.coordination));
       setAssignments(body.coordination?.assignments ?? []);
+      setNotifications(body.coordination?.notifications ?? []);
       const normalized = requestLocatorString(body.request.id, locator.capability);
       setRequestLocator(normalized);
       setCapability(locator.capability);
@@ -479,6 +484,7 @@ export default function RequestApp() {
           setPrivateCommitment(body.context?.privateCommitment ?? null);
           setAssignmentApiAvailable(Boolean(body.coordination));
           setAssignments(body.coordination?.assignments ?? []);
+      setNotifications(body.coordination?.notifications ?? []);
           if (body.access) {
             setShareable(body.access.shareable);
             setActivityBound(body.access.activityBound ?? false);
@@ -613,6 +619,21 @@ async function submitRequest(acceptedEffectsDigest?: string) {
       body: JSON.stringify({ assignSigner: signerAddress }),
     }));
     setAssignments(body.coordination.assignments);
+    setNotifications(body.coordination.notifications);
+    return body.notification;
+  }
+
+  async function remindSignerToSign(signerAddress: string): Promise<RemindSigningRequestResponse['notification']> {
+    if (!snapshot || !shareable || !walletAddress || !privateReadyForRequest) {
+      throw new Error('Confirm the signer wallet that sent the original request before sending a reminder.');
+    }
+    const body = await apiJson<RemindSigningRequestResponse>(await fetch('/api/request', {
+      method: 'PATCH',
+      headers: requestHeaders(snapshot.id, capability, walletAddress, true),
+      body: JSON.stringify({ remindSigner: signerAddress }),
+    }));
+    setAssignments(body.coordination.assignments);
+    setNotifications(body.coordination.notifications);
     return body.notification;
   }
 
@@ -804,7 +825,9 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                     onSignWithWallet={() => void signRequestWithWallet()}
                     onShare={shareable ? () => requestUrl(snapshot.id, capability) : undefined}
                     onAsk={shareable && privateReadyForRequest && assignmentApiAvailable ? askSignerToSign : undefined}
+                    onRemind={shareable && privateReadyForRequest && assignmentApiAvailable ? remindSignerToSign : undefined}
                     assignments={assignments}
+                    notifications={notifications}
                     shareCreatesLink={shareable}
                     knownComplete={signaturesComplete}
                   />

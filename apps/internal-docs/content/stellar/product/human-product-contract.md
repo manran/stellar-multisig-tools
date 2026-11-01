@@ -521,8 +521,12 @@ Current MVP routing is deliberately lightweight:
 - private Contact names make those candidates understandable;
 - explicit Ask persists a Classic Request signer Assignment;
 - if that Contact has an email, Ask queues a `signature_requested` Human notification;
+- the Proposal coordination projection exposes the latest Human email state as `queued`, `provider_accepted`, `delivered`, `bounced`, or `failed`; `provider_accepted` means only that the configured provider accepted the send request, while `delivered` and `bounced` require a verified provider event matched to the provider message id;
+- the original signer who created the Ask may send a `signature_reminder` while the Proposal still needs that signer; Reminder is a new semantic notification event, not a replay of the original idempotency key;
+- other participants cannot send a Reminder using another signer's private Contact route;
+- a verified bounce may offer the original requester an explicit retry; delivery/bounce evidence never auto-assigns, auto-signs, or changes Proposal state;
 - email delivery is coordination only and never changes Stellar authorization;
-- the same Request/signer pair is idempotent, so retrying Ask can repair notification enqueue without creating duplicate Assignment semantics.
+- the same Request/signer pair is idempotent for the initial Ask, so retrying Ask can repair an enqueue failure without creating duplicate Assignment semantics.
 
 Preserve this architecture distinction:
 
