@@ -74,6 +74,7 @@ export interface SigningRequestAssignment {
   signerAddress: string;
   assignedByAddress: string;
   assignedAt: string;
+  viewedAt?: string;
 }
 
 export type SigningRequestNotificationEventType =

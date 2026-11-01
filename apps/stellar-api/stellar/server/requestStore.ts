@@ -86,6 +86,7 @@ export interface StoredRequestAssignment {
   signerAddress: string;
   assignedByAddress: string;
   assignedAt: string;
+  viewedAt?: string;
 }
 
 export interface SigningRequestStore {
@@ -123,6 +124,11 @@ export interface SigningRequestStore {
     id: string,
     assignment: StoredRequestAssignment,
   ): Promise<{ assignment: StoredRequestAssignment; created: boolean }>;
+  markRequestAssignmentViewed?(
+    id: string,
+    signerAddress: string,
+    viewedAt: string,
+  ): Promise<StoredRequestAssignment | null>;
   listActivityEvents?(id: string): Promise<ActivityEvent[]>;
   putActivityEvent?(id: string, event: ActivityFactEvent): Promise<void>;
   listPrivateNoteRevisions?(id: string): Promise<PrivateNoteRevision[]>;

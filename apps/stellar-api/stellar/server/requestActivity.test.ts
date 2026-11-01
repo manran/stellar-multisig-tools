@@ -200,6 +200,15 @@ test('Activity keeps Human coordination separate from transaction evidence and o
     },
     {
       version: 1,
+      eventId: 'coord-viewed',
+      requestId: older.id,
+      type: 'proposal_viewed',
+      occurredAt: '2026-08-30T09:20:30.000Z',
+      actorAddress: recipient.publicKey(),
+      subjectAddress: recipient.publicKey(),
+    },
+    {
+      version: 1,
       eventId: 'coord-delivered',
       requestId: older.id,
       type: 'notification_delivered',
@@ -216,6 +225,7 @@ test('Activity keeps Human coordination separate from transaction evidence and o
   assert.deepEqual(items[0].events.map((event) => event.type), ['request_created']);
   assert.deepEqual(items[0].coordinationEvents?.map((event) => event.type), [
     'signer_requested',
+    'proposal_viewed',
     'notification_delivered',
   ]);
 });

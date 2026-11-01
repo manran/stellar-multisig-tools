@@ -320,7 +320,7 @@ test('Classic participants, submission, Activity facts, and private note revisio
 });
 
 
-test('Classic Activity projects Assignment and Human delivery facts without exposing contact data', {
+test('Classic Activity projects Assignment, Proposal view, and Human delivery facts without exposing contact data', {
   skip: !TEST_URL || !RESET_ALLOWED,
 }, async () => {
   const pool = coordinationPool();
@@ -334,6 +334,22 @@ test('Classic Activity projects Assignment and Human delivery facts without expo
     assignedByAddress: f.creator.publicKey(),
     assignedAt: '2026-09-18T01:04:00.000Z',
   });
+  const firstView = await store.markRequestAssignmentViewed!(
+    f.request.id,
+    f.signer.publicKey(),
+    '2026-09-18T01:04:01.000Z',
+  );
+  const repeatedView = await store.markRequestAssignmentViewed!(
+    f.request.id,
+    f.signer.publicKey(),
+    '2026-09-18T01:09:00.000Z',
+  );
+  assert.equal(firstView?.viewedAt, '2026-09-18T01:04:01.000Z');
+  assert.equal(repeatedView, null);
+  assert.equal(
+    (await store.listRequestAssignments!(f.request.id))[0]?.viewedAt,
+    firstView?.viewedAt,
+  );
 
   await pool.query(
     `INSERT INTO mst_stellar.human_notification_outbox (
@@ -358,11 +374,14 @@ test('Classic Activity projects Assignment and Human delivery facts without expo
   const events = await store.listRequestCoordinationEvents!(f.request.id);
   assert.deepEqual(events.map((event) => event.type), [
     'signer_requested',
+    'proposal_viewed',
     'notification_accepted',
     'notification_delivered',
   ]);
   assert.equal(events[0]?.actorAddress, f.creator.publicKey());
   assert.equal(events[0]?.subjectAddress, f.signer.publicKey());
-  assert.equal(events[2]?.notificationKind, 'signature_requested');
+  assert.equal(events[1]?.actorAddress, f.signer.publicKey());
+  assert.equal(events[1]?.subjectAddress, f.signer.publicKey());
+  assert.equal(events[3]?.notificationKind, 'signature_requested');
   assert.doesNotMatch(JSON.stringify(events), /private@example\.com|resend-message-private|svix-private/);
 });

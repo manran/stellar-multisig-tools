@@ -117,6 +117,12 @@ function coordinationEventCopy(
       title: actor ? `${actor} asked ${subject} to sign` : `Asked ${subject} to sign`,
       tone: 'neutral' as const,
     };
+    case 'proposal_viewed': return {
+      title: event.subjectAddress === currentAddress
+        ? 'You viewed the proposal'
+        : `${signerLabel(event.subjectAddress)} viewed the proposal`,
+      tone: 'neutral' as const,
+    };
     case 'notification_accepted': return {
       title: `${channel} accepted for ${subject}`,
       tone: 'positive' as const,

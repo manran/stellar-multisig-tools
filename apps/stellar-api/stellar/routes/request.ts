@@ -287,6 +287,29 @@ async function bindRequestParticipantBestEffort(id: string, address: string): Pr
   }
 }
 
+async function markAssignedSignerViewedBestEffort(access: AuthorizedRequest): Promise<void> {
+  if (
+    access.mode !== 'session'
+    || !access.actorAddress
+    || !signingRequestStore.markRequestAssignmentViewed
+  ) return;
+  try {
+    await signingRequestStore.markRequestAssignmentViewed(
+      access.id,
+      access.actorAddress,
+      new Date().toISOString(),
+    );
+  } catch (cause) {
+    // Viewing evidence is coordination metadata. A transient write failure must
+    // never block an authorized signer from opening the Proposal.
+    console.error('Signing request assignment view write failed', {
+      requestId: access.id,
+      address: access.actorAddress,
+      cause,
+    });
+  }
+}
+
 function storedCapabilityStatus(
   expiresAt: string,
   submitted: boolean,
@@ -677,6 +700,9 @@ export async function GET(request: Request): Promise<Response> {
     const snapshot = await snapshotPromise;
     if (access.mode === 'capability' && (snapshot.status === 'submitted' || snapshot.status === 'expired')) {
       return capabilityClosedResponse(snapshot.network, snapshot.status);
+    }
+    if (!historyRequested && snapshot.status === 'awaiting_signatures') {
+      await markAssignedSignerViewedBestEffort(access);
     }
 
     let declined = false;

@@ -522,12 +522,14 @@ Current MVP routing is deliberately lightweight:
 - explicit Ask persists a Classic Request signer Assignment;
 - if that Contact has an email, Ask queues a `signature_requested` Human notification;
 - the Proposal coordination projection exposes the latest Human email state as `queued`, `provider_accepted`, `delivered`, `bounced`, or `failed`; `provider_accepted` means only that the configured provider accepted the send request, while `delivered` and `bounced` require a verified provider event matched to the provider message id;
+- an assigned signer gains a separate one-time `Viewed` fact only after a verified Human signer session opens the active Proposal; anonymous capability access, Agent access, Service access, and provider email delivery do not count as a signer view;
+- `Email delivered` and `Viewed` intentionally remain different product facts: the former is mail delivery evidence, the latter is authenticated Proposal access;
 - the original signer who created the Ask may send a `signature_reminder` while the Proposal still needs that signer; Reminder is a new semantic notification event, not a replay of the original idempotency key;
 - other participants cannot send a Reminder using another signer's private Contact route;
 - a verified bounce may offer the original requester an explicit retry; delivery/bounce evidence never auto-assigns, auto-signs, or changes Proposal state;
 - email delivery is coordination only and never changes Stellar authorization;
 - the same Request/signer pair is idempotent for the initial Ask, so retrying Ask can repair an enqueue failure without creating duplicate Assignment semantics;
-- Activity may project Assignment and Human notification delivery facts into the same Human timeline as signatures, so a sender can later understand who was asked, whether the email was accepted/delivered/bounced, whether a Reminder was sent, and who eventually signed;
+- Activity may project Assignment, authenticated Proposal view, and Human notification delivery facts into the same Human timeline as signatures, so a sender can later understand who was asked, whether email delivery succeeded, whether the assigned signer actually viewed the Proposal, whether a Reminder was sent, and who eventually signed;
 - those coordination facts remain separate from transaction/authorization evidence: email delivery must not appear in the Transaction Receipt or portable evidence as if it proved Stellar authorization.
 
 Preserve this architecture distinction:
