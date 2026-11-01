@@ -61,6 +61,9 @@ services:
       MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED: ${MULTISIG_CLASSIC_MANAGED_EXECUTION_ENABLED:-false}
       MULTISIG_PRIVATE_OBJECT_STORAGE: filesystem
       MULTISIG_PRIVATE_OBJECT_ROOT: /var/lib/mst/private
+      RESEND_WEBHOOK_SECRET_FILE: /run/secrets/resend_webhook_secret
+    secrets:
+      - resend_webhook_secret
     volumes:
       - private_data:/var/lib/mst/private
     depends_on:
@@ -163,3 +166,5 @@ secrets:
     file: ${MST_WEBHOOK_RELAY_SECRET_FILE:-/opt/MST/runtime/mst-testnet-api/webhook-relay.secret}
   resend_api_key:
     file: ${MST_RESEND_API_KEY_FILE:-/opt/MST/runtime/mst-testnet-api/resend-api-key.secret}
+  resend_webhook_secret:
+    file: ${MST_RESEND_WEBHOOK_SECRET_FILE:-/opt/MST/runtime/mst-testnet-api/resend-webhook.secret}

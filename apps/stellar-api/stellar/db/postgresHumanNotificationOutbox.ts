@@ -9,6 +9,7 @@ import { coordinationPool, withPostgresTransaction } from './postgres.js';
 export type HumanNotificationEventType = 'signature_requested' | 'signature_reminder';
 export type HumanNotificationTerminalOutcome = 'sent' | 'permanent_failure';
 export type HumanNotificationDeliveryOutcome = 'succeeded' | 'retry' | 'permanent_failure';
+export type HumanNotificationProviderDeliveryState = 'delivered' | 'bounced';
 
 export interface HumanNotificationOutboxRecord {
   eventId: string;
@@ -196,6 +197,8 @@ interface NotificationSummaryRow {
   completed_at: Date | string | null;
   outcome: HumanNotificationTerminalOutcome | null;
   terminal_error_code: string | null;
+  provider_delivery_state: HumanNotificationProviderDeliveryState | null;
+  provider_event_at: Date | string | null;
 }
 
 export async function listLatestHumanNotificationSummaries(
@@ -205,7 +208,8 @@ export async function listLatestHumanNotificationSummaries(
   const result = await pool.query<NotificationSummaryRow>(
     `SELECT DISTINCT ON (recipient_signer_address)
             event_type, recipient_signer_address, actor_address, created_at,
-            last_attempt_at, completed_at, outcome, terminal_error_code
+            last_attempt_at, completed_at, outcome, terminal_error_code,
+            provider_delivery_state, provider_event_at
        FROM mst_stellar.human_notification_outbox
       WHERE request_id = $1
       ORDER BY recipient_signer_address, created_at DESC, event_id DESC`,
@@ -216,11 +220,15 @@ export async function listLatestHumanNotificationSummaries(
     eventType: row.event_type,
     signerAddress: row.recipient_signer_address,
     actorAddress: row.actor_address,
-    state: row.outcome === 'sent'
-      ? 'provider_accepted' as const
-      : row.outcome === 'permanent_failure'
-        ? 'failed' as const
-        : 'queued' as const,
+    state: row.provider_delivery_state === 'delivered'
+      ? 'delivered' as const
+      : row.provider_delivery_state === 'bounced'
+        ? 'bounced' as const
+        : row.outcome === 'sent'
+          ? 'provider_accepted' as const
+          : row.outcome === 'permanent_failure'
+            ? 'failed' as const
+            : 'queued' as const,
     createdAt: iso(row.created_at),
     ...(row.last_attempt_at ? { lastAttemptAt: iso(row.last_attempt_at) } : {}),
     ...(row.completed_at ? { completedAt: iso(row.completed_at) } : {}),
@@ -344,6 +352,50 @@ export async function completeHumanNotificationEvent(
 
 export function humanNotificationDeliveryId(eventId: string, attempt: number): string {
   return `${eventId}:${attempt}`;
+}
+
+
+export async function recordHumanNotificationProviderEvent(
+  input: {
+    providerMessageId: string;
+    state: HumanNotificationProviderDeliveryState;
+    eventAt: Date;
+    providerEventId: string;
+  },
+  pool: Pool = coordinationPool(),
+): Promise<'updated' | 'not_found' | 'stale'> {
+  const providerMessageId = input.providerMessageId.trim();
+  const providerEventId = input.providerEventId.trim();
+  if (!providerMessageId || !providerEventId || Number.isNaN(input.eventAt.getTime())) {
+    throw new Error('Human notification provider event is invalid.');
+  }
+
+  const result = await pool.query<{ event_id: string }>(
+    `UPDATE mst_stellar.human_notification_outbox
+        SET provider_delivery_state = $1,
+            provider_event_at = $2,
+            provider_event_id = $3
+      WHERE provider_message_id = $4
+        AND outcome = 'sent'
+        AND (
+          provider_event_at IS NULL
+          OR provider_event_at < $2
+          OR (provider_event_at = $2 AND provider_event_id = $3)
+        )
+      RETURNING event_id`,
+    [input.state, input.eventAt.toISOString(), providerEventId, providerMessageId],
+  );
+  if (result.rowCount === 1) return 'updated';
+
+  const known = await pool.query<{ provider_event_at: Date | string | null }>(
+    `SELECT provider_event_at
+       FROM mst_stellar.human_notification_outbox
+      WHERE provider_message_id = $1
+        AND outcome = 'sent'
+      LIMIT 1`,
+    [providerMessageId],
+  );
+  return known.rowCount === 0 ? 'not_found' : 'stale';
 }
 
 export async function startHumanNotificationDelivery(
