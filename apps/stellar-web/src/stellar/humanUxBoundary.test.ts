@@ -168,6 +168,20 @@ test('assigned signer view progress requires verified Human session and stays ou
   assert.doesNotMatch(requestApi, /markAssignedSignerViewedBestEffort[\s\S]{0,400}putRequestParticipant/);
 });
 
+test('Inbox waiting rows reuse sender coordination without inventing signer order', () => {
+  const inbox = source('../InboxApp.tsx');
+  const presentation = source('./inboxRequestPresentation.ts');
+  const requestInbox = source('../../../stellar-api/stellar/server/requestInbox.ts');
+
+  assert.match(inbox, /inboxOutgoingSignerProgress/);
+  assert.match(inbox, /Asked \{signerLabel\(item\.signerAddress\)\}/);
+  assert.match(inbox, /item\.viewedAt/);
+  assert.match(presentation, /event\.actorAddress !== viewerAddress/);
+  assert.match(presentation, /notification_delivered/);
+  assert.match(requestInbox, /viewerAction === 'waiting_for_others'/);
+  assert.doesNotMatch(inbox, /Waiting on \{signerLabel/);
+});
+
 test('Activity retention explains that the share link ends without implying the confirmed transaction disappears', () => {
   const notice = source('../ActivityRetentionNotice.tsx');
   const request = source('../RequestApp.tsx');

@@ -115,6 +115,7 @@ test('Human Inbox action projection recognizes the current signer signature and 
     statusReason: 'signatures_required' as const,
   };
 
+  const coordinationReads: string[] = [];
   const store = baseStore({
     async listActivityEvents(id) {
       return id === '1'.repeat(16)
@@ -127,6 +128,29 @@ test('Human Inbox action projection recognizes the current signer signature and 
             actorAddress: signer.publicKey(),
           }]
         : [];
+    },
+    async listRequestCoordinationEvents(id) {
+      coordinationReads.push(id);
+      return [
+        {
+          version: 1,
+          eventId: `asked-${destination.publicKey()}`,
+          requestId: id,
+          type: 'signer_requested',
+          occurredAt: '2026-09-06T00:02:00.000Z',
+          actorAddress: signer.publicKey(),
+          subjectAddress: destination.publicKey(),
+        },
+        {
+          version: 1,
+          eventId: 'unrelated-ask',
+          requestId: id,
+          type: 'signer_requested',
+          occurredAt: '2026-09-06T00:03:00.000Z',
+          actorAddress: destination.publicKey(),
+          subjectAddress: signer.publicKey(),
+        },
+      ];
     },
   });
   const { projectHumanInboxRequests } = await import('./requestInbox.js');
@@ -145,6 +169,11 @@ test('Human Inbox action projection recognizes the current signer signature and 
     'submit',
     'waiting_execution',
   ]);
+  assert.deepEqual(coordinationReads, ['0'.repeat(16)]);
+  assert.equal(projected[0]?.coordinationEvents?.length, 1);
+  assert.equal(projected[0]?.coordinationEvents?.[0]?.type, 'signer_requested');
+  assert.equal(projected[0]?.coordinationEvents?.[0]?.actorAddress, signer.publicKey());
+  assert.equal(projected[1]?.coordinationEvents, undefined);
 });
 
 test('legacy exact Soroban Proposal stays on the already-routed submit path when stored execution policy is absent', async () => {

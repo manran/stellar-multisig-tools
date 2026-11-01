@@ -1,3 +1,4 @@
+import type { InboxRequestSnapshot } from '../../../../packages/stellar-core/src/inboxPresentation.js';
 import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
 import { projectTransactionSemantics } from './transactionSemantics.js';
 import { transactionSystemTypeLabel } from '../../../../packages/stellar-core/src/transactionPresentation.js';
@@ -75,4 +76,80 @@ export function inboxDeadlineLabel(inspection: TransactionXdrInspection) {
   if (hours < 24) return `${Math.ceil(hours)}h left`;
   if (hours < 48) return 'Tomorrow';
   return new Date(deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+
+export interface InboxOutgoingSignerProgress {
+  signerAddress: string;
+  askedAt: string;
+  viewedAt?: string;
+  notification?: {
+    label: string;
+    tone: 'neutral' | 'success' | 'danger';
+    occurredAt: string;
+  };
+}
+
+function laterEvent<T extends { occurredAt: string; eventId: string }>(left: T | undefined, right: T): T {
+  if (!left) return right;
+  return right.occurredAt > left.occurredAt
+    || (right.occurredAt === left.occurredAt && right.eventId > left.eventId)
+    ? right
+    : left;
+}
+
+export function inboxOutgoingSignerProgress(
+  request: Pick<InboxRequestSnapshot, 'coordinationEvents'>,
+  viewerAddress: string,
+): InboxOutgoingSignerProgress[] {
+  const events = request.coordinationEvents ?? [];
+  const asks = new Map<string, { occurredAt: string; eventId: string }>();
+
+  for (const event of events) {
+    if (event.type !== 'signer_requested' || event.actorAddress !== viewerAddress) continue;
+    const current = asks.get(event.subjectAddress);
+    asks.set(event.subjectAddress, laterEvent(current, event));
+  }
+
+  const progress: InboxOutgoingSignerProgress[] = [];
+  for (const [signerAddress, ask] of asks) {
+    let viewed: { occurredAt: string; eventId: string } | undefined;
+    let notification: typeof events[number] | undefined;
+    for (const event of events) {
+      if (event.subjectAddress !== signerAddress) continue;
+      if (event.type === 'proposal_viewed') viewed = laterEvent(viewed, event);
+      if (
+        event.actorAddress === viewerAddress
+        && (
+          event.type === 'notification_accepted'
+          || event.type === 'notification_delivered'
+          || event.type === 'notification_bounced'
+          || event.type === 'notification_failed'
+        )
+      ) {
+        notification = laterEvent(notification, event);
+      }
+    }
+
+    const channel = notification?.notificationKind === 'signature_reminder' ? 'Reminder' : 'Email';
+    const notificationPresentation = notification
+      ? notification.type === 'notification_delivered'
+        ? { label: `${channel} delivered`, tone: 'success' as const, occurredAt: notification.occurredAt }
+        : notification.type === 'notification_accepted'
+          ? { label: `${channel} accepted`, tone: 'neutral' as const, occurredAt: notification.occurredAt }
+          : notification.type === 'notification_bounced'
+            ? { label: `${channel} bounced`, tone: 'danger' as const, occurredAt: notification.occurredAt }
+            : { label: `${channel} failed`, tone: 'danger' as const, occurredAt: notification.occurredAt }
+      : undefined;
+
+    progress.push({
+      signerAddress,
+      askedAt: ask.occurredAt,
+      ...(viewed ? { viewedAt: viewed.occurredAt } : {}),
+      ...(notificationPresentation ? { notification: notificationPresentation } : {}),
+    });
+  }
+
+  return progress.sort((left, right) =>
+    right.askedAt.localeCompare(left.askedAt) || left.signerAddress.localeCompare(right.signerAddress));
 }

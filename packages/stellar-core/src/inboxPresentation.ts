@@ -1,3 +1,4 @@
+import type { ActivityCoordinationEvent } from './activityTypes.js';
 import type { SigningRequestSnapshot, SigningRequestStatus } from './requestTypes.js';
 import type { InboxSorobanIntentSnapshot } from './sorobanIntentApiTypes.js';
 
@@ -13,6 +14,7 @@ export type InboxViewerAction =
 
 export interface InboxRequestSnapshot extends SigningRequestSnapshot {
   viewerAction: InboxViewerAction;
+  coordinationEvents?: ActivityCoordinationEvent[];
 }
 
 export interface InboxActionCounts {

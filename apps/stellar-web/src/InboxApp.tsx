@@ -11,7 +11,11 @@ import {
   inboxViewerActionPresentation,
 } from '../../../packages/stellar-core/src/inboxPresentation';
 import type { InboxActionCounts, InboxRequestSnapshot } from '../../../packages/stellar-core/src/inboxPresentation';
-import { describeInboxRequest, inboxDeadlineLabel } from './stellar/inboxRequestPresentation';
+import {
+  describeInboxRequest,
+  inboxDeadlineLabel,
+  inboxOutgoingSignerProgress,
+} from './stellar/inboxRequestPresentation';
 import { intentAuthorizationWindowLabel, intentViewerActionNeedsAction, intentViewerActionPresentation } from './stellar/sorobanIntentPresentation';
 import type { InboxSorobanIntentSnapshot } from '../../../packages/stellar-core/src/sorobanIntentApiTypes';
 import type { InboxRequestDescription } from './stellar/inboxRequestPresentation';
@@ -61,7 +65,45 @@ function viewFromUrl(): InboxView {
   return 'inbox';
 }
 
-function DetailPane({ request, description }: { request: InboxRequestSnapshot; description: InboxRequestDescription }) {
+function OutgoingProgress({
+  request,
+  viewerAddress,
+  signerLabel,
+  compact = false,
+}: {
+  request: InboxRequestSnapshot;
+  viewerAddress: string;
+  signerLabel: (address: string) => string;
+  compact?: boolean;
+}) {
+  const progress = inboxOutgoingSignerProgress(request, viewerAddress);
+  if (progress.length === 0) return null;
+  const visible = compact ? progress.slice(0, 2) : progress;
+  return (
+    <div className="mt-2 space-y-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
+      {visible.map((item) => (
+        <div key={item.signerAddress} title={item.signerAddress}>
+          <span className="font-semibold text-neutral-700 dark:text-neutral-200">Asked {signerLabel(item.signerAddress)}</span>
+          {item.notification && <span> · {item.notification.label}</span>}
+          {item.viewedAt && <span> · Viewed</span>}
+        </div>
+      ))}
+      {compact && progress.length > visible.length && <div>+{progress.length - visible.length} more asked signer{progress.length - visible.length === 1 ? '' : 's'}</div>}
+    </div>
+  );
+}
+
+function DetailPane({
+  request,
+  description,
+  viewerAddress,
+  signerLabel,
+}: {
+  request: InboxRequestSnapshot;
+  description: InboxRequestDescription;
+  viewerAddress: string;
+  signerLabel: (address: string) => string;
+}) {
   const viewerAction = inboxViewerActionPresentation(request.viewerAction);
   return (
     <div className="space-y-4">
@@ -72,6 +114,7 @@ function DetailPane({ request, description }: { request: InboxRequestSnapshot; d
       <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
         <StatusBadge tone={viewerAction.tone}>{viewerAction.label}</StatusBadge>
         <p className="mt-2 text-xs leading-5 text-neutral-600 dark:text-neutral-300">{viewerAction.detail}</p>
+        <OutgoingProgress request={request} viewerAddress={viewerAddress} signerLabel={signerLabel} />
       </div>
       <ReviewTransactionSummary inspection={description.inspection} />
       <button type="button" onClick={() => openRequestDetails(request)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-base font-semibold text-white hover:bg-emerald-700">{viewerAction.cta} <ArrowRight className="h-4 w-4" /></button>
@@ -158,6 +201,7 @@ export default function InboxApp() {
 
   const selectedRequest = visibleRequests.find((request) => request.id === selectedId) ?? null;
   const selectedDescription = selectedRequest ? descriptions.get(selectedRequest.id) ?? null : null;
+  const signerLabel = (address: string) => labelFor(address, 'signer') || shortAddress(address);
   return (
     <StellarWorkspaceShell active={view === 'needs' ? 'inbox' : view}>
       <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
@@ -247,6 +291,7 @@ export default function InboxApp() {
                         <p className="mt-1 line-clamp-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{description.summary}</p>
                         <div className="mt-3">
                           <StatusBadge tone={inboxViewerActionPresentation(request.viewerAction).tone}>{inboxViewerActionPresentation(request.viewerAction).label}</StatusBadge>
+                          <OutgoingProgress request={request} viewerAddress={unlockedAddress} signerLabel={signerLabel} compact />
                         </div>
                         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
                           {request.network === 'testnet' && (
@@ -268,7 +313,12 @@ export default function InboxApp() {
 
                 {selectedRequest && selectedDescription && (
                   <div className="mst-inbox-detail hidden xl:block">
-                    <DetailPane request={selectedRequest} description={selectedDescription} />
+                    <DetailPane
+                      request={selectedRequest}
+                      description={selectedDescription}
+                      viewerAddress={unlockedAddress}
+                      signerLabel={signerLabel}
+                    />
                   </div>
                 )}
 
