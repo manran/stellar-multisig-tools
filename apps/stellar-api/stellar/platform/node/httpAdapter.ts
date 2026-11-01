@@ -11,6 +11,7 @@ import * as contractInterface from '../../routes/contract-interface.js';
 import * as contractPrepare from '../../routes/contract-prepare.js';
 import * as contracts from '../../routes/contracts.js';
 import * as inbox from '../../routes/inbox.js';
+import * as humanEmailEvents from '../../routes/human-email-events.js';
 import * as integrationAdmin from '../../routes/integration-admin.js';
 import * as integrationExecution from '../../routes/integration-execution.js';
 import * as integrationTestnet from '../../routes/integration-testnet.js';
@@ -40,6 +41,7 @@ const routes: Record<string, RouteModule> = {
   'contract-prepare': contractPrepare,
   contracts,
   inbox,
+  'human-email-events': humanEmailEvents,
   'integration-admin': integrationAdmin,
   'integration-execution': integrationExecution,
   'integration-testnet': integrationTestnet,

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { AddressBookStore, StoredAddressAlias } from './addressBookStore.js';
-import { queueSignatureRequestedEmail } from './humanNotificationService.js';
+import {
+  queueSignatureReminderEmail,
+  queueSignatureRequestedEmail,
+} from './humanNotificationService.js';
 
 const OWNER = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 const SIGNER = 'GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBK4';
@@ -90,4 +93,35 @@ test('preserves outbox idempotency result instead of creating another email', as
   });
 
   assert.deepEqual(result, { status: 'duplicate', eventId: 'event-1' });
+});
+
+test('queues a distinct signature reminder from the original assigner private contact', async () => {
+  const calls: unknown[] = [];
+  const result = await queueSignatureReminderEmail({
+    requestId: '0123456789ABCDEF',
+    remindedByAddress: OWNER,
+    signerAddress: SIGNER,
+  }, {
+    addressBook: addressBook([{
+      version: 1,
+      address: SIGNER,
+      subjectType: 'signer',
+      label: 'Bob',
+      notificationEmail: 'bob@example.com',
+      createdAt: '2026-10-30T11:00:00Z',
+      updatedAt: '2026-10-30T11:00:00Z',
+    }]),
+    enqueue: async (input) => {
+      calls.push(input);
+      return { eventId: 'reminder-1', created: true };
+    },
+  });
+
+  assert.deepEqual(result, { status: 'queued', eventId: 'reminder-1' });
+  assert.deepEqual(calls[0], {
+    requestId: '0123456789ABCDEF',
+    recipientSignerAddress: SIGNER,
+    actorAddress: OWNER,
+    destinationEmail: 'bob@example.com',
+  });
 });

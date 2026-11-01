@@ -12,6 +12,7 @@ const apiFiles = [
   'contract-interface.ts',
   'contract-prepare.ts',
   'contracts.ts',
+  'human-email-events.ts',
   'inbox.ts',
   'integration-admin.ts',
   'integration-execution.ts',

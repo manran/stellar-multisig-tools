@@ -49,12 +49,18 @@ export function buildSignatureRequestedEmail(input: {
   actorAddress: string;
   systemType: string;
   businessLabel?: string;
+  eventType?: 'signature_requested' | 'signature_reminder';
 }): HumanNotificationEmail {
   const actionUrl = requestActionUrl(input.webOrigin, input.requestId);
   const networkLabel = input.network === 'testnet' ? 'Stellar Testnet' : 'Stellar Mainnet';
+  const reminder = input.eventType === 'signature_reminder';
   const subject = input.network === 'testnet'
-    ? '[Testnet] Signature requested in MultiSig Tools'
-    : 'Signature requested in MultiSig Tools';
+    ? reminder
+      ? '[Testnet] Reminder: Signature requested in MultiSig Tools'
+      : '[Testnet] Signature requested in MultiSig Tools'
+    : reminder
+      ? 'Reminder: Signature requested in MultiSig Tools'
+      : 'Signature requested in MultiSig Tools';
   const displayId = requestDisplayId(input.requestId);
   const closesAt = signingDeadline(input.expiresAt);
   const inboxUrl = new URL('/inbox', input.webOrigin).toString();
@@ -68,7 +74,7 @@ export function buildSignatureRequestedEmail(input: {
   const text = [
     `Signing closes: ${closesAt}`,
     '',
-    `${input.actorAddress} invited you to review and sign:`,
+    `${input.actorAddress} ${reminder ? 'reminded' : 'invited'} you to review and sign:`,
     businessLabel ? businessLabel : input.systemType,
     ...(businessLabel ? [input.systemType] : []),
     '',
@@ -86,7 +92,7 @@ export function buildSignatureRequestedEmail(input: {
 
   const html = [
     `<p><strong>Signing closes:</strong> ${closesAt}</p>`,
-    `<p><span style="word-break:break-all">${actorHtml}</span> invited you to review and sign:</p>`,
+    `<p><span style="word-break:break-all">${actorHtml}</span> ${reminder ? 'reminded' : 'invited'} you to review and sign:</p>`,
     `<p><strong>${workLabelHtml}</strong>${businessLabel ? `<br>${systemTypeHtml}` : ''}</p>`,
     `<p><strong>Network:</strong> ${networkLabel}<br><strong>Proposal ID:</strong> ${displayId}</p>`,
     `<p><a href="${actionUrl}"><strong>Review proposal</strong></a></p>`,

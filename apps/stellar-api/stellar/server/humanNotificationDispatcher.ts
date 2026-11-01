@@ -155,6 +155,7 @@ export async function dispatchHumanNotificationEvent(
     webOrigin,
     actorAddress: record.actorAddress,
     systemType: transactionSystemTypeLabel(inspection),
+    eventType: record.eventType,
     ...(record.templateName ? { businessLabel: record.templateName } : {}),
   });
   const sendEmail = dependencies.sendEmail ?? ((input) => sendResendEmail(input));
