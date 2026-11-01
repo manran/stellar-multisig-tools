@@ -11,6 +11,7 @@ import {
   findSucceededHumanNotificationDelivery,
   listDueHumanNotificationEventIds,
   listLatestHumanNotificationSummaries,
+  recordHumanNotificationProviderEvent,
   releaseHumanNotificationEvent,
   startHumanNotificationDelivery,
 } from './postgresHumanNotificationOutbox.js';
@@ -189,4 +190,34 @@ test('Human notification projection keeps latest reminder state distinct from th
     .find((item) => item.signerAddress === signer);
   assert.equal(latest?.state, 'provider_accepted');
   assert.equal(latest?.completedAt, '2026-10-30T14:00:01.000Z');
+
+  assert.equal(await recordHumanNotificationProviderEvent({
+    providerMessageId: 'reminder-email',
+    state: 'delivered',
+    eventAt: new Date('2026-10-30T14:00:05Z'),
+    providerEventId: 'svix-delivered-1',
+  }, pool), 'updated');
+  latest = (await listLatestHumanNotificationSummaries('0123456789ABCDEF', pool))
+    .find((item) => item.signerAddress === signer);
+  assert.equal(latest?.state, 'delivered');
+
+  assert.equal(await recordHumanNotificationProviderEvent({
+    providerMessageId: 'reminder-email',
+    state: 'bounced',
+    eventAt: new Date('2026-10-30T14:00:04Z'),
+    providerEventId: 'svix-stale-bounce',
+  }, pool), 'stale');
+  latest = (await listLatestHumanNotificationSummaries('0123456789ABCDEF', pool))
+    .find((item) => item.signerAddress === signer);
+  assert.equal(latest?.state, 'delivered');
+
+  assert.equal(await recordHumanNotificationProviderEvent({
+    providerMessageId: 'reminder-email',
+    state: 'bounced',
+    eventAt: new Date('2026-10-30T14:00:06Z'),
+    providerEventId: 'svix-bounce-2',
+  }, pool), 'updated');
+  latest = (await listLatestHumanNotificationSummaries('0123456789ABCDEF', pool))
+    .find((item) => item.signerAddress === signer);
+  assert.equal(latest?.state, 'bounced');
 });

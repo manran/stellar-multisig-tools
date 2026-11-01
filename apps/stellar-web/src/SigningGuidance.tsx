@@ -213,13 +213,17 @@ export default function SigningGuidance({
     const assigned = Boolean(assignment);
     const assignedByMe = Boolean(assignment && sessionAddress && assignment.assignedByAddress === sessionAddress);
     const notification = notifications.find((item) => item.signerAddress === signerAddress);
-    const statusLabel = notification?.state === 'provider_accepted'
-      ? notification.eventType === 'signature_reminder' ? 'Reminder accepted' : 'Email accepted'
-      : notification?.state === 'queued'
-        ? notification.eventType === 'signature_reminder' ? 'Reminder queued' : 'Email queued'
-        : notification?.state === 'failed'
-          ? notification.eventType === 'signature_reminder' ? 'Reminder failed' : 'Email failed'
-          : assigned ? 'Assigned' : '';
+    const statusLabel = notification?.state === 'delivered'
+      ? notification.eventType === 'signature_reminder' ? 'Reminder delivered' : 'Email delivered'
+      : notification?.state === 'bounced'
+        ? notification.eventType === 'signature_reminder' ? 'Reminder bounced' : 'Email bounced'
+        : notification?.state === 'provider_accepted'
+          ? notification.eventType === 'signature_reminder' ? 'Reminder accepted' : 'Email accepted'
+          : notification?.state === 'queued'
+            ? notification.eventType === 'signature_reminder' ? 'Reminder queued' : 'Email queued'
+            : notification?.state === 'failed'
+              ? notification.eventType === 'signature_reminder' ? 'Reminder failed' : 'Email failed'
+              : assigned ? 'Assigned' : '';
 
     if (!email) {
       if (!privateUnlocked) return assigned
@@ -235,8 +239,14 @@ export default function SigningGuidance({
     }
 
     const canRepairInitialEmail = assignedByMe && !notification;
-    const canRemind = assignedByMe && notification?.state === 'provider_accepted';
-    const canRetryFailed = assignedByMe && notification?.state === 'failed';
+    const canRemind = assignedByMe && (
+      notification?.state === 'provider_accepted'
+      || notification?.state === 'delivered'
+    );
+    const canRetryFailed = assignedByMe && (
+      notification?.state === 'failed'
+      || notification?.state === 'bounced'
+    );
 
     return (
       <div className="mst-signer-contact mt-2">
@@ -246,9 +256,9 @@ export default function SigningGuidance({
         </div>
         {statusLabel && (
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-            notification?.state === 'provider_accepted'
+            notification?.state === 'provider_accepted' || notification?.state === 'delivered'
               ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-              : notification?.state === 'failed'
+              : notification?.state === 'failed' || notification?.state === 'bounced'
                 ? 'bg-red-500/10 text-red-700 dark:text-red-300'
                 : 'bg-neutral-500/10 text-neutral-600 dark:text-neutral-300'
           }`}>

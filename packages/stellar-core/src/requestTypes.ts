@@ -83,6 +83,8 @@ export type SigningRequestNotificationEventType =
 export type SigningRequestNotificationDeliveryState =
   | 'queued'
   | 'provider_accepted'
+  | 'delivered'
+  | 'bounced'
   | 'failed';
 
 export interface SigningRequestNotificationSummary {
