@@ -475,8 +475,9 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
       signer_address: string;
       assigned_by_address: string;
       assigned_at: Date | string;
+      viewed_at: Date | string | null;
     }>(
-      `SELECT signer_address, assigned_by_address, assigned_at
+      `SELECT signer_address, assigned_by_address, assigned_at, viewed_at
          FROM mst_stellar.classic_request_assignments
         WHERE request_id = $1
         ORDER BY assigned_at, signer_address`,
@@ -487,6 +488,7 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
       signerAddress: row.signer_address,
       assignedByAddress: row.assigned_by_address,
       assignedAt: iso(row.assigned_at),
+      ...(row.viewed_at ? { viewedAt: iso(row.viewed_at) } : {}),
     }));
   }
 
@@ -498,12 +500,13 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
       signer_address: string;
       assigned_by_address: string;
       assigned_at: Date | string;
+      viewed_at: Date | string | null;
     }>(
       `INSERT INTO mst_stellar.classic_request_assignments (
          request_id, signer_address, assigned_by_address, assigned_at
        ) VALUES ($1, $2, $3, $4)
        ON CONFLICT (request_id, signer_address) DO NOTHING
-       RETURNING signer_address, assigned_by_address, assigned_at`,
+       RETURNING signer_address, assigned_by_address, assigned_at, viewed_at`,
       [id, assignment.signerAddress, assignment.assignedByAddress, assignment.assignedAt],
     );
     const row = inserted.rows[0];
@@ -515,6 +518,7 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
           signerAddress: row.signer_address,
           assignedByAddress: row.assigned_by_address,
           assignedAt: iso(row.assigned_at),
+          ...(row.viewed_at ? { viewedAt: iso(row.viewed_at) } : {}),
         },
       };
     }
@@ -523,8 +527,9 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
       signer_address: string;
       assigned_by_address: string;
       assigned_at: Date | string;
+      viewed_at: Date | string | null;
     }>(
-      `SELECT signer_address, assigned_by_address, assigned_at
+      `SELECT signer_address, assigned_by_address, assigned_at, viewed_at
          FROM mst_stellar.classic_request_assignments
         WHERE request_id = $1 AND signer_address = $2`,
       [id, assignment.signerAddress],
@@ -538,8 +543,38 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
         signerAddress: current.signer_address,
         assignedByAddress: current.assigned_by_address,
         assignedAt: iso(current.assigned_at),
+        ...(current.viewed_at ? { viewedAt: iso(current.viewed_at) } : {}),
       },
     };
+  }
+
+  async markRequestAssignmentViewed(
+    id: string,
+    signerAddress: string,
+    viewedAt: string,
+  ): Promise<StoredRequestAssignment | null> {
+    const result = await this.pool.query<{
+      signer_address: string;
+      assigned_by_address: string;
+      assigned_at: Date | string;
+      viewed_at: Date | string | null;
+    }>(
+      `UPDATE mst_stellar.classic_request_assignments
+          SET viewed_at = $3
+        WHERE request_id = $1
+          AND signer_address = $2
+          AND viewed_at IS NULL
+      RETURNING signer_address, assigned_by_address, assigned_at, viewed_at`,
+      [id, signerAddress, viewedAt],
+    );
+    const row = result.rows[0];
+    return row ? {
+      version: 1,
+      signerAddress: row.signer_address,
+      assignedByAddress: row.assigned_by_address,
+      assignedAt: iso(row.assigned_at),
+      ...(row.viewed_at ? { viewedAt: iso(row.viewed_at) } : {}),
+    } : null;
   }
 
   async listRequestCoordinationEvents(id: string): Promise<ActivityCoordinationEvent[]> {
@@ -548,8 +583,9 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
         signer_address: string;
         assigned_by_address: string;
         assigned_at: Date | string;
+        viewed_at: Date | string | null;
       }>(
-        `SELECT signer_address, assigned_by_address, assigned_at
+        `SELECT signer_address, assigned_by_address, assigned_at, viewed_at
            FROM mst_stellar.classic_request_assignments
           WHERE request_id = $1
           ORDER BY assigned_at, signer_address`,
@@ -584,6 +620,19 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
       actorAddress: row.assigned_by_address,
       subjectAddress: row.signer_address,
     }));
+
+    for (const row of assignments.rows) {
+      if (!row.viewed_at) continue;
+      events.push({
+        version: 1,
+        eventId: `coord-assignment-${row.signer_address}-viewed`,
+        requestId: id,
+        type: 'proposal_viewed',
+        occurredAt: iso(row.viewed_at),
+        actorAddress: row.signer_address,
+        subjectAddress: row.signer_address,
+      });
+    }
 
     for (const row of notifications.rows) {
       const common = {

@@ -146,12 +146,26 @@ test('Activity shows Human coordination progress without turning email delivery 
 
   assert.match(activity, /item\.coordinationEvents \?\? \[\]/);
   assert.match(activity, /asked .* to sign/);
+  assert.match(activity, /proposal_viewed/);
+  assert.match(activity, /viewed the proposal/);
   assert.match(activity, /notification_delivered/);
   assert.match(activity, /\$\{channel\} delivered to \$\{subject\}/);
   assert.match(activity, /signature_reminder/);
   assert.match(activity, /notification_bounced/);
-  assert.doesNotMatch(receipt, /coordinationEvents/);
-  assert.doesNotMatch(portableEvidence, /coordinationEvents/);
+  assert.doesNotMatch(receipt, /coordinationEvents|proposal_viewed/);
+  assert.doesNotMatch(portableEvidence, /coordinationEvents|proposal_viewed/);
+});
+
+test('assigned signer view progress requires verified Human session and stays outside Activity retention', () => {
+  const guidance = source('../SigningGuidance.tsx');
+  const requestApi = source('../../../stellar-api/stellar/routes/request.ts');
+
+  assert.match(guidance, /assignment\?\.viewedAt/);
+  assert.match(guidance, />\s*Viewed\s*</);
+  assert.match(requestApi, /access\.mode !== 'session'/);
+  assert.match(requestApi, /markRequestAssignmentViewed/);
+  assert.match(requestApi, /snapshot\.status === 'awaiting_signatures'/);
+  assert.doesNotMatch(requestApi, /markAssignedSignerViewedBestEffort[\s\S]{0,400}putRequestParticipant/);
 });
 
 test('Activity retention explains that the share link ends without implying the confirmed transaction disappears', () => {

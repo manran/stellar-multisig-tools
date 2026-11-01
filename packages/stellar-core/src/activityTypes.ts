@@ -21,6 +21,7 @@ export type ActivityEventType = ActivityFactType | LegacyActivityProjectionType;
 
 export type ActivityCoordinationEventType =
   | 'signer_requested'
+  | 'proposal_viewed'
   | 'notification_accepted'
   | 'notification_delivered'
   | 'notification_bounced'

@@ -211,6 +211,7 @@ export default function SigningGuidance({
     const askLabel = alias && alias.length <= 18 ? `Ask ${alias} to sign` : 'Ask to sign';
     const assignment = assignments.find((item) => item.signerAddress === signerAddress);
     const assigned = Boolean(assignment);
+    const viewed = Boolean(assignment?.viewedAt);
     const assignedByMe = Boolean(assignment && sessionAddress && assignment.assignedByAddress === sessionAddress);
     const notification = notifications.find((item) => item.signerAddress === signerAddress);
     const statusLabel = notification?.state === 'delivered'
@@ -223,15 +224,24 @@ export default function SigningGuidance({
             ? notification.eventType === 'signature_reminder' ? 'Reminder queued' : 'Email queued'
             : notification?.state === 'failed'
               ? notification.eventType === 'signature_reminder' ? 'Reminder failed' : 'Email failed'
-              : assigned ? 'Assigned' : '';
+              : assigned && !viewed ? 'Assigned' : '';
+    const viewedBadge = viewed ? (
+      <span
+        className="shrink-0 rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-700 dark:text-sky-300"
+        title={assignment?.viewedAt ? `Proposal viewed ${new Date(assignment.viewedAt).toLocaleString()}` : undefined}
+      >
+        Viewed
+      </span>
+    ) : null;
 
     if (!email) {
       if (!privateUnlocked) return assigned
-        ? <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">{statusLabel}</span>
+        ? viewedBadge ?? <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">{statusLabel}</span>
         : null;
       return (
         <div className="mst-signer-contact mt-2">
-          {assigned && <span className="shrink-0 rounded-full bg-neutral-500/10 px-2 py-0.5 text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">{statusLabel}</span>}
+          {statusLabel && <span className="shrink-0 rounded-full bg-neutral-500/10 px-2 py-0.5 text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">{statusLabel}</span>}
+          {viewedBadge}
           <AddressAliasEditor address={signerAddress} subjectType="signer" allowNotificationEmail />
           <span className="text-xs text-neutral-500 dark:text-neutral-400">Add a private name and email to notify this signer.</span>
         </div>
@@ -265,6 +275,7 @@ export default function SigningGuidance({
             {statusLabel}
           </span>
         )}
+        {viewedBadge}
         {onAsk && (!assigned || canRepairInitialEmail) && (
           <button
             type="button"
