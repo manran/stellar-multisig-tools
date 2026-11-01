@@ -19,6 +19,15 @@ export type LegacyActivityProjectionType =
 
 export type ActivityEventType = ActivityFactType | LegacyActivityProjectionType;
 
+export type ActivityCoordinationEventType =
+  | 'signer_requested'
+  | 'notification_accepted'
+  | 'notification_delivered'
+  | 'notification_bounced'
+  | 'notification_failed';
+
+export type ActivityNotificationKind = 'signature_requested' | 'signature_reminder';
+
 interface ActivityEventBase {
   version: 1;
   eventId: string;
@@ -37,10 +46,22 @@ export interface ActivityEvent extends ActivityEventBase {
   type: ActivityEventType;
 }
 
-/** Durable audit fact exposed by Activity and accepted for new Activity writes. */
+/** Durable transaction/authorization fact exposed by Activity and accepted for new Activity writes. */
 export interface ActivityFactEvent extends ActivityEventBase {
   type: ActivityFactType;
 }
+
+/**
+ * Human coordination fact projected from existing Assignment / notification records.
+ * These events are Activity-only context, not transaction receipt or portable evidence.
+ */
+export interface ActivityCoordinationEvent extends ActivityEventBase {
+  type: ActivityCoordinationEventType;
+  subjectAddress: string;
+  notificationKind?: ActivityNotificationKind;
+}
+
+export type ActivityTimelineEvent = ActivityFactEvent | ActivityCoordinationEvent;
 
 export interface ActivityRequestItem {
   requestId: string;
@@ -51,6 +72,7 @@ export interface ActivityRequestItem {
   expiresAt: string;
   accountIds: string[];
   events: ActivityFactEvent[];
+  coordinationEvents?: ActivityCoordinationEvent[];
 }
 
 export interface ActivityResponse {

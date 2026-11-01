@@ -139,6 +139,21 @@ test('Personal Activity opts into unified Work history without changing Treasury
   assert.match(activityApi, /work_activity_scope_denied/);
 });
 
+test('Activity shows Human coordination progress without turning email delivery into transaction evidence', () => {
+  const activity = source('../ActivityApp.tsx');
+  const receipt = source('../TransactionReceiptApp.tsx');
+  const portableEvidence = source('./portableEvidence.ts');
+
+  assert.match(activity, /item\.coordinationEvents \?\? \[\]/);
+  assert.match(activity, /asked .* to sign/);
+  assert.match(activity, /notification_delivered/);
+  assert.match(activity, /\$\{channel\} delivered to \$\{subject\}/);
+  assert.match(activity, /signature_reminder/);
+  assert.match(activity, /notification_bounced/);
+  assert.doesNotMatch(receipt, /coordinationEvents/);
+  assert.doesNotMatch(portableEvidence, /coordinationEvents/);
+});
+
 test('Activity retention explains that the share link ends without implying the confirmed transaction disappears', () => {
   const notice = source('../ActivityRetentionNotice.tsx');
   const request = source('../RequestApp.tsx');

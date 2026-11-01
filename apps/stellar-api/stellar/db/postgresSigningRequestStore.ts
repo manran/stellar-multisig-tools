@@ -1,5 +1,10 @@
 import { isValidStellarAccountId } from '../../../../packages/stellar-core/src/horizon.js';
-import type { ActivityEvent, ActivityFactEvent } from '../../../../packages/stellar-core/src/activityTypes.js';
+import type {
+  ActivityCoordinationEvent,
+  ActivityEvent,
+  ActivityFactEvent,
+  ActivityNotificationKind,
+} from '../../../../packages/stellar-core/src/activityTypes.js';
 import type { MachineCallerProvenance } from '../../../../packages/stellar-core/src/coordinationActorTypes.js';
 import type { ExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
 import type { RequestIntegrationContext } from '../../../../packages/stellar-core/src/integrationTypes.js';
@@ -535,6 +540,89 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
         assignedAt: iso(current.assigned_at),
       },
     };
+  }
+
+  async listRequestCoordinationEvents(id: string): Promise<ActivityCoordinationEvent[]> {
+    const [assignments, notifications] = await Promise.all([
+      this.pool.query<{
+        signer_address: string;
+        assigned_by_address: string;
+        assigned_at: Date | string;
+      }>(
+        `SELECT signer_address, assigned_by_address, assigned_at
+           FROM mst_stellar.classic_request_assignments
+          WHERE request_id = $1
+          ORDER BY assigned_at, signer_address`,
+        [id],
+      ),
+      this.pool.query<{
+        event_id: string;
+        event_type: ActivityNotificationKind;
+        recipient_signer_address: string;
+        actor_address: string;
+        created_at: Date | string;
+        completed_at: Date | string | null;
+        outcome: 'sent' | 'permanent_failure' | null;
+        provider_delivery_state: 'delivered' | 'bounced' | null;
+        provider_event_at: Date | string | null;
+      }>(
+        `SELECT event_id, event_type, recipient_signer_address, actor_address,
+                created_at, completed_at, outcome, provider_delivery_state, provider_event_at
+           FROM mst_stellar.human_notification_outbox
+          WHERE request_id = $1
+          ORDER BY created_at, event_id`,
+        [id],
+      ),
+    ]);
+
+    const events: ActivityCoordinationEvent[] = assignments.rows.map((row) => ({
+      version: 1,
+      eventId: `coord-assignment-${row.signer_address}`,
+      requestId: id,
+      type: 'signer_requested',
+      occurredAt: iso(row.assigned_at),
+      actorAddress: row.assigned_by_address,
+      subjectAddress: row.signer_address,
+    }));
+
+    for (const row of notifications.rows) {
+      const common = {
+        version: 1 as const,
+        requestId: id,
+        actorAddress: row.actor_address,
+        subjectAddress: row.recipient_signer_address,
+        notificationKind: row.event_type,
+      };
+      if (row.outcome === 'sent' && row.completed_at) {
+        events.push({
+          ...common,
+          eventId: `coord-notification-${row.event_id}-accepted`,
+          type: 'notification_accepted',
+          occurredAt: iso(row.completed_at),
+        });
+      } else if (row.outcome === 'permanent_failure' && row.completed_at) {
+        events.push({
+          ...common,
+          eventId: `coord-notification-${row.event_id}-failed`,
+          type: 'notification_failed',
+          occurredAt: iso(row.completed_at),
+        });
+      }
+
+      if (row.provider_delivery_state && row.provider_event_at) {
+        events.push({
+          ...common,
+          eventId: `coord-notification-${row.event_id}-${row.provider_delivery_state}`,
+          type: row.provider_delivery_state === 'delivered'
+            ? 'notification_delivered'
+            : 'notification_bounced',
+          occurredAt: iso(row.provider_event_at),
+        });
+      }
+    }
+
+    return events.sort((a, b) =>
+      a.occurredAt.localeCompare(b.occurredAt) || a.eventId.localeCompare(b.eventId));
   }
 
   async listActivityEvents(id: string): Promise<ActivityEvent[]> {

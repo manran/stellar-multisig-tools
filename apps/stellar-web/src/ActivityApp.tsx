@@ -16,7 +16,12 @@ import StellarWorkspaceShell from './StellarWorkspaceShell';
 import SorobanIntentActivityCard from './SorobanIntentActivityCard';
 import { useStellarWallet } from './StellarWalletContext';
 import { horizonTransactionUrl, isValidStellarAccountId } from '../../../packages/stellar-core/src/horizon';
-import type { ActivityFactEvent, ActivityRequestItem, ActivityResponse } from '../../../packages/stellar-core/src/activityTypes';
+import type {
+  ActivityCoordinationEvent,
+  ActivityRequestItem,
+  ActivityResponse,
+  ActivityTimelineEvent,
+} from '../../../packages/stellar-core/src/activityTypes';
 import type { WorkActivityItem, WorkActivityResponse } from '../../../packages/stellar-core/src/workActivityTypes';
 import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
 import { projectTransactionSemantics } from './stellar/transactionSemantics';
@@ -97,7 +102,42 @@ function activityDescription(item: ActivityRequestItem) {
   };
 }
 
-function eventCopy(event: ActivityFactEvent, currentAddress: string, signerLabel: (address: string) => string) {
+function coordinationEventCopy(
+  event: ActivityCoordinationEvent,
+  currentAddress: string,
+  signerLabel: (address: string) => string,
+) {
+  const actor = event.actorAddress
+    ? event.actorAddress === currentAddress ? 'You' : signerLabel(event.actorAddress)
+    : '';
+  const subject = event.subjectAddress === currentAddress ? 'you' : signerLabel(event.subjectAddress);
+  const channel = event.notificationKind === 'signature_reminder' ? 'Reminder' : 'Email';
+  switch (event.type) {
+    case 'signer_requested': return {
+      title: actor ? `${actor} asked ${subject} to sign` : `Asked ${subject} to sign`,
+      tone: 'neutral' as const,
+    };
+    case 'notification_accepted': return {
+      title: `${channel} accepted for ${subject}`,
+      tone: 'positive' as const,
+    };
+    case 'notification_delivered': return {
+      title: `${channel} delivered to ${subject}`,
+      tone: 'positive' as const,
+    };
+    case 'notification_bounced': return {
+      title: `${channel} to ${subject} bounced`,
+      tone: 'warning' as const,
+    };
+    case 'notification_failed': return {
+      title: `${channel} to ${subject} failed`,
+      tone: 'warning' as const,
+    };
+  }
+}
+
+function eventCopy(event: ActivityTimelineEvent, currentAddress: string, signerLabel: (address: string) => string) {
+  if ('subjectAddress' in event) return coordinationEventCopy(event, currentAddress, signerLabel);
   switch (event.type) {
     case 'request_created': return { title: 'Transaction prepared', tone: 'neutral' as const };
     case 'private_note_added': return { title: 'Private note added', tone: 'neutral' as const };
@@ -154,6 +194,10 @@ function ActivityCard({
     : `${item.accountIds.length} source accounts`;
   const confirmed = [...item.events].reverse().find((event) => event.type === 'transaction_confirmed');
   const signerLabel = (signerAddress: string) => labelFor(signerAddress, 'signer') || shortAddress(signerAddress);
+  const timelineEvents: ActivityTimelineEvent[] = [
+    ...item.events,
+    ...(item.coordinationEvents ?? []),
+  ].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.eventId.localeCompare(b.eventId));
 
   return (
     <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)} className="group mst-activity-item">
@@ -179,9 +223,9 @@ function ActivityCard({
 
       <div className="mst-activity-detail">
         <div className="mst-activity-timeline">
-          {item.events.map((event, index) => {
+          {timelineEvents.map((event, index) => {
             const copy = eventCopy(event, currentAddress, signerLabel);
-            const isLast = index === item.events.length - 1;
+            const isLast = index === timelineEvents.length - 1;
             return (
               <div key={event.eventId} className="relative grid grid-cols-[18px_minmax(0,1fr)] gap-3 pb-5 last:pb-0">
                 {!isLast && <div className="absolute left-[4px] top-3 h-[calc(100%-0.25rem)] w-px bg-black/10 dark:bg-white/10" />}
