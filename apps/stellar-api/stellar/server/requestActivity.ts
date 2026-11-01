@@ -1,7 +1,13 @@
 import { analyzeEnvelopeSignatures } from '../../../../packages/stellar-core/src/signatureAnalysis.js';
 import { mergeSignedTransactionXdr } from '../../../../packages/stellar-core/src/signatureMerge.js';
 import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
-import type { ActivityEvent, ActivityFactEvent, ActivityFactType, ActivityRequestItem } from '../../../../packages/stellar-core/src/activityTypes.js';
+import type {
+  ActivityCoordinationEvent,
+  ActivityEvent,
+  ActivityFactEvent,
+  ActivityFactType,
+  ActivityRequestItem,
+} from '../../../../packages/stellar-core/src/activityTypes.js';
 import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
 import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { StellarNetwork, StellarSigner } from '../../../../packages/stellar-core/src/types.js';
@@ -290,9 +296,10 @@ async function activityItemForRequest(
         store.listContributions(request.id),
         store.getSubmission(request.id, request.transactionHash),
       ]).then(([contributions, submission]) => ({ contributions, submission }));
-  const [facts, storedEvents, noteRevisions, participant, participants] = await Promise.all([
+  const [facts, storedEvents, coordinationEvents, noteRevisions, participant, participants] = await Promise.all([
     factsPromise,
     store.listActivityEvents?.(request.id) ?? Promise.resolve([]),
+    store.listRequestCoordinationEvents?.(request.id) ?? Promise.resolve([] as ActivityCoordinationEvent[]),
     privateNoteRevisions
       ? Promise.resolve(privateNoteRevisions)
       : store.listPrivateNoteRevisions?.(request.id) ?? Promise.resolve([]),
@@ -341,11 +348,17 @@ async function activityItemForRequest(
     expiresAt: request.expiresAt,
     accountIds,
     events,
+    ...(coordinationEvents.length > 0 ? {
+      coordinationEvents: [...coordinationEvents].sort((a, b) =>
+        a.occurredAt.localeCompare(b.occurredAt) || a.eventId.localeCompare(b.eventId)),
+    } : {}),
   };
 }
 
 function latestActivityAt(item: ActivityRequestItem): string {
-  return item.events[item.events.length - 1]?.occurredAt ?? item.createdAt;
+  const transactionAt = item.events[item.events.length - 1]?.occurredAt ?? item.createdAt;
+  const coordinationAt = item.coordinationEvents?.[item.coordinationEvents.length - 1]?.occurredAt;
+  return coordinationAt && coordinationAt > transactionAt ? coordinationAt : transactionAt;
 }
 
 function compareActivityItems(a: ActivityRequestItem, b: ActivityRequestItem): number {

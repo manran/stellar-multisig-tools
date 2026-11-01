@@ -1,4 +1,4 @@
-import type { ActivityEvent, ActivityFactEvent } from '../../../../packages/stellar-core/src/activityTypes.js';
+import type { ActivityCoordinationEvent, ActivityEvent, ActivityFactEvent } from '../../../../packages/stellar-core/src/activityTypes.js';
 import type { AgentActorProvenance } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 import type { MachineCallerProvenance } from '../../../../packages/stellar-core/src/coordinationActorTypes.js';
 import type { RequestIntegrationContext } from '../../../../packages/stellar-core/src/integrationTypes.js';
@@ -118,6 +118,7 @@ export interface SigningRequestStore {
   listRequestParticipants?(id: string): Promise<StoredRequestParticipant[]>;
   putRequestParticipant?(id: string, participant: StoredRequestParticipant): Promise<void>;
   listRequestAssignments?(id: string): Promise<StoredRequestAssignment[]>;
+  listRequestCoordinationEvents?(id: string): Promise<ActivityCoordinationEvent[]>;
   putRequestAssignment?(
     id: string,
     assignment: StoredRequestAssignment,

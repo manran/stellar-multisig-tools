@@ -9,7 +9,7 @@ import {
   TimeoutInfinite,
   TransactionBuilder,
 } from '@stellar/stellar-sdk/base';
-import type { ActivityEvent } from '../../../../packages/stellar-core/src/activityTypes.js';
+import type { ActivityCoordinationEvent, ActivityEvent } from '../../../../packages/stellar-core/src/activityTypes.js';
 import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
 import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 import {
@@ -33,6 +33,7 @@ class MemoryStore implements SigningRequestStore {
   submissions = new Map<string, StoredSubmissionResult>();
   participants = new Map<string, StoredRequestParticipant>();
   activityEvents = new Map<string, ActivityEvent[]>();
+  coordinationEvents = new Map<string, ActivityCoordinationEvent[]>();
   privateNotes = new Map<string, PrivateNoteRevision[]>();
 
   async createRequest(request: StoredSigningRequest) { this.requests.set(request.id, request); }
@@ -60,6 +61,7 @@ class MemoryStore implements SigningRequestStore {
       .map(([, participant]) => participant);
   }
   async listActivityEvents(id: string) { return this.activityEvents.get(id) ?? []; }
+  async listRequestCoordinationEvents(id: string) { return this.coordinationEvents.get(id) ?? []; }
   async putActivityEvent(id: string, item: ActivityEvent) {
     this.activityEvents.set(id, [...(this.activityEvents.get(id) ?? []), item]);
   }
@@ -168,6 +170,54 @@ test('a request participant appears in Activity without being forced to sign', a
   assert.equal(items.length, 1);
   assert.equal(items[0].requestId, request.id);
   assert.deepEqual(items[0].events.map((event) => event.type), ['request_created']);
+});
+
+test('Activity keeps Human coordination separate from transaction evidence and orders by the latest coordination fact', async () => {
+  const store = new MemoryStore();
+  const actor = Keypair.random();
+  const recipient = Keypair.random();
+  const source = Keypair.random();
+  const older = storedRequest('Q'.repeat(16), source, '2026-08-30T09:00:00.000Z');
+  const newer = storedRequest('R'.repeat(16), source, '2026-08-30T09:10:00.000Z');
+  await store.createRequest(older);
+  await store.createRequest(newer);
+  for (const request of [older, newer]) {
+    await store.putRequestParticipant(request.id, {
+      version: 1,
+      address: actor.publicKey(),
+      joinedAt: request.createdAt,
+    });
+  }
+  store.coordinationEvents.set(older.id, [
+    {
+      version: 1,
+      eventId: 'coord-assignment',
+      requestId: older.id,
+      type: 'signer_requested',
+      occurredAt: '2026-08-30T09:20:00.000Z',
+      actorAddress: actor.publicKey(),
+      subjectAddress: recipient.publicKey(),
+    },
+    {
+      version: 1,
+      eventId: 'coord-delivered',
+      requestId: older.id,
+      type: 'notification_delivered',
+      occurredAt: '2026-08-30T09:21:00.000Z',
+      actorAddress: actor.publicKey(),
+      subjectAddress: recipient.publicKey(),
+      notificationKind: 'signature_requested',
+    },
+  ]);
+
+  const items = await listSignerActivity(store, actor.publicKey(), { network: 'testnet' });
+
+  assert.deepEqual(items.map((item) => item.requestId), [older.id, newer.id]);
+  assert.deepEqual(items[0].events.map((event) => event.type), ['request_created']);
+  assert.deepEqual(items[0].coordinationEvents?.map((event) => event.type), [
+    'signer_requested',
+    'notification_delivered',
+  ]);
 });
 
 test('history Activity can reuse preloaded request facts and private-note revisions', async () => {

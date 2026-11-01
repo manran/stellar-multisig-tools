@@ -60,7 +60,8 @@ Testnet now has the first two productization slices:
 - **P1 Reusable Template:** Payment and Batch Payment Templates are implemented and deployed on Testnet. Templates save the stable recurring setup (treasury, recipients, assets and signing window), while amount, Memo and Private Note remain proposal-specific. Every Proposal still ends in exact transaction Review and signing.
 - **P2 Explicit Ask / Assignment:** implemented and deployed on Testnet. "Ask Bob to sign" now records that Human coordination fact instead of only copying a generic link. Assignment does not grant access or Stellar authority; access still requires an authenticated signer session or an independently issued private capability, and current on-chain signer policy remains authorization truth.
 - **P3 Contact email + Human delivery:** feature-complete in code for the current slice. Private signer notification-email metadata, `signature_requested`, explicit `signature_reminder`, durable provider-acceptance/failure status, and verified Resend `email.delivered` / `email.bounced` evidence are implemented. A dedicated Human outbox/delivery history remains the delivery authority. Email remains delivery only, never identity or authorization. Testnet still needs the provider webhook endpoint/secret configured and a real delivery/bounce proof before this slice is considered live-proven.
-- **P4 Webhook productization:** follows after Human notification behavior is proven.
+- **P4 Webhook productization:** complete in code. Integration administration exposes delivery history, bounded automatic retry state, and explicit manual redelivery without adding a second event model.
+- **P5 Stop and learn:** active. The first observed product gap is lifecycle visibility after leaving the Proposal: signer Ask / email delivery / reminder facts should remain understandable in Activity without becoming transaction evidence.
 
 Signer/threshold Reusable Templates remain a candidate, not a completeness requirement. Learn from real Payment/Batch Template use before expanding the Template catalog mechanically.
 
@@ -216,6 +217,7 @@ After Templates, Human notifications/reminders, and webhook delivery are usable,
 
 Evaluate:
 
+- whether Activity gives the sender a continuous, Human-readable view from Ask -> delivery/reminder -> signature -> completion without requiring the original Proposal page;
 - which Templates people actually save and repeat;
 - where users still abandon or misunderstand the workflow;
 - which notifications cause useful action versus noise;

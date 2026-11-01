@@ -526,7 +526,9 @@ Current MVP routing is deliberately lightweight:
 - other participants cannot send a Reminder using another signer's private Contact route;
 - a verified bounce may offer the original requester an explicit retry; delivery/bounce evidence never auto-assigns, auto-signs, or changes Proposal state;
 - email delivery is coordination only and never changes Stellar authorization;
-- the same Request/signer pair is idempotent for the initial Ask, so retrying Ask can repair an enqueue failure without creating duplicate Assignment semantics.
+- the same Request/signer pair is idempotent for the initial Ask, so retrying Ask can repair an enqueue failure without creating duplicate Assignment semantics;
+- Activity may project Assignment and Human notification delivery facts into the same Human timeline as signatures, so a sender can later understand who was asked, whether the email was accepted/delivered/bounced, whether a Reminder was sent, and who eventually signed;
+- those coordination facts remain separate from transaction/authorization evidence: email delivery must not appear in the Transaction Receipt or portable evidence as if it proved Stellar authorization.
 
 Preserve this architecture distinction:
 

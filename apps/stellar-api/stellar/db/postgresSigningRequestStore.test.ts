@@ -318,3 +318,51 @@ test('Classic participants, submission, Activity facts, and private note revisio
   assert.equal(outbox.rows.filter((row) => row.event_id.includes('activity:submitted-')).length, 1);
   assert.doesNotMatch(JSON.stringify(outbox.rows), /private revision two/);
 });
+
+
+test('Classic Activity projects Assignment and Human delivery facts without exposing contact data', {
+  skip: !TEST_URL || !RESET_ALLOWED,
+}, async () => {
+  const pool = coordinationPool();
+  const store = createPostgresSigningRequestStore(pool, new MemoryPrivateStore());
+  const f = fixture('PGREQEST00000005');
+  await store.createRequest(f.request);
+
+  await store.putRequestAssignment!(f.request.id, {
+    version: 1,
+    signerAddress: f.signer.publicKey(),
+    assignedByAddress: f.creator.publicKey(),
+    assignedAt: '2026-09-18T01:04:00.000Z',
+  });
+
+  await pool.query(
+    `INSERT INTO mst_stellar.human_notification_outbox (
+       event_id, event_type, request_id, recipient_signer_address, actor_address,
+       destination_email, created_at, available_at, completed_at, outcome,
+       provider_message_id, provider_delivery_state, provider_event_at, provider_event_id
+     ) VALUES ($1, 'signature_requested', $2, $3, $4, $5, $6, $6, $7, 'sent', $8, 'delivered', $9, $10)`,
+    [
+      'human-activity-proof',
+      f.request.id,
+      f.signer.publicKey(),
+      f.creator.publicKey(),
+      'private@example.com',
+      '2026-09-18T01:04:01.000Z',
+      '2026-09-18T01:04:02.000Z',
+      'resend-message-private',
+      '2026-09-18T01:04:03.000Z',
+      'svix-private',
+    ],
+  );
+
+  const events = await store.listRequestCoordinationEvents!(f.request.id);
+  assert.deepEqual(events.map((event) => event.type), [
+    'signer_requested',
+    'notification_accepted',
+    'notification_delivered',
+  ]);
+  assert.equal(events[0]?.actorAddress, f.creator.publicKey());
+  assert.equal(events[0]?.subjectAddress, f.signer.publicKey());
+  assert.equal(events[2]?.notificationKind, 'signature_requested');
+  assert.doesNotMatch(JSON.stringify(events), /private@example\.com|resend-message-private|svix-private/);
+});
