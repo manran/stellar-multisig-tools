@@ -6,6 +6,7 @@ import {
   completeIntegrationWebhookDelivery,
   integrationWebhookEndpointHash,
   listIntegrationWebhookDeliveries,
+  listRecentIntegrationWebhookDeliverySummaries,
   startIntegrationWebhookDelivery,
 } from './postgresIntegrationWebhookDeliveryHistory.js';
 
@@ -90,4 +91,20 @@ test('delivery attempt start is idempotent and completion records only bounded a
   const all = await listIntegrationWebhookDeliveries('evt-delivery-1');
   assert.equal(all.length, 2);
   assert.equal(all[1]?.attempt, 2);
+});
+
+test('recent delivery summary projects the latest receiver result without exposing the callback URL', {
+  skip: !TEST_URL || !RESET_ALLOWED,
+}, async () => {
+  const summaries = await listRecentIntegrationWebhookDeliverySummaries('fednetwork');
+  assert.equal(summaries.length, 1);
+  const summary = summaries[0];
+  assert.equal(summary?.eventId, 'evt-delivery-1');
+  assert.equal(summary?.resourceKind, 'soroban_intent');
+  assert.equal(summary?.resourceId, 'INT1');
+  assert.equal(summary?.status, 'retrying');
+  assert.equal(summary?.attemptCount, 0);
+  assert.equal(summary?.latestDelivery?.attempt, 2);
+  assert.equal(summary?.latestDelivery?.httpStatus, 503);
+  assert.equal(JSON.stringify(summary).includes('hooks.example.com'), false);
 });

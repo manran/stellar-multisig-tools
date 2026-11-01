@@ -49,6 +49,8 @@ const event = new Webhook(process.env.MULTISIG_WEBHOOK_SECRET!)
 // Deduplicate event.id, then GET current canonical state.
 ```
 
+MultiSig Tools may retry automatically and an operator may explicitly redeliver a terminal webhook. Redelivery keeps the same `webhook-id` / event `id`; treat it as another delivery attempt of the same event, not a new business event. Record an event as processed only after your handler has completed the work you intend to deduplicate.
+
 ## Error handling
 
 Branch on stable error codes, not message text.

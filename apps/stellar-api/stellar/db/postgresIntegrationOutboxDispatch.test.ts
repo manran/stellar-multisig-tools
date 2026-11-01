@@ -7,6 +7,7 @@ import {
   listDueIntegrationOutboxEventIds,
   markIntegrationOutboxPublished,
   releaseIntegrationOutboxEvent,
+  requeueIntegrationOutboxEvent,
 } from './postgresIntegrationOutboxDispatch.js';
 
 const TEST_URL = process.env.MST_POSTGRES_TEST_URL?.trim();
@@ -140,4 +141,35 @@ test('publish and retry require the active lease token and never hold a DB lock 
     leaseToken: 'late',
     pool,
   }), null);
+});
+
+test('manual webhook redelivery requeues the same terminal event id and never duplicates an active event', {
+  skip: !TEST_URL || !RESET_ALLOWED,
+}, async () => {
+  await insertOutbox('manual-redelivery-1', { publishedAt: '2026-09-18T02:10:00Z' });
+  const pool = coordinationPool();
+  assert.deepEqual(await requeueIntegrationOutboxEvent('fednetwork', 'manual-redelivery-1', {
+    now: new Date('2026-09-18T03:00:00Z'),
+    pool,
+  }), { status: 'requeued' });
+
+  const row = await pool.query<{
+    event_id: string;
+    published_at: Date | string | null;
+    available_at: Date | string;
+  }>(
+    `SELECT event_id, published_at, available_at
+       FROM mst_stellar.integration_outbox
+      WHERE event_id = 'manual-redelivery-1'`,
+  );
+  assert.equal(row.rows[0]?.event_id, 'manual-redelivery-1');
+  assert.equal(row.rows[0]?.published_at, null);
+  assert.equal(new Date(row.rows[0]!.available_at).toISOString(), '2026-09-18T03:00:00.000Z');
+
+  assert.deepEqual(await requeueIntegrationOutboxEvent('fednetwork', 'manual-redelivery-1', { pool }), {
+    status: 'not_terminal',
+  });
+  assert.deepEqual(await requeueIntegrationOutboxEvent('other-service', 'manual-redelivery-1', { pool }), {
+    status: 'not_found',
+  });
 });
