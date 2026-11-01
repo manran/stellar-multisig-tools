@@ -1,3 +1,8 @@
+---
+title: "Vercel Topology Cleanup — 2026-11-01"
+description: "Process record for the November 2026 MST deployment topology cleanup."
+---
+
 # Vercel topology cleanup — 2026-11-01
 
 This is a process record for the November 2026 MST deployment cleanup. It documents what was observed, what was changed, and which decisions remain open. It is not the long-term bootstrap authority.
