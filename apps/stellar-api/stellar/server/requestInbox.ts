@@ -1,5 +1,6 @@
 import { loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
 import type { StellarNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
+import type { ActivityCoordinationEvent } from '../../../../packages/stellar-core/src/activityTypes.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import type { InboxRequestSnapshot } from '../../../../packages/stellar-core/src/inboxPresentation.js';
 import { projectInboxViewerAction } from '../../../../packages/stellar-core/src/inboxPresentation.js';
@@ -112,6 +113,24 @@ function projectedRequestExecutionMode(snapshot: SigningRequestSnapshot): 'multi
   }
 }
 
+function outgoingCoordinationEvents(
+  events: readonly ActivityCoordinationEvent[],
+  viewerAddress: string,
+): ActivityCoordinationEvent[] {
+  const requestedSigners = new Set(
+    events
+      .filter((event) => event.type === 'signer_requested' && event.actorAddress === viewerAddress)
+      .map((event) => event.subjectAddress),
+  );
+  if (requestedSigners.size === 0) return [];
+  return events.filter((event) =>
+    requestedSigners.has(event.subjectAddress)
+    && (
+      event.type === 'proposal_viewed'
+      || event.actorAddress === viewerAddress
+    ));
+}
+
 export async function projectHumanInboxRequests(
   store: SigningRequestStore,
   address: string,
@@ -123,13 +142,18 @@ export async function projectHumanInboxRequests(
           event.type === 'approval_declined' && event.actorAddress === address,
         )
       : false;
+    const viewerAction = projectInboxViewerAction(snapshot.status, {
+      hasSigned: signerHasSignedTransaction(address, snapshot.mergedXdr, snapshot.network),
+      declined,
+      executionMode: projectedRequestExecutionMode(snapshot),
+    });
+    const coordinationEvents = viewerAction === 'waiting_for_others' && store.listRequestCoordinationEvents
+      ? outgoingCoordinationEvents(await store.listRequestCoordinationEvents(snapshot.id), address)
+      : [];
     return {
       ...snapshot,
-      viewerAction: projectInboxViewerAction(snapshot.status, {
-        hasSigned: signerHasSignedTransaction(address, snapshot.mergedXdr, snapshot.network),
-        declined,
-        executionMode: projectedRequestExecutionMode(snapshot),
-      }),
+      viewerAction,
+      ...(coordinationEvents.length > 0 ? { coordinationEvents } : {}),
     };
   }));
 }

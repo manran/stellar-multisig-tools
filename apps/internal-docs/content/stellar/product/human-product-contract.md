@@ -530,6 +530,8 @@ Current MVP routing is deliberately lightweight:
 - email delivery is coordination only and never changes Stellar authorization;
 - the same Request/signer pair is idempotent for the initial Ask, so retrying Ask can repair an enqueue failure without creating duplicate Assignment semantics;
 - Activity may project Assignment, authenticated Proposal view, and Human notification delivery facts into the same Human timeline as signatures, so a sender can later understand who was asked, whether email delivery succeeded, whether the assigned signer actually viewed the Proposal, whether a Reminder was sent, and who eventually signed;
+- when Inbox already knows the current signer is `waiting_for_others`, it may reuse those same coordination facts to summarize only the Asks originated by that viewer; this is a Manage-style progress aid, not a claim that the assigned signer is currently required by protocol;
+- Inbox coordination progress must not add a second event model or force coordination queries onto work that still needs the current viewer's action;
 - those coordination facts remain separate from transaction/authorization evidence: email delivery must not appear in the Transaction Receipt or portable evidence as if it proved Stellar authorization.
 
 Preserve this architecture distinction:
