@@ -103,6 +103,9 @@ html.stellar-ui [data-stellar-network="public"] {
   --color-accent-hover: #043c39;
   --color-accent-ink: #ffffff;
   --color-focus: #d8a23a;
+  --color-action: var(--color-accent);
+  --color-action-hover: var(--color-accent-hover);
+  --color-action-ink: var(--color-accent-ink);
 
   --color-emerald-50: #eff8f7;
   --color-emerald-100: #d7eeeb;
@@ -139,6 +142,12 @@ html.stellar-ui [data-stellar-network="public"] {
 html.stellar-ui [data-stellar-network="public"] .mst-brand__accent,
 html.stellar-ui [data-stellar-network="public"] .mst-kicker {
   color: #d8a23a;
+}
+
+html.stellar-ui [data-stellar-network="testnet"] {
+  --color-action: var(--color-info);
+  --color-action-hover: var(--color-info-hover);
+  --color-action-ink: var(--color-info-ink);
 }
 
 html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textarea, select, [role="button"]) {
