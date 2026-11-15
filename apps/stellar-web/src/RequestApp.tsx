@@ -760,7 +760,20 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                     : snapshot.status === 'ready'
                       ? 'All required signatures are present. Choose the execution route.'
                       : 'Track signatures and see what happens next.'}
-                actions={<><ActionButton variant="secondary" size="sm" className="min-h-11" onClick={() => void load(requestLocatorString(snapshot.id, capability))} disabled={loading}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Refresh</ActionButton>{shareable && <ActionButton variant="secondary" size="sm" className="min-h-11" onClick={() => void copyLink()}><ClipboardCopy className="h-4 w-4" />{copied === 'link' ? 'Copied' : 'Copy private link'}</ActionButton>}</>}
+                actions={
+                  <>
+                    <ActionButton variant="secondary" size="sm" className="min-h-11" onClick={() => void load(requestLocatorString(snapshot.id, capability))} disabled={loading}>
+                      <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </ActionButton>
+                    {shareable && (
+                      <ActionButton variant="secondary" size="sm" className="min-h-11" onClick={() => void copyLink()}>
+                        <ClipboardCopy className="h-4 w-4" />
+                        {copied === 'link' ? 'Copied' : 'Copy private link'}
+                      </ActionButton>
+                    )}
+                  </>
+                }
               />
 
               <WorkflowProgress current={workflowStage} />
@@ -798,7 +811,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                 )
               )}
 
-                            {!reviewComplete ? (
+              {!reviewComplete ? (
                 <>
                   <ReviewTransactionSummary inspection={inspection} xdr={snapshot.mergedXdr} sourceAccount={sourceAnalyses.find((analysis) => analysis.accountId === inspection.transactionSourceAccount)?.account ?? null} privateCommitment={privateCommitment} />
                   {!privateCommitment && privateNote && <PrivateNoteCard note={privateNote} busy={false} locked />}
