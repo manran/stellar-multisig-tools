@@ -1072,17 +1072,20 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
   }
 }
 
-@media (max-width: 22rem) {
-  .mst-header__inner {
-    width: calc(100% - 1rem);
-  }
-
+/* When Testnet and Sign in share the header, keep the badge and wallet control readable. */
+@media (max-width: 28rem) {
   .mst-header .mst-brand__name {
     display: none;
   }
 
   .mst-header .mst-brand {
     gap: 0;
+  }
+}
+
+@media (max-width: 22rem) {
+  .mst-header__inner {
+    width: calc(100% - 1rem);
   }
 }
 
