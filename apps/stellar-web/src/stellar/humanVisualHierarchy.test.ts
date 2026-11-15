@@ -7,6 +7,8 @@ function source(relativePath: string) {
 }
 
 const ui = source('../MultiSigUi.tsx');
+const tokens = source('../../tokens.css');
+const stylesheet = source('../index.css');
 const dashboard = source('../StellarDashboardApp.tsx');
 const inbox = source('../InboxApp.tsx');
 const request = source('../RequestApp.tsx');
@@ -63,7 +65,8 @@ test('Proposal Request keeps neutral scaffolding on the shared work surface whil
   assert.match(request, /mst-request-lookup-form/);
   assert.match(request, /mst-request-control/);
   assert.match(request, /mst-request-context-row/);
-  assert.match(request, /mst-request-toast/);
+  assert.match(request, /copied === 'link' \? 'Copied' : 'Copy private link'/);
+  assert.doesNotMatch(request, /mst-request-toast/);
   assert.match(request, /mst-request-advanced-facts/);
   assert.doesNotMatch(request, /dark:bg-\[#151515\]/);
   assert.match(request, /border-amber-500\/30 bg-amber-500/);
@@ -268,9 +271,12 @@ test('signer guidance uses a continuous ledger without a bespoke dark surface co
 
 test('Human CTAs have semantic Action ownership without turning actions into statuses', () => {
   assert.match(ui, /export function ActionButton/);
-  assert.match(ui, /primary: 'bg-emerald-700 text-white hover:bg-emerald-800'/);
-  assert.match(ui, /secondary: 'border border-black\/10 bg-white/);
-  assert.match(ui, /danger: 'bg-red-600 text-white hover:bg-red-700'/);
+  assert.ok(ui.includes("primary: 'bg-[var(--color-action)] text-[var(--color-action-ink)]"));
+  assert.ok(ui.includes("secondary: 'border border-[var(--color-rule)] bg-[var(--color-paper)]"));
+  assert.ok(ui.includes("danger: 'bg-[var(--color-danger)] text-[var(--color-danger-ink)]"));
+  assert.match(tokens, /--color-action: var\(--color-accent\)/);
+  assert.match(tokens, /--color-danger-ink:/);
+  assert.match(stylesheet, /--color-action: var\(--color-info\)/);
   assert.match(accountSigningEntry, /<ActionButton type="submit"/);
   assert.match(request, /<ActionButton variant="secondary" size="sm" onClick=\{\(\) => void copyXdr\(\)\}/);
 });
