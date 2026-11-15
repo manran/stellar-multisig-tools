@@ -7,6 +7,7 @@ function source(relativePath: string) {
 }
 
 const ui = source('../MultiSigUi.tsx');
+const shell = source('../StellarWorkspaceShell.tsx');
 const tokens = source('../../tokens.css');
 const stylesheet = source('../index.css');
 const dashboard = source('../StellarDashboardApp.tsx');
@@ -29,6 +30,13 @@ const sorobanActivity = source('../SorobanIntentActivityCard.tsx');
 const review = source('../ReviewTransactionSummary.tsx');
 const accountSigningEntry = source('../AccountSigningEntryApp.tsx');
 const xdrQr = source('../XdrQrCode.tsx');
+
+test('mobile workspace navigation keeps full labels visible without truncation at 320px', () => {
+  assert.match(shell, /flex-col gap-1 rounded-xl px-1 py-1\.5/);
+  assert.match(shell, /sm:flex-row/);
+  assert.match(shell, /grid grid-cols-4 gap-1 lg:block/);
+  assert.match(shell, /bg-\[var\(--color-action\)\]/);
+});
 
 test('primary Human surfaces share one page-header grammar', () => {
   assert.match(ui, /export function PageHeader/);
