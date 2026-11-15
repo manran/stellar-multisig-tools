@@ -306,6 +306,7 @@ export default function RequestApp() {
     const parsed = inspectTransactionXdr(next.mergedXdr, next.network);
     const sameRequest = snapshot?.id === next.id;
     if (next.status !== 'awaiting_signatures') setReviewComplete(true);
+    if (next.status === 'submitted') setContributionMessage('');
     else if (!sameRequest) setReviewComplete(false);
     setSnapshot(next);
     setInspection(parsed);
@@ -536,9 +537,11 @@ export default function RequestApp() {
     }));
     await applySnapshot(body.request);
     if (body.access?.contributionGrantExpiresAt) setContributionGrantExpiresAt(body.access.contributionGrantExpiresAt);
-    setContributionMessage(body.addedSignatureCount > 0
-      ? `Added ${body.addedSignatureCount} signature${body.addedSignatureCount === 1 ? '' : 's'}.`
-      : 'No new signature was added; this signed copy was already represented.');
+    setContributionMessage(body.request.status === 'awaiting_signatures'
+      ? body.addedSignatureCount > 0
+        ? `Added ${body.addedSignatureCount} signature${body.addedSignatureCount === 1 ? '' : 's'}.`
+        : 'No new signature was added; this signed copy was already represented.'
+      : '');
   }
 
   async function contribute(event: FormEvent) {
