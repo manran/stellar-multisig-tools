@@ -13,7 +13,7 @@ export type WorkspaceView = 'dashboard' | 'inbox' | 'waiting' | 'ready' | 'activ
 type InboxWorkspaceView = 'inbox' | 'waiting' | 'ready';
 
 function navClass(active: boolean) {
-  return `flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-semibold transition sm:gap-2 sm:px-3 sm:text-sm lg:w-full lg:justify-start ${
+  return `flex min-w-0 items-center justify-center flex-col gap-1 rounded-xl px-1 py-1.5 text-xs font-semibold transition sm:flex-row sm:gap-2 sm:px-3 sm:py-2.5 sm:text-sm lg:w-full lg:justify-start ${
     active
       ? 'bg-black text-white dark:bg-white dark:text-black'
       : 'text-neutral-600 hover:bg-black/5 hover:text-black dark:text-neutral-300 dark:hover:bg-white/10 dark:hover:text-white'
@@ -21,8 +21,10 @@ function navClass(active: boolean) {
 }
 
 function newClass(active: boolean) {
-  const accent = active ? 'bg-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700';
-  return `flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-bold text-white transition sm:gap-2 sm:px-3 sm:text-sm lg:mb-5 lg:w-full lg:justify-start lg:px-3 lg:py-3 ${accent}`;
+  const accent = active
+    ? 'bg-[var(--color-action-hover)]'
+    : 'bg-[var(--color-action)] hover:bg-[var(--color-action-hover)]';
+  return `flex min-w-0 items-center justify-center flex-col gap-1 rounded-xl px-1 py-1.5 text-xs font-bold text-[var(--color-action-ink)] transition sm:flex-row sm:gap-2 sm:px-3 sm:py-2.5 sm:text-sm lg:mb-5 lg:w-full lg:justify-start lg:px-3 lg:py-3 ${accent}`;
 }
 
 interface Props {
