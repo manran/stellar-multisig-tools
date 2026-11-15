@@ -181,6 +181,8 @@ Use:
 - Use semantic CSS variables for colors and fonts. Add or revise tokens in `apps/stellar-web/tokens.css`; do not introduce raw hex, RGB, OKLCH, or new Tailwind palette utilities in page/component source.
 - `--color-action` is the primary interaction color. Its Mainnet/Testnet value is set at the network boundary. `--color-success`, `--color-warning`, and `--color-danger` retain outcome meaning independently of the network.
 - In pull requests, `scripts/check-ui-design.mjs` rejects **new** hard-coded color/font declarations and branded palette utilities in either web source tree. Existing legacy usage is a cleanup backlog, not a reason to disable the rule.
+- Proposal signer, wallet-connection, notification, and share-link CTAs in `SigningGuidance.tsx` reuse `ActionButton`; state copy and confirmation remain owned by the business controller.
+- Focus outlines must meet 3:1 contrast with the work surface. Action labels must meet 4.5:1 against their fill in both light and dark themes. `apps/stellar-web/src/stellar/designContrast.test.ts` guards these conditions.
 - Validate the Proposal workbench on Mainnet and Testnet at 320, 375, 414, 768, and desktop widths before merging. Color changes must never alter wallet, authorization, submission, or routing behavior.
 
 ## What pages MAY differ on
