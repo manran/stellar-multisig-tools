@@ -697,7 +697,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                 <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-300" />
                 <h1 className="mt-5 text-4xl font-bold tracking-tight">{closedCapability.status === 'expired' ? 'This private link has expired' : 'Transaction confirmed'}</h1>
                 <p className="mt-3 text-lg leading-8 text-neutral-600 dark:text-neutral-300">{closedCapability.status === 'expired' ? 'For privacy, this share link no longer opens transaction details. Associated wallets can continue in Activity.' : 'Confirmed on Stellar. For privacy, this private share link no longer exposes proposal details; associated wallets can open the permanent on-chain receipt from Activity.'}</p>
-                <button type="button" onClick={() => navigateWorkspace('/activity')} className="mt-7 rounded-xl bg-emerald-600 px-5 py-3 text-base font-semibold text-white">View Activity</button>
+                <ActionButton onClick={() => navigateWorkspace('/activity')} className="mt-7">View Activity</ActionButton>
               </section>
             ) : (
               <PrivateWorkspaceUnlock
@@ -723,7 +723,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
               <CircleAlert className="h-8 w-8 text-amber-600 dark:text-amber-300" />
               <h1 className="mt-5 text-4xl font-bold tracking-tight">This wallet cannot open this proposal</h1>
               <p className="mt-3 text-lg leading-8 text-neutral-600 dark:text-neutral-300">The confirmed wallet is not a current signer for this transaction. Use the private share link, or choose another current signer wallet and confirm it.</p>
-              <button type="button" disabled={walletBusy} onClick={() => void connectWallet()} className="mt-7 rounded-xl bg-emerald-600 px-5 py-3 text-base font-semibold text-white disabled:opacity-50">{walletBusy ? 'Opening wallets…' : 'Choose another signer wallet'}</button>
+              <ActionButton disabled={walletBusy} onClick={() => void connectWallet()} className="mt-7">{walletBusy ? 'Opening wallets…' : 'Choose another signer wallet'}</ActionButton>
             </section>
           )}
 
@@ -736,7 +736,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
               <form onSubmit={submitLookup} className="mst-request-lookup-form mt-7">
                 <label htmlFor="request-locator" className="text-sm font-semibold">Private link or proposal ID</label>
                 <input id="request-locator" value={requestLocator} onChange={(event) => setRequestLocator(event.target.value)} placeholder="Paste shared transaction link" spellCheck={false} className="mst-request-control mt-2 w-full" />
-                <button disabled={loading || !requestLocator.trim()} className="mst-action-primary mt-3 disabled:opacity-50">{loading && <LoaderCircle className="h-4 w-4 animate-spin" />}Open transaction</button>
+                <ActionButton type="submit" disabled={loading || !requestLocator.trim()} className="mt-3">{loading && <LoaderCircle className="h-4 w-4 animate-spin" />}Open transaction</ActionButton>
               </form>
               <p className="mt-5 text-sm text-neutral-500 dark:text-neutral-400">Have XDR instead? Use <a href={stellarHref('/new/import')} className="whitespace-nowrap font-semibold text-emerald-700 dark:text-emerald-300">New → Import transaction</a>.</p>
             </section>
@@ -753,8 +753,14 @@ async function submitRequest(acceptedEffectsDigest?: string) {
               <PageHeader
                 eyebrow={<div className="flex flex-wrap items-center gap-2"><RequestStatusBadge status={snapshot.status} /><NetworkFact network={snapshot.network} /></div>}
                 title="Proposal"
-                description="Review the exact transaction, collect signatures, then follow its configured execution route once authorization is complete."
-                actions={<><button type="button" onClick={() => void load(requestLocatorString(snapshot.id, capability))} disabled={loading} className="flex items-center gap-2 rounded-xl border border-black/10 px-3 py-2.5 text-sm font-semibold disabled:opacity-50 dark:border-white/10"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Refresh</button>{shareable && <button type="button" onClick={() => void copyLink()} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white"><ClipboardCopy className="h-4 w-4" />{copied === 'link' ? 'Copied' : 'Copy private link'}</button>}</>}
+                description={snapshot.submission
+                  ? 'Confirmed on Stellar. Review the ledger record below.'
+                  : !reviewComplete
+                    ? 'Check the exact transaction before signing.'
+                    : snapshot.status === 'ready'
+                      ? 'All required signatures are present. Choose the execution route.'
+                      : 'Track signatures and see what happens next.'}
+                actions={<><ActionButton variant="secondary" size="sm" className="min-h-11" onClick={() => void load(requestLocatorString(snapshot.id, capability))} disabled={loading}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Refresh</ActionButton>{shareable && <ActionButton variant="secondary" size="sm" className="min-h-11" onClick={() => void copyLink()}><ClipboardCopy className="h-4 w-4" />{copied === 'link' ? 'Copied' : 'Copy private link'}</ActionButton>}</>}
               />
 
               <WorkflowProgress current={workflowStage} />
@@ -777,7 +783,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                     <Share2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" />
                     <div><div className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">Private link ready</div><p className="mt-0.5 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Anyone with this private link can view the active Proposal. The link never grants Stellar signing authority.</p></div>
                   </div>
-                  <button type="button" onClick={() => setShareJustCreated(false)} className="rounded-lg p-1.5 text-neutral-500 hover:bg-black/5 hover:text-black dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-white" aria-label="Dismiss private link reminder"><X className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => setShareJustCreated(false)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-paper-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]" aria-label="Dismiss private link reminder"><X className="h-4 w-4" /></button>
                 </section>
               )}
 
@@ -792,24 +798,22 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                 )
               )}
 
-              {copied === 'link' && <div className="mst-request-toast fixed bottom-6 right-6 z-[90]">Private link copied.</div>}
-
-              {!reviewComplete ? (
+                            {!reviewComplete ? (
                 <>
                   <ReviewTransactionSummary inspection={inspection} xdr={snapshot.mergedXdr} sourceAccount={sourceAnalyses.find((analysis) => analysis.accountId === inspection.transactionSourceAccount)?.account ?? null} privateCommitment={privateCommitment} />
                   {!privateCommitment && privateNote && <PrivateNoteCard note={privateNote} busy={false} locked />}
                   <div className="flex justify-end">
-                    <button type="button" onClick={() => setReviewComplete(true)} className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700">{reviewContinueLabel}</button>
+                    <ActionButton onClick={() => setReviewComplete(true)}>{reviewContinueLabel}</ActionButton>
                   </div>
                 </>
               ) : (
                 <>
-                  <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] px-4 py-3 sm:px-5">
+                  <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[var(--color-rule)] bg-[var(--color-paper-2)] px-4 py-3 sm:px-5">
                     <div className="flex items-center gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                      <div><div className="text-sm font-semibold">Review complete</div><div className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">Receipt details are collapsed while signatures are collected.</div></div>
+                      <CheckCircle2 className="h-5 w-5 text-[var(--color-ink-2)]" />
+                      <div><div className="text-sm font-semibold">Review complete</div><div className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">Transaction details can be reopened before you sign.</div></div>
                     </div>
-                    <button type="button" onClick={() => setReviewComplete(false)} className="text-sm font-semibold text-emerald-700 underline decoration-emerald-500/30 underline-offset-4 dark:text-emerald-300">Review details</button>
+                    <button type="button" onClick={() => setReviewComplete(false)} className="min-h-11 text-sm font-semibold text-[var(--color-accent)] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]">Review details</button>
                   </section>
 
                   {contributionMessage && <div className="flex gap-2 rounded-xl bg-emerald-500/10 p-4 text-sm text-emerald-800 dark:text-emerald-200"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />{contributionMessage}</div>}
@@ -877,8 +881,8 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                                 </label>
                               )}
                               <div className="mt-4 flex flex-wrap gap-2">
-                                <button type="button" onClick={() => void submitRequest(submissionEffectsDiff?.requiresExplicitReview ? submissionEffectsDiff.currentDigest : undefined)} disabled={submitting || (snapshot.network === 'public' && !mainnetConfirmed)} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{submitting ? 'Checking and submitting…' : submissionEffectsDiff?.requiresExplicitReview ? 'Accept current effects and submit' : 'Submit transaction'}</button>
-                                {!executionAlreadyRoutedToMst && <button type="button" disabled={submitting} onClick={() => { setSubmitArmed(false); setMainnetConfirmed(false); }} className="rounded-xl border border-black/10 px-4 py-3 text-sm font-semibold dark:border-white/10">Choose another route</button>}
+                                <ActionButton onClick={() => void submitRequest(submissionEffectsDiff?.requiresExplicitReview ? submissionEffectsDiff.currentDigest : undefined)} disabled={submitting || (snapshot.network === 'public' && !mainnetConfirmed)} aria-busy={submitting}>{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{submitting ? 'Checking and submitting…' : submissionEffectsDiff?.requiresExplicitReview ? 'Accept current effects and submit' : 'Submit transaction'}</ActionButton>
+                                {!executionAlreadyRoutedToMst && <ActionButton variant="secondary" disabled={submitting} onClick={() => { setSubmitArmed(false); setMainnetConfirmed(false); }}>Choose another route</ActionButton>}
                               </div>
                             </div>
                           )}
