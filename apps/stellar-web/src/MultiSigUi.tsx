@@ -40,7 +40,7 @@ export function ActionButton({
   return (
     <button
       type={type}
-      className={`inline-flex min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl font-semibold transition-colors duration-[var(--dur-short)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-40 ${ACTION_VARIANT_CLASS[variant]} ${ACTION_SIZE_CLASS[size]} ${className}`}
+      className={`inline-flex min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl font-semibold transition-colors duration-[var(--dur-short)] active:brightness-95 aria-busy:cursor-progress focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-40 ${ACTION_VARIANT_CLASS[variant]} ${ACTION_SIZE_CLASS[size]} ${className}`}
       {...props}
     />
   );
