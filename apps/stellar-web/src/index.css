@@ -141,7 +141,7 @@ html.stellar-ui [data-stellar-network="public"] {
 
 html.stellar-ui [data-stellar-network="public"] .mst-brand__accent,
 html.stellar-ui [data-stellar-network="public"] .mst-kicker {
-  color: #d8a23a;
+  color: var(--color-brand-wordmark-accent);
 }
 
 html.stellar-ui [data-stellar-network="testnet"] {
