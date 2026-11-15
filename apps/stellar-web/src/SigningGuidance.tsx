@@ -494,7 +494,7 @@ export default function SigningGuidance({
                   </ActionButton>
                 ) : (
                   <ActionButton variant="secondary" disabled={walletBusy} aria-busy={walletBusy} onClick={onConnectWallet} className="min-h-12 w-full px-4">
-                    <WalletCards className="h-4 w-4" />{walletBusy ? 'Opening wallets…' : 'Choose signer wallet'}
+                    <WalletCards className="h-4 w-4" />{walletBusy ? 'Opening wallets…' : 'Choose an authorized signer'}
                   </ActionButton>
                 )
               ) : (
