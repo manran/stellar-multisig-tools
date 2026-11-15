@@ -281,6 +281,18 @@ test('Human CTAs have semantic Action ownership without turning actions into sta
   assert.match(request, /<ActionButton variant="secondary" size="sm" onClick=\{\(\) => void copyXdr\(\)\}/);
 });
 
+test('Proposal signing and sharing use semantic actions', () => {
+  const signing = source('../SigningGuidance.tsx');
+  assert.match(signing, /import \{ ActionButton \} from '\.\/MultiSigUi'/);
+  assert.match(signing, /<ActionButton variant=\{walletAlreadySigned \? 'secondary' : 'primary'\}/);
+  assert.match(signing, /<ActionButton variant="secondary" disabled=\{shareBusy\}/);
+  assert.match(signing, /<ActionButton variant="secondary" size="sm"/);
+  assert.match(signing, /aria-busy=\{walletBusy\}/);
+  assert.doesNotMatch(signing, /<button\b[^>]*className="[^"]*bg-(?:emerald|neutral-900)/s);
+  assert.match(signing, /className="flex h-11 w-11 shrink-0/);
+  assert.match(request, /<ActionButton onClick=\{\(\) => setReviewComplete\(true\)\}/);
+});
+
 test('account signing entry uses one sequence and continuous form instead of stacked cards', () => {
   assert.match(accountSigningEntry, /mst-signing-entry-icon/);
   assert.match(accountSigningEntry, /mst-signing-path/);
