@@ -15,6 +15,7 @@
   --color-action-ink: var(--color-accent-ink);
   --color-focus: oklch(0.61 0.145 166);
   --color-mainnet-focus: oklch(0.50 0.10 80);
+  --color-brand-wordmark-accent: oklch(0.50 0.10 80);
   --color-success: oklch(0.51 0.118 166);
   --color-danger: oklch(0.53 0.19 27);
   --color-danger-ink: oklch(0.99 0.002 25);
@@ -78,6 +79,7 @@
   --color-accent-ink: oklch(0.17 0.007 155);
   --color-focus: oklch(0.75 0.17 162);
   --color-mainnet-focus: oklch(0.75 0.10 80);
+  --color-brand-wordmark-accent: oklch(0.75 0.10 80);
   --color-success: oklch(0.69 0.17 162);
   --color-danger: oklch(0.68 0.17 25);
   --color-danger-ink: oklch(0.16 0.012 25);
