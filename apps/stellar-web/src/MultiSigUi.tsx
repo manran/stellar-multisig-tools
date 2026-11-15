@@ -17,9 +17,9 @@ export type ActionButtonVariant = 'primary' | 'secondary' | 'danger';
 export type ActionButtonSize = 'sm' | 'md';
 
 const ACTION_VARIANT_CLASS: Record<ActionButtonVariant, string> = {
-  primary: 'bg-emerald-700 text-white hover:bg-emerald-800',
-  secondary: 'border border-black/10 bg-white text-neutral-800 hover:bg-black/5 dark:border-white/10 dark:bg-white/[0.03] dark:text-neutral-100 dark:hover:bg-white/[0.08]',
-  danger: 'bg-red-600 text-white hover:bg-red-700',
+  primary: 'bg-[var(--color-action)] text-[var(--color-action-ink)] hover:bg-[var(--color-action-hover)]',
+  secondary: 'border border-[var(--color-rule)] bg-[var(--color-paper)] text-[var(--color-ink)] hover:bg-[var(--color-paper-2)]',
+  danger: 'bg-[var(--color-danger)] text-white hover:brightness-95',
 };
 
 const ACTION_SIZE_CLASS: Record<ActionButtonSize, string> = {
@@ -40,7 +40,7 @@ export function ActionButton({
   return (
     <button
       type={type}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 dark:focus-visible:ring-white/30 disabled:cursor-not-allowed disabled:opacity-40 ${ACTION_VARIANT_CLASS[variant]} ${ACTION_SIZE_CLASS[size]} ${className}`}
+      className={`inline-flex min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl font-semibold transition-colors duration-[var(--dur-short)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-40 ${ACTION_VARIANT_CLASS[variant]} ${ACTION_SIZE_CLASS[size]} ${className}`}
       {...props}
     />
   );
