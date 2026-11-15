@@ -286,7 +286,7 @@ test('Proposal signing and sharing use semantic actions', () => {
   assert.match(signing, /import \{ ActionButton \} from '\.\/MultiSigUi'/);
   assert.match(signing, /<ActionButton variant=\{walletAlreadySigned \? 'secondary' : 'primary'\}/);
   assert.match(signing, /<ActionButton variant="secondary" disabled=\{shareBusy\}/);
-  assert.match(signing, /<ActionButton variant="secondary" size="sm"/);
+  assert.match(signing, /<ActionButton\s+variant="secondary"\s+size="sm"/);
   assert.match(signing, /aria-busy=\{walletBusy\}/);
   assert.doesNotMatch(signing, /<button\b[^>]*className="[^"]*bg-(?:emerald|neutral-900)/s);
   assert.match(signing, /className="flex h-11 w-11 shrink-0/);
