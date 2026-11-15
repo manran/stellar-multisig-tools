@@ -24,7 +24,7 @@ try {
 const literalColor = /(?:^|[^\w-])#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{4}|[0-9a-f]{3})(?![0-9a-f])/i;
 const colorFunction = /\b(?:rgb|rgba|hsl|hsla|oklch|oklab)\s*\(/i;
 const paletteUtility = /\b(?:bg|text|border|ring|from|via|to|fill|stroke|decoration|outline)-(?:emerald|sky|violet|amber|red|lime|green|blue|purple|pink|yellow|orange|indigo)-\d{2,3}\b/;
-const hardcodedFont = /\bfont-family\s*:\s*(?!var\(|inherit\b|initial\b|unset\b)/i;
+const fontDeclaration = /\bfont-family\s*:\s*([^;]+)/i;
 const failures = [];
 let file = '';
 let lineNumber = 0;
@@ -53,7 +53,10 @@ for (const line of diff.split('\n')) {
   const problems = [];
   if (literalColor.test(code) || colorFunction.test(code)) problems.push('literal color');
   if (paletteUtility.test(code)) problems.push('palette utility');
-  if (file.endsWith('.css') && hardcodedFont.test(code)) problems.push('hard-coded font family');
+  const fontValue = file.endsWith('.css') ? fontDeclaration.exec(code)?.[1]?.trim() : null;
+  if (fontValue && !/^(?:var\(|inherit\b|initial\b|unset\b)/i.test(fontValue)) {
+    problems.push('hard-coded font family');
+  }
   if (problems.length > 0) {
     failures.push(file + ':' + lineNumber + ': ' + problems.join(', ') + '\n  ' + code.trim());
   }
