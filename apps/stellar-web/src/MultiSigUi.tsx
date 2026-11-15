@@ -19,7 +19,7 @@ export type ActionButtonSize = 'sm' | 'md';
 const ACTION_VARIANT_CLASS: Record<ActionButtonVariant, string> = {
   primary: 'bg-[var(--color-action)] text-[var(--color-action-ink)] hover:bg-[var(--color-action-hover)]',
   secondary: 'border border-[var(--color-rule)] bg-[var(--color-paper)] text-[var(--color-ink)] hover:bg-[var(--color-paper-2)]',
-  danger: 'bg-[var(--color-danger)] text-white hover:brightness-95',
+  danger: 'bg-[var(--color-danger)] text-[var(--color-danger-ink)] hover:brightness-95',
 };
 
 const ACTION_SIZE_CLASS: Record<ActionButtonSize, string> = {
