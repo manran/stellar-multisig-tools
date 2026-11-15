@@ -894,7 +894,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                                 </label>
                               )}
                               <div className="mt-4 flex flex-wrap gap-2">
-                                <ActionButton onClick={() => void submitRequest(submissionEffectsDiff?.requiresExplicitReview ? submissionEffectsDiff.currentDigest : undefined)} disabled={submitting || (snapshot.network === 'public' && !mainnetConfirmed)} aria-busy={submitting}>{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{submitting ? 'Checking and submitting…' : submissionEffectsDiff?.requiresExplicitReview ? 'Accept current effects and submit' : 'Submit transaction'}</ActionButton>
+                                <ActionButton onClick={() => void submitRequest(submissionEffectsDiff?.requiresExplicitReview ? submissionEffectsDiff.currentDigest : undefined)} disabled={submitting || (snapshot.network === 'public' && !mainnetConfirmed)} aria-busy={submitting}>{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{submitting ? 'Checking and submitting…' : submissionEffectsDiff?.requiresExplicitReview ? 'Accept effects & submit' : 'Submit transaction'}</ActionButton>
                                 {!executionAlreadyRoutedToMst && <ActionButton variant="secondary" disabled={submitting} onClick={() => { setSubmitArmed(false); setMainnetConfirmed(false); }}>Choose another route</ActionButton>}
                               </div>
                             </div>
