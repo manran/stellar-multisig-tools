@@ -44,10 +44,21 @@ test('Stellar Mainnet and Testnet keyboard focus clears 3:1 in light and dark', 
   assert.match(runtime, /--color-focus: var\(--color-info\)/);
   for (const [mode, css] of Object.entries(modes)) {
     const paper = linearRgb(css, '--color-paper');
-    for (const focusName of ['--color-mainnet-focus', '--color-info']) {
+    for (const focusName of ['--color-mainnet-focus', '--color-info', '--color-brand-wordmark-accent']) {
       const ratio = contrast(linearRgb(css, focusName), paper);
       assert.ok(ratio >= 3, mode + ' ' + focusName + ' focus contrast: ' + ratio.toFixed(2));
     }
+  }
+});
+
+test('Mainnet gold wordmark text uses a readable brand token', () => {
+  assert.match(runtime, /--color-brand-wordmark-accent\)/);
+  for (const [mode, css] of Object.entries(modes)) {
+    const ratio = contrast(
+      linearRgb(css, '--color-brand-wordmark-accent'),
+      linearRgb(css, '--color-paper'),
+    );
+    assert.ok(ratio >= 4.5, mode + ' gold brand wordmark contrast: ' + ratio.toFixed(2));
   }
 });
 
