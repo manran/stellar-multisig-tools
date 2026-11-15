@@ -153,6 +153,11 @@ test('exact N-of-M signing uses one discrete signer presentation without repeati
   assert.match(signingGuidance, /policy\?\.exactNOfM \? null : signaturesRemaining !== null/);
 });
 
+test('signature feedback clears once authorization is ready or the transaction is submitted', () => {
+  assert.match(requestUi, /setContributionMessage\(body\.request\.status === 'awaiting_signatures'/);
+  assert.match(requestUi, /if \(next\.status === 'submitted'\) setContributionMessage\(''\)/);
+});
+
 test('human signing turns a connected wrong wallet into an actionable identity choice', () => {
   assert.doesNotMatch(signingGuidance, />Change<\/button>/);
   assert.match(signingGuidance, /Sign proposal/);
