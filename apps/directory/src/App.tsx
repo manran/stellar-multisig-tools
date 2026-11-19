@@ -129,9 +129,9 @@ export default function App() {
   }, [selectedNetwork]);
 
   return (
-    <div className="min-h-screen bg-[#F5F5F0] dark:bg-[#0A0A0A] text-[#1A1A1A] dark:text-[#F5F5F0] transition-colors duration-300 font-sans">
+    <div className="min-h-screen bg-directory-paper dark:bg-directory-night text-directory-ink dark:text-directory-ink-inverse transition-colors duration-300 font-sans">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 dark:bg-black/80 backdrop-blur-md border-bottom border-black/5 dark:border-white/10">
+      <header className="sticky top-0 z-50 bg-white/80 dark:bg-directory-night/85 backdrop-blur-md border-bottom border-black/5 dark:border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 md:h-16">
             <div className="flex items-center gap-2">
@@ -141,8 +141,8 @@ export default function App() {
                 aria-hidden="true"
                 className="h-8 w-12 shrink-0 object-contain md:h-9 md:w-14"
               />
-              <h1 className="text-lg md:text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-300">
-                MultiSig Tools
+              <h1 className="text-lg md:text-xl font-bold tracking-tight text-brand-teal dark:text-brand-teal-light">
+                MultiSig <span className="text-directory-ink dark:text-directory-ink-inverse">Tools</span>
               </h1>
             </div>
 
@@ -152,7 +152,7 @@ export default function App() {
                 <input
                   type="text"
                   placeholder="Search wallets and tools..."
-                  className="pl-10 pr-4 py-1.5 bg-black/5 dark:bg-white/5 border border-transparent focus:border-emerald-500 rounded-full text-sm outline-none transition-all w-64"
+                  className="pl-10 pr-4 py-1.5 bg-black/5 dark:bg-white/5 border border-transparent focus:border-brand-teal dark:focus:border-brand-teal-light rounded-full text-sm outline-none transition-all w-64"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -184,7 +184,7 @@ export default function App() {
               placeholder="Search wallets and tools..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
+              className="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/50 dark:focus:ring-brand-teal-light/50 transition-all"
             />
           </div>
         </div>
@@ -201,8 +201,8 @@ export default function App() {
                 onClick={() => setSelectedNetwork(network.id)}
                 className={`flex items-center gap-1.5 md:gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap shrink-0 ${
                   selectedNetwork === network.id
-                    ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
-                    : 'bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 hover:border-emerald-500/50'
+                    ? 'bg-brand-teal text-white shadow-md shadow-brand-teal/20'
+                    : 'bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 hover:border-brand-teal/40 dark:hover:border-brand-teal-light/40'
                 }`}
               >
                 <span>{network.icon}</span>
@@ -218,9 +218,9 @@ export default function App() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="hidden lg:flex bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-6 mb-8 items-start gap-4"
+              className="hidden lg:flex bg-brand-teal/10 dark:bg-brand-teal-light/10 border border-brand-teal/20 dark:border-brand-teal-light/20 rounded-2xl p-6 mb-8 items-start gap-4"
             >
-              <Info className="w-6 h-6 text-emerald-500 shrink-0 mt-1" />
+              <Info className="w-6 h-6 text-seal-ink dark:text-seal-gold shrink-0 mt-1" />
               <div>
                 <h2 className="text-lg font-semibold mb-1">
                   {selectedNetwork === 'all' ? 'Explore the Multisig Ecosystem' : `${currentNetworkInfo?.name} Multisig`}
@@ -256,7 +256,7 @@ export default function App() {
                     onClick={() => setSelectedCategory(cat)}
                     className={`whitespace-nowrap shrink-0 lg:w-full text-left px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl text-sm transition-all ${
                       selectedCategory === cat
-                        ? 'bg-emerald-500/10 text-emerald-500 font-semibold'
+                        ? 'bg-brand-teal/10 dark:bg-brand-teal-light/10 text-brand-teal dark:text-brand-teal-light font-semibold'
                         : 'text-black/60 dark:text-white/60 hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'
                     }`}
                   >
@@ -290,7 +290,7 @@ export default function App() {
                   onClick={() => setViewMode('grid')}
                   className={`p-1.5 rounded-md transition-all ${
                     viewMode === 'grid' 
-                      ? 'bg-white dark:bg-black shadow-sm text-emerald-500' 
+                      ? 'bg-white dark:bg-black shadow-sm text-brand-teal dark:text-brand-teal-light' 
                       : 'opacity-50 hover:opacity-100'
                   }`}
                   aria-label="Grid view"
@@ -301,7 +301,7 @@ export default function App() {
                   onClick={() => setViewMode('list')}
                   className={`p-1.5 rounded-md transition-all ${
                     viewMode === 'list' 
-                      ? 'bg-white dark:bg-black shadow-sm text-emerald-500' 
+                      ? 'bg-white dark:bg-black shadow-sm text-brand-teal dark:text-brand-teal-light' 
                       : 'opacity-50 hover:opacity-100'
                   }`}
                   aria-label="List view"
@@ -349,7 +349,7 @@ export default function App() {
             <details className="group bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl overflow-hidden">
               <summary className="flex items-center justify-between p-4 font-semibold text-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">
                 <div className="flex items-center gap-2">
-                  <Info className="w-4 h-4 text-emerald-500" />
+                  <Info className="w-4 h-4 text-brand-teal dark:text-brand-teal-light" />
                   {selectedNetwork === 'all' ? 'Explore the Multisig Ecosystem' : `${currentNetworkInfo?.name} Multisig`}
                 </div>
                 <span className="transition group-open:rotate-180">
@@ -369,7 +369,7 @@ export default function App() {
             <details className="group bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl overflow-hidden">
               <summary className="flex items-center justify-between p-4 font-semibold text-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">
                 <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                  <ShieldCheck className="w-4 h-4 text-brand-teal dark:text-brand-teal-light" />
                   Why Multisig?
                 </div>
                 <span className="transition group-open:rotate-180">
@@ -396,24 +396,24 @@ export default function App() {
 function ServiceCard({ service, viewMode = 'grid' }: { service: MultiSigService, viewMode?: 'grid' | 'list' }) {
   if (viewMode === 'list') {
     return (
-      <div className="group bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl p-4 hover:border-emerald-500/50 transition-all hover:shadow-xl hover:shadow-emerald-500/5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+      <div className="group bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl p-4 hover:border-brand-teal/40 dark:hover:border-brand-teal-light/40 transition-all hover:shadow-xl hover:shadow-brand-teal/5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
         {/* TODO: Replace this initial-based placeholder with actual service logos. */}
-        <div className="w-12 h-12 shrink-0 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 text-xl font-bold">
+        <div className="w-12 h-12 shrink-0 bg-brand-teal/10 dark:bg-brand-teal-light/10 rounded-xl flex items-center justify-center text-brand-teal dark:text-brand-teal-light text-xl font-bold">
           {service.name[0]}
         </div>
         
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 font-semibold uppercase tracking-wider shrink-0">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-seal-gold/10 text-seal-ink dark:text-seal-gold font-semibold uppercase tracking-wider shrink-0">
               {service.listingType}
             </span>
-            <h3 className="text-lg font-bold group-hover:text-emerald-500 transition-colors truncate">
+            <h3 className="text-lg font-bold group-hover:text-brand-teal dark:group-hover:text-brand-teal-light transition-colors truncate">
               {service.name}
             </h3>
             <div className="flex gap-1 shrink-0">
               {service.hasAudit && (
                 <div className="group/tip relative">
-                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                  <ShieldCheck className="w-4 h-4 text-brand-teal dark:text-brand-teal-light" />
                   <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-gray-900 text-white text-[10px] leading-relaxed rounded opacity-0 group-hover/tip:opacity-100 transition-opacity w-max max-w-[200px] text-center z-50 pointer-events-none shadow-xl">
                     {service.auditNotes || 'Audited'}
                   </span>
@@ -421,7 +421,7 @@ function ServiceCard({ service, viewMode = 'grid' }: { service: MultiSigService,
               )}
               {service.openSourceStatus === 'Fully Open Source' && (
                 <div className="group/tip relative">
-                  <Code className="w-4 h-4 text-blue-500" />
+                  <Code className="w-4 h-4 text-directory-ink/60 dark:text-directory-ink-inverse/75" />
                   <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-gray-900 text-white text-[10px] leading-relaxed rounded opacity-0 group-hover/tip:opacity-100 transition-opacity w-max max-w-[200px] text-center z-50 pointer-events-none shadow-xl">
                     {service.openSourceNotes || 'Open Source'}
                   </span>
@@ -433,10 +433,10 @@ function ServiceCard({ service, viewMode = 'grid' }: { service: MultiSigService,
             {service.description}
           </p>
           <div className="flex gap-2 mt-2">
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-brand-teal/10 dark:bg-brand-teal-light/10 text-brand-teal dark:text-brand-teal-light font-medium">
               {service.securityModel}
             </span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 text-directory-ink/70 dark:text-directory-ink-inverse/75 font-medium">
               {service.custodyModel}
             </span>
           </div>
@@ -455,7 +455,7 @@ function ServiceCard({ service, viewMode = 'grid' }: { service: MultiSigService,
               href={service.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 text-sm font-semibold text-emerald-500 hover:underline"
+              className="flex items-center gap-1 text-sm font-semibold text-brand-teal dark:text-brand-teal-light hover:underline"
             >
               Visit <ExternalLink className="w-3 h-3" />
             </a>
@@ -467,17 +467,17 @@ function ServiceCard({ service, viewMode = 'grid' }: { service: MultiSigService,
 
   return (
     <div
-      className="group bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl p-4 md:p-5 hover:border-emerald-500/50 transition-all hover:shadow-xl hover:shadow-emerald-500/5 flex flex-col h-full"
+      className="group bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl p-4 md:p-5 hover:border-brand-teal/40 dark:hover:border-brand-teal-light/40 transition-all hover:shadow-xl hover:shadow-brand-teal/5 flex flex-col h-full"
     >
       <div className="flex justify-between items-start mb-2 md:mb-3">
         {/* TODO: Replace this initial-based placeholder with actual service logos. */}
-        <div className="w-10 h-10 md:w-12 md:h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 text-lg md:text-xl font-bold">
+        <div className="w-10 h-10 md:w-12 md:h-12 bg-brand-teal/10 dark:bg-brand-teal-light/10 rounded-xl flex items-center justify-center text-brand-teal dark:text-brand-teal-light text-lg md:text-xl font-bold">
           {service.name[0]}
         </div>
         <div className="flex gap-1 md:gap-2">
           {service.hasAudit && (
             <div className="group/tip relative p-1.5 -m-1.5 md:p-0 md:m-0 cursor-help" tabIndex={0}>
-              <ShieldCheck className="w-4 h-4 md:w-5 md:h-5 text-emerald-500" />
+              <ShieldCheck className="w-4 h-4 md:w-5 md:h-5 text-brand-teal dark:text-brand-teal-light" />
               <span className="absolute bottom-full right-0 mb-2 px-2.5 py-1.5 bg-gray-900 text-white text-[10px] leading-relaxed rounded opacity-0 group-hover/tip:opacity-100 group-focus/tip:opacity-100 transition-opacity w-max max-w-[220px] text-left z-50 pointer-events-none shadow-xl">
                 {service.auditNotes || 'Audited'}
               </span>
@@ -485,7 +485,7 @@ function ServiceCard({ service, viewMode = 'grid' }: { service: MultiSigService,
           )}
           {service.openSourceStatus === 'Fully Open Source' && (
             <div className="group/tip relative p-1.5 -m-1.5 md:p-0 md:m-0 cursor-help" tabIndex={0}>
-              <Code className="w-4 h-4 md:w-5 md:h-5 text-blue-500" />
+              <Code className="w-4 h-4 md:w-5 md:h-5 text-directory-ink/60 dark:text-directory-ink-inverse/75" />
               <span className="absolute bottom-full right-0 mb-2 px-2.5 py-1.5 bg-gray-900 text-white text-[10px] leading-relaxed rounded opacity-0 group-hover/tip:opacity-100 group-focus/tip:opacity-100 transition-opacity w-max max-w-[220px] text-left z-50 pointer-events-none shadow-xl">
                 {service.openSourceNotes || 'Open Source'}
               </span>
@@ -495,11 +495,11 @@ function ServiceCard({ service, viewMode = 'grid' }: { service: MultiSigService,
       </div>
 
       <div className="mb-1.5 md:mb-2">
-        <span className="inline-block text-[10px] px-1.5 py-0.5 md:px-2 md:py-1 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 font-semibold uppercase tracking-wider">
+        <span className="inline-block text-[10px] px-1.5 py-0.5 md:px-2 md:py-1 rounded bg-seal-gold/10 text-seal-ink dark:text-seal-gold font-semibold uppercase tracking-wider">
           {service.listingType}
         </span>
       </div>
-      <h3 className="text-base md:text-lg font-bold mb-1.5 md:mb-2 group-hover:text-emerald-500 transition-colors">
+      <h3 className="text-base md:text-lg font-bold mb-1.5 md:mb-2 group-hover:text-brand-teal dark:group-hover:text-brand-teal-light transition-colors">
         {service.name}
       </h3>
       <p className="text-sm opacity-60 mb-4 flex-1 leading-relaxed">
@@ -507,10 +507,10 @@ function ServiceCard({ service, viewMode = 'grid' }: { service: MultiSigService,
       </p>
 
       <div className="flex flex-wrap gap-2 mb-4 mt-auto">
-        <span className="text-[10px] px-2 py-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">
+        <span className="text-[10px] px-2 py-1 rounded bg-brand-teal/10 dark:bg-brand-teal-light/10 text-brand-teal dark:text-brand-teal-light font-medium">
           {service.securityModel}
         </span>
-        <span className="text-[10px] px-2 py-1 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium">
+        <span className="text-[10px] px-2 py-1 rounded bg-black/5 dark:bg-white/10 text-directory-ink/70 dark:text-directory-ink-inverse/75 font-medium">
           {service.custodyModel}
         </span>
       </div>
@@ -528,7 +528,7 @@ function ServiceCard({ service, viewMode = 'grid' }: { service: MultiSigService,
             href={service.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 text-sm font-semibold text-emerald-500 hover:underline shrink-0"
+            className="flex items-center gap-1 text-sm font-semibold text-brand-teal dark:text-brand-teal-light hover:underline shrink-0"
           >
             Visit <ExternalLink className="w-3 h-3" />
           </a>
