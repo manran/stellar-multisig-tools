@@ -55,7 +55,8 @@ test('page identity precedes Proposal workflow progress', () => {
   const progressIndex = request.indexOf('<WorkflowProgress current={workflowStage}');
   assert.ok(headerIndex >= 0);
   assert.ok(progressIndex > headerIndex);
-  assert.match(request, /title="Proposal"/);
+  assert.match(request, /title=\{proposalDescription\?\.title \?\? 'Proposal'\}/);
+  assert.ok(request.indexOf('aria-label="Current proposal step"') > progressIndex);
 });
 
 
