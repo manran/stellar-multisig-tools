@@ -5,7 +5,7 @@ export function baseOptions(): BaseLayoutProps {
     nav: {
       title: (
         <span className="flex items-center gap-2">
-          <img src="/brand/mst-app-icon.svg" alt="" aria-hidden="true" className="h-6 w-6 shrink-0" />
+          <img src="/brand/mst-a3-app-icon.svg" alt="" aria-hidden="true" className="h-6 w-6 shrink-0" />
           <span>MultiSig Tools · Internal · Stellar</span>
         </span>
       ),

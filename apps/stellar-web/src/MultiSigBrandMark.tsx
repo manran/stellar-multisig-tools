@@ -5,7 +5,7 @@ interface Props {
 export default function MultiSigBrandMark({ className = 'h-9 w-14' }: Props) {
   return (
     <img
-      src="/brand/mst-primary.svg"
+      src="/brand/mst-a3-primary.svg"
       alt=""
       aria-hidden="true"
       className={`${className} shrink-0 object-contain`}

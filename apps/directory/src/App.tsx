@@ -136,7 +136,7 @@ export default function App() {
           <div className="flex justify-between items-center h-14 md:h-16">
             <div className="flex items-center gap-2">
               <img
-                src="/brand/mst-app-icon.svg"
+                src="/brand/mst-a3-app-icon.svg"
                 alt=""
                 aria-hidden="true"
                 className="h-8 w-8 shrink-0 rounded-xl md:h-9 md:w-9"
