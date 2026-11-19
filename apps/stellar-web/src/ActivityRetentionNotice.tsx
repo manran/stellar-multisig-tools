@@ -8,7 +8,7 @@ import { isWalletUserRejected } from './stellar/walletKit';
 interface Props {
   status: SigningRequestStatus;
   network: StellarNetwork;
-  onUnlocked: () => void | Promise<void>;
+  onUnlocked: (verifiedAddress: string) => void | Promise<void>;
 }
 
 export default function ActivityRetentionNotice({ status, network, onUnlocked }: Props) {
@@ -20,8 +20,9 @@ export default function ActivityRetentionNotice({ status, network, onUnlocked }:
   async function confirmAndSave() {
     setAttemptError('');
     try {
-      await unlock(undefined, network);
-      await onUnlocked();
+      const verifiedAddress = await unlock(undefined, network);
+      if (!verifiedAddress) return;
+      await onUnlocked(verifiedAddress);
     } catch (cause) {
       if (!isWalletUserRejected(cause)) {
         setAttemptError(cause instanceof Error ? cause.message : 'Unable to confirm this wallet for Activity.');

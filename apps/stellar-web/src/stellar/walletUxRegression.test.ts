@@ -27,7 +27,7 @@ test('wallet identity is event-driven with bounded focus/visibility reconciliati
 test('private confirmation uses the wallet-menu duration preference without a second chooser', () => {
   assert.doesNotMatch(privateWorkspaceUnlock, /UNLOCK_DURATION_OPTIONS|Remember this wallet for/);
   assert.match(privateWorkspaceUnlock, /getDefaultUnlockDuration\(localStorage\)/);
-  assert.match(privateWorkspaceUnlock, /await unlock\(unlockSeconds\)/);
+  assert.match(privateWorkspaceUnlock, /await unlock\(unlockSeconds, network\)/);
   assert.match(privateWorkspaceUnlock, /Confirm in wallet…/);
   assert.doesNotMatch(activityRetention, /unlock\(3600\)/);
   assert.match(activityRetention, /await unlock\(undefined, network\)/);

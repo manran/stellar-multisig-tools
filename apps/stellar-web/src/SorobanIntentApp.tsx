@@ -21,9 +21,11 @@ import type {
 } from '../../../packages/stellar-core/src/sorobanIntentApiTypes';
 import { inspectSorobanAuthorizationEntry, type SorobanInvocationInspection } from '../../../packages/stellar-core/src/sorobanInspection';
 import type { SorobanEffectsDiff, SorobanEffectsSnapshot } from '../../../packages/stellar-core/src/sorobanEffects';
+import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
 import { horizonTransactionUrl, isValidStellarAccountId } from '../../../packages/stellar-core/src/horizon';
 import { sorobanExecutionRoutes, type SorobanExecutionRoute } from '../../../packages/stellar-core/src/executionPolicy';
 import { sorobanAuthorizationStatusPresentation, sorobanIntentWorkflowStage } from './stellar/humanWorkflow';
+import { isWalletUserRejected } from './stellar/walletKit';
 import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
 import { writeReviewHandoff } from './stellar/reviewHandoff';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
@@ -37,7 +39,7 @@ interface ApiError {
 }
 
 class IntentApiError extends Error {
-  constructor(message: string, readonly code?: string, readonly details?: ApiError['details']) {
+  constructor(message: string, readonly code?: string, readonly details?: ApiError['details'], readonly status?: number) {
     super(message);
     this.name = 'IntentApiError';
   }
@@ -56,7 +58,7 @@ async function apiJson<T>(response: Response): Promise<T> {
   const body = await response.json() as T | ApiError;
   if (!response.ok) {
     const error = body as ApiError;
-    throw new IntentApiError(error.error || `MultiSigTools returned HTTP ${response.status}.`, error.code, error.details);
+    throw new IntentApiError(error.error || `MultiSigTools returned HTTP ${response.status}.`, error.code, error.details, response.status);
   }
   return body as T;
 }
@@ -86,9 +88,9 @@ function SimulationEffectsView({ effects }: { effects?: SorobanEffectsSnapshot }
 export default function SorobanIntentApp() {
   const intentId = useMemo(intentIdFromHash, []);
   const wallet = useStellarWallet();
-  const [intent, setIntent] = useState<StoredSorobanIntentSnapshot | null>(null);
-  const [authorization, setAuthorization] = useState<SorobanIntentAuthorizationSnapshot | null>(null);
-  const [evidence, setEvidence] = useState<SorobanIntentEvidenceEvent[]>([]);
+  const [loadedIntent, setIntent] = useState<StoredSorobanIntentSnapshot | null>(null);
+  const [loadedAuthorization, setAuthorization] = useState<SorobanIntentAuthorizationSnapshot | null>(null);
+  const [loadedEvidence, setEvidence] = useState<SorobanIntentEvidenceEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -101,8 +103,21 @@ export default function SorobanIntentApp() {
   const [executionCopied, setExecutionCopied] = useState(false);
   const [executionCheckMessage, setExecutionCheckMessage] = useState('');
   const initialLoadKey = useRef('');
+  const knownIntentNetwork = useRef<StellarNetwork | undefined>(undefined);
 
   const sessionAddress = wallet.privateUnlocked ? wallet.unlockedAddress : '';
+  const sessionNetwork = wallet.privateUnlocked ? wallet.unlockedNetwork : null;
+  // A new scope also invalidates responses from before a lock or access denial,
+  // even if the same address and network are confirmed again later.
+  const viewerRef = useRef({ address: sessionAddress, network: sessionNetwork });
+  if (viewerRef.current.address !== sessionAddress || viewerRef.current.network !== sessionNetwork) {
+    viewerRef.current = { address: sessionAddress, network: sessionNetwork };
+  }
+  const viewer = viewerRef.current;
+  const [loadedViewer, setLoadedViewer] = useState<typeof viewer | null>(null);
+  const intent = loadedViewer === viewer ? loadedIntent : null;
+  const authorization = loadedViewer === viewer ? loadedAuthorization : null;
+  const evidence = loadedViewer === viewer ? loadedEvidence : [];
   const invocationFacts = useMemo(() => {
     if (!authorization) return [];
     return authorization.authorizationEntriesXdr.flatMap((value, index) => {
@@ -132,8 +147,26 @@ export default function SorobanIntentApp() {
       : undefined;
   }, [evidence]);
 
-  async function loadIntent(address = sessionAddress, quiet = false) {
-    if (!intentId || !address) return;
+  function clearIntentView() {
+    viewerRef.current = { ...viewerRef.current };
+    setLoadedViewer(null);
+    setIntent(null);
+    setAuthorization(null);
+    setEvidence([]);
+    setExecutionSource('');
+    setExecutionDiff(null);
+    setPendingExecution(null);
+    setPendingExecutionRoute(null);
+    setExecutionCopied(false);
+    setExecutionCheckMessage('');
+    setCopied(false);
+    setLoading(false);
+    setBusy(false);
+  }
+
+  async function loadIntent(address = sessionAddress, quiet = false): Promise<boolean> {
+    const requestedViewer = viewerRef.current;
+    if (!intentId || !address || requestedViewer.address !== address || !requestedViewer.network) return false;
     if (!quiet) setLoading(true);
     if (!quiet) setError('');
     try {
@@ -145,30 +178,55 @@ export default function SorobanIntentApp() {
         },
       });
       const body = await apiJson<SorobanIntentResponse>(response);
+      if (viewerRef.current !== requestedViewer) return false;
+      if (body.intent.network !== requestedViewer.network) {
+        throw new Error(`Switch your wallet to ${body.intent.network === 'testnet' ? 'Testnet' : 'Mainnet'} to open this proposal.`);
+      }
+      knownIntentNetwork.current = body.intent.network;
+      setLoadedViewer(requestedViewer);
       setIntent(body.intent);
       setAuthorization(body.authorization);
       setEvidence(body.evidence ?? []);
       if (!quiet) { setExecutionDiff(null); setPendingExecution(null); setPendingExecutionRoute(null); setExecutionCopied(false); setExecutionCheckMessage(''); }
       if (!executionSource && isValidStellarAccountId(address)) setExecutionSource(address);
+      return true;
     } catch (cause) {
-      if (!quiet) setError(cause instanceof Error ? cause.message : 'Unable to load this Soroban Intent.');
+      if (viewerRef.current !== requestedViewer) return false;
+      const accessDenied = cause instanceof IntentApiError && (cause.status === 401 || cause.status === 403);
+      if (!quiet || accessDenied) {
+        clearIntentView();
+        initialLoadKey.current = '';
+        setError(cause instanceof Error ? cause.message : 'Unable to load this Soroban Intent.');
+      }
+      return false;
     } finally {
-      if (!quiet) setLoading(false);
+      if (!quiet && viewerRef.current === requestedViewer) setLoading(false);
     }
   }
 
-  async function confirmSigner() {
+  async function confirmSigner(chooseAnother = false) {
     setBusy(true);
     setError('');
     try {
-      if (!wallet.address) await wallet.connect();
-      const address = wallet.privateUnlocked && wallet.unlockedNetwork === intent?.network
-        ? wallet.unlockedAddress
-        : await wallet.unlock(undefined, intent?.network);
-      await loadIntent(address);
-      return address;
+      let selectedAddress = wallet.address;
+      if (chooseAnother) {
+        if (wallet.unlockedAddress && wallet.unlockedNetwork) await wallet.lock();
+        selectedAddress = await wallet.connect();
+      } else if (!selectedAddress) {
+        selectedAddress = await wallet.connect();
+      }
+      if (!selectedAddress) return '';
+      if (!chooseAnother && wallet.privateUnlocked
+        && (!knownIntentNetwork.current || wallet.unlockedNetwork === knownIntentNetwork.current)) {
+        return await loadIntent(wallet.unlockedAddress) ? wallet.unlockedAddress : '';
+      }
+      const address = await wallet.unlock(undefined, knownIntentNetwork.current);
+      if (address !== selectedAddress) throw new Error('The selected wallet changed during confirmation. Confirm the signer you want to use.');
+      // The verified-session effect loads after the wallet context has rendered.
+      // A proof alone must not continue an action against the previous snapshot.
+      return '';
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to confirm this signer wallet.');
+      if (!isWalletUserRejected(cause)) setError(cause instanceof Error ? cause.message : 'Unable to confirm this signer wallet.');
       return '';
     } finally {
       setBusy(false);
@@ -176,18 +234,27 @@ export default function SorobanIntentApp() {
   }
 
   useEffect(() => {
-    if (!intentId || !wallet.privateUnlocked || !wallet.unlockedAddress) return;
-    const key = `${intentId}:${wallet.unlockedAddress}`;
+    if (!intentId || !sessionAddress || !sessionNetwork) {
+      clearIntentView();
+      setError('');
+      initialLoadKey.current = '';
+      return;
+    }
+    const key = `${intentId}:${sessionNetwork}:${sessionAddress}`;
     if (initialLoadKey.current === key) return;
+    clearIntentView();
+    setError('');
     initialLoadKey.current = key;
-    void loadIntent(wallet.unlockedAddress);
-  }, [intentId, wallet.privateUnlocked, wallet.unlockedAddress]);
+    void loadIntent(sessionAddress);
+  }, [intentId, sessionAddress, sessionNetwork]);
 
   useEffect(() => {
-    if (!intent || !wallet.privateUnlocked || !wallet.unlockedAddress) return;
-    const timer = window.setInterval(() => void loadIntent(wallet.unlockedAddress, true), POLL_INTERVAL_MS);
+    if (!intent || !viewer.address || !viewer.network) return;
+    const timer = window.setInterval(() => {
+      if (viewerRef.current === viewer && document.visibilityState === 'visible') void loadIntent(viewer.address, true);
+    }, POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [intent?.id, wallet.privateUnlocked, wallet.unlockedAddress]);
+  }, [intent?.id, viewer]);
 
   const targetsForSigner = useMemo(() => {
     if (!authorization || !sessionAddress) return [];
@@ -198,13 +265,12 @@ export default function SorobanIntentApp() {
   }, [authorization, sessionAddress]);
 
   async function authorize() {
-    if (!intent || !authorization || busy) return;
+    const actingViewer = viewer;
+    if (!intent || !authorization || busy || loadedViewer !== actingViewer || viewerRef.current !== actingViewer || !actingViewer.address) return;
     setBusy(true);
     setError('');
     try {
-      let address = sessionAddress;
-      if (!address) address = await confirmSigner();
-      if (!address) return;
+      const address = actingViewer.address;
       let current = authorization;
       const targets = current.authorizers.filter((authorizer) =>
         !authorizer.ready
@@ -222,6 +288,7 @@ export default function SorobanIntentApp() {
           expirationLedger: target.expirationLedger,
         });
         const signed = await wallet.signAuthEntry(preimageXdr, intent.network);
+        if (viewerRef.current !== actingViewer) return;
         if (signed.signerAddress !== address) throw new Error('The selected wallet changed while authorization was being signed.');
         const response = await fetch('/api/intent', {
           method: 'PATCH',
@@ -233,13 +300,14 @@ export default function SorobanIntentApp() {
           body: JSON.stringify({ entryIndex: target.entryIndex, signatureBase64: signed.signatureBase64 }),
         });
         const body = await apiJson<SorobanIntentContributionResponse>(response);
+        if (viewerRef.current !== actingViewer) return;
         current = body.authorization;
       }
       setAuthorization(current);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to add Soroban authorization.');
+      if (viewerRef.current === actingViewer) setError(cause instanceof Error ? cause.message : 'Unable to add Soroban authorization.');
     } finally {
-      setBusy(false);
+      if (viewerRef.current === actingViewer) setBusy(false);
     }
   }
 
@@ -252,7 +320,8 @@ export default function SorobanIntentApp() {
   }
 
   async function cancelIntent() {
-    if (!intent || !authorization || busy || authorization.status === 'cancelled' || confirmedExecution) return;
+    const actingViewer = viewer;
+    if (!intent || !authorization || busy || loadedViewer !== actingViewer || viewerRef.current !== actingViewer || !actingViewer.address || authorization.status === 'cancelled' || confirmedExecution) return;
     const warning = pendingExecutionPreparation
       ? 'Cancel this Intent in MultiSigTools? A prepared transaction already exists. Cancellation stops further MultiSigTools coordination, but it cannot revoke detached AUTH or prepared XDR already disclosed outside MultiSigTools.'
       : 'Cancel this Intent in MultiSigTools? Cancellation stops further MultiSigTools coordination, but it cannot revoke detached AUTH already disclosed outside MultiSigTools.';
@@ -260,9 +329,7 @@ export default function SorobanIntentApp() {
     setBusy(true);
     setError('');
     try {
-      let address = sessionAddress;
-      if (!address) address = await confirmSigner();
-      if (!address) return;
+      const address = actingViewer.address;
       const response = await fetch('/api/intent', {
         method: 'PUT',
         headers: {
@@ -273,6 +340,7 @@ export default function SorobanIntentApp() {
         body: JSON.stringify({ action: 'cancel' }),
       });
       const body = await apiJson<SorobanIntentCancelResponse>(response);
+      if (viewerRef.current !== actingViewer) return;
       setIntent(body.intent);
       setAuthorization(body.authorization);
       setExecutionDiff(null);
@@ -281,21 +349,20 @@ export default function SorobanIntentApp() {
       setExecutionCopied(false);
       await loadIntent(address, true);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to cancel this Soroban Intent.');
+      if (viewerRef.current === actingViewer) setError(cause instanceof Error ? cause.message : 'Unable to cancel this Soroban Intent.');
     } finally {
-      setBusy(false);
+      if (viewerRef.current === actingViewer) setBusy(false);
     }
   }
 
   async function refreshAuthorization() {
+    const actingViewer = viewer;
     const refreshingChangedStructure = executionDiff?.requiresReauthorization === true;
-    if (!intent || !authorization || (authorization.status !== 'expired' && !refreshingChangedStructure) || busy) return;
+    if (!intent || !authorization || loadedViewer !== actingViewer || viewerRef.current !== actingViewer || !actingViewer.address || (authorization.status !== 'expired' && !refreshingChangedStructure) || busy) return;
     setBusy(true);
     setError('');
     try {
-      let address = sessionAddress;
-      if (!address) address = await confirmSigner();
-      if (!address) return;
+      const address = actingViewer.address;
       const response = await fetch('/api/intent', {
         method: 'PUT',
         headers: {
@@ -306,6 +373,7 @@ export default function SorobanIntentApp() {
         body: JSON.stringify({ action: 'replan' }),
       });
       const body = await apiJson<SorobanIntentReplanResponse>(response);
+      if (viewerRef.current !== actingViewer) return;
       setIntent(body.intent);
       setAuthorization(body.authorization);
       setExecutionDiff(null);
@@ -313,14 +381,14 @@ export default function SorobanIntentApp() {
       setPendingExecutionRoute(null);
       setExecutionCopied(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to refresh Soroban authorization.');
+      if (viewerRef.current === actingViewer) setError(cause instanceof Error ? cause.message : 'Unable to refresh Soroban authorization.');
     } finally {
-      setBusy(false);
+      if (viewerRef.current === actingViewer) setBusy(false);
     }
   }
 
   function continueToSigningRoom(body: SorobanIntentExecutionResponse, route: SorobanExecutionRoute = 'multisigtools') {
-    if (!intent) return;
+    if (!intent || loadedViewer !== viewerRef.current) return;
     writeReviewHandoff(sessionStorage, {
       xdr: body.execution.xdr,
       network: intent.network,
@@ -344,7 +412,8 @@ export default function SorobanIntentApp() {
     acceptedEffectsDigest?: string,
     sourceOverride?: string,
   ) {
-    if (!intent || !authorization || authorization.status !== 'authorization_ready' || busy) return;
+    const actingViewer = viewer;
+    if (!intent || !authorization || loadedViewer !== actingViewer || viewerRef.current !== actingViewer || !actingViewer.address || authorization.status !== 'authorization_ready' || busy) return;
     const source = sourceOverride ?? (route === 'current_client' && isValidStellarAccountId(sessionAddress) ? sessionAddress : executionSource);
     if (!isValidStellarAccountId(source)) {
       setError('Enter a valid Stellar G... account to provide the final transaction sequence and fee.');
@@ -355,9 +424,7 @@ export default function SorobanIntentApp() {
     setBusy(true);
     setError('');
     try {
-      let address = sessionAddress;
-      if (!address) address = await confirmSigner();
-      if (!address) return;
+      const address = actingViewer.address;
       const response = await fetch('/api/intent', {
         method: 'PUT',
         headers: {
@@ -368,6 +435,7 @@ export default function SorobanIntentApp() {
         body: JSON.stringify({ executionSource: source, ...(acceptedEffectsDigest ? { acceptedEffectsDigest } : {}) }),
       });
       const body = await apiJson<SorobanIntentExecutionResponse>(response);
+      if (viewerRef.current !== actingViewer) return;
       setExecutionDiff(body.execution.effectsDiff);
       if (acceptedEffectsDigest || body.execution.effectsDiff.kind === 'unchanged') {
         if (route === 'handoff') {
@@ -378,33 +446,33 @@ export default function SorobanIntentApp() {
         return;
       }
       setPendingExecution(body);
-      setBusy(false);
     } catch (cause) {
+      if (viewerRef.current !== actingViewer) return;
       if (cause instanceof IntentApiError && (cause.code === 'intent_execution_effects_review_required' || cause.code === 'intent_execution_effects_reauthorization_required')) {
         const diff = cause.details?.effectsDiff;
         if (diff) setExecutionDiff(diff);
         setPendingExecution(null);
       }
       setError(cause instanceof Error ? cause.message : 'Unable to prepare the final transaction.');
-      setBusy(false);
+    } finally {
+      if (viewerRef.current === actingViewer) setBusy(false);
     }
   }
 
   async function copyPreparedExecution() {
-    if (!pendingExecution) return;
+    if (!pendingExecution || loadedViewer !== viewerRef.current) return;
     await navigator.clipboard.writeText(pendingExecution.execution.xdr);
     setExecutionCopied(true);
   }
 
   async function reconcileExecution(transactionHash: string) {
-    if (!intent || busy) return;
+    const actingViewer = viewer;
+    if (!intent || busy || loadedViewer !== actingViewer || viewerRef.current !== actingViewer || !actingViewer.address) return;
     setBusy(true);
     setError('');
     setExecutionCheckMessage('');
     try {
-      let address = sessionAddress;
-      if (!address) address = await confirmSigner();
-      if (!address) return;
+      const address = actingViewer.address;
       const response = await fetch('/api/intent', {
         method: 'PUT',
         headers: {
@@ -415,18 +483,19 @@ export default function SorobanIntentApp() {
         body: JSON.stringify({ action: 'reconcile_execution', transactionHash }),
       });
       const body = await apiJson<SorobanIntentExecutionReconciliationResponse>(response);
+      if (viewerRef.current !== actingViewer) return;
       if (!body.observed) {
         setExecutionCheckMessage('This prepared transaction has not been observed on Stellar yet.');
         return;
       }
-      await loadIntent(address, true);
+      if (!await loadIntent(address, true) || viewerRef.current !== actingViewer) return;
       setExecutionCheckMessage(body.observation?.successful
         ? `Confirmed in ledger ${body.observation.ledger.toLocaleString()}.`
         : `Observed in ledger ${body.observation?.ledger.toLocaleString() ?? 'unknown'}, but execution failed.`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to check this prepared transaction on Stellar.');
+      if (viewerRef.current === actingViewer) setError(cause instanceof Error ? cause.message : 'Unable to check this prepared transaction on Stellar.');
     } finally {
-      setBusy(false);
+      if (viewerRef.current === actingViewer) setBusy(false);
     }
   }
 
@@ -434,14 +503,14 @@ export default function SorobanIntentApp() {
     return <StellarWorkspaceShell active="inbox"><main className="mx-auto max-w-2xl px-4 py-14"><h1 className="text-3xl font-bold">Contract authorization</h1><p className="mt-3 text-neutral-600 dark:text-neutral-300">Open a valid Soroban Intent link.</p><a href={stellarHref('/inbox')} className="mt-6 inline-flex font-semibold text-emerald-700 dark:text-emerald-300">Back to Inbox</a></main></StellarWorkspaceShell>;
   }
 
-  if (!wallet.privateUnlocked && !intent) {
+  if (!sessionAddress || !sessionNetwork) {
     return (
       <StellarWorkspaceShell active="inbox">
         <main className="mx-auto max-w-2xl px-4 py-14">
           <WorkflowProgress current="review" />
           <h1 className="mt-6 text-3xl font-bold">Contract authorization</h1>
           <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-300">This link carries only an Intent id. Confirm a Stellar wallet so MultiSig Tools can verify that you created the Intent or are a current signer for its authorization.</p>
-          <ActionButton className="mt-6" disabled={busy || wallet.authBusy} onClick={() => void confirmSigner()}><KeyRound className="h-4 w-4" />{busy || wallet.authBusy ? 'Confirming…' : 'Confirm signer wallet'}</ActionButton>
+          <ActionButton className="mt-6" disabled={busy || wallet.busy || wallet.authBusy} onClick={() => void confirmSigner()}><KeyRound className="h-4 w-4" />{busy || wallet.busy || wallet.authBusy ? 'Confirming…' : 'Confirm signer wallet'}</ActionButton>
           {error && <div className="mt-5 rounded-xl border border-red-500/25 bg-red-500/[0.08] p-4 text-sm">{error}</div>}
         </main>
       </StellarWorkspaceShell>
@@ -453,7 +522,7 @@ export default function SorobanIntentApp() {
   }
 
   if (!intent || !authorization) {
-    return <StellarWorkspaceShell active="inbox"><main className="mx-auto max-w-2xl px-4 py-14"><h1 className="text-3xl font-bold">Intent unavailable</h1><p className="mt-3 text-neutral-600 dark:text-neutral-300">{error || 'This Soroban Intent could not be opened.'}</p><ActionButton className="mt-5" variant="secondary" onClick={() => void confirmSigner()}>Try another signer</ActionButton></main></StellarWorkspaceShell>;
+    return <StellarWorkspaceShell active="inbox"><main className="mx-auto max-w-2xl px-4 py-14"><h1 className="text-3xl font-bold">Intent unavailable</h1><p className="mt-3 text-neutral-600 dark:text-neutral-300">{error || 'This Soroban Intent could not be opened.'}</p><div className="mt-5 flex flex-wrap gap-3"><ActionButton disabled={loading || busy || wallet.busy || wallet.authBusy} onClick={() => void loadIntent(sessionAddress)}>Try again</ActionButton><ActionButton variant="secondary" disabled={busy || wallet.busy || wallet.authBusy} onClick={() => void confirmSigner(true)}>{busy || wallet.busy || wallet.authBusy ? 'Choosing signer…' : 'Choose another signer'}</ActionButton></div></main></StellarWorkspaceShell>;
   }
 
   const status = sorobanAuthorizationStatusPresentation(authorization.status);
@@ -507,7 +576,7 @@ export default function SorobanIntentApp() {
             <section className="mst-intent-authorization-section">
               <h2 className="text-xl font-bold">Required authorization</h2>
               <div className="mst-intent-authorizer-list">{authorization.authorizers.map((authorizer) => <div key={authorizer.entryIndex} className="mst-intent-authorizer-row"><div className="flex flex-wrap items-center justify-between gap-2"><div className="font-semibold">{compactAddress(authorizer.authorizer)}</div><div className={authorizer.ready ? 'font-semibold text-emerald-700 dark:text-emerald-300' : 'font-semibold text-neutral-500'}>{authorizer.threshold === 0 ? (authorizer.ready ? 'Signature present' : 'Signature required') : `${authorizer.signedWeight} / ${authorizer.threshold} approval power`}</div></div><div className="mt-2 flex flex-wrap gap-2">{authorizer.signerEvidence.length ? authorizer.signerEvidence.map((signer) => <span key={signer.publicKey} className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:text-emerald-300">{compactAddress(signer.publicKey)} · +{signer.weight}</span>) : <span className="text-xs text-neutral-500">Waiting for signer authorization.</span>}</div></div>)}</div>
-              {authorization.status === 'awaiting_authorization' && <div className="mst-intent-action-context mt-5"><div className="text-sm font-semibold">Your action</div><p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Selected verified wallet: {sessionAddress ? compactAddress(sessionAddress) : 'none'}.</p><div className="mt-3 flex flex-wrap gap-2">{targetsForSigner.length > 0 && wallet.networkSource !== 'application' && <ActionButton disabled={busy} onClick={() => void authorize()}><KeyRound className="h-4 w-4" />{busy ? 'Authorizing…' : 'Authorize contract Intent'}</ActionButton>}<ActionButton variant="secondary" disabled={busy || wallet.busy} onClick={() => void confirmSigner()}>{sessionAddress ? 'Choose another signer' : 'Choose signer'}</ActionButton></div>{targetsForSigner.length === 0 && sessionAddress && <p className="mt-2 text-xs text-neutral-500">This wallet has no remaining AUTH contribution. Share the Intent link with another current signer.</p>}{targetsForSigner.length > 0 && wallet.networkSource === 'application' && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">Ledger and Trezor can sign the final transaction envelope but not detached Soroban AUTH entries. Choose another current signer for this step.</p>}</div>}
+              {authorization.status === 'awaiting_authorization' && <div className="mst-intent-action-context mt-5"><div className="text-sm font-semibold">Your action</div><p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Selected verified wallet: {sessionAddress ? compactAddress(sessionAddress) : 'none'}.</p><div className="mt-3 flex flex-wrap gap-2">{targetsForSigner.length > 0 && wallet.networkSource !== 'application' && <ActionButton disabled={busy} onClick={() => void authorize()}><KeyRound className="h-4 w-4" />{busy ? 'Authorizing…' : 'Authorize contract Intent'}</ActionButton>}<ActionButton variant="secondary" disabled={busy || wallet.busy || wallet.authBusy} onClick={() => void confirmSigner(true)}>{sessionAddress ? 'Choose another signer' : 'Choose signer'}</ActionButton></div>{targetsForSigner.length === 0 && sessionAddress && <p className="mt-2 text-xs text-neutral-500">This wallet has no remaining AUTH contribution. Share the Intent link with another current signer.</p>}{targetsForSigner.length > 0 && wallet.networkSource === 'application' && <p className="mt-2 text-xs text-[var(--color-ink-2)]">Ledger and Trezor can sign the final transaction envelope but not detached Soroban AUTH entries. Choose another current signer for this step.</p>}</div>}
             </section>
 
             {!confirmedExecution && authorization.status === 'authorization_ready' && Boolean(intent.integration) && <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] p-5 sm:p-6"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div><h2 className="text-xl font-bold">Authorization complete</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">AUTH collection is complete. {intent.integration.serviceLabel ?? intent.integration.serviceId} owns final execution for this Intent. MultiSigTools will not let a signer replace that execution boundary.</p>{intent.executionPolicy?.executor ? <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Executor account <span className="font-mono">{intent.executionPolicy.executor.address}</span></p> : <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">The executor account is not bound yet. The Service may bind one when preparing execution{intent.executionPolicy?.fallback === 'multisigtools_managed' ? ', otherwise configured MultiSigTools managed execution is used' : ''}.</p>}</div></div></section>}

@@ -102,7 +102,10 @@ html.stellar-ui [data-stellar-network="public"] {
   --color-accent: #075e59;
   --color-accent-hover: #043c39;
   --color-accent-ink: #ffffff;
-  --color-focus: #d8a23a;
+  --color-focus: var(--color-mainnet-focus);
+  --color-action: var(--color-accent);
+  --color-action-hover: var(--color-accent-hover);
+  --color-action-ink: var(--color-accent-ink);
 
   --color-emerald-50: #eff8f7;
   --color-emerald-100: #d7eeeb;
@@ -133,12 +136,19 @@ html.stellar-ui [data-stellar-network="public"] {
   --color-accent: #78c9c0;
   --color-accent-hover: #aee0da;
   --color-accent-ink: #021f1d;
-  --color-focus: #d8a23a;
+  --color-focus: var(--color-mainnet-focus);
 }
 
 html.stellar-ui [data-stellar-network="public"] .mst-brand__accent,
 html.stellar-ui [data-stellar-network="public"] .mst-kicker {
-  color: #d8a23a;
+  color: var(--color-brand-wordmark-accent);
+}
+
+html.stellar-ui [data-stellar-network="testnet"] {
+  --color-action: var(--color-info);
+  --color-action-hover: var(--color-info-hover);
+  --color-action-ink: var(--color-info-ink);
+  --color-focus: var(--color-info);
 }
 
 html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textarea, select, [role="button"]) {
@@ -1062,17 +1072,20 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
   }
 }
 
-@media (max-width: 22rem) {
-  .mst-header__inner {
-    width: calc(100% - 1rem);
-  }
-
+/* When Testnet and Sign in share the header, keep the badge and wallet control readable. */
+@media (max-width: 28rem) {
   .mst-header .mst-brand__name {
     display: none;
   }
 
   .mst-header .mst-brand {
     gap: 0;
+  }
+}
+
+@media (max-width: 22rem) {
+  .mst-header__inner {
+    width: calc(100% - 1rem);
   }
 }
 

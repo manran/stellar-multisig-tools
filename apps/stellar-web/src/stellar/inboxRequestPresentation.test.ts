@@ -121,6 +121,7 @@ test('Proposal presents the next task without claiming an unauthorized wallet ca
     heading: 'Next step',
     title: 'Review this transaction',
     detail: 'Check the affected accounts, recipients, and changes before continuing to signatures.',
+    action: { label: 'Review transaction', target: 'review' },
   });
   const waiting = proposalNextStep('awaiting_signatures', { ...options, reviewComplete: true });
   assert.equal(waiting.title, 'Collect the required signatures');
@@ -128,6 +129,8 @@ test('Proposal presents the next task without claiming an unauthorized wallet ca
   const signed = proposalNextStep('awaiting_signatures', { ...options, reviewComplete: true, walletAlreadySigned: true });
   assert.equal(signed.heading, 'Current status');
   assert.equal(signed.title, 'Your signature is recorded');
+  assert.equal(signed.action.target, 'signatures');
+  assert.match(signed.detail, /has not been submitted/);
 });
 
 test('Proposal distinguishes self-managed, external and unchosen execution', () => {
@@ -137,6 +140,7 @@ test('Proposal distinguishes self-managed, external and unchosen execution', () 
   const external = proposalNextStep('ready', { ...options, executionMode: 'external', executionRoutedToMst: true });
   assert.equal(external.heading, 'Current status');
   assert.equal(external.title, 'Waiting for the originating service');
+  assert.equal(external.action.target, 'submission');
 });
 
 test('Proposal terminal and blocked statuses take precedence over the review step', () => {
@@ -146,4 +150,15 @@ test('Proposal terminal and blocked statuses take precedence over the review ste
   assert.equal(proposalNextStep('blocked', options).title, 'This proposal needs review');
   assert.equal(proposalNextStep('stale', options).heading, 'Current status');
   assert.equal(proposalNextStep('expired', options).title, 'This proposal has expired');
+});
+
+test('Proposal expiry distinguishes the collaboration window from the Stellar time limit', () => {
+  const options = { reviewComplete: true, walletAlreadySigned: true, executionRoutedToMst: true };
+  const closed = proposalNextStep('expired', { ...options, statusReason: 'request_expired' });
+  assert.match(closed.detail, /exported transaction may still be valid/);
+  assert.match(closed.detail, /Check its network record/);
+  assert.equal(closed.action.target, 'issue');
+  const expiredTransaction = proposalNextStep('expired', { ...options, statusReason: 'transaction_expired' });
+  assert.match(expiredTransaction.detail, /Stellar transaction time limit has passed/);
+  assert.doesNotMatch(expiredTransaction.detail, /may still be valid/);
 });

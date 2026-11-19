@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   },
   description: 'Private engineering and operations documentation for MultiSig Tools.',
   icons: {
-    icon: '/brand/mst-favicon.svg',
+    icon: '/brand/mst-a3-favicon-16.svg',
   },
   robots: {
     index: false,

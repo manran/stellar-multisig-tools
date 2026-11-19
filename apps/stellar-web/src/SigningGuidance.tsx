@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, CircleAlert, LoaderCircle, Mail, Share2, WalletCards, X } from 'lucide-react';
 import AddressAliasEditor from './AddressAliasEditor';
 import AddressIdentity from './AddressIdentity';
+import { ActionButton } from './MultiSigUi';
 import { useAddressBook } from './AddressBookContext';
 import { useStellarWallet } from './StellarWalletContext';
 import { cachedTreasuryNames, loadSharedTreasuryNames } from './treasuryMetadataCache';
@@ -277,26 +278,28 @@ export default function SigningGuidance({
         )}
         {viewedBadge}
         {onAsk && (!assigned || canRepairInitialEmail) && (
-          <button
-            type="button"
+          <ActionButton
+            variant="secondary"
+            size="sm"
             disabled={askBusy === signerAddress}
             onClick={() => void askSigner(signerAddress)}
-            className="shrink-0 whitespace-nowrap rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-500/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 active:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-300"
+            className="min-h-11 shrink-0"
           >
             {askBusy === signerAddress
               ? assigned ? 'Notifying…' : 'Asking…'
               : assigned ? 'Notify by email' : askLabel}
-          </button>
+          </ActionButton>
         )}
         {onRemind && (canRemind || canRetryFailed) && (
-          <button
-            type="button"
+          <ActionButton
+            variant="secondary"
+            size="sm"
             disabled={askBusy === signerAddress}
             onClick={() => void remindSigner(signerAddress)}
-            className="shrink-0 whitespace-nowrap rounded-lg border border-black/10 px-2.5 py-1.5 text-xs font-semibold hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/10"
+            className="min-h-11 shrink-0"
           >
             {askBusy === signerAddress ? 'Sending…' : canRetryFailed ? 'Retry email' : 'Remind'}
-          </button>
+          </ActionButton>
         )}
         {askError?.address === signerAddress && <span className="basis-full text-xs text-red-600 dark:text-red-400">{askError.message}</span>}
       </div>
@@ -361,13 +364,13 @@ export default function SigningGuidance({
             <p className="mt-1 leading-6 opacity-65">Submit this transaction or save a private link if others need access to it.</p>
           </div>
           {shareLink ? (
-            <button type="button" onClick={() => void copyShareLink()} className="mt-3 flex shrink-0 items-center gap-2 rounded-xl border border-emerald-500/30 bg-white px-4 py-2.5 font-semibold text-emerald-700 hover:bg-emerald-500/5 dark:bg-black/10 dark:text-emerald-300 sm:mt-0">
+            <ActionButton variant="secondary" onClick={() => void copyShareLink()} className="mt-3 shrink-0 sm:mt-0">
               <Share2 className="h-4 w-4" />{shareCopied ? 'Copied' : 'Copy private link'}
-            </button>
+            </ActionButton>
           ) : (
-            <button type="button" disabled={shareBusy} onClick={invokeShare} className="mt-3 flex shrink-0 items-center gap-2 rounded-xl border border-emerald-500/30 bg-white px-4 py-2.5 font-semibold text-emerald-700 hover:bg-emerald-500/5 disabled:opacity-50 dark:bg-black/10 dark:text-emerald-300 sm:mt-0">
+            <ActionButton variant="secondary" disabled={shareBusy} onClick={invokeShare} className="mt-3 shrink-0 sm:mt-0">
               {shareBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}Save private link
-            </button>
+            </ActionButton>
           )}
         </div>
       )}
@@ -486,25 +489,25 @@ export default function SigningGuidance({
             <div className={`mst-signing-action-grid mt-4 ${shouldShowShare && onShare ? 'mst-signing-action-grid--split' : ''}`}>
               {walletAddress ? (
                 walletCanSign || walletAlreadySigned ? (
-                  <button type="button" disabled={!walletCanSign || walletBusy} onClick={onSignWithWallet} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100 dark:disabled:bg-white/10 dark:disabled:text-neutral-500">
-                    <WalletCards className="h-4 w-4" />{walletBusy ? 'Signing…' : walletAlreadySigned ? 'Signed' : 'Sign'}
-                  </button>
+                  <ActionButton variant={walletAlreadySigned ? 'secondary' : 'primary'} disabled={!walletCanSign || walletBusy} aria-busy={walletBusy} onClick={onSignWithWallet} className="min-h-12 w-full px-4">
+                    {walletAlreadySigned ? <CheckCircle2 className="h-4 w-4" /> : <WalletCards className="h-4 w-4" />}{walletBusy ? 'Signing…' : walletAlreadySigned ? 'Signed' : 'Sign'}
+                  </ActionButton>
                 ) : (
-                  <button type="button" disabled={walletBusy} onClick={onConnectWallet} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-neutral-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900">
+                  <ActionButton variant="secondary" disabled={walletBusy} aria-busy={walletBusy} onClick={onConnectWallet} className="min-h-12 w-full px-4">
                     <WalletCards className="h-4 w-4" />{walletBusy ? 'Opening wallets…' : 'Choose an authorized signer'}
-                  </button>
+                  </ActionButton>
                 )
               ) : (
-                <button type="button" disabled={walletBusy} onClick={onConnectWallet} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50">
+                <ActionButton disabled={walletBusy} aria-busy={walletBusy} onClick={onConnectWallet} className="min-h-12 w-full px-4">
                   <WalletCards className="h-4 w-4" />{walletBusy ? 'Opening wallets…' : 'Connect signer'}
-                </button>
+                </ActionButton>
               )}
 
               {shouldShowShare && onShare && (
-                <button type="button" disabled={shareBusy} onClick={invokeShare} className="flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-black/10 px-4 py-3 text-sm font-semibold text-neutral-700 hover:bg-black/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 active:bg-black/[0.06] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:text-neutral-200 dark:hover:bg-white/[0.04] dark:active:bg-white/[0.08]">
+                <ActionButton variant="secondary" disabled={shareBusy} aria-busy={shareBusy} onClick={invokeShare} className="min-h-12 w-full px-4">
                   {shareBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
                   Share private link
-                </button>
+                </ActionButton>
               )}
             </div>
 
@@ -527,20 +530,20 @@ export default function SigningGuidance({
                   {shareBusy ? 'You can stay on this transaction while we prepare the link.' : shareError ? shareError : 'Send it only to the signer you want to review and sign this transaction.'}
                 </p>
               </div>
-              {!shareBusy && <button type="button" onClick={() => setShareModalOpen(false)} className="rounded-lg p-1.5 text-neutral-500 hover:bg-black/5 dark:hover:bg-white/10" aria-label="Close"><X className="h-5 w-5" /></button>}
+              {!shareBusy && <button type="button" onClick={() => setShareModalOpen(false)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-paper-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]" aria-label="Close"><X className="h-5 w-5" /></button>}
             </div>
 
             {shareBusy ? (
               <div className="mst-share-dialog__state mt-7"><LoaderCircle className="h-5 w-5 animate-spin" />Preparing…</div>
             ) : shareError ? (
               <div className="mt-6 flex gap-2">
-                <button type="button" onClick={() => void createShareLink()} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white">Try again</button>
-                <button type="button" onClick={() => setShareModalOpen(false)} className="rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold dark:border-white/10">Close</button>
+                <ActionButton onClick={() => void createShareLink()}>Try again</ActionButton>
+                <ActionButton variant="secondary" onClick={() => setShareModalOpen(false)}>Close</ActionButton>
               </div>
             ) : (
               <div className="mt-6 flex flex-wrap gap-2">
-                <button type="button" onClick={() => void copyShareLink()} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white"><Share2 className="h-4 w-4" />{shareCopied ? 'Copied' : 'Copy private link'}</button>
-                <button type="button" onClick={() => setShareModalOpen(false)} className="rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold dark:border-white/10">Done</button>
+                <ActionButton onClick={() => void copyShareLink()}><Share2 className="h-4 w-4" />{shareCopied ? 'Copied' : 'Copy private link'}</ActionButton>
+                <ActionButton variant="secondary" onClick={() => setShareModalOpen(false)}>Done</ActionButton>
               </div>
             )}
           </div>

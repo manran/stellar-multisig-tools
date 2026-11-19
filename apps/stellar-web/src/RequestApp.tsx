@@ -80,6 +80,7 @@ interface ParsedRequestLocator {
 interface RequestNavigationState {
   requestPreview?: SigningRequestSnapshot;
   requestJustCreated?: boolean;
+  requestReviewedByAddress?: string;
   requestActivityBound?: boolean;
   returnTo?: string;
   returnLabel?: string;
@@ -177,28 +178,31 @@ function requestNavigationState(requestId: string): {
   returnTarget: { href: string; label: string } | null;
   justCreated: boolean;
   activityBound: boolean;
+  reviewedByAddress: string;
 } {
   const state = window.history.state as RequestNavigationState | null;
   if (!isCurrentWorkspaceNavigationState(state)) {
-    return { preview: null, returnTarget: null, justCreated: false, activityBound: false };
+    return { preview: null, returnTarget: null, justCreated: false, activityBound: false, reviewedByAddress: '' };
   }
   const preview = state?.requestPreview?.id === requestId ? state.requestPreview : null;
+  const reviewedByAddress = typeof state?.requestReviewedByAddress === 'string' ? state.requestReviewedByAddress : '';
   if (!state?.returnTo) {
-    return { preview, returnTarget: null, justCreated: Boolean(state?.requestJustCreated), activityBound: Boolean(state?.requestActivityBound) };
+    return { preview, returnTarget: null, justCreated: Boolean(state?.requestJustCreated), activityBound: Boolean(state?.requestActivityBound), reviewedByAddress };
   }
   try {
     const target = new URL(state.returnTo);
     if (target.origin !== window.location.origin) {
-      return { preview, returnTarget: null, justCreated: Boolean(state?.requestJustCreated), activityBound: Boolean(state?.requestActivityBound) };
+      return { preview, returnTarget: null, justCreated: Boolean(state?.requestJustCreated), activityBound: Boolean(state?.requestActivityBound), reviewedByAddress };
     }
     return {
       preview,
       returnTarget: { href: target.toString(), label: state.returnLabel?.trim() || 'Back' },
       justCreated: Boolean(state.requestJustCreated),
       activityBound: Boolean(state.requestActivityBound),
+      reviewedByAddress,
     };
   } catch {
-    return { preview, returnTarget: null, justCreated: Boolean(state?.requestJustCreated), activityBound: Boolean(state?.requestActivityBound) };
+    return { preview, returnTarget: null, justCreated: Boolean(state?.requestJustCreated), activityBound: Boolean(state?.requestActivityBound), reviewedByAddress };
   }
 }
 
@@ -208,7 +212,11 @@ export default function RequestApp() {
   const navigation = useMemo(() => requestNavigationState(initialRequest.id), []);
   const returnTarget = useMemo(() => navigation.returnTarget ?? sameOriginReturnTarget(), [navigation]);
   const initialPreview = navigation.preview;
-  const didStart = useRef(false);
+  const activeLoad = useRef<AbortController | null>(null);
+  const activePoll = useRef<AbortController | null>(null);
+  const snapshotRevision = useRef(0);
+  const accessScopeRef = useRef({});
+  const accessScope = accessScopeRef.current;
   const [requestLocator, setRequestLocator] = useState(initialLocator);
   const [capability, setCapability] = useState(initialRequest.capability);
   const [shareable, setShareable] = useState(Boolean(initialRequest.capability));
@@ -217,7 +225,7 @@ export default function RequestApp() {
   const [assignmentApiAvailable, setAssignmentApiAvailable] = useState(false);
   const [assignments, setAssignments] = useState<SigningRequestAssignment[]>([]);
   const [notifications, setNotifications] = useState<SigningRequestNotificationSummary[]>([]);
-  const [snapshot, setSnapshot] = useState<SigningRequestSnapshot | null>(initialPreview);
+  const [storedSnapshot, setSnapshot] = useState<SigningRequestSnapshot | null>(initialPreview);
   const [privateNote, setPrivateNote] = useState<PrivateNoteRevision | null>(null);
   const [privateCommitment, setPrivateCommitment] = useState<PrivateCommitmentRecord | null>(null);
   const [inspection, setInspection] = useState<TransactionXdrInspection | null>(() =>
@@ -244,6 +252,8 @@ export default function RequestApp() {
   const [contributionMessage, setContributionMessage] = useState('');
   const [contributionGrantExpiresAt, setContributionGrantExpiresAt] = useState<number | null>(null);
   const [copied, setCopied] = useState<'link' | 'xdr' | null>(null);
+  const [focusSection, setFocusSection] = useState<'review' | 'signatures' | 'submission' | 'issue' | null>(null);
+  const [pendingRetention, setPendingRetention] = useState<{ id: string; address: string } | null>(null);
   const {
     address: walletAddress,
     network: walletNetwork,
@@ -254,7 +264,20 @@ export default function RequestApp() {
     sign: signWithWallet,
     privateUnlocked,
     unlock,
+    lock,
   } = useStellarWallet();
+
+  const viewerRef = useRef({ address: walletAddress, network: walletNetwork, unlocked: privateUnlocked });
+  if (viewerRef.current.address !== walletAddress || viewerRef.current.network !== walletNetwork || viewerRef.current.unlocked !== privateUnlocked) {
+    viewerRef.current = { address: walletAddress, network: walletNetwork, unlocked: privateUnlocked };
+  }
+  const viewer = viewerRef.current;
+  const [loadedViewer, setLoadedViewer] = useState<typeof viewer | null>(null);
+  const snapshot = loadedViewer === viewer && (capability || privateUnlocked) ? storedSnapshot : null;
+
+  function isCurrentView() {
+    return viewerRef.current === viewer && accessScopeRef.current === accessScope;
+  }
 
   const authorization = useMemo(() => {
     if (!snapshot || !inspection) return null;
@@ -281,6 +304,7 @@ export default function RequestApp() {
     walletAlreadySigned,
     executionMode: snapshot.execution?.mode,
     executionRoutedToMst: executionAlreadyRoutedToMst,
+    statusReason: snapshot.statusReason,
   }) : null;
   const requestNetwork = snapshot?.network ?? closedCapability?.network ?? null;
   const walletNetworkMismatch = Boolean(
@@ -311,11 +335,20 @@ export default function RequestApp() {
   );
 
   async function applySnapshot(next: SigningRequestSnapshot) {
+    if (!isCurrentView()) return false;
+    const revision = ++snapshotRevision.current;
     const parsed = inspectTransactionXdr(next.mergedXdr, next.network);
     const sameRequest = snapshot?.id === next.id;
+    const reviewedAtCreation = navigation.justCreated && viewer.unlocked
+      && navigation.reviewedByAddress === viewer.address
+      && viewer.network === next.network
+      && initialPreview?.transactionHash === next.transactionHash
+      && initialPreview.network === next.network;
     if (next.status !== 'awaiting_signatures') setReviewComplete(true);
-    else if (!sameRequest) setReviewComplete(false);
+    else if (!sameRequest) setReviewComplete(reviewedAtCreation);
+    if (next.status !== 'awaiting_signatures' || !sameRequest) setContributionMessage('');
     setSnapshot(next);
+    setLoadedViewer(viewer);
     setInspection(parsed);
     if (!sameRequest) setSourceAnalyses([]);
     window.history.replaceState({
@@ -323,10 +356,19 @@ export default function RequestApp() {
       requestPreview: next,
     }, '');
     const analyses = await loadTransactionSourceAnalyses(parsed, next.network);
+    if (!isCurrentView() || snapshotRevision.current !== revision) return false;
     setSourceAnalyses(analyses);
+    return true;
   }
 
-  function clearPrivateRequestView() {
+  function clearPrivateRequestView(invalidateAccess = true) {
+    if (invalidateAccess) {
+      accessScopeRef.current = {};
+      activeLoad.current?.abort();
+    }
+    snapshotRevision.current += 1;
+    activePoll.current?.abort();
+    setLoading(false);
     setSnapshot(null);
     setInspection(null);
     setPrivateNote(null);
@@ -350,6 +392,7 @@ export default function RequestApp() {
   }
 
   async function load(locatorValue = requestLocator) {
+    activeLoad.current?.abort();
     const locator = parseRequestLocator(locatorValue);
     if (!locator.id) return;
     if (snapshot?.id && snapshot.id !== locator.id) setContributionGrantExpiresAt(null);
@@ -373,11 +416,15 @@ export default function RequestApp() {
     setClosedCapability(null);
     setError('');
     setContributionMessage('');
+    const controller = new AbortController();
+    activeLoad.current = controller;
     try {
       const body = await apiJson<CreateSigningRequestResponse>(await fetch('/api/request', {
         cache: 'no-store',
         headers: requestHeaders(locator.id, locator.capability, walletAddress),
+        signal: controller.signal,
       }));
+      if (controller.signal.aborted || !isCurrentView()) return;
       if (
         locator.capability
         && body.access?.activityBound
@@ -386,7 +433,7 @@ export default function RequestApp() {
         navigateWorkspace('/activity');
         return;
       }
-      await applySnapshot(body.request);
+      if (!await applySnapshot(body.request) || controller.signal.aborted) return;
       setPrivateNote(body.context?.privateNote ?? null);
       setPrivateCommitment(body.context?.privateCommitment ?? null);
       setAssignmentApiAvailable(Boolean(body.coordination));
@@ -400,6 +447,7 @@ export default function RequestApp() {
       setContributionGrantExpiresAt(body.access?.contributionGrantExpiresAt ?? null);
       window.history.replaceState(window.history.state ?? {}, '', requestUrl(body.request.id, locator.capability));
     } catch (cause) {
+      if (controller.signal.aborted || !isCurrentView()) return;
       if (cause instanceof RequestApiError && cause.code === 'request_capability_closed') {
         applyClosedCapabilityError(cause);
         return;
@@ -407,7 +455,9 @@ export default function RequestApp() {
       const accessDenied = cause instanceof RequestApiError && cause.code === 'request_access_denied';
       setRequestNeedsUnlock(false);
       setRequestAccessDenied(accessDenied);
-      if (!initialPreview || accessDenied) {
+      if (accessDenied) {
+        clearPrivateRequestView();
+      } else if (!initialPreview) {
         setSnapshot(null);
         setInspection(null);
       }
@@ -418,32 +468,40 @@ export default function RequestApp() {
         setError(cause instanceof Error ? cause.message : 'Unable to open this shared transaction.');
       }
     } finally {
-      setLoading(false);
+      if (activeLoad.current === controller && isCurrentView()) {
+        setLoading(false);
+        activeLoad.current = null;
+      }
     }
   }
 
   useEffect(() => {
-    if (didStart.current) return;
-    didStart.current = true;
-    if (initialLocator) void load(initialLocator);
-  }, []);
+    if (loadedViewer !== viewer) {
+      clearPrivateRequestView(false);
+      setContributing(false);
+      setSubmitting(false);
+      setSubmitArmed(false);
+      setMainnetConfirmed(false);
+      setContributionMessage('');
+      setSubmissionEffectsDiff(null);
+    }
+    if (requestLocator.trim()) void load(requestLocator);
+    return () => activeLoad.current?.abort();
+  }, [viewer]);
 
   useEffect(() => {
-    if (!requestNeedsUnlock || !privateUnlocked || !requestLocator.trim()) return;
-    void load(requestLocator);
-  }, [requestNeedsUnlock, privateUnlocked]);
+    if (!focusSection) return;
+    const section = document.getElementById(`proposal-${focusSection}`);
+    section?.focus({ preventScroll: true });
+    section?.scrollIntoView({ block: 'start' });
+    setFocusSection(null);
+  }, [focusSection, reviewComplete]);
 
   useEffect(() => {
-    if (!snapshot || capability || privateUnlocked) return;
-    clearPrivateRequestView();
-    setShareable(false);
-    setActivityBound(false);
-    setRequestAccessDenied(false);
-    setRequestNeedsUnlock(true);
-    setLoading(false);
-    setError('');
-    setContributionMessage('');
-  }, [snapshot?.id, capability, privateUnlocked]);
+    if (!pendingRetention || !privateReadyForRequest || !snapshot) return;
+    setPendingRetention(null);
+    if (pendingRetention.id === snapshot.id && pendingRetention.address === walletAddress) void saveToActivity();
+  }, [pendingRetention, privateReadyForRequest, snapshot?.id, walletAddress]);
 
   useEffect(() => {
     setSubmitArmed(false);
@@ -476,6 +534,8 @@ export default function RequestApp() {
     const id = snapshot.id;
     const currentMergedXdr = snapshot.mergedXdr;
     const currentStatus = snapshot.status;
+    const controller = new AbortController();
+    activePoll.current = controller;
     const timer = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       void (async () => {
@@ -483,31 +543,44 @@ export default function RequestApp() {
           const body = await apiJson<CreateSigningRequestResponse>(await fetch('/api/request', {
             cache: 'no-store',
             headers: requestHeaders(id, capability, walletAddress),
+            signal: controller.signal,
           }));
+          if (controller.signal.aborted || !isCurrentView()) return;
           const requestChanged = body.request.mergedXdr !== currentMergedXdr
             || body.request.status !== currentStatus;
-          if (requestChanged) await applySnapshot(body.request);
+          if (requestChanged) {
+            if (!await applySnapshot(body.request) || controller.signal.aborted) return;
+          }
           else setSnapshot(body.request);
           setPrivateNote(body.context?.privateNote ?? null);
           setPrivateCommitment(body.context?.privateCommitment ?? null);
           setAssignmentApiAvailable(Boolean(body.coordination));
           setAssignments(body.coordination?.assignments ?? []);
-      setNotifications(body.coordination?.notifications ?? []);
+          setNotifications(body.coordination?.notifications ?? []);
           if (body.access) {
             setShareable(body.access.shareable);
             setActivityBound(body.access.activityBound ?? false);
             setContributionGrantExpiresAt(body.access.contributionGrantExpiresAt ?? null);
           }
         } catch (cause) {
+          if (controller.signal.aborted || !isCurrentView()) return;
           if (cause instanceof RequestApiError && cause.code === 'request_capability_closed') {
             applyClosedCapabilityError(cause);
+          } else if (cause instanceof RequestApiError && cause.code === 'request_access_denied') {
+            clearPrivateRequestView();
+            setRequestAccessDenied(true);
+            setRequestNeedsUnlock(false);
           }
           // Keep the last known state for transient failures; explicit refresh surfaces them.
         }
       })();
     }, REQUEST_POLL_INTERVAL_MS);
-    return () => window.clearInterval(timer);
-  }, [snapshot?.id, snapshot?.status, snapshot?.mergedXdr, capability, privateUnlocked, walletAddress]);
+    return () => {
+      window.clearInterval(timer);
+      controller.abort();
+      if (activePoll.current === controller) activePoll.current = null;
+    };
+  }, [snapshot?.id, snapshot?.status, snapshot?.mergedXdr, capability, viewer]);
 
   function submitLookup(event: FormEvent) {
     event.preventDefault();
@@ -525,33 +598,35 @@ export default function RequestApp() {
         headers: requestHeaders(snapshot.id, capability, walletAddress, true),
         body: JSON.stringify({ retainActivity: true }),
       }));
-      await applySnapshot(body.request);
+      if (!await applySnapshot(body.request)) return;
       setShareable(body.access?.shareable ?? shareable);
       setActivityBound(body.access?.activityBound ?? false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to save this proposal to Activity.');
+      if (isCurrentView()) setError(cause instanceof Error ? cause.message : 'Unable to save this proposal to Activity.');
     } finally {
-      setLoading(false);
+      if (isCurrentView()) setLoading(false);
     }
   }
 
   async function addSignatureContribution(signedCopy: string) {
-    if (!snapshot) return;
+    if (!snapshot || !isCurrentView()) return;
     const body = await apiJson<ContributeSigningRequestResponse>(await fetch('/api/request', {
       method: 'PATCH',
       headers: requestHeaders(snapshot.id, capability, walletAddress, true),
       body: JSON.stringify({ signedXdr: signedCopy.trim() }),
     }));
-    await applySnapshot(body.request);
+    if (!await applySnapshot(body.request)) return;
     if (body.access?.contributionGrantExpiresAt) setContributionGrantExpiresAt(body.access.contributionGrantExpiresAt);
-    setContributionMessage(body.addedSignatureCount > 0
-      ? `Added ${body.addedSignatureCount} signature${body.addedSignatureCount === 1 ? '' : 's'}.`
-      : 'No new signature was added; this signed copy was already represented.');
+    setContributionMessage(body.request.status === 'awaiting_signatures'
+      ? body.addedSignatureCount > 0
+        ? `Added ${body.addedSignatureCount} signature${body.addedSignatureCount === 1 ? '' : 's'}.`
+        : 'No new signature was added; this signed copy was already represented.'
+      : '');
   }
 
   async function contribute(event: FormEvent) {
     event.preventDefault();
-    if (!snapshot || !signedXdr.trim()) return;
+    if (!snapshot || snapshot.status !== 'awaiting_signatures' || contributing || !signedXdr.trim()) return;
     setContributing(true);
     setError('');
     setContributionMessage('');
@@ -559,30 +634,31 @@ export default function RequestApp() {
       await addSignatureContribution(signedXdr);
       setSignedXdr('');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to add this signed copy.');
+      if (isCurrentView()) setError(cause instanceof Error ? cause.message : 'Unable to add this signed copy.');
     } finally {
-      setContributing(false);
+      if (isCurrentView()) setContributing(false);
     }
   }
 
   async function signRequestWithWallet() {
-    if (!snapshot) return;
+    if (!snapshot || snapshot.status !== 'awaiting_signatures' || contributing || walletBusy) return;
     setContributing(true);
     setError('');
     setContributionMessage('');
     try {
       const signedCopy = await signWithWallet(snapshot.mergedXdr, snapshot.network);
       await addSignatureContribution(signedCopy);
-      setContributionMessage('');
     } catch (cause) {
-      if (!walletError) setError(cause instanceof Error ? cause.message : 'The wallet could not sign this transaction.');
+      if (isCurrentView() && !isWalletUserRejected(cause)) setError(cause instanceof Error ? cause.message : 'The wallet could not sign this transaction.');
     } finally {
-      setContributing(false);
+      if (isCurrentView()) setContributing(false);
     }
   }
 
-async function submitRequest(acceptedEffectsDigest?: string) {
-    if (!snapshot || snapshot.status !== 'ready' || !submitArmed) return;
+  async function submitRequest(acceptedEffectsDigest?: string) {
+    if (!snapshot || snapshot.status !== 'ready' || submitting) return;
+    if (snapshot.execution?.mode === 'external' || submissionEffectsDiff?.requiresReauthorization) return;
+    if (!submitArmed && !executionAlreadyRoutedToMst) return;
     if (snapshot.network === 'public' && !mainnetConfirmed) return;
     setSubmitting(true);
     setError('');
@@ -592,7 +668,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
         headers: requestHeaders(snapshot.id, capability, walletAddress, Boolean(acceptedEffectsDigest)),
         ...(acceptedEffectsDigest ? { body: JSON.stringify({ acceptedEffectsDigest }) } : {}),
       }));
-      await applySnapshot(body.request);
+      if (!await applySnapshot(body.request)) return;
       if (
         body.request.status === 'submitted'
         && inspection?.operations.some((operation) => operation.type === 'setOptions' && operation.threshold === 'high')
@@ -604,6 +680,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
       setMainnetConfirmed(false);
       setSubmissionEffectsDiff(null);
     } catch (cause) {
+      if (!isCurrentView()) return;
       if (cause instanceof RequestApiError
         && (cause.code === 'soroban_effects_review_required' || cause.code === 'soroban_effects_reauthorization_required')
         && cause.details?.effectsDiff) {
@@ -613,7 +690,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
       }
       setError(cause instanceof Error ? cause.message : 'Unable to submit this transaction.');
     } finally {
-      setSubmitting(false);
+      if (isCurrentView()) setSubmitting(false);
     }
   }
 
@@ -626,6 +703,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
       headers: requestHeaders(snapshot.id, capability, walletAddress, true),
       body: JSON.stringify({ assignSigner: signerAddress }),
     }));
+    if (!isCurrentView()) return undefined;
     setAssignments(body.coordination.assignments);
     setNotifications(body.coordination.notifications);
     return body.notification;
@@ -640,6 +718,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
       headers: requestHeaders(snapshot.id, capability, walletAddress, true),
       body: JSON.stringify({ remindSigner: signerAddress }),
     }));
+    if (!isCurrentView()) throw new Error('The wallet changed. Open the proposal with the current signer to check the reminder.');
     setAssignments(body.coordination.assignments);
     setNotifications(body.coordination.notifications);
     return body.notification;
@@ -647,14 +726,26 @@ async function submitRequest(acceptedEffectsDigest?: string) {
 
   async function copyLink() {
     if (!snapshot || !shareable) return;
-    await navigator.clipboard.writeText(requestUrl(snapshot.id, capability));
-    setCopied('link');
+    setCopied(null);
+    setError('');
+    try {
+      await navigator.clipboard.writeText(requestUrl(snapshot.id, capability));
+      setCopied('link');
+    } catch {
+      setError('Could not copy the private link. Allow clipboard access, then try again.');
+    }
   }
 
   async function copyXdr() {
     if (!snapshot) return;
-    await navigator.clipboard.writeText(snapshot.mergedXdr);
-    setCopied('xdr');
+    setCopied(null);
+    setError('');
+    try {
+      await navigator.clipboard.writeText(snapshot.mergedXdr);
+      setCopied('xdr');
+    } catch {
+      setError('Could not copy the transaction. Allow clipboard access, then try again.');
+    }
   }
 
   async function openTransactionReceipt() {
@@ -679,12 +770,39 @@ async function submitRequest(acceptedEffectsDigest?: string) {
   async function openActivity() {
     setError('');
     try {
-      if (!privateReadyForRequest) await unlock(undefined, snapshot.network);
+      if (!privateReadyForRequest) await unlock(undefined, requestNetwork ?? undefined);
       navigateWorkspace('/activity');
     } catch (cause) {
       if (!isWalletUserRejected(cause)) setError(cause instanceof Error ? cause.message : 'Unable to confirm this wallet.');
     }
   }
+
+  async function chooseSignerWallet() {
+    setError('');
+    try {
+      if (requestAccessDenied && privateUnlocked) await lock();
+      await connectWallet();
+    } catch (cause) {
+      if (!isWalletUserRejected(cause)) setError(cause instanceof Error ? cause.message : 'Unable to choose a signer wallet.');
+    }
+  }
+
+  function openCurrentStep() {
+    if (!nextStep) return;
+    if (nextStep.action.target === 'receipt') {
+      void openTransactionReceipt();
+      return;
+    }
+    setReviewComplete(nextStep.action.target !== 'review');
+    setFocusSection(nextStep.action.target);
+  }
+
+  const closedLinkTitle = closedCapability?.status === 'submitted'
+    ? 'Transaction confirmed'
+    : closedCapability?.status === 'expired' ? 'This private link has expired' : 'This private link is closed';
+  const closedLinkDescription = closedCapability?.status === 'submitted'
+    ? 'Confirmed on Stellar. This private link is closed. An associated wallet can open the transaction receipt in Activity.'
+    : 'This link no longer opens private details. An associated wallet can check the proposal and its latest network result in Activity.';
 
   return (
     <StellarWorkspaceShell active="detail" networkContext={requestNetwork}>
@@ -702,16 +820,17 @@ async function submitRequest(acceptedEffectsDigest?: string) {
           {!snapshot && closedCapability && (
             privateReadyForRequest ? (
               <section className="mx-auto max-w-xl py-12 sm:py-20">
-                <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-300" />
-                <h1 className="mt-5 text-4xl font-bold tracking-tight">{closedCapability.status === 'expired' ? 'This private link has expired' : 'Transaction confirmed'}</h1>
-                <p className="mt-3 text-lg leading-8 text-neutral-600 dark:text-neutral-300">{closedCapability.status === 'expired' ? 'For privacy, this share link no longer opens transaction details. Associated wallets can continue in Activity.' : 'Confirmed on Stellar. For privacy, this private share link no longer exposes proposal details; associated wallets can open the permanent on-chain receipt from Activity.'}</p>
-                <button type="button" onClick={() => navigateWorkspace('/activity')} className="mt-7 rounded-xl bg-emerald-600 px-5 py-3 text-base font-semibold text-white">View Activity</button>
+                {closedCapability.status === 'submitted' ? <CheckCircle2 className="h-8 w-8 text-[var(--color-success)]" /> : <CircleAlert className="h-8 w-8 text-[var(--color-muted)]" />}
+                <h1 className="mt-5 text-4xl font-bold tracking-tight">{closedLinkTitle}</h1>
+                <p className="mt-3 text-lg leading-8 text-neutral-600 dark:text-neutral-300">{closedLinkDescription}</p>
+                <ActionButton onClick={() => navigateWorkspace('/activity')} className="mt-7">View Activity</ActionButton>
               </section>
             ) : (
               <PrivateWorkspaceUnlock
-                title={closedCapability.status === 'expired' ? 'This private link has expired' : 'Transaction confirmed'}
-                description={closedCapability.status === 'expired' ? 'For privacy, this share link no longer opens transaction details. Confirm an associated wallet to continue in Activity; this expired link grants no additional access.' : 'Confirmed on Stellar. This private share link no longer exposes proposal details. Confirm an associated wallet to open the permanent on-chain receipt in Activity; this finished link grants no additional access.'}
+                title={closedLinkTitle}
+                description={closedLinkDescription}
                 buttonLabel="Open Activity"
+                network={requestNetwork ?? undefined}
                 onUnlocked={() => navigateWorkspace('/activity')}
               />
             )
@@ -719,10 +838,11 @@ async function submitRequest(acceptedEffectsDigest?: string) {
 
           {!snapshot && (requestNeedsUnlock || requestAccessDenied) && !privateUnlocked && (
             <PrivateWorkspaceUnlock
-              title="Confirm your wallet"
-              description="Confirm a current signer wallet to open this transaction. This does not sign or submit anything."
-              buttonLabel="Open transaction"
-              onUnlocked={() => load(requestLocator)}
+              title="Open your proposal"
+              description="Use a current signer wallet to open this private proposal. You can review the transaction before deciding whether to sign."
+              buttonLabel="Open proposal"
+              network={requestNetwork ?? undefined}
+              context={<span className="break-all font-mono">Proposal {displayRequestId(parseRequestLocator(requestLocator).id)}</span>}
             />
           )}
 
@@ -730,8 +850,8 @@ async function submitRequest(acceptedEffectsDigest?: string) {
             <section className="mx-auto max-w-xl py-12 sm:py-20">
               <CircleAlert className="h-8 w-8 text-amber-600 dark:text-amber-300" />
               <h1 className="mt-5 text-4xl font-bold tracking-tight">This wallet cannot open this proposal</h1>
-              <p className="mt-3 text-lg leading-8 text-neutral-600 dark:text-neutral-300">The confirmed wallet is not a current signer for this transaction. Use the private share link, or choose another current signer wallet and confirm it.</p>
-              <button type="button" disabled={walletBusy} onClick={() => void connectWallet()} className="mt-7 rounded-xl bg-emerald-600 px-5 py-3 text-base font-semibold text-white disabled:opacity-50">{walletBusy ? 'Opening wallets…' : 'Choose another signer wallet'}</button>
+              <p className="mt-3 text-lg leading-8 text-neutral-600 dark:text-neutral-300">The current wallet session could not open this proposal. Confirm a current signer wallet again, or choose another signer.</p>
+              <ActionButton disabled={walletBusy} onClick={() => void chooseSignerWallet()} className="mt-7">{walletBusy ? 'Opening wallets…' : 'Choose another signer wallet'}</ActionButton>
             </section>
           )}
 
@@ -744,13 +864,13 @@ async function submitRequest(acceptedEffectsDigest?: string) {
               <form onSubmit={submitLookup} className="mst-request-lookup-form mt-7">
                 <label htmlFor="request-locator" className="text-sm font-semibold">Private link or proposal ID</label>
                 <input id="request-locator" value={requestLocator} onChange={(event) => setRequestLocator(event.target.value)} placeholder="Paste shared transaction link" spellCheck={false} className="mst-request-control mt-2 w-full" />
-                <button disabled={loading || !requestLocator.trim()} className="mst-action-primary mt-3 disabled:opacity-50">{loading && <LoaderCircle className="h-4 w-4 animate-spin" />}Open transaction</button>
+                <ActionButton type="submit" disabled={loading || !requestLocator.trim()} className="mt-3">{loading && <LoaderCircle className="h-4 w-4 animate-spin" />}Open transaction</ActionButton>
               </form>
               <p className="mt-5 text-sm text-neutral-500 dark:text-neutral-400">Have XDR instead? Use <a href={stellarHref('/new/import')} className="whitespace-nowrap font-semibold text-emerald-700 dark:text-emerald-300">New → Import transaction</a>.</p>
             </section>
           )}
 
-          {error && <div className="mt-5 flex gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm"><CircleAlert className="h-5 w-5 shrink-0 text-red-500" />{error}</div>}
+          {error && <div role="alert" className="mt-5 flex gap-3 rounded-2xl border border-[var(--color-danger)] p-4 text-sm text-[var(--color-danger)]"><CircleAlert className="h-5 w-5 shrink-0" />{error}</div>}
 
           {snapshot && inspection && (
             <div className="space-y-5">
@@ -762,7 +882,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                 eyebrow={<div className="flex flex-wrap items-center gap-2"><span className="text-[var(--color-muted)]">Proposal</span><RequestStatusBadge status={snapshot.status} /><NetworkFact network={snapshot.network} /></div>}
                 title={proposalDescription?.title ?? 'Proposal'}
                 description={proposalDescription?.summary}
-                meta={<span className="font-mono">ID {displayRequestId(snapshot.id)}</span>}
+                meta={<><span className="font-mono">ID {displayRequestId(snapshot.id)}</span>{!['submitted', 'expired', 'stale', 'blocked'].includes(snapshot.status) && <span>Signing closes <time dateTime={snapshot.expiresAt}>{new Date(snapshot.expiresAt).toLocaleString()}</time></span>}</>}
                 actions={
                   <>
                     <ActionButton variant="secondary" size="sm" className="min-h-11" onClick={() => void load(requestLocatorString(snapshot.id, capability))} disabled={loading}>
@@ -784,6 +904,10 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                   <div className="text-xs font-semibold text-[var(--color-muted)]">{nextStep.heading}</div>
                   <h2 className="mt-1 text-lg font-semibold text-[var(--color-ink)]">{nextStep.title}</h2>
                   <p className="mt-1 max-w-prose text-sm leading-6 text-[var(--color-ink-2)]">{nextStep.detail}</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <ActionButton variant="secondary" onClick={openCurrentStep}>{nextStep.action.label}</ActionButton>
+                    {walletAlreadySigned && <a href={stellarHref('/inbox')} className="inline-flex min-h-11 items-center text-sm font-semibold text-[var(--color-action)]">Back to Inbox</a>}
+                  </div>
                 </section>
               )}
 
@@ -805,7 +929,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                     <Share2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" />
                     <div><div className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">Private link ready</div><p className="mt-0.5 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Anyone with this private link can view the active Proposal. The link never grants Stellar signing authority.</p></div>
                   </div>
-                  <button type="button" onClick={() => setShareJustCreated(false)} className="rounded-lg p-1.5 text-neutral-500 hover:bg-black/5 hover:text-black dark:text-neutral-400 dark:hover:bg-white/10 dark:hover:text-white" aria-label="Dismiss private link reminder"><X className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => setShareJustCreated(false)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-paper-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]" aria-label="Dismiss private link reminder"><X className="h-4 w-4" /></button>
                 </section>
               )}
 
@@ -816,32 +940,31 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                     <button type="button" disabled={loading} onClick={() => void saveToActivity()} className="font-semibold text-emerald-700 disabled:opacity-50 dark:text-emerald-300">Save to Activity</button>
                   </section>
                 ) : (
-                  <ActivityRetentionNotice status={snapshot.status} network={snapshot.network} onUnlocked={saveToActivity} />
+                  <ActivityRetentionNotice status={snapshot.status} network={snapshot.network} onUnlocked={(address) => setPendingRetention({ id: snapshot.id, address })} />
                 )
               )}
 
-              {copied === 'link' && <div className="mst-request-toast fixed bottom-6 right-6 z-[90]">Private link copied.</div>}
-
               {!reviewComplete ? (
-                <>
+                <section id="proposal-review" tabIndex={-1} className="scroll-mt-24 space-y-5 focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]">
                   <ReviewTransactionSummary inspection={inspection} xdr={snapshot.mergedXdr} sourceAccount={sourceAnalyses.find((analysis) => analysis.accountId === inspection.transactionSourceAccount)?.account ?? null} privateCommitment={privateCommitment} />
                   {!privateCommitment && privateNote && <PrivateNoteCard note={privateNote} busy={false} locked />}
                   <div className="flex justify-end">
-                    <button type="button" onClick={() => setReviewComplete(true)} className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700">{reviewContinueLabel}</button>
+                    <ActionButton onClick={() => setReviewComplete(true)}>{reviewContinueLabel}</ActionButton>
                   </div>
-                </>
+                </section>
               ) : (
                 <>
-                  <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] px-4 py-3 sm:px-5">
+                  <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[var(--color-rule)] bg-[var(--color-paper-2)] px-4 py-3 sm:px-5">
                     <div className="flex items-center gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                      <div><div className="text-sm font-semibold">Review complete</div><div className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">Receipt details are collapsed while signatures are collected.</div></div>
+                      <CheckCircle2 className="h-5 w-5 text-[var(--color-ink-2)]" />
+                      <div><div className="text-sm font-semibold">Transaction details</div><div className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">Open the exact transaction at any time.</div></div>
                     </div>
-                    <button type="button" onClick={() => setReviewComplete(false)} className="text-sm font-semibold text-emerald-700 underline decoration-emerald-500/30 underline-offset-4 dark:text-emerald-300">Review details</button>
+                    <button type="button" onClick={() => setReviewComplete(false)} className="min-h-11 text-sm font-semibold text-[var(--color-accent)] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]">Review details</button>
                   </section>
 
-                  {contributionMessage && <div className="flex gap-2 rounded-xl bg-emerald-500/10 p-4 text-sm text-emerald-800 dark:text-emerald-200"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />{contributionMessage}</div>}
+                  {contributionMessage && <div role="status" className="flex gap-2 rounded-xl border border-[var(--color-success)] p-4 text-sm text-[var(--color-success)]"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />{contributionMessage}</div>}
 
+                  {!['submitted', 'expired', 'stale', 'blocked'].includes(snapshot.status) && <section id="proposal-signatures" tabIndex={-1} className="scroll-mt-24 focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]">
                   <SigningGuidance
                     inspection={inspection}
                     authorization={authorization}
@@ -849,19 +972,20 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                     walletAddress={walletAddress}
                     walletBusy={walletBusy || contributing}
                     walletError={walletError}
-                    onConnectWallet={() => void connectWallet()}
+                    onConnectWallet={() => void chooseSignerWallet()}
                     onSignWithWallet={() => void signRequestWithWallet()}
                     onShare={shareable ? () => requestUrl(snapshot.id, capability) : undefined}
-                    onAsk={shareable && privateReadyForRequest && assignmentApiAvailable ? askSignerToSign : undefined}
-                    onRemind={shareable && privateReadyForRequest && assignmentApiAvailable ? remindSignerToSign : undefined}
+                    onAsk={snapshot.status === 'awaiting_signatures' && shareable && privateReadyForRequest && assignmentApiAvailable ? askSignerToSign : undefined}
+                    onRemind={snapshot.status === 'awaiting_signatures' && shareable && privateReadyForRequest && assignmentApiAvailable ? remindSignerToSign : undefined}
                     assignments={assignments}
                     notifications={notifications}
                     shareCreatesLink={shareable}
                     knownComplete={signaturesComplete}
                   />
+                  </section>}
 
                   {snapshot.status === 'ready' && (
-                    <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.08] p-5 sm:p-6">
+                    <section id="proposal-submission" tabIndex={-1} className="scroll-mt-24 rounded-2xl border border-[var(--color-success)] p-5 sm:p-6 focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]">
                       <div className="font-semibold text-emerald-800 dark:text-emerald-200">Authorization complete</div>
                       <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{snapshot.execution?.mode === 'external'
                         ? `All required signatures are present. ${snapshot.execution.executor.label ?? snapshot.execution.executor.id} owns final execution; MultiSigTools will not broadcast this transaction.`
@@ -905,8 +1029,8 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                                 </label>
                               )}
                               <div className="mt-4 flex flex-wrap gap-2">
-                                <button type="button" onClick={() => void submitRequest(submissionEffectsDiff?.requiresExplicitReview ? submissionEffectsDiff.currentDigest : undefined)} disabled={submitting || (snapshot.network === 'public' && !mainnetConfirmed)} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{submitting ? 'Checking and submitting…' : submissionEffectsDiff?.requiresExplicitReview ? 'Accept current effects and submit' : 'Submit transaction'}</button>
-                                {!executionAlreadyRoutedToMst && <button type="button" disabled={submitting} onClick={() => { setSubmitArmed(false); setMainnetConfirmed(false); }} className="rounded-xl border border-black/10 px-4 py-3 text-sm font-semibold dark:border-white/10">Choose another route</button>}
+                                <ActionButton onClick={() => void submitRequest(submissionEffectsDiff?.requiresExplicitReview ? submissionEffectsDiff.currentDigest : undefined)} disabled={submitting || (snapshot.network === 'public' && !mainnetConfirmed)} aria-busy={submitting}>{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{submitting ? 'Checking and submitting…' : submissionEffectsDiff?.requiresExplicitReview ? 'Accept effects & submit' : 'Submit transaction'}</ActionButton>
+                                {!executionAlreadyRoutedToMst && <ActionButton variant="secondary" disabled={submitting} onClick={() => { setSubmitArmed(false); setMainnetConfirmed(false); }}>Choose another route</ActionButton>}
                               </div>
                             </div>
                           )}
@@ -916,7 +1040,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                   )}
 
                   {snapshot.status === 'waiting_preconditions' && (
-                    <section className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.08] p-5 text-sm">
+                    <section id="proposal-issue" tabIndex={-1} className="scroll-mt-24 rounded-2xl border border-[var(--color-warning)] p-5 text-sm focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]">
                       <div className="flex gap-3"><CircleAlert className="h-5 w-5 shrink-0 text-amber-500" /><div><div className="font-semibold">Signatures are complete, but this transaction is still waiting.</div><div className="mt-1 opacity-65">{snapshot.statusDetail}</div></div></div>
                     </section>
                   )}
@@ -931,12 +1055,17 @@ async function submitRequest(acceptedEffectsDigest?: string) {
                         <a href={horizonTransactionUrl(snapshot.submission.transactionHash, snapshot.network)} target="_blank" rel="noreferrer" className="underline decoration-black/20 underline-offset-4 dark:decoration-white/20">View network record</a>
                         <a href={stellarExpertTransactionUrl(snapshot.submission.transactionHash, snapshot.network)} target="_blank" rel="noreferrer" className="underline decoration-black/20 underline-offset-4 dark:decoration-white/20">View on StellarExpert</a>
                       </div>
+                      <a href={stellarHref('/inbox')} className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-[var(--color-action)]">Continue to Inbox</a>
                     </section>
                   )}
 
                   {(snapshot.status === 'expired' || snapshot.status === 'stale' || snapshot.status === 'blocked') && (
-                    <section className="rounded-2xl border border-red-500/25 bg-red-500/[0.07] p-5 text-sm">
-                      <div className="flex gap-3"><CircleAlert className="h-5 w-5 shrink-0 text-red-500" /><div><div className="font-semibold">This transaction cannot continue in its current state.</div><div className="mt-1 opacity-65">{snapshot.statusDetail}</div></div></div>
+                    <section id="proposal-issue" tabIndex={-1} className="scroll-mt-24 rounded-2xl border border-[var(--color-danger)] p-5 text-sm focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]">
+                      <div className="flex gap-3"><CircleAlert className="h-5 w-5 shrink-0 text-[var(--color-danger)]" /><div><div className="font-semibold">This proposal cannot continue in MultiSigTools.</div><div className="mt-1 text-[var(--color-ink-2)]">{snapshot.statusDetail}</div></div></div>
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <ActionButton variant="secondary" disabled={loading} onClick={() => void load(requestLocatorString(snapshot.id, capability))}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Check latest status</ActionButton>
+                        <a href={stellarExpertTransactionUrl(snapshot.transactionHash, snapshot.network)} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center font-semibold text-[var(--color-action)]">Check network record</a>
+                      </div>
                     </section>
                   )}
 
