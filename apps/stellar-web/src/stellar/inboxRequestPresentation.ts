@@ -1,5 +1,5 @@
 import type { InboxRequestSnapshot } from '../../../../packages/stellar-core/src/inboxPresentation.js';
-import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
+import type { SigningRequestSnapshot, SigningRequestStatus } from '../../../../packages/stellar-core/src/requestTypes.js';
 import { projectTransactionSemantics } from './transactionSemantics.js';
 import { transactionSystemTypeLabel } from '../../../../packages/stellar-core/src/transactionPresentation.js';
 import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
@@ -78,6 +78,52 @@ export function inboxDeadlineLabel(inspection: TransactionXdrInspection) {
   return new Date(deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+
+
+export interface ProposalNextStep {
+  heading: 'Next step' | 'Current status';
+  title: string;
+  detail: string;
+}
+
+export function proposalNextStep(
+  status: SigningRequestStatus,
+  options: {
+    reviewComplete: boolean;
+    walletAlreadySigned: boolean;
+    executionMode?: 'multisigtools' | 'external';
+    executionRoutedToMst: boolean;
+  },
+): ProposalNextStep {
+  if (status === 'submitted') {
+    return { heading: 'Current status', title: 'Confirmed on Stellar', detail: 'The transaction is complete. Open its receipt below to see the ledger result.' };
+  }
+  if (status === 'expired') {
+    return { heading: 'Current status', title: 'This proposal has expired', detail: 'Start a new proposal if you still need to complete this transaction.' };
+  }
+  if (status === 'stale' || status === 'blocked') {
+    return { heading: 'Current status', title: 'This proposal needs review', detail: 'The transaction cannot continue as prepared. Review the reason below before taking another action.' };
+  }
+  if (status === 'waiting_preconditions') {
+    return { heading: 'Current status', title: 'Waiting for ledger conditions', detail: 'The required signatures are present. Submission must wait for the transaction conditions.' };
+  }
+  if (!options.reviewComplete) {
+    return { heading: 'Next step', title: 'Review this transaction', detail: 'Check the affected accounts, recipients, and changes before continuing to signatures.' };
+  }
+  if (status === 'ready') {
+    if (options.executionMode === 'external') {
+      return { heading: 'Current status', title: 'Waiting for the originating service', detail: 'Authorization is complete. The originating service owns the final submission.' };
+    }
+    if (options.executionRoutedToMst) {
+      return { heading: 'Next step', title: 'Review and submit', detail: 'All required signatures are present. Review the final effects before submitting.' };
+    }
+    return { heading: 'Next step', title: 'Choose how to submit', detail: 'All required signatures are present. Select who will submit the transaction.' };
+  }
+  if (options.walletAlreadySigned) {
+    return { heading: 'Current status', title: 'Your signature is recorded', detail: 'Other authorized signatures are still needed. See the signer progress below.' };
+  }
+  return { heading: 'Next step', title: 'Collect the required signatures', detail: 'See who can sign below. An eligible signer can review and sign with their wallet.' };
+}
 
 export interface InboxOutgoingSignerProgress {
   signerAddress: string;
