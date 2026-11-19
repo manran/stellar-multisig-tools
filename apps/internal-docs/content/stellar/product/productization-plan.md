@@ -65,6 +65,44 @@ Current Testnet productization status:
 
 Signer/threshold Reusable Templates remain a candidate, not a completeness requirement. Learn from real Payment/Batch Template use before expanding the Template catalog mechanically.
 
+## November 2026 — workflow polish, not feature expansion
+
+**Product reference:** DocuSign's sender-to-recipient task model, adapted to Stellar shared authorization. Reuse existing Proposal, Assignment, Activity, Template, Inbox, and execution evidence. No new generic workflow engine.
+
+**Baseline:** Dashboard and Inbox already prioritize work; Reusable Templates and email delivery/view evidence already exist. The gap is the presentation of a single Proposal to the sender and the signer.
+
+### P0 — Make each Proposal legible (current slice)
+
+- Show the Template business label, or derive a factual transaction title from the exact XDR, on the Proposal detail page.
+- Show Proposal status, network, and non-secret ID without making the ID the primary title.
+- State the next task or waiting reason accurately for Review, awaiting signatures, already signed, ready, external execution, submitted, expired, stale, blocked, and ledger-precondition cases.
+- Do not claim the current wallet can sign unless authorization has been verified; never treat a notification or a view as authorization.
+- Keep full transaction review, signer policy, authorization, and final submission confirmation intact.
+- Verify with presentation unit tests, build/typecheck, 320/375/414/768 responsive checks, and a real Testnet signing walk-through. Merge only after verification.
+
+### P1 — Recipient experience
+
+- Follow a real notification from email to wallet confirmation, exact transaction review, signature contribution, and visible acknowledgement.
+- Reduce intervening choices; never require account registration to sign with a current authorized wallet.
+- Preserve sender-controlled Assignment and the non-secret email locator. Keep private capability links separate from ordinary email.
+- Accept when a recipient can answer: who requested what, what will change, whether I have signed, and what happens next.
+
+### P2 — Sender progress
+
+- Show requested, provider-accepted/delivered, authenticated Viewed, signed, and ready-to-submit as distinct facts from the existing coordination and signing evidence.
+- Show only sender-owned invitations, respecting current signer authorization.
+- Offer reminders only where the existing Assignment rules permit them. Avoid additional polling.
+- Accept when the sender can identify the pending person and next available action without opening technical evidence.
+
+### P3 — First-use and Templates
+
+- Prioritize common payment and saved Template tasks. Keep imported XDR, multi-source, and specialized Soroban operations under explicit advanced routes.
+- Validate first-use with a person unfamiliar with Stellar transaction internals. Expand Templates only from observed use cases.
+
+### Release and collaboration boundary
+
+Each slice is a scoped PR; run Testnet first. Do not change signing authority, execution ownership, API/storage schema, Mainnet deployment, or on-chain semantics as part of visual polish. PR #17 also touches the Proposal header and shared buttons: reconcile overlapping changes and check its state transitions before merging.
+
 ## Product rule
 
 Build for today's users; keep the foundation compatible with tomorrow's larger teams.
