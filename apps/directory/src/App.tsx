@@ -136,10 +136,10 @@ export default function App() {
           <div className="flex justify-between items-center h-14 md:h-16">
             <div className="flex items-center gap-2">
               <img
-                src="/brand/mst-a3-app-icon.svg"
+                src="/brand/mst-a3-primary.svg"
                 alt=""
                 aria-hidden="true"
-                className="h-8 w-8 shrink-0 rounded-xl md:h-9 md:w-9"
+                className="h-8 w-12 shrink-0 object-contain md:h-9 md:w-14"
               />
               <h1 className="text-lg md:text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-300">
                 MultiSig Tools
