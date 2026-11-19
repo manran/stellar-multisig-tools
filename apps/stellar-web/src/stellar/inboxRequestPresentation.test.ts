@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Account, Asset, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk/base';
-import { describeInboxRequest, inboxOutgoingSignerProgress } from './inboxRequestPresentation.js';
+import { describeInboxRequest, inboxOutgoingSignerProgress, proposalNextStep } from './inboxRequestPresentation.js';
 
 function paymentXdr() {
   const source = Keypair.random().publicKey();
@@ -112,4 +112,38 @@ test('Inbox outgoing progress keeps sender asks separate from email delivery and
       occurredAt: '2026-11-01T01:03:00.000Z',
     },
   }]);
+});
+
+
+test('Proposal presents the next task without claiming an unauthorized wallet can sign', () => {
+  const options = { reviewComplete: false, walletAlreadySigned: false, executionRoutedToMst: false };
+  assert.deepEqual(proposalNextStep('awaiting_signatures', options), {
+    heading: 'Next step',
+    title: 'Review this transaction',
+    detail: 'Check the affected accounts, recipients, and changes before continuing to signatures.',
+  });
+  const waiting = proposalNextStep('awaiting_signatures', { ...options, reviewComplete: true });
+  assert.equal(waiting.title, 'Collect the required signatures');
+  assert.doesNotMatch(waiting.detail, /your signature is needed/i);
+  const signed = proposalNextStep('awaiting_signatures', { ...options, reviewComplete: true, walletAlreadySigned: true });
+  assert.equal(signed.heading, 'Current status');
+  assert.equal(signed.title, 'Your signature is recorded');
+});
+
+test('Proposal distinguishes self-managed, external and unchosen execution', () => {
+  const options = { reviewComplete: true, walletAlreadySigned: false, executionRoutedToMst: false };
+  assert.equal(proposalNextStep('ready', options).title, 'Choose how to submit');
+  assert.equal(proposalNextStep('ready', { ...options, executionRoutedToMst: true }).title, 'Review and submit');
+  const external = proposalNextStep('ready', { ...options, executionMode: 'external', executionRoutedToMst: true });
+  assert.equal(external.heading, 'Current status');
+  assert.equal(external.title, 'Waiting for the originating service');
+});
+
+test('Proposal terminal and blocked statuses take precedence over the review step', () => {
+  const options = { reviewComplete: false, walletAlreadySigned: false, executionRoutedToMst: false };
+  assert.equal(proposalNextStep('submitted', options).title, 'Confirmed on Stellar');
+  assert.equal(proposalNextStep('waiting_preconditions', options).heading, 'Current status');
+  assert.equal(proposalNextStep('blocked', options).title, 'This proposal needs review');
+  assert.equal(proposalNextStep('stale', options).heading, 'Current status');
+  assert.equal(proposalNextStep('expired', options).title, 'This proposal has expired');
 });
