@@ -52,6 +52,7 @@ import type { SorobanEffectsDiff } from '../../../packages/stellar-core/src/soro
 import { analyzeTransactionAuthorization } from '../../../packages/stellar-core/src/transactionAuthorization';
 import { inspectTransactionXdr } from '../../../packages/stellar-core/src/transactionXdr';
 import { proposalWorkflowStage } from './stellar/humanWorkflow';
+import { describeInboxRequest, proposalNextStep } from './stellar/inboxRequestPresentation';
 import type { TransactionXdrInspection } from '../../../packages/stellar-core/src/transactionXdr';
 import { isCurrentWorkspaceNavigationState, navigateWorkspace, stellarHref } from './workspaceNavigation';
 
@@ -268,12 +269,19 @@ export default function RequestApp() {
     || snapshot?.status === 'waiting_preconditions'
     || snapshot?.status === 'submitted',
   );
+  const proposalDescription = useMemo(() => snapshot ? describeInboxRequest(snapshot) : null, [snapshot]);
   const authorizationStatus = projectTransactionReviewAuthorizationStatus(authorization);
   const isSorobanTransaction = Boolean(inspection?.operations.some((operation) => operation.type === 'invokeHostFunction'));
   const executionAlreadyRoutedToMst = snapshot?.execution?.mode === 'multisigtools' || isSorobanTransaction;
   const workflowStage = snapshot
     ? proposalWorkflowStage(snapshot.status, { reviewComplete, signaturesComplete })
     : 'sign';
+  const nextStep = snapshot ? proposalNextStep(snapshot.status, {
+    reviewComplete,
+    walletAlreadySigned,
+    executionMode: snapshot.execution?.mode,
+    executionRoutedToMst: executionAlreadyRoutedToMst,
+  }) : null;
   const requestNetwork = snapshot?.network ?? closedCapability?.network ?? null;
   const walletNetworkMismatch = Boolean(
     snapshot
@@ -751,13 +759,33 @@ async function submitRequest(acceptedEffectsDigest?: string) {
               )}
 
               <PageHeader
-                eyebrow={<div className="flex flex-wrap items-center gap-2"><RequestStatusBadge status={snapshot.status} /><NetworkFact network={snapshot.network} /></div>}
-                title="Proposal"
-                description="Review the exact transaction, collect signatures, then follow its configured execution route once authorization is complete."
-                actions={<><button type="button" onClick={() => void load(requestLocatorString(snapshot.id, capability))} disabled={loading} className="flex items-center gap-2 rounded-xl border border-black/10 px-3 py-2.5 text-sm font-semibold disabled:opacity-50 dark:border-white/10"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Refresh</button>{shareable && <button type="button" onClick={() => void copyLink()} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white"><ClipboardCopy className="h-4 w-4" />{copied === 'link' ? 'Copied' : 'Copy private link'}</button>}</>}
+                eyebrow={<div className="flex flex-wrap items-center gap-2"><span className="text-[var(--color-muted)]">Proposal</span><RequestStatusBadge status={snapshot.status} /><NetworkFact network={snapshot.network} /></div>}
+                title={proposalDescription?.title ?? 'Proposal'}
+                description={proposalDescription?.summary}
+                meta={<span className="font-mono">ID {displayRequestId(snapshot.id)}</span>}
+                actions={
+                  <>
+                    <ActionButton variant="secondary" size="sm" className="min-h-11" onClick={() => void load(requestLocatorString(snapshot.id, capability))} disabled={loading}>
+                      <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Refresh
+                    </ActionButton>
+                    {shareable && (
+                      <ActionButton variant="secondary" size="sm" className="min-h-11" onClick={() => void copyLink()}>
+                        <ClipboardCopy className="h-4 w-4" />{copied === 'link' ? 'Copied' : 'Copy private link'}
+                      </ActionButton>
+                    )}
+                  </>
+                }
               />
 
               <WorkflowProgress current={workflowStage} />
+
+              {nextStep && (
+                <section aria-label="Current proposal step" className="border-b border-[var(--color-rule)] pb-[var(--space-md)]">
+                  <div className="text-xs font-semibold text-[var(--color-muted)]">{nextStep.heading}</div>
+                  <h2 className="mt-1 text-lg font-semibold text-[var(--color-ink)]">{nextStep.title}</h2>
+                  <p className="mt-1 max-w-prose text-sm leading-6 text-[var(--color-ink-2)]">{nextStep.detail}</p>
+                </section>
+              )}
 
               {walletNetworkMismatch && (
                 <section className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.08] p-4 text-sm">
