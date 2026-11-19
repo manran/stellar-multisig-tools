@@ -159,7 +159,8 @@ async function fixturePage(width, options = {}) {
   const state = {
     templateStatus: 200, templates: [], templateOwner: addresses.alice, templateDelay: null,
     inboxStatus: 200, inbox: inboxFixture(), request: requestFixture(), requestError: null,
-    requestGetCount: 0, inboxGetCount: 0, contributionCount: 0, submitCount: 0,
+    requestGetCount: 0, inboxGetCount: 0, contributionCount: 0, submitCount: 0, retentionCount: 0,
+    requestAccess: { shareable: false, activityBound: true }, requestGetResponse: null,
     ...options.state,
   };
   await page.route('**/*', async (route) => {
@@ -198,11 +199,23 @@ async function fixturePage(width, options = {}) {
       assert.equal(request.headers()['x-multisig-request-id'], requestId);
       if (request.method() === 'GET') {
         state.requestGetCount++;
+        if (state.requestGetResponse) {
+          const reply = state.requestGetResponse(request);
+          if (reply.delay) await reply.delay;
+          try { return await json(reply.body, reply.status ?? 200); }
+          finally { reply.onDone?.(); }
+        }
         if (state.requestError) return json(state.requestError, 410);
-        return json({ request: state.request, access: { shareable: false, activityBound: true }, coordination: { assignments: [], notifications: [] } });
+        return json({ request: state.request, access: state.requestAccess, coordination: { assignments: [], notifications: [] } });
       }
       if (request.method() === 'PATCH') {
         const body = request.postDataJSON();
+        if (body.retainActivity === true) {
+          assert.equal(request.headers()['x-multisig-session-address'], addresses.alice, 'Retention must use the newly verified wallet');
+          state.retentionCount++;
+          state.requestAccess = { ...state.requestAccess, activityBound: true };
+          return json({ request: state.request, access: state.requestAccess });
+        }
         assert.ok(body.signedXdr, 'QA only accepts an explicit signed XDR contribution');
         const transaction = TransactionBuilder.fromXDR(body.signedXdr, Networks.TESTNET);
         assert.equal(Buffer.from(transaction.hash()).toString('hex'), Buffer.from(unsigned.hash()).toString('hex'));
@@ -442,10 +455,121 @@ try {
     assert.equal(await page.getByText('Transaction confirmed', { exact: true }).count(), 0);
     await snapshot(page, 'proposal-closed-unknown', 375);
   });
+
+  await run('proposal-retain-after-proof', 375, { wallet: walletState('', false), state: { requestAccess: { shareable: true, activityBound: false } } }, async ({ page, state }) => {
+    await page.goto(`${origin}/s#${requestId}${capability}`);
+    await visible(page, 'Keep this transaction in Activity');
+    assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), []);
+    const saved = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/request'
+      && response.request().method() === 'PATCH' && response.request().postDataJSON()?.retainActivity === true);
+    await page.getByRole('button', { name: 'Save to Activity', exact: true }).click();
+    await saved;
+    await page.getByRole('button', { name: 'Save to Activity', exact: true }).waitFor({ state: 'detached' });
+    await visible(page, 'November supplier payment', 'heading');
+    assert.equal(state.retentionCount, 1, 'One explicit proof saves Activity once');
+    assert.equal(state.requestAccess.activityBound, true);
+    assert.equal(await page.getByText(/Not saved to Activity/).count(), 0);
+    assert.equal(state.contributionCount + state.submitCount, 0);
+    await snapshot(page, 'proposal-retained', 375);
+  });
+
+  for (const status of [403, 500]) {
+    await run(`proposal-history-preview-${status}`, 375, { wallet: walletState(addresses.bob) }, async ({ page, state }) => {
+      const delayed = Promise.withResolvers();
+      const preview = { ...requestFixture(), template: { id: 'tpl_qa_private', version: 1, name: 'Alice private history proposal' } };
+      state.requestGetResponse = () => ({ status, delay: delayed.promise, body: { error: 'Fixture access failed.', code: status === 403 ? 'request_access_denied' : 'request_failed' } });
+      await page.goto(`${origin}/new`);
+      await visible(page, 'New proposal', 'heading');
+      await page.evaluate(() => {
+        window.__MST_QA_PRIVATE_LEAKS__ = [];
+        new MutationObserver(() => {
+          if (document.body.textContent.includes('Alice private history proposal')) window.__MST_QA_PRIVATE_LEAKS__.push('preview');
+        }).observe(document.body, { childList: true, characterData: true, subtree: true });
+      });
+      const requested = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/request');
+      await page.evaluate(async ({ preview, reviewedBy }) => {
+        const { navigateWorkspace } = await import('/src/workspaceNavigation.ts');
+        navigateWorkspace('/s', { hash: preview.id, state: { requestPreview: preview, requestJustCreated: true, requestReviewedByAddress: reviewedBy } });
+      }, { preview, reviewedBy: addresses.alice });
+      await requested;
+      assert.equal(await page.getByText('Alice private history proposal', { exact: true }).count(), 0);
+      delayed.resolve();
+      if (status === 403) await visible(page, 'This wallet cannot open this proposal', 'heading');
+      else await page.getByRole('alert').waitFor({ state: 'visible' });
+      assert.deepEqual(await page.evaluate(() => window.__MST_QA_PRIVATE_LEAKS__), []);
+      assert.equal(await page.getByText('Alice private history proposal', { exact: true }).count(), 0);
+      await snapshot(page, `proposal-preview-denied-${status}`, 375);
+    });
+  }
+
+  await run('proposal-late-other-wallet-response', 375, {}, async ({ page, state }) => {
+    const delayed = Promise.withResolvers();
+    const completed = Promise.withResolvers();
+    const privateRequest = { ...requestFixture(), template: { id: 'tpl_qa_private', version: 1, name: 'Alice delayed private proposal' } };
+    state.requestGetResponse = (request) => request.headers()['x-multisig-session-address'] === addresses.alice
+      ? { delay: delayed.promise, onDone: completed.resolve, body: { request: privateRequest, access: state.requestAccess } }
+      : { status: 403, body: { error: 'Fixture signer denied.', code: 'request_access_denied' } };
+    const requested = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/request');
+    await page.goto(`${origin}/s#${requestId}`);
+    await requested;
+    await page.evaluate((wallet) => window.__MST_QA_SET_WALLET__(wallet), walletState(addresses.bob));
+    await visible(page, 'This wallet cannot open this proposal', 'heading');
+    delayed.resolve();
+    await completed.promise;
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await page.getByText('Alice delayed private proposal', { exact: true }).count(), 0);
+    await visible(page, 'This wallet cannot open this proposal', 'heading');
+    await snapshot(page, 'proposal-late-other-wallet', 375);
+  });
+
+  await run('proposal-denial-invalidates-same-wallet-poll', 375, {}, async ({ page, state }) => {
+    const delayed = Promise.withResolvers();
+    const completed = Promise.withResolvers();
+    let phase = 'initial';
+    state.requestGetResponse = () => {
+      if (phase === 'poll') return { delay: delayed.promise, onDone: completed.resolve, body: { request: state.request, access: state.requestAccess } };
+      if (phase === 'denied') return { status: 403, body: { error: 'Fixture signer revoked.', code: 'request_access_denied' } };
+      return { body: { request: state.request, access: state.requestAccess } };
+    };
+    await page.clock.install();
+    await page.goto(`${origin}/s#${requestId}`);
+    await visible(page, 'November supplier payment', 'heading');
+    phase = 'poll';
+    const poll = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/request');
+    await page.clock.fastForward(30_100);
+    await poll;
+    phase = 'denied';
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await visible(page, 'This wallet cannot open this proposal', 'heading');
+    delayed.resolve();
+    await completed.promise;
+    await page.clock.runFor(50);
+    assert.equal(await page.getByText('November supplier payment', { exact: true }).count(), 0);
+    await visible(page, 'This wallet cannot open this proposal', 'heading');
+    await snapshot(page, 'proposal-same-wallet-denied', 375);
+  });
+
+  await run('proposal-creator-review-handoff', 375, {}, async ({ page, state }) => {
+    await page.goto(`${origin}/new`);
+    await visible(page, 'New proposal', 'heading');
+    await page.evaluate(async ({ preview, reviewedBy }) => {
+      const { navigateWorkspace } = await import('/src/workspaceNavigation.ts');
+      navigateWorkspace('/s', { hash: preview.id, state: { requestPreview: preview, requestJustCreated: true, requestReviewedByAddress: reviewedBy } });
+    }, { preview: state.request, reviewedBy: addresses.alice });
+    await visible(page, 'Collect the required signatures', 'heading');
+    await visible(page, 'Sign', 'button');
+    assert.ok(state.requestGetCount > 0, 'Creator handoff still checks current private access');
+    assert.equal(await page.getByRole('button', { name: 'Continue to signatures', exact: true }).count(), 0);
+  });
 } finally {
   await browser.close();
   await server.close();
-  const report = { commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+  let commit = process.env.MST_QA_COMMIT;
+  if (!commit) {
+    try { commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+    catch { commit = 'unavailable; set MST_QA_COMMIT for a mounted worktree'; }
+  }
+  const report = { commit,
     generatedAt: new Date().toISOString(), method: 'Actual React UI in Chromium; fixture wallet, API, and Horizon; no broadcast or email.', widths,
     passed: results.filter((item) => item.passed).length, failed: results.filter((item) => !item.passed).length, unexpectedRequests, results };
   await writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
