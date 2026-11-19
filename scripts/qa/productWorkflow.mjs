@@ -130,6 +130,7 @@ const origin = 'http://127.0.0.1:4177';
 const browser = await chromium.launch({ headless: true });
 const results = [];
 const unexpectedRequests = [];
+const pageErrors = [];
 
 function walletState(address = addresses.alice, unlocked = true) {
   return { address, sessionAddress: address, network: 'testnet', sessionNetwork: 'testnet', privateUnlocked: unlocked,
@@ -260,6 +261,7 @@ async function run(name, width, options, check) {
     await fixture.page.screenshot({ path: path.join(output, `FAILED-${name}-${width}.png`), fullPage: true }).catch(() => {});
     console.error(`FAIL ${name} ${width}px: ${error.message}`);
   } finally {
+    pageErrors.push(...fixture.errors.map((message) => ({ name, width, message })));
     await fixture.context.close();
   }
 }
@@ -525,9 +527,13 @@ try {
   await run('proposal-denial-invalidates-same-wallet-poll', 375, {}, async ({ page, state }) => {
     const delayed = Promise.withResolvers();
     const completed = Promise.withResolvers();
+    const pollSelected = Promise.withResolvers();
     let phase = 'initial';
     state.requestGetResponse = () => {
-      if (phase === 'poll') return { delay: delayed.promise, onDone: completed.resolve, body: { request: state.request, access: state.requestAccess } };
+      if (phase === 'poll') {
+        pollSelected.resolve();
+        return { delay: delayed.promise, onDone: completed.resolve, body: { request: state.request, access: state.requestAccess } };
+      }
       if (phase === 'denied') return { status: 403, body: { error: 'Fixture signer revoked.', code: 'request_access_denied' } };
       return { body: { request: state.request, access: state.requestAccess } };
     };
@@ -538,6 +544,9 @@ try {
     const poll = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/request');
     await page.clock.fastForward(30_100);
     await poll;
+    // A request event can precede its route handler. Wait until the old poll's
+    // response is actually captured before making the explicit refresh fail.
+    await pollSelected.promise;
     phase = 'denied';
     await page.getByRole('button', { name: 'Refresh', exact: true }).click();
     await visible(page, 'This wallet cannot open this proposal', 'heading');
@@ -571,8 +580,8 @@ try {
   }
   const report = { commit,
     generatedAt: new Date().toISOString(), method: 'Actual React UI in Chromium; fixture wallet, API, and Horizon; no broadcast or email.', widths,
-    passed: results.filter((item) => item.passed).length, failed: results.filter((item) => !item.passed).length, unexpectedRequests, results };
+    passed: results.filter((item) => item.passed).length, failed: results.filter((item) => !item.passed).length, unexpectedRequests, pageErrors, results };
   await writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
-  console.log(JSON.stringify({ passed: report.passed, failed: report.failed, unexpectedRequests, output }));
+  console.log(JSON.stringify({ passed: report.passed, failed: report.failed, unexpectedRequests, pageErrors, output }));
   if (report.failed || unexpectedRequests.length) process.exitCode = 1;
 }
