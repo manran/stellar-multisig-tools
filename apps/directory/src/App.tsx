@@ -139,7 +139,13 @@ export default function App() {
                 src="/brand/mst-a3-primary.svg"
                 alt=""
                 aria-hidden="true"
-                className="h-8 w-12 shrink-0 object-contain md:h-9 md:w-14"
+                className="h-8 w-12 shrink-0 object-contain dark:hidden md:h-9 md:w-14"
+              />
+              <img
+                src="/brand/mst-a3-primary-dark.svg"
+                alt=""
+                aria-hidden="true"
+                className="hidden h-8 w-12 shrink-0 object-contain dark:block md:h-9 md:w-14"
               />
               <h1 className="text-lg md:text-xl font-bold tracking-tight text-brand-teal dark:text-brand-teal-light">
                 MultiSig <span className="text-directory-ink dark:text-directory-ink-inverse">Tools</span>
