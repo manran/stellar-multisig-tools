@@ -162,3 +162,23 @@ test('Proposal expiry distinguishes the collaboration window from the Stellar ti
   assert.match(expiredTransaction.detail, /Stellar transaction time limit has passed/);
   assert.doesNotMatch(expiredTransaction.detail, /may still be valid/);
 });
+
+test('Proposal next step names the current wallet action only after authorization is checked', () => {
+  const options = { reviewComplete: true, walletAlreadySigned: false, executionRoutedToMst: false };
+  const eligible = proposalNextStep('awaiting_signatures', { ...options, walletSigningState: 'can_sign' });
+  assert.equal(eligible.title, 'Your signature is needed');
+  assert.equal(eligible.action.label, 'Review and sign');
+  assert.match(eligible.detail, /Signing does not submit/);
+  const other = proposalNextStep('awaiting_signatures', { ...options, walletSigningState: 'other_signer' });
+  assert.equal(other.heading, 'Current status');
+  assert.equal(other.title, 'Waiting for an authorized signer');
+  const unknown = proposalNextStep('awaiting_signatures', { ...options, walletSigningState: 'unknown' });
+  assert.equal(unknown.title, 'Collect the required signatures');
+  const signed = proposalNextStep('awaiting_signatures', { ...options, walletAlreadySigned: true, walletSigningState: 'signed' });
+  assert.equal(signed.title, 'Your signature is recorded');
+  const needsReview = proposalNextStep('awaiting_signatures', { ...options, walletSigningState: 'needs_review' });
+  assert.equal(needsReview.title, 'Signing details need review');
+  assert.equal(needsReview.action.target, 'signatures');
+  const expired = proposalNextStep('expired', { ...options, walletSigningState: 'can_sign' });
+  assert.equal(expired.title, 'This proposal has expired');
+});

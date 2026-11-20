@@ -53,6 +53,7 @@ import { analyzeTransactionAuthorization } from '../../../packages/stellar-core/
 import { inspectTransactionXdr } from '../../../packages/stellar-core/src/transactionXdr';
 import { proposalWorkflowStage } from './stellar/humanWorkflow';
 import { describeInboxRequest, proposalNextStep } from './stellar/inboxRequestPresentation';
+import { proposalWalletSigningState } from './stellar/proposalAuthorizationPresentation';
 import type { TransactionXdrInspection } from '../../../packages/stellar-core/src/transactionXdr';
 import { isCurrentWorkspaceNavigationState, navigateWorkspace, stellarHref } from './workspaceNavigation';
 
@@ -283,9 +284,8 @@ export default function RequestApp() {
     if (!snapshot || !inspection) return null;
     return analyzeTransactionAuthorization(snapshot.mergedXdr, snapshot.network, inspection, sourceAnalyses);
   }, [snapshot, inspection, sourceAnalyses]);
-  const walletAlreadySigned = Boolean(walletAddress && authorization?.sources.some((source) =>
-    source.matchedSigners.some((signer) => !signer.automatic && signer.signerKey === walletAddress),
-  ));
+  const walletSigningState = proposalWalletSigningState(authorization, sourceAnalyses, walletAddress);
+  const walletAlreadySigned = walletSigningState === 'signed';
   const signaturesComplete = Boolean(
     authorization?.coreAuthorizationValid
     || snapshot?.status === 'ready'
@@ -302,6 +302,7 @@ export default function RequestApp() {
   const nextStep = snapshot ? proposalNextStep(snapshot.status, {
     reviewComplete,
     walletAlreadySigned,
+    walletSigningState,
     executionMode: snapshot.execution?.mode,
     executionRoutedToMst: executionAlreadyRoutedToMst,
     statusReason: snapshot.statusReason,

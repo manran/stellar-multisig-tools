@@ -161,7 +161,7 @@ async function fixturePage(width, options = {}) {
     templateStatus: 200, templates: [], templateOwner: addresses.alice, templateDelay: null,
     inboxStatus: 200, inbox: inboxFixture(), request: requestFixture(), requestError: null,
     requestGetCount: 0, inboxGetCount: 0, contributionCount: 0, submitCount: 0, retentionCount: 0,
-    requestAccess: { shareable: false, activityBound: true }, requestGetResponse: null,
+    requestAccess: { shareable: false, activityBound: true }, requestGetResponse: null, horizonAccount: null,
     ...options.state,
   };
   await page.route('**/*', async (route) => {
@@ -169,7 +169,7 @@ async function fixturePage(width, options = {}) {
     const url = new URL(request.url());
     const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
     if (url.hostname === 'horizon-testnet.stellar.org') {
-      if (url.pathname.startsWith('/accounts/')) return json({
+      if (url.pathname.startsWith('/accounts/')) return json(state.horizonAccount ?? {
         account_id: url.pathname.split('/').at(-1), sequence: '100', subentry_count: 3, num_sponsoring: 0, num_sponsored: 0,
         balances: [{ asset_type: 'native', balance: '1000.0000000' }],
         thresholds: { low_threshold: 2, med_threshold: 2, high_threshold: 2 },
@@ -322,6 +322,34 @@ try {
       assert.equal(new URL(page.url()).hash, `#${requestId}`);
       assert.equal(await page.evaluate(() => document.activeElement?.id), 'proposal-signatures');
       await snapshot(page, 'proposal-signed', width);
+    });
+
+    await run('proposal-weighted-approval', width, {
+      wallet: walletState(addresses.bob),
+      state: {
+        request: requestFixture('awaiting_signatures', ['alice']),
+        horizonAccount: {
+          account_id: addresses.source, sequence: '100', subentry_count: 2,
+          num_sponsoring: 0, num_sponsored: 0,
+          balances: [{ asset_type: 'native', balance: '1000.0000000' }],
+          thresholds: { low_threshold: 1, med_threshold: 3, high_threshold: 3 },
+          signers: [
+            { key: addresses.alice, type: 'ed25519_public_key', weight: 2 },
+            { key: addresses.bob, type: 'ed25519_public_key', weight: 1 },
+            { key: addresses.carol, type: 'ed25519_public_key', weight: 1 },
+          ],
+        },
+      },
+    }, async ({ page }) => {
+      await page.goto(origin + '/s#' + requestId);
+      await visible(page, 'November supplier payment', 'heading');
+      await page.getByRole('button', { name: 'Review transaction', exact: true }).click();
+      await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
+      await visible(page, 'Your signature is needed', 'heading');
+      await visible(page, 'Approval power required');
+      await visible(page, '2 / 3');
+      await visible(page, 'Needs 1 more approval power');
+      await snapshot(page, 'proposal-weighted', width);
     });
 
     await run('proposal-managed-submit', width, { state: { request: requestFixture('ready', ['alice', 'bob'], { mode: 'multisigtools' }) } }, async ({ page, state }) => {
@@ -565,7 +593,7 @@ try {
       const { navigateWorkspace } = await import('/src/workspaceNavigation.ts');
       navigateWorkspace('/s', { hash: preview.id, state: { requestPreview: preview, requestJustCreated: true, requestReviewedByAddress: reviewedBy } });
     }, { preview: state.request, reviewedBy: addresses.alice });
-    await visible(page, 'Collect the required signatures', 'heading');
+    await visible(page, 'Your signature is needed', 'heading');
     await visible(page, 'Sign', 'button');
     assert.ok(state.requestGetCount > 0, 'Creator handoff still checks current private access');
     assert.equal(await page.getByRole('button', { name: 'Continue to signatures', exact: true }).count(), 0);

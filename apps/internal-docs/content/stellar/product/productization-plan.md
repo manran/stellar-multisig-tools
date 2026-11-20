@@ -125,6 +125,26 @@ Run Testnet before a live release. This work keeps signing authority, execution 
 
 **Release check still required:** a real recipient opens a Testnet email, confirms a supported wallet, reviews and signs; the sender observes progress and completes the configured submission route. Verify the hosted API, actual wallet prompts, and receipt in this walk-through. A fixture replay does not replace this check.
 
+### 2026-11-20 — Authorization truth at a glance
+
+The Proposal task panel uses verified current-account eligibility to distinguish
+**Your signature is needed**, **Your signature is recorded**, **Waiting for an authorized signer**,
+and **Collect the required signatures** when account rules are still unknown.
+Never infer wallet authority from an invitation, email, or unsigned XDR.
+
+In the signing region, show **matched / required approval power** for weighted
+source-account requirements. Keep separate accounts independent: no combined
+numerator, no inferred signer count, no cross-account threshold sum. Continue
+showing exact N-of-M signer rows only when the existing policy analysis proves
+that the weights are uniform. Show mandatory extra signer preconditions in
+addition to account thresholds; preserve Core-order and fee-bump evidence in
+advanced authorization details.
+
+**Acceptance:** unit tests cover 2-power + 1-power signers, multiple accounts,
+extra signers, unknown Horizon rules, and expired states. Browser regression
+must verify the eligible wallet sees the next action without asserting that
+mere signature count meets threshold. No signing policy, API, or server changes.
+
 **Next product evidence:** observe a first-time sender and recipient using one real Payment proposal. Record where they hesitate or need an explanation. Use that evidence to prioritize the next round; do not add another template category or workflow engine by default.
 
 ## Product rule

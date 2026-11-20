@@ -92,6 +92,7 @@ export function proposalNextStep(
   options: {
     reviewComplete: boolean;
     walletAlreadySigned: boolean;
+    walletSigningState?: 'can_sign' | 'other_signer' | 'unknown' | 'signed' | 'needs_review';
     executionMode?: 'multisigtools' | 'external';
     executionRoutedToMst: boolean;
     statusReason?: SigningRequestStatusReason;
@@ -128,8 +129,17 @@ export function proposalNextStep(
     }
     return { heading: 'Next step', title: 'Choose how to submit', detail: 'All required signatures are present. Select who will submit the transaction.', action: { label: 'View submission options', target: 'submission' } };
   }
+  if (options.walletSigningState === 'needs_review') {
+    return { heading: 'Current status', title: 'Signing details need review', detail: 'Stellar Core cannot use the current signatures as prepared. Check the authorization evidence before collecting more.', action: { label: 'Review signing details', target: 'signatures' } };
+  }
   if (options.walletAlreadySigned) {
     return { heading: 'Current status', title: 'Your signature is recorded', detail: 'This proposal has not been submitted. Check signing progress for the remaining requirements.', action: { label: 'View signing progress', target: 'signatures' } };
+  }
+  if (options.walletSigningState === 'can_sign') {
+    return { heading: 'Next step', title: 'Your signature is needed', detail: 'This wallet is an eligible signer. Review the signing requirements before approving. Signing does not submit the transaction.', action: { label: 'Review and sign', target: 'signatures' } };
+  }
+  if (options.walletSigningState === 'other_signer') {
+    return { heading: 'Current status', title: 'Waiting for an authorized signer', detail: 'This wallet cannot sign the remaining requirements. Check the signing progress or ask an eligible signer.', action: { label: 'View signing progress', target: 'signatures' } };
   }
   return { heading: 'Next step', title: 'Collect the required signatures', detail: 'An eligible signer can review and sign with their wallet. Signing does not submit the transaction.', action: { label: 'View signers', target: 'signatures' } };
 }

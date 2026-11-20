@@ -8,6 +8,7 @@ import { useStellarWallet } from './StellarWalletContext';
 import { cachedTreasuryNames, loadSharedTreasuryNames } from './treasuryMetadataCache';
 import { treasuryDisplayLabel } from './treasuryDisplay';
 import { humanAuthorizationRequirement } from './stellar/authorizationPresentation';
+import { proposalWalletSigningState, weightedProposalRequirements } from './stellar/proposalAuthorizationPresentation';
 import type { SourceAnalysis } from '../../../packages/stellar-core/src/transactionReviewAnalysis';
 import type { TransactionAuthorizationStatus } from '../../../packages/stellar-core/src/transactionAuthorization';
 import type {
@@ -118,16 +119,20 @@ export default function SigningGuidance({
   });
 
   const incomplete = entries.filter((entry) => entry.auth?.satisfied !== true);
-  const neededWalletKeys = new Set(incomplete.flatMap((entry) => entry.remainingSignerKeys));
-  const walletCanSign = Boolean(walletAddress && neededWalletKeys.has(walletAddress));
-  const walletAlreadySigned = Boolean(walletAddress && authorization?.sources.some((source) =>
-    source.matchedSigners.some((signer) => !signer.automatic && signer.signerKey === walletAddress),
-  ));
+  const missingExtraSigners = (authorization?.extraSigners ?? []).filter((signer) => !signer.satisfied);
+  const neededWalletKeys = new Set([
+    ...incomplete.flatMap((entry) => entry.remainingSignerKeys),
+    ...missingExtraSigners.filter((signer) => signer.signerType === 'ed25519_public_key').map((signer) => signer.signerKey),
+  ]);
+  const walletSigningState = proposalWalletSigningState(authorization, sourceAnalyses, walletAddress);
+  const walletCanSign = walletSigningState === 'can_sign';
+  const walletAlreadySigned = walletSigningState === 'signed';
+  const weightedRequirements = weightedProposalRequirements(authorization, sourceAnalyses);
   const authorizationComplete = knownComplete || authorization?.coreAuthorizationValid === true;
   const hasAuthorizationError = !knownComplete
     && authorization?.signatureRequirementsSatisfied === true
     && authorization.coreAuthorizationValid === false;
-  const exactSignaturesRemaining = incomplete.every((entry) => entry.signaturesRemaining !== null)
+  const exactSignaturesRemaining = missingExtraSigners.length === 0 && incomplete.every((entry) => entry.signaturesRemaining !== null)
     ? incomplete.reduce((total, entry) => total + (entry.signaturesRemaining ?? 0), 0)
     : null;
   const shareTargets = [...neededWalletKeys].filter((key) => key !== walletAddress);
@@ -137,7 +142,7 @@ export default function SigningGuidance({
     : exactSignaturesRemaining === 1
       ? '1 more signer needs to sign.'
       : `${exactSignaturesRemaining} more signatures are needed.`;
-  const signedStateCopy = `Signed${exactSignaturesRemaining ? ` · ${remainingSignatureCopy}` : ''}`;
+  const signedStateCopy = authorizationComplete ? 'Signed' : 'Signed · ' + remainingSignatureCopy;
 
   useEffect(() => {
     if (!shareCopied) return;
@@ -424,6 +429,16 @@ export default function SigningGuidance({
                     </div>
                   </div>
                 )}
+                {weightedRequirements.filter((item) => item.accountId === requirement.accountId && item.scope === requirement.scope).map((item) => (
+                  <div key={item.accountId + ':' + item.scope} className="mb-4 border-b border-[var(--color-rule)] pb-4">
+                    <div className="text-xs font-semibold text-[var(--color-muted)]">Approval power required</div>
+                    <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                      <strong className="text-xl font-semibold tabular-nums text-[var(--color-ink)]">{item.matchedWeight} / {item.requiredWeight}</strong>
+                      <span className="text-sm text-[var(--color-ink-2)]">Needs {item.missingWeight} more approval power</span>
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">Signers may have different weights. Signature count alone does not determine authorization.</p>
+                  </div>
+                ))}
                 {error || auth?.error ? (
                   <>
                     <div className="text-sm text-amber-700 dark:text-amber-300">We could not load the current signing rules for this account.</div>
@@ -458,7 +473,7 @@ export default function SigningGuidance({
                   </>
                 ) : (
                   <>
-                    <div className="font-semibold">Another signature is needed{accountDisplay ? ` for ${accountDisplay}` : ''}</div>
+                    <div className="font-semibold">{policy && !policy.exactNOfM ? 'More approval power is needed' : 'Another signature is needed'}{accountDisplay ? ` for ${accountDisplay}` : ''}</div>
                     <p className="mt-1 text-sm opacity-60">One or more of these signers can sign:</p>
                     <div className="mst-signer-candidates mt-3">
                       {remainingSignerKeys.map((key) => (
@@ -473,6 +488,14 @@ export default function SigningGuidance({
               </div>
             );
           })}
+          {missingExtraSigners.map((signer) => (
+            <div key={'extra:' + signer.signerKey} className="mst-signing-requirement">
+              <div className="font-semibold">Additional required signer</div>
+              <p className="mt-1 text-sm leading-6 text-[var(--color-ink-2)]">This signer is required in addition to the account approval thresholds.</p>
+              <div className="mt-3"><AddressIdentity address={signer.signerKey} subjectType="signer" allowNaming={allowNaming} /></div>
+              {signerContactControl(signer.signerKey)}
+            </div>
+          ))}
         </div>
       )}
 
