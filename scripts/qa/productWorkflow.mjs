@@ -622,7 +622,12 @@ try {
     await page.evaluate((wallet) => window.__MST_QA_SET_WALLET__(wallet), walletState(addresses.bob));
     await visible(page, 'This wallet cannot open this proposal', 'heading');
     delayed.resolve();
-    await completed.promise;
+    // A cancelled request may never call route.fulfill(), so onDone is not
+    // guaranteed. A bounded settle still lets the UI reject stale data.
+    await Promise.race([
+      completed.promise,
+      new Promise((resolve) => setTimeout(resolve, 750)),
+    ]);
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     assert.equal(await page.getByText('Alice delayed private proposal', { exact: true }).count(), 0);
     await visible(page, 'This wallet cannot open this proposal', 'heading');
