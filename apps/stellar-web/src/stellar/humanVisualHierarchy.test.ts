@@ -177,6 +177,32 @@ test('Agent access uses one credential workspace while retaining permission and 
   assert.doesNotMatch(agentAccess, /md:grid-cols-3/);
 });
 
+test('Operational tools connect decisions to the existing secure workflow', () => {
+  const shell = source('../StellarWorkspaceShell.tsx');
+  assert.match(shell, /href=\{stellarHref\('\/agent-access'\)\}/);
+  assert.match(agentAccess, /active="agent-access"/);
+  assert.match(treasury, /mst-treasury-detail-actions/);
+  assert.match(treasury, /stellarHrefWithSearch\('\/new', \{ account: account\.accountId, network \}\)/);
+  assert.match(treasury, /treasurySettingsHref\(account\.accountId, network\)/);
+  assert.match(treasury, /humanAuthorizationRequirement\(analysis\.thresholds\.high\)/);
+  assert.ok(
+    addressBook.indexOf('visibleSigners.length > 0') < addressBook.indexOf('privateReady && visibleContacts.length > 0')
+    && addressBook.indexOf('privateReady && visibleContacts.length > 0') < addressBook.indexOf('visibleTreasuries.length > 0'),
+    'Contact order must be signers, saved contacts, then linked treasuries',
+  );
+  assert.match(addressBook, /unlockedAddress === address && unlockedNetwork === network/);
+  assert.match(addressBook, /await saveAlias\(target, 'account', name\)/);
+  assert.match(addressBook, /id="contact-search" type="search"/);
+  assert.match(agentAccess, /pendingRevokeId === credential\.credentialId/);
+  assert.match(agentAccess, /Confirm revoke/);
+  assert.match(agentAccess, /setPendingRevokeId\(credential\.credentialId\)/);
+  assert.match(agentAccess, /setNewSecret\(body\.apiKey\)/);
+  assert.ok(agentAccess.indexOf('Current agents') < agentAccess.indexOf('Connect another agent'));
+  assert.match(stylesheet, /\.mst-agent-danger-action/);
+  assert.match(stylesheet, /\.mst-contacts-search/);
+  assert.match(stylesheet, /\.mst-treasury-detail-actions/);
+});
+
 test('Classic transaction composers share one continuous preparation workbench', () => {
   for (const composer of [payment, transfer, claimablePayment]) {
     assert.match(composer, /mst-transaction-composer/);

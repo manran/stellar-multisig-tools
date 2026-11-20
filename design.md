@@ -174,6 +174,34 @@ The task and the exact action always dominate supporting technical evidence.
   controls, and keyboard focus visibility. All data remains live; no mock
   product facts in production UI.
 
+## Operational companion workbenches (November 2026)
+
+Treasury, Contacts and Agent access extend the same task-first workspace.
+They do not create a parallel information architecture.
+
+- **Treasuries:** confirmed shared-control accounts are the primary list;
+  available accounts remain a distinct opt-in area. Account views lead with
+  the on-chain balance, **New proposal**, Activity, and Settings. Exact assets,
+  signing thresholds, key powers and signer identities remain on the same page.
+  A Treasury name is private metadata, never an on-chain label.
+- **Contacts:** signer names and notification email management lead. Other
+  saved addresses follow; linked Treasury accounts are references last.
+  Search matches full Stellar addresses and names without loading new private
+  data. A new contact closes only after the API confirms its save.
+- **Agent access:** surface who currently has access before issuing more
+  credentials. Treat Read/Write/Sign as cumulative API scopes, not custodial
+  authority. Revoke requires a second explicit control. Newly issued secrets
+  stay visible immediately after creation until dismissed; revoked credentials
+  are opt-in history.
+- **Private identity:** names, email addresses, and agent secrets are displayed
+  only for the verified wallet/network session. Network and Stellar signer
+  authorization remain authoritative across all operational views.
+
+**Interaction rule:** one primary action per resource, secondary actions
+beside or below it, and irreversible/revocation operations require explicit
+confirmation. Reuse StellarWorkspaceShell, PageHeader, shared action
+classes, design tokens and workflow routes. Do not invent new CSS palettes.
+
 ## Footer
 
 Marketing footer is a compact product/trust directory, not a four-column SaaS sitemap.

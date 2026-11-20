@@ -3836,3 +3836,263 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
     }
   }
 }
+
+/* Hallmark · operational workbenches · task-first extension */
+/* Pre-emit critique P5 H5 E4 S5 R5 V4 · linked to locked design.md */
+@layer components {
+  .mst-operations-section-head {
+    margin-bottom: var(--space-xs);
+  }
+
+  .mst-operations-section-head h2 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2xs);
+    color: var(--color-ink);
+    font-size: var(--text-lg);
+    font-weight: 750;
+    line-height: 1.3;
+  }
+
+  .mst-operations-section-head p {
+    max-width: 60ch;
+    margin-top: var(--space-2xs);
+    color: var(--color-ink-2);
+    font-size: var(--text-sm);
+    line-height: 1.6;
+  }
+
+  .mst-operations-count {
+    color: var(--color-muted);
+    font-size: var(--text-xs);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mst-treasury-row__actions {
+    justify-content: flex-start;
+    align-items: center;
+    gap: var(--space-lg);
+  }
+
+  .mst-treasury-row__action {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    gap: var(--space-2xs);
+    color: var(--color-ink-2);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .mst-treasury-row__action:hover { color: var(--color-action); }
+  .mst-treasury-row__action:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
+
+  .mst-treasury-detail__header h1 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-family: var(--font-display);
+    font-size: clamp(1.875rem, 3vw, 2.5rem);
+    line-height: 1.12;
+    letter-spacing: -0.025em;
+  }
+
+  .mst-treasury-detail__balance {
+    min-width: 0;
+    text-align: left;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mst-treasury-detail-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs);
+    padding-block: var(--space-md);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-treasury-detail-actions :where(a) { white-space: nowrap; }
+
+  .mst-contacts-search {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: var(--space-2xs) var(--space-sm);
+    margin-top: var(--space-lg);
+    padding-bottom: var(--space-sm);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-contacts-search label {
+    grid-column: 1 / -1;
+    color: var(--color-ink-2);
+    font-size: var(--text-sm);
+    font-weight: 700;
+  }
+
+  .mst-contacts-search input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .mst-contacts-search > span {
+    align-self: center;
+    color: var(--color-muted);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .mst-contacts-section {
+    margin-top: var(--space-lg);
+  }
+
+  .mst-contacts-section .mst-address-list {
+    margin-top: var(--space-xs);
+  }
+
+  .mst-contacts-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--space-2xs);
+  }
+
+  .mst-contacts-form-actions :where(button) { white-space: nowrap; }
+
+  .mst-agent-stack { gap: var(--space-lg); }
+
+  .mst-agent-credential-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+
+  .mst-agent-credential-head > div { min-width: 0; }
+
+  .mst-agent-secret {
+    padding: var(--space-md);
+    border: var(--rule-hairline) solid var(--color-warning);
+    border-radius: var(--radius-panel);
+    background: var(--color-paper-2);
+  }
+
+  .mst-agent-credential-list {
+    margin-top: var(--space-sm);
+    border-top: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-agent-credential-list > div {
+    min-width: 0;
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+  }
+
+  .mst-agent-credential-list > div > div:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .mst-agent-danger-action {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2xs);
+    padding-inline: var(--space-sm);
+    border: var(--rule-hairline) solid var(--color-danger);
+    border-radius: var(--radius-input);
+    background: transparent;
+    color: var(--color-danger);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .mst-agent-danger-action:hover {
+    background: var(--color-paper-2);
+  }
+
+  .mst-agent-danger-action:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .mst-agent-danger-action:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .mst-agent-revoke-confirm {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2xs);
+  }
+
+  .mst-agent-revoke-confirm > span {
+    color: var(--color-danger);
+    font-size: var(--text-xs);
+    font-weight: 700;
+  }
+
+  .mst-agent-create-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+    margin-top: var(--space-md);
+  }
+
+  .mst-agent-create-form > label {
+    color: var(--color-ink-2);
+    font-size: var(--text-sm);
+    font-weight: 700;
+  }
+
+  .mst-agent-create-form__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+
+  .mst-agent-create-form__actions input {
+    flex: 1 1 14rem;
+    min-width: 0;
+  }
+
+  .mst-agent-create-form__actions button {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 40rem) {
+  @layer components {
+    .mst-treasury-detail__header {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .mst-treasury-detail__header > div:first-child {
+      flex: 0 0 auto;
+      width: 100%;
+    }
+
+    .mst-treasury-detail__balance {
+      width: 100%;
+      text-align: left;
+    }
+
+    .mst-treasury-row__actions { gap: var(--space-sm); }
+    .mst-contacts-search { grid-template-columns: minmax(0, 1fr); }
+    .mst-contacts-search > span { justify-self: start; }
+    .mst-agent-revoke-confirm { width: 100%; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mst-agent-danger-action { transition-duration: 100ms; }
+}

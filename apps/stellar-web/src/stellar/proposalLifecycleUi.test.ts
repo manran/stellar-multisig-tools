@@ -215,9 +215,9 @@ test('default evidence export structurally excludes private plaintext', () => {
 });
 
 test('Address Book presents signer workspace relationships plus secondary Contacts', () => {
-  assert.match(addressBook, />Treasuries</);
-  assert.match(addressBook, />Signers</);
-  assert.match(addressBook, />Contacts</);
+  assert.match(addressBook, /<h2>Treasuries <span/);
+  assert.match(addressBook, /<h2>Signers <span/);
+  assert.match(addressBook, /title="Contacts"/);
   assert.match(addressBook, /loadAccountsForSigner/);
   assert.match(addressBook, /loadSharedTreasuryNames/);
   assert.match(addressBook, /Add contact/);

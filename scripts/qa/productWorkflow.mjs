@@ -78,6 +78,16 @@ function templateFixture(name = 'Monthly suppliers') {
   };
 }
 
+function agentFixture() {
+  return {
+    credentialId: 'qa-agent-001',
+    label: 'Research assistant',
+    prefix: 'mstqa_read_01',
+    principal: { type: 'signer', network: 'testnet', address: addresses.alice },
+    access: 'read', createdAt: now, createdBy: addresses.alice,
+  };
+}
+
 const walletModule = `
 import React, { createContext, useContext, useState } from 'react';
 const Context = createContext(null);
@@ -163,6 +173,8 @@ async function fixturePage(width, options = {}) {
     requestGetCount: 0, inboxGetCount: 0, contributionCount: 0, submitCount: 0, retentionCount: 0,
     requestAccess: { shareable: false, activityBound: true }, requestGetResponse: null, horizonAccount: null,
     inviteContacts: false, assignments: [], notifications: [],
+    agentCredentials: [agentFixture()], agentRevokeCount: 0, agentCreates: [],
+    contactSaveCount: 0, contactSaveStatus: 200, addressEntries: null,
     ...options.state,
   };
   await page.route('**/*', async (route) => {
@@ -170,6 +182,14 @@ async function fixturePage(width, options = {}) {
     const url = new URL(request.url());
     const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
     if (url.hostname === 'horizon-testnet.stellar.org') {
+      if (url.pathname === '/accounts' && url.searchParams.get('signer')) return json({
+        _embedded: { records: [{
+          account_id: addresses.source, sequence: '100', subentry_count: 3, num_sponsoring: 0, num_sponsored: 0,
+          balances: [{ asset_type: 'native', balance: '125.0000000' }],
+          thresholds: { low_threshold: 1, med_threshold: 2, high_threshold: 2 },
+          signers: ['alice', 'bob', 'carol'].map((name) => ({ key: addresses[name], type: 'ed25519_public_key', weight: 1 })),
+        }] },
+      });
       if (url.pathname.startsWith('/accounts/')) return json(state.horizonAccount ?? {
         account_id: url.pathname.split('/').at(-1), sequence: '100', subentry_count: 3, num_sponsoring: 0, num_sponsored: 0,
         balances: [{ asset_type: 'native', balance: '1000.0000000' }],
@@ -193,10 +213,42 @@ async function fixturePage(width, options = {}) {
       state.inboxGetCount++;
       return json(state.inboxStatus === 200 ? state.inbox : { error: 'Fixture inbox load failure.' }, state.inboxStatus);
     }
-    if (url.pathname === '/api/address-book') return json({ entries: ['alice', 'bob', 'carol'].map((name) => ({
-      address: addresses[name], subjectType: 'signer', label: name[0].toUpperCase() + name.slice(1),
-      ...(state.inviteContacts && name !== 'alice' ? { notificationEmail: name + '@example.org' } : {}),
-    })) });
+    if (url.pathname === '/api/address-book') {
+      if (request.method() === 'PUT') {
+        const body = request.postDataJSON();
+        if (state.contactSaveStatus !== 200) return json({ error: 'Contact could not be saved.' }, state.contactSaveStatus);
+        state.contactSaveCount++;
+        const entry = { address: body.address, subject_type: body.subject_type, label: body.label, created_at: now, updated_at: now };
+        state.addressEntries = [...(state.addressEntries ?? []), entry];
+        return json({ entry });
+      }
+      return json({ entries: state.addressEntries ?? ['alice', 'bob', 'carol'].map((name) => ({
+        address: addresses[name], subjectType: 'signer', label: name[0].toUpperCase() + name.slice(1),
+        ...(state.inviteContacts && name !== 'alice' ? { notificationEmail: name + '@example.org' } : {}),
+      })) });
+    }
+    if (url.pathname === '/api/agent-access') {
+      assert.equal(request.headers()['x-multisig-session-address'], addresses.alice);
+      if (request.method() === 'GET') return json({ credentials: state.agentCredentials });
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON();
+        assert.ok(['read', 'write', 'sign'].includes(body.access));
+        state.agentCreates.push(body);
+        const credential = {
+          ...agentFixture(), credentialId: 'qa-agent-' + (state.agentCreates.length + 1),
+          label: body.label, access: body.access, prefix: 'mstqa_new_01',
+        };
+        state.agentCredentials = [...state.agentCredentials, credential];
+        return json({ credential, apiKey: 'qa_one_time_credential_secret' });
+      }
+      if (request.method() === 'DELETE') {
+        const { credentialId } = request.postDataJSON();
+        state.agentRevokeCount++;
+        state.agentCredentials = state.agentCredentials.map((credential) =>
+          credential.credentialId === credentialId ? { ...credential, revokedAt: now, revokedBy: addresses.alice } : credential);
+        return json({ revoked: true });
+      }
+    }
     if (url.pathname === '/api/contracts') return json({ contracts: [] });
     if (url.pathname === '/api/treasury-box') return json({ metadataByAccount: {} });
     if (url.pathname === '/api/runtime-config') return json({ stellarNetwork: 'testnet', fixedNetwork: 'testnet', capabilities: { classicManagedExecution: { testnet: false, public: false } } });
@@ -318,9 +370,95 @@ try {
           await visible(page, 'Contracts', 'menuitem');
           await visible(page, 'Treasuries', 'menuitem');
           await visible(page, 'Contacts', 'menuitem');
+          await visible(page, 'Agent access', 'menuitem');
           await page.keyboard.press('Escape');
           assert.equal(await more.getAttribute('aria-expanded'), 'false');
         }
+      });
+    }
+
+    if (width === 375 || width === 1280) {
+      await run('treasury-proposal-shortcut', width, {}, async ({ page }) => {
+        await page.goto(origin + '/treasury');
+        await page.getByRole('button', { name: 'Add to Treasuries' }).waitFor({ state: 'visible' });
+        await page.getByRole('button', { name: 'Add to Treasuries' }).click();
+        await page.getByRole('heading', { name: /My treasuries/ }).waitFor({ state: 'visible' });
+        await page.getByRole('link', { name: 'View account' }).click();
+        if (width <= 414) {
+          const overlapping = await page.locator('.mst-treasury-detail__header > div').evaluateAll((nodes) => {
+            const [heading, balance] = nodes.map((node) => node.getBoundingClientRect());
+            return balance.top < heading.bottom - 1;
+          });
+          assert.equal(overlapping, false, 'Treasury account identity and balance must not overlap');
+        }
+        const nav = page.getByRole('navigation', { name: 'Treasury actions' });
+        const proposal = nav.getByRole('link', { name: 'New proposal' });
+        await proposal.waitFor({ state: 'visible' });
+        const href = new URL(await proposal.getAttribute('href'), origin);
+        assert.equal(href.searchParams.get('account'), addresses.source);
+        assert.equal(href.searchParams.get('network'), 'testnet');
+        await snapshot(page, 'treasury-workbench', width);
+      });
+
+      if (width === 375) {
+        await run('contacts-wallet-scope', width, {}, async ({ page }) => {
+          await page.goto(origin + '/address-book');
+          await visible(page, 'Contacts', 'heading');
+          await page.evaluate((wallet) => window.__MST_QA_SET_WALLET__(wallet),
+            { ...walletState(addresses.bob), unlockedAddress: addresses.alice });
+          await visible(page, 'Saved contact details are private');
+          assert.equal(await page.getByRole('button', { name: 'Add contact' }).count(), 0);
+        });
+      }
+
+      await run('contacts-search-and-save', width, {}, async ({ page, state }) => {
+        await page.goto(origin + '/address-book');
+        await visible(page, 'Contacts', 'heading');
+        const search = page.getByRole('searchbox', { name: 'Find a contact' });
+        await search.fill('Bob');
+        await visible(page, 'Bob');
+        await search.fill('no-matches-999');
+        await visible(page, 'No matching contacts. Try another name or address.');
+        await search.fill('');
+        await page.getByRole('button', { name: 'Add contact' }).click();
+        await page.getByRole('textbox', { name: 'Contact address' }).fill(addresses.recipient);
+        const name = page.getByRole('textbox', { name: 'Name', exact: true });
+        await name.fill('Vendor Example');
+        state.contactSaveStatus = 500;
+        await page.getByRole('button', { name: 'Save contact' }).click();
+        await visible(page, 'Contact could not be saved.');
+        assert.equal(state.contactSaveCount, 0);
+        assert.equal(await name.inputValue(), 'Vendor Example');
+        state.contactSaveStatus = 200;
+        await page.getByRole('button', { name: 'Save contact' }).click();
+        await visible(page, 'Vendor Example');
+        assert.equal(state.contactSaveCount, 1);
+        await snapshot(page, 'contacts-workbench', width);
+      });
+
+      await run('agent-access-confirmed-revoke', width, {}, async ({ page, state }) => {
+        await page.goto(origin + '/agent-access');
+        await page.getByRole('heading', { name: /Current agents/ }).waitFor({ state: 'visible' });
+        await page.getByRole('button', { name: 'Revoke', exact: true }).click();
+        assert.equal(state.agentRevokeCount, 0);
+        await visible(page, 'Confirm revoke', 'button');
+        await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+        assert.equal(state.agentRevokeCount, 0);
+        await page.getByRole('button', { name: 'Revoke', exact: true }).click();
+        await page.getByRole('button', { name: 'Confirm revoke' }).click();
+        await visible(page, 'No active agents. Create a credential below to connect one.');
+        assert.equal(state.agentRevokeCount, 1);
+        await page.getByRole('button', { name: 'Show revoked (1)' }).click();
+        await visible(page, 'Research assistant');
+        await snapshot(page, 'agents-workbench', width);
+        await page.getByRole('button', { name: /^Write\b/ }).click();
+        await page.getByRole('textbox', { name: 'Agent name' }).fill('Operations bot');
+        await page.getByRole('button', { name: 'Create credential' }).click();
+        await visible(page, 'Copy this credential now');
+        await visible(page, 'qa_one_time_credential_secret');
+        assert.deepEqual(state.agentCreates, [{ label: 'Operations bot', access: 'write' }]);
+        await page.getByRole('button', { name: 'Done', exact: true }).click();
+        assert.equal(await page.getByText('qa_one_time_credential_secret').count(), 0);
       });
     }
 
