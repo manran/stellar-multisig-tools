@@ -1,0 +1,285 @@
+#!/usr/bin/env node
+// Explicit opt-in Testnet smoke: one ephemeral account, one durable Request,
+// two independently signed contributions, and one real Stellar transaction.
+// No saved keys, email invitations, Mainnet calls, or production credentials.
+import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
+import { Account, BASE_FEE, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
+
+const API = 'https://api-testnet.multisig.tools/stellar';
+const HORIZON = 'https://horizon-testnet.stellar.org';
+const FAUCET = 'https://friendbot.stellar.org';
+const LIVE = process.argv.includes('--live');
+const AGENT = process.argv.includes('--agent');
+const now = () => new Date().toISOString();
+const trace = [];
+function record(step, extra = {}) {
+  trace.push({ step, at: now(), ...extra });
+  console.log('PASS ' + step);
+}
+function check(test, description) { assert.ok(test, description); }
+async function readJson(response) {
+  const text = await response.text();
+  try { return text ? JSON.parse(text) : {}; }
+  catch { throw new Error('Non-JSON HTTP ' + response.status + ' from ' + new URL(response.url).pathname); }
+}
+async function call(path, method = 'GET', payload, headers = {}, expect = 200) {
+  const response = await fetch(API + path, {
+    method,
+    headers: {
+      Accept: 'application/json',
+      ...(payload === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...headers,
+    },
+    ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
+    signal: AbortSignal.timeout(30000),
+  });
+  const body = await readJson(response);
+  if (response.status !== expect) {
+    throw new Error(method + ' ' + path + ': HTTP ' + response.status +
+      ' [' + (body.code ?? 'no_code') + '] ' + (body.error ?? ''));
+  }
+  return body;
+}
+async function horizon(path, init) {
+  const response = await fetch(HORIZON + path, { ...init, signal: AbortSignal.timeout(30000) });
+  const body = await readJson(response);
+  if (!response.ok) {
+    throw new Error('Horizon ' + path.split('?')[0] + ': HTTP ' + response.status +
+      ' ' + (body.title ?? ''));
+  }
+  return body;
+}
+async function fund(address) {
+  const response = await fetch(FAUCET + '/?addr=' + encodeURIComponent(address),
+    { signal: AbortSignal.timeout(30000) });
+  const body = await readJson(response);
+  if (!response.ok) throw new Error('Testnet Friendbot: HTTP ' + response.status +
+    ' ' + (body.detail ?? body.title ?? ''));
+}
+async function submitXdr(xdr) {
+  return horizon('/transactions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ tx: xdr }),
+  });
+}
+async function unlock(signer) {
+  const challenge = await call('/auth?account=' + encodeURIComponent(signer.publicKey()) + '&network=testnet');
+  const tx = TransactionBuilder.fromXdr(challenge.transaction, Networks.TESTNET);
+  check(tx.source === challenge.signing_key, 'Challenge source is not the server');
+  check(tx.operations[0]?.source === signer.publicKey(), 'Challenge signer mismatch');
+  tx.sign(signer);
+  const session = await call('/auth', 'POST', { transaction: tx.toXdr(), network: 'testnet' });
+  check(session.address === signer.publicKey() && session.network === 'testnet', 'Unlock identity mismatch');
+  check(typeof session.token === 'string' && session.token.split('.').length === 3, 'Missing session token');
+  return session.token; // Never log or persist.
+}
+function humanHeaders(address, token) {
+  return { Authorization: 'Bearer ' + token, 'x-multisig-session-address': address };
+}
+function cookieHeaders(token) { return { Cookie: 'mst_auth=' + encodeURIComponent(token) }; }
+function requestHeaders(id, capability, extra = {}) {
+  return { 'x-multisig-request-id': id, ...(capability ? { 'x-multisig-capability': capability } : {}), ...extra };
+}
+
+async function main() {
+  const runtime = await call('/runtime-config');
+  check(runtime.fixedNetwork === 'testnet', 'Refusing non-Testnet API deployment');
+  record('isolated-testnet-runtime');
+
+  if (!LIVE) {
+    console.log('READ-ONLY PASS. Re-run with --live for one explicit Testnet-only transaction.');
+    return;
+  }
+
+  // New keys only. Never use a supplied wallet or retain seeds on disk.
+  const alice = Keypair.random();
+  const bob = Keypair.random();
+  const carol = Keypair.random();
+  const source = alice.publicKey();
+  await fund(source);
+  const funded = await horizon('/accounts/' + source);
+  check(funded.account_id === source, 'Faucet-funded account not found');
+  record('ephemeral-friendbot-account', { account: source });
+
+  // The initial account key authorizes one setup. The resulting policy needs
+  // any two of Alice, Bob and Carol for every operation.
+  const setup = new TransactionBuilder(new Account(source, funded.sequence), {
+    fee: BASE_FEE, networkPassphrase: Networks.TESTNET,
+  })
+    .addOperation(Operation.setOptions({ signer: { ed25519PublicKey: bob.publicKey(), weight: 1 } }))
+    .addOperation(Operation.setOptions({ signer: { ed25519PublicKey: carol.publicKey(), weight: 1 } }))
+    .addOperation(Operation.setOptions({
+      masterWeight: 1, lowThreshold: 2, medThreshold: 2, highThreshold: 2,
+    }))
+    .setTimeout(120).build();
+  setup.sign(alice);
+  const setupReceipt = await submitXdr(setup.toXdr());
+  check(setupReceipt.successful === true, '2-of-3 setup not accepted on ledger');
+  const configured = await horizon('/accounts/' + source);
+  check(configured.thresholds.low_threshold === 2 &&
+    configured.thresholds.med_threshold === 2 &&
+    configured.thresholds.high_threshold === 2, 'Signing thresholds not set to 2');
+  for (const signer of [alice, bob, carol]) {
+    check(configured.signers.some((x) => x.key === signer.publicKey() && x.weight === 1),
+      'Signer missing from on-chain policy');
+  }
+  record('live-2-of-3-ledger-policy', { setupHash: setupReceipt.hash });
+
+  const token = await unlock(alice);
+  record('live-wallet-signed-unlock');
+
+  const dataKey = 'mst_e2e_' + Date.now().toString(36) + '_' + randomBytes(3).toString('hex');
+  const dataValue = 'hosted-testnet-proof';
+  const transaction = new TransactionBuilder(new Account(source, configured.sequence), {
+    fee: BASE_FEE, networkPassphrase: Networks.TESTNET,
+  })
+    .addOperation(Operation.manageData({ name: dataKey, value: dataValue }))
+    .setTimeout(480).build();
+  const unsignedXdr = transaction.toXdr();
+
+  const denied = await call('/request', 'POST', { network: 'testnet', xdr: unsignedXdr }, {}, 401);
+  check(denied.code === 'request_creator_identity_required', 'Unauthenticated creator was not rejected');
+  record('unauthenticated-proposal-rejected');
+
+  const created = await call('/request', 'POST', { network: 'testnet', xdr: unsignedXdr },
+    humanHeaders(source, token), 201);
+  const requestId = created.request?.id;
+  const capability = created.capability;
+  check(typeof requestId === 'string' && typeof capability === 'string', 'Missing private proposal locator');
+  check(created.request.network === 'testnet' && created.request.signatureCount === 0 &&
+    created.request.status === 'awaiting_signatures', 'Proposal creation status is incorrect');
+  record('hosted-postgres-proposal-created', { requestId });
+
+  const before = await call('/request', 'GET', undefined, requestHeaders(requestId, capability));
+  check(before.request?.signatureCount === 0, 'Stored proposal signature count changed');
+  record('hosted-proposal-readback');
+
+  // With --agent, the principal signs exact XDR locally while a scoped API
+  // credential names the Agent actor. The API never holds the private key.
+  let agentApiKey = '';
+  let agentCredentialId = '';
+  let bobToken = '';
+  if (AGENT) {
+    bobToken = await unlock(bob);
+    const agent = await call('/agent-access', 'POST',
+      { label: 'MST hosted Testnet QA', access: 'sign' }, {
+        ...cookieHeaders(bobToken), 'x-multisig-session-address': bob.publicKey(),
+      }, 201);
+    check(typeof agent.apiKey === 'string' && agent.credential?.access === 'sign',
+      'Agent credential was not issued');
+    agentApiKey = agent.apiKey;
+    agentCredentialId = agent.credential.credentialId;
+    record('agent-credential-created-for-signer');
+    const task = await call('/request', 'GET', undefined,
+      requestHeaders(requestId, '', { Authorization: 'Bearer ' + agentApiKey }));
+    check(task.request?.id === requestId && task.task, 'Agent cannot read its current signer task');
+    record('agent-task-read');
+  }
+
+  const signedB = TransactionBuilder.fromXdr(unsignedXdr, Networks.TESTNET);
+  signedB.sign(bob);
+  const firstHeaders = AGENT
+    ? requestHeaders(requestId, '', { Authorization: 'Bearer ' + agentApiKey })
+    : requestHeaders(requestId, capability);
+  const first = await call('/request', 'PATCH', { signedXdr: signedB.toXdr() }, firstHeaders);
+  check(first.addedSignatureCount === 1 && first.request?.signatureCount === 1 &&
+    first.request.status === 'awaiting_signatures', 'First signer contribution was not retained');
+  record('first-independent-signature');
+
+  const duplicate = await call('/request', 'PATCH', { signedXdr: signedB.toXdr() }, firstHeaders);
+  check(duplicate.addedSignatureCount === 0 && duplicate.request?.signatureCount === 1,
+    'Duplicate signature changed authorization');
+  record('duplicate-contribution-idempotent');
+
+  // A private capability is not a replacement for signer identity in Activity.
+  const inbox = await call('/inbox', 'GET', undefined, cookieHeaders(token));
+  check(inbox.network === 'testnet' && inbox.address === source, 'Inbox wallet scope mismatch');
+  check(inbox.requests?.some((item) => item.id === requestId), 'Created proposal is missing from signer Inbox');
+  record('live-signer-inbox');
+
+  const signedC = TransactionBuilder.fromXdr(unsignedXdr, Networks.TESTNET);
+  signedC.sign(carol);
+  const second = await call('/request', 'PATCH', { signedXdr: signedC.toXdr() },
+    requestHeaders(requestId, capability));
+  check(second.addedSignatureCount === 1 && second.request?.signatureCount === 2 &&
+    second.request.status === 'ready', 'Second signer contribution did not reach quorum');
+  record('second-independent-signature-quorum');
+
+  if (AGENT) {
+    const deniedSubmit = await call('/request', 'PUT', {}, firstHeaders, 403);
+    check(deniedSubmit.code === 'agent_submit_denied', 'Agent escaped submit permission boundary');
+    record('agent-submit-denied');
+  }
+  const submitted = await call('/request', 'PUT', {}, requestHeaders(requestId, capability));
+  check(submitted.request?.status === 'submitted' &&
+    submitted.request?.submission?.transactionHash === Buffer.from(transaction.hash()).toString('hex'),
+    'Hosted API did not retain final transaction hash');
+  const ledger = submitted.request.submission.ledger;
+  check(Number.isInteger(ledger) && ledger > 0, 'Missing confirmed Stellar ledger');
+  record('hosted-api-final-submission', { ledger });
+
+  const chain = await horizon('/transactions/' + submitted.request.submission.transactionHash);
+  check(chain.successful === true && chain.ledger === ledger, 'Ledger confirmation disagrees with Request');
+  const data = await horizon('/accounts/' + source + '/data/' + encodeURIComponent(dataKey));
+  check(Buffer.from(data.value, 'base64').toString('utf8') === dataValue, 'On-chain data proof missing');
+  record('stellar-ledger-state-verified', { transactionHash: chain.hash });
+
+  const closed = await call('/request', 'GET', undefined, requestHeaders(requestId, capability), 410);
+  check(closed.code === 'request_capability_closed', 'Closed private link still exposes proposal');
+  record('finished-capability-restricted');
+
+  const history = await call('/request?view=history', 'GET', undefined,
+    requestHeaders(requestId, '', {
+      ...cookieHeaders(token),
+      'x-multisig-session-address': source,
+    }));
+  check(history.request?.status === 'submitted' && history.history?.activity,
+    'Verified signer cannot view completed proposal');
+  record('post-submit-signer-history');
+
+  const activity = await call('/activity?request=' + encodeURIComponent(requestId), 'GET',
+    undefined, cookieHeaders(token));
+  check(activity.network === 'testnet' && activity.item, 'Retained Activity missing');
+  record('post-submit-retained-activity');
+
+  if (AGENT) {
+    const agentApproval = activity.item.events?.find((event) =>
+      event.type === 'approval_added' && event.actor?.type === 'agent' &&
+      event.actor.id === agentCredentialId &&
+      event.actor.principalAddress === bob.publicKey());
+    check(agentApproval, 'Retained approval lost the real Agent actor provenance');
+    record('agent-approval-audit-provenance');
+  }
+
+  if (AGENT) {
+    const revoked = await call('/agent-access', 'DELETE', { credentialId: agentCredentialId }, {
+      ...cookieHeaders(bobToken), 'x-multisig-session-address': bob.publicKey(),
+    });
+    check(typeof revoked.credential?.revokedAt === 'string', 'Agent revocation not persisted');
+    const denied = await call('/request', 'GET', undefined, firstHeaders, 401);
+    check(denied.code === 'agent_credential_revoked', 'Revoked Agent still reads signer work');
+    record('agent-revocation-enforced');
+  }
+
+  console.log('LIVE HOSTED TESTNET E2E PASSED');
+  console.log(JSON.stringify({
+    api: API,
+    network: 'testnet',
+    account: source,
+    signerCount: 3,
+    requiredSignatures: 2,
+    agentMode: AGENT,
+    requestId,
+    transactionHash: chain.hash,
+    ledger,
+    evidence: trace,
+    // No session tokens, private capabilities or signing keys.
+  }, null, 2));
+}
+
+await main().catch((cause) => {
+  console.error('LIVE HOSTED TESTNET E2E FAILED: ' + (cause instanceof Error ? cause.message : String(cause)));
+  process.exitCode = 1;
+});
