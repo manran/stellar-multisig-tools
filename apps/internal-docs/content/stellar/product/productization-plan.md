@@ -147,6 +147,51 @@ mere signature count meets threshold. No signing policy, API, or server changes.
 
 **Next product evidence:** observe a first-time sender and recipient using one real Payment proposal. Record where they hesitate or need an explanation. Use that evidence to prioritize the next round; do not add another template category or workflow engine by default.
 
+### 2026-11-20 — AI-first participant delivery
+
+**Decision:** signer authorization, acting principal and notification route are
+separate. A 2-of-3 account can invite 2 or all 3 active candidates without
+changing the on-chain threshold. Two independent Agents using one signer
+G-address do not become two independent signers.
+
+| Context | Who chooses | Initial request | Follow-up |
+| --- | --- | --- | --- |
+| Ordinary Proposal | Explicit current signer | Explicit Ask; private-contact email when available | Proposal creator or original Ask sender may Remind using their own saved contact |
+| Saved Payment Template | Template owner explicitly opts in | Still explicit Ask; never auto-select all eligible keys | Worker checks at 12h and at least 24h after the first successful reminder; at most 2 |
+| Signer Agent / bot | Signer Principal grants Agent access | Existing signer-owned Inbox | Typed Task list on Agent GET /inbox; consumer fetches fresh task before signing |
+| External Integration Service | Explicit contract/account scope | Service-owned Job / Intent | Existing signed Integration webhook; not signer-Agent delivery |
+
+**Release boundaries:** automatic reminder delivery requires
+`MULTISIG_TEMPLATE_AUTO_REMINDERS_ENABLED=1` on the authenticated API
+and on the Human notification worker;
+disabled by default. It only runs for immutable Template versions with
+`autoRemind: true`, the template creator's own explicit assignments and an
+initial provider-accepted email. The authenticated Ask queues two delayed email slots with deterministic
+event ids, using the private Contact email at Ask time. The Worker does not
+hold Blob contact credentials. A deferred email address remains in the
+PostgreSQL outbox until dispatch or cancellation; the Worker scrubs it when
+the slot closes. Review this retention window before Mainnet enablement. Stage 2 requires at least 24 hours after the
+first successful reminder. Immediately before send it re-checks the current
+Request state and signer policy. A no-longer-needed reminder is recorded as
+`skipped` (not as a failed email). All other normal email guards still apply.
+
+Template policy is version-bound and never grants an Agent or sender additional
+signing authority. Assignment, Task, email and webhook facts never count toward
+Stellar authorization.
+
+**Future slice:** per-Principal, named Agent webhook subscriptions with signed
+minimal notifications, explicit endpoint ownership, SSRF-safe verification,
+durable delivery and retries. Do not reuse a scoped `msi_` Service credential
+or the Integration webhook as an Agent credential. Do not add auto-signing
+before separate spending/asset/contract authorization limits exist.
+
+**Acceptance:** automatic reminders are default-off, bounded, idempotent,
+cancelled if authorization is complete, and never sent just because an account
+has several signer keys. Agent Inbox remains backward compatible and
+returns the same typed Task contract as the single-Request API. Test on
+isolated Testnet before enabling the worker flag; validate real
+Resend delivery and a delegated Agent with a real `msa_` credential.
+
 ## Product rule
 
 Build for today's users; keep the foundation compatible with tomorrow's larger teams.

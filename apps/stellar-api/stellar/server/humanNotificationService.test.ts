@@ -125,3 +125,50 @@ test('queues a distinct signature reminder from the original assigner private co
     destinationEmail: 'bob@example.com',
   });
 });
+
+test('prequeues template reminder slots while private Contact email is available', async () => {
+  let captured: unknown = null;
+  const queued = await queueSignatureRequestedEmail({
+    requestId: '0123456789ABCDEF',
+    assignedByAddress: OWNER,
+    signerAddress: SIGNER,
+    assignedAt: '2026-11-20T08:00:00Z',
+  }, {
+    automationEnabled: true,
+    addressBook: addressBook([{
+      version: 1, address: SIGNER, subjectType: 'signer',
+      label: 'Signer', notificationEmail: 'signer@example.org',
+      createdAt: '2026-11-20T07:00:00Z', updatedAt: '2026-11-20T07:00:00Z',
+    }]),
+    enqueue: async () => ({ eventId: 'initial', created: true }),
+    enqueueAuto: async (input) => { captured = input; return 2; },
+  });
+  assert.equal(queued.status, 'queued');
+  assert.deepEqual(captured, {
+    requestId: '0123456789ABCDEF',
+    signerAddress: SIGNER,
+    assignedByAddress: OWNER,
+    destinationEmail: 'signer@example.org',
+    assignedAt: new Date('2026-11-20T08:00:00Z'),
+  });
+});
+
+test('manual invite never schedules automatic reminders when the deployment switch is off', async () => {
+  let autoCalls = 0;
+  await queueSignatureRequestedEmail({
+    requestId: '0123456789ABCDEF',
+    assignedByAddress: OWNER,
+    signerAddress: SIGNER,
+    assignedAt: '2026-11-20T08:00:00Z',
+  }, {
+    automationEnabled: false,
+    addressBook: addressBook([{
+      version: 1, address: SIGNER, subjectType: 'signer',
+      label: 'Signer', notificationEmail: 'signer@example.org',
+      createdAt: '2026-11-20T07:00:00Z', updatedAt: '2026-11-20T07:00:00Z',
+    }]),
+    enqueue: async () => ({ eventId: 'initial', created: true }),
+    enqueueAuto: async () => { autoCalls += 1; return 2; },
+  });
+  assert.equal(autoCalls, 0);
+});

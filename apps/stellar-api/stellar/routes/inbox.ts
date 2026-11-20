@@ -13,6 +13,8 @@ import {
   requireAgentAccess,
 } from '../server/agentCredentialService.js';
 import { listSignerInbox, projectHumanInboxRequests } from '../server/requestInbox.js';
+import { projectClassicAgentTask } from '../server/agentTaskProjection.js';
+import { signerHasSignedTransaction } from '../server/requestAccess.js';
 import { listSorobanIntentInbox } from '../server/sorobanIntentInbox.js';
 import { noStoreJson } from '../server/httpResponse.js';
 import { summarizeInboxActions } from '../../../../packages/stellar-core/src/inboxPresentation.js';
@@ -27,7 +29,7 @@ async function signerContext(request: Request) {
     const credential = await authenticateAgentCredential(blobAgentCredentialStore, bearer[1].trim());
     requireAgentAccess(credential, 'read');
     await blobAgentCredentialStore.touchCredential(credential.credentialId, new Date().toISOString());
-    return { address: credential.principal.address, network: credential.principal.network, actor: 'agent' as const };
+    return { address: credential.principal.address, network: credential.principal.network, actor: 'agent' as const, access: credential.access };
   }
   const session = await requirePrivateWorkspaceSession(
     blobAuthStore,
@@ -59,12 +61,29 @@ export async function GET(request: Request): Promise<Response> {
         intents,
       });
     }
+    // Machine callers receive the same verified Request list plus typed next tasks.
+    // A task action can be unavailable to a Read/Write credential without
+    // implying a different on-chain signer or permission.
+    const tasks = await Promise.all(requests.map(async (item) => {
+      const declined = item.status === 'awaiting_signatures' && signingRequestStore.listActivityEvents
+        ? (await signingRequestStore.listActivityEvents(item.id)).some((event) =>
+          event.type === 'approval_declined' && event.actorAddress === context.address)
+        : false;
+      return projectClassicAgentTask({
+        request: item,
+        credentialAccess: context.access,
+        hasSigned: signerHasSignedTransaction(context.address, item.mergedXdr, item.network),
+        declined,
+      });
+    }));
     return noStoreJson({
       address: context.address,
       network: context.network,
       actor: context.actor,
       pending_count: requests.length,
+      action_count: tasks.filter((task) => task.state === 'action_required').length,
       requests,
+      tasks,
     });
   } catch (cause) {
     if (cause instanceof AgentCredentialServiceError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);

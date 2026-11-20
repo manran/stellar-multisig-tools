@@ -3,6 +3,7 @@ import { blobAddressBookStore } from './blobAddressBookStore.js';
 import {
   enqueueSignatureReminderNotification,
   enqueueSignatureRequestedNotification,
+  enqueueTemplateRemindersFromAsk,
 } from '../db/postgresHumanNotificationOutbox.js';
 
 export type HumanNotificationQueueResult =
@@ -32,6 +33,8 @@ export async function queueSignatureRequestedEmail(
   dependencies: {
     addressBook?: AddressBookStore;
     enqueue?: typeof enqueueSignatureRequestedNotification;
+    enqueueAuto?: typeof enqueueTemplateRemindersFromAsk;
+    automationEnabled?: boolean;
   } = {},
 ): Promise<HumanNotificationQueueResult> {
   const addressBook = dependencies.addressBook ?? blobAddressBookStore;
@@ -46,6 +49,24 @@ export async function queueSignatureRequestedEmail(
     destinationEmail,
     createdAt: new Date(input.assignedAt),
   });
+  if (dependencies.automationEnabled ?? process.env.MULTISIG_TEMPLATE_AUTO_REMINDERS_ENABLED === '1') {
+    try {
+      await (dependencies.enqueueAuto ?? enqueueTemplateRemindersFromAsk)({
+        requestId: input.requestId,
+        signerAddress: input.signerAddress,
+        assignedByAddress: input.assignedByAddress,
+        destinationEmail,
+        assignedAt: new Date(input.assignedAt),
+      });
+    } catch (cause) {
+      // The initial Ask is durable even if optional future reminders cannot
+      // be queued. A retry can repair the future slots idempotently.
+      console.error('Automatic template reminders could not be queued', {
+        requestId: input.requestId,
+        error: cause instanceof Error ? cause.name : 'unknown_error',
+      });
+    }
+  }
   return queued.created
     ? { status: 'queued', eventId: queued.eventId }
     : { status: 'duplicate', eventId: queued.eventId };
@@ -56,6 +77,7 @@ export async function queueSignatureReminderEmail(
     requestId: string;
     remindedByAddress: string;
     signerAddress: string;
+    eventId?: string;
   },
   dependencies: {
     addressBook?: AddressBookStore;
@@ -72,6 +94,7 @@ export async function queueSignatureReminderEmail(
     recipientSignerAddress: input.signerAddress,
     actorAddress: input.remindedByAddress,
     destinationEmail,
+    ...(input.eventId ? { eventId: input.eventId } : {}),
   });
   return { status: 'queued', eventId: queued.eventId };
 }

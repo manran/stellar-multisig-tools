@@ -179,3 +179,33 @@ test('only the signer who created the Ask can send its reminder', async () => {
       && cause.code === 'request_reminder_not_owner',
   );
 });
+
+test('proposal creator may remind a signer invited by another authorized signer', async () => {
+  const originalCreator = Keypair.random().publicKey();
+  const inviter = Keypair.random().publicKey();
+  const target = Keypair.random().publicKey();
+  const destination = Keypair.random().publicKey();
+  const request: StoredSigningRequest = {
+    version: 1,
+    id: '0123456789ABCDEF',
+    network: 'testnet',
+    baseXdr: unsignedPayment(originalCreator, destination),
+    transactionHash: 'e'.repeat(64),
+    createdAt: '2026-10-30T04:00:00Z',
+    expiresAt: '2026-10-31T04:00:00Z',
+    creatorAddress: originalCreator,
+  };
+  const store = storeFor(request);
+  const access = async (address: string) =>
+    address === originalCreator || address === inviter || address === target;
+  await assignSigningRequest(store, request.id, inviter, target, {
+    signerAccess: access,
+    snapshotLoader: async () => snapshot(request),
+  });
+  const reminder = await requireSigningRequestReminder(store, request.id, originalCreator, target, {
+    signerAccess: access,
+    snapshotLoader: async () => snapshot(request),
+  });
+  assert.equal(reminder.assignedByAddress, inviter, 'Original Ask provenance is unchanged');
+  assert.equal(reminder.signerAddress, target);
+});

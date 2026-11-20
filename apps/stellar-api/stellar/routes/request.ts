@@ -1125,7 +1125,7 @@ export async function PATCH(request: Request): Promise<Response> {
       try {
         const queued = await queueSignatureReminderEmail({
           requestId: access.id,
-          remindedByAddress: assignment.assignedByAddress,
+          remindedByAddress: access.actorAddress,
           signerAddress: assignment.signerAddress,
         });
         notification = { channel: 'email', status: queued.status };

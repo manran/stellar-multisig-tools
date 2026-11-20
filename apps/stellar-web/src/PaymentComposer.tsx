@@ -76,6 +76,7 @@ export default function PaymentComposer({ network }: Props) {
   const [activeTemplate, setActiveTemplate] = useState<(ReusableTemplateRef & { name: string }) | null>(null);
   const [templateSaveOpen, setTemplateSaveOpen] = useState(false);
   const [templateSaveName, setTemplateSaveName] = useState('');
+  const [templateAutoRemind, setTemplateAutoRemind] = useState(false);
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateApiAvailable, setTemplateApiAvailable] = useState(false);
 
@@ -318,6 +319,7 @@ export default function PaymentComposer({ network }: Props) {
         setPrivateNote('');
         setAddOnChainProof(false);
         setSigningWindowSeconds(template.definition.signingWindowSeconds);
+        setTemplateAutoRemind(template.definition.autoRemind === true);
         setActiveTemplate({ id: template.id, version: template.currentVersion, name: template.name });
         setTemplateApiAvailable(true);
         setError('');
@@ -399,6 +401,7 @@ export default function PaymentComposer({ network }: Props) {
               assetKey: recipient.assetKey,
             })),
             signingWindowSeconds,
+            ...(templateAutoRemind ? { autoRemind: true } : {}),
           },
         }),
       });
@@ -691,16 +694,27 @@ export default function PaymentComposer({ network }: Props) {
                 )}
               </div>
               {templateSaveOpen && (
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <div className="mt-4 space-y-3">
+                  <label htmlFor="template-name" className="block text-sm font-semibold">Template name</label>
                   <input
+                    id="template-name"
                     value={templateSaveName}
                     onChange={(event) => setTemplateSaveName(event.target.value)}
                     maxLength={80}
                     placeholder="e.g. Pay ACME"
-                    className="mst-transaction-control min-w-0 flex-1"
+                    className="mst-transaction-control w-full"
                   />
-                  <button type="button" disabled={!canSaveTemplate || !templateSaveName.trim()} onClick={() => void saveReusableTemplate()} className="mst-action-primary disabled:opacity-40">{templateSaving && <LoaderCircle className="h-4 w-4 animate-spin" />}Save template</button>
-                  <button type="button" disabled={templateSaving} onClick={() => { setTemplateSaveOpen(false); setTemplateSaveName(''); }} className="mst-action-secondary">Cancel</button>
+                  <label className="flex min-w-0 items-start gap-3 rounded-[var(--radius-panel)] border border-[var(--color-rule)] bg-[var(--color-paper-2)] p-3">
+                    <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-[var(--color-accent)]" checked={templateAutoRemind} disabled={templateSaving} onChange={(event) => setTemplateAutoRemind(event.target.checked)} />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold">Automatically remind invited signers</span>
+                      <span className="mt-1 block text-xs leading-5 text-[var(--color-muted)]">After you invite someone by email, remind them after 12 hours, then 24 hours later if authorization is still needed. Up to two reminders, before expiry. No invitation is sent just by using this template.</span>
+                    </span>
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" disabled={!canSaveTemplate || !templateSaveName.trim()} onClick={() => void saveReusableTemplate()} className="mst-action-primary disabled:opacity-40">{templateSaving && <LoaderCircle className="h-4 w-4 animate-spin" />}Save template</button>
+                    <button type="button" disabled={templateSaving} onClick={() => { setTemplateSaveOpen(false); setTemplateSaveName(''); }} className="mst-action-secondary">Cancel</button>
+                  </div>
                 </div>
               )}
             </section>

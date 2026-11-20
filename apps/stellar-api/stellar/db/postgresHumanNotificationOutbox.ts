@@ -7,7 +7,7 @@ import type { StellarNetwork } from '../../../../packages/stellar-core/src/types
 import { coordinationPool, withPostgresTransaction } from './postgres.js';
 
 export type HumanNotificationEventType = 'signature_requested' | 'signature_reminder';
-export type HumanNotificationTerminalOutcome = 'sent' | 'permanent_failure';
+export type HumanNotificationTerminalOutcome = 'sent' | 'permanent_failure' | 'skipped';
 export type HumanNotificationDeliveryOutcome = 'succeeded' | 'retry' | 'permanent_failure';
 export type HumanNotificationProviderDeliveryState = 'delivered' | 'bounced';
 
@@ -121,6 +121,104 @@ export function signatureReminderNotificationEventId(
   return `classic_request:${requestId}:signature_reminder:${signerAddress}:${nonce}`;
 }
 
+
+// A stable key prevents concurrent reminder scans from sending twice.
+export function templateAutoReminderEventId(id: string, signer: string, stage: 1 | 2): string {
+  return `classic_request:${id}:signature_reminder:${signer}:template:${stage}`;
+}
+
+export function isTemplateAutoReminderEventId(eventId: string): boolean {
+  return /:signature_reminder:G[A-Z2-7]{55}:template:[12]$/.test(eventId);
+}
+
+// Queue both reminder slots at the moment of the sender's explicit Ask while
+// the original private-contact email is available to the authenticated API.
+// The mail worker deliberately has no access to private Address Books.
+export async function enqueueTemplateRemindersFromAsk(
+  input: {
+    requestId: string;
+    signerAddress: string;
+    assignedByAddress: string;
+    destinationEmail: string;
+    assignedAt: Date;
+  },
+  pool: Pool = coordinationPool(),
+): Promise<number> {
+  const result = await pool.query(
+    `INSERT INTO mst_stellar.human_notification_outbox (
+       event_id, event_type, request_id, recipient_signer_address,
+       actor_address, destination_email, created_at, available_at
+     )
+     SELECT 'classic_request:' || r.id || ':signature_reminder:' || a.signer_address || ':template:' || slots.stage,
+            'signature_reminder', r.id, a.signer_address, a.assigned_by_address,
+            $4, $5, $5::timestamptz + slots.delay
+       FROM mst_stellar.classic_requests r
+       JOIN mst_stellar.classic_request_assignments a ON a.request_id = r.id
+       JOIN mst_stellar.reusable_templates t ON t.id = r.reusable_template_id
+       JOIN mst_stellar.reusable_template_versions v
+         ON v.template_id = r.reusable_template_id AND v.version = r.reusable_template_version
+       CROSS JOIN (VALUES (1, interval '12 hours'), (2, interval '36 hours')) AS slots(stage, delay)
+      WHERE r.id = $1 AND a.signer_address = $2 AND a.assigned_by_address = $3
+        AND r.creator_address = $3 AND t.owner_address = $3
+        AND v.definition->>'autoRemind' = 'true'
+        AND r.expires_at > ($5::timestamptz + slots.delay + interval '15 minutes')
+      ON CONFLICT (event_id) DO NOTHING`,
+    [input.requestId, input.signerAddress, input.assignedByAddress,
+      input.destinationEmail, input.assignedAt.toISOString()],
+  );
+  return result.rowCount ?? 0;
+}
+
+export type TemplateReminderDispatchDecision =
+  | { state: 'send' }
+  | { state: 'skip' }
+  | { state: 'wait'; retryAt: Date };
+
+// A queued future email is never sufficient authority to send. It must follow
+// a delivered/accepted Ask, and slot 2 must wait 24 hours after slot 1 sent.
+export async function templateReminderDispatchDecision(
+  eventId: string,
+  now: Date,
+  pool: Pool = coordinationPool(),
+): Promise<TemplateReminderDispatchDecision> {
+  const stage = eventId.endsWith(':template:1') ? 1 : 2;
+  const result = await pool.query<{
+    initial_outcome: HumanNotificationTerminalOutcome | null;
+    initial_provider_state: string | null;
+    first_outcome: HumanNotificationTerminalOutcome | null;
+    first_completed_at: Date | string | null;
+    first_provider_state: string | null;
+  }>(
+    `SELECT initial.outcome AS initial_outcome,
+            initial.provider_delivery_state AS initial_provider_state,
+            first.outcome AS first_outcome,
+            first.completed_at AS first_completed_at,
+            first.provider_delivery_state AS first_provider_state
+       FROM mst_stellar.human_notification_outbox candidate
+       JOIN mst_stellar.human_notification_outbox initial
+         ON initial.event_id = ('classic_request:' || candidate.request_id || ':signature_requested:' || candidate.recipient_signer_address)
+       LEFT JOIN mst_stellar.human_notification_outbox first
+         ON first.event_id = ('classic_request:' || candidate.request_id || ':signature_reminder:' || candidate.recipient_signer_address || ':template:1')
+      WHERE candidate.event_id = $1`,
+    [eventId],
+  );
+  const row = result.rows[0];
+  if (!row) return { state: 'skip' };
+  if (row.initial_provider_state === 'bounced' || row.initial_outcome === 'permanent_failure'
+    || row.initial_outcome === 'skipped') return { state: 'skip' };
+  if (row.initial_outcome !== 'sent') {
+    return { state: 'wait', retryAt: new Date(now.getTime() + 5 * 60_000) };
+  }
+  if (stage === 1) return { state: 'send' };
+  if (row.first_outcome === 'permanent_failure' || row.first_outcome === 'skipped'
+    || row.first_provider_state === 'bounced') return { state: 'skip' };
+  if (row.first_outcome !== 'sent' || !row.first_completed_at) {
+    return { state: 'wait', retryAt: new Date(now.getTime() + 5 * 60_000) };
+  }
+  const earliest = new Date(new Date(row.first_completed_at).getTime() + 24 * 60 * 60_000);
+  return earliest > now ? { state: 'wait', retryAt: earliest } : { state: 'send' };
+}
+
 async function enqueueHumanNotification(
   input: {
     eventId: string;
@@ -189,6 +287,7 @@ export function enqueueSignatureReminderNotification(
 }
 
 interface NotificationSummaryRow {
+  event_id: string;
   event_type: HumanNotificationEventType;
   recipient_signer_address: string;
   actor_address: string;
@@ -207,17 +306,22 @@ export async function listLatestHumanNotificationSummaries(
 ): Promise<SigningRequestNotificationSummary[]> {
   const result = await pool.query<NotificationSummaryRow>(
     `SELECT DISTINCT ON (recipient_signer_address)
-            event_type, recipient_signer_address, actor_address, created_at,
+            event_id, event_type, recipient_signer_address, actor_address, created_at,
             last_attempt_at, completed_at, outcome, terminal_error_code,
             provider_delivery_state, provider_event_at
        FROM mst_stellar.human_notification_outbox
       WHERE request_id = $1
-      ORDER BY recipient_signer_address, created_at DESC, event_id DESC`,
+        AND outcome IS DISTINCT FROM 'skipped'
+        AND (event_id !~ ':template:[12]$' OR available_at <= now())
+      ORDER BY recipient_signer_address,
+               GREATEST(created_at, COALESCE(completed_at, created_at)) DESC,
+               event_id DESC`,
     [requestId],
   );
   return result.rows.map((row) => ({
     channel: 'email' as const,
     eventType: row.event_type,
+    ...(isTemplateAutoReminderEventId(row.event_id) ? { automatic: true as const } : {}),
     signerAddress: row.recipient_signer_address,
     actorAddress: row.actor_address,
     state: row.provider_delivery_state === 'delivered'

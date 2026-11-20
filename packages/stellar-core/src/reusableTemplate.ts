@@ -12,6 +12,8 @@ export interface ReusablePaymentTemplateDefinitionV1 {
   source: string;
   recipients: ReusablePaymentTemplateRecipient[];
   signingWindowSeconds: number;
+  /** Explicit sender opt-in: after a manual Ask, at most two automatic email reminders. */
+  autoRemind?: true;
 }
 
 export type ReusableTemplateDefinition = ReusablePaymentTemplateDefinitionV1;

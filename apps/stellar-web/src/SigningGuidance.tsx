@@ -23,6 +23,7 @@ interface Props {
   authorization: TransactionAuthorizationStatus | null;
   sourceAnalyses: SourceAnalysis[];
   walletAddress: string;
+  creatorAddress?: string;
   walletBusy: boolean;
   walletError: string;
   onConnectWallet: () => void;
@@ -42,6 +43,7 @@ export default function SigningGuidance({
   authorization,
   sourceAnalyses,
   walletAddress,
+  creatorAddress,
   walletBusy,
   walletError,
   onConnectWallet,
@@ -63,6 +65,9 @@ export default function SigningGuidance({
   const [shareError, setShareError] = useState('');
   const [shareCopied, setShareCopied] = useState(false);
   const [askBusy, setAskBusy] = useState('');
+  const [inviteSelection, setInviteSelection] = useState<string[]>([]);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteFeedback, setInviteFeedback] = useState('');
   const [askError, setAskError] = useState<{ address: string; message: string } | null>(null);
   const allowNaming = Boolean(sessionAddress);
   const requirementAccountIds = inspection.sourceRequirements.map((requirement) => requirement.accountId);
@@ -136,6 +141,11 @@ export default function SigningGuidance({
     ? incomplete.reduce((total, entry) => total + (entry.signaturesRemaining ?? 0), 0)
     : null;
   const shareTargets = [...neededWalletKeys].filter((key) => key !== walletAddress);
+  const inviteCandidates = shareTargets.filter((key) =>
+    Boolean(emailFor(key))
+    && !assignments.some((assignment) => assignment.signerAddress === key));
+  const inviteSelectedNow = inviteSelection.filter((key) => inviteCandidates.includes(key));
+
   const shouldShowShare = shareTargets.length > 0 || (!walletAddress && neededWalletKeys.size > 0);
   const remainingSignatureCopy = exactSignaturesRemaining === null
     ? 'More signatures are still needed.'
@@ -183,6 +193,33 @@ export default function SigningGuidance({
     }
   }
 
+  async function inviteSelectedSigners() {
+    if (!onAsk || inviteBusy || inviteSelectedNow.length === 0) return;
+    setInviteBusy(true);
+    setInviteFeedback('');
+    let invited = 0;
+    const remaining: string[] = [];
+    for (const address of inviteSelectedNow) {
+      try {
+        const result = await onAsk(address);
+        if (!result || result.status === 'enqueue_failed' || result.status === 'no_contact_email') {
+          remaining.push(address);
+        } else {
+          invited += 1;
+        }
+      } catch {
+        remaining.push(address);
+      }
+    }
+    setInviteSelection(remaining);
+    setInviteFeedback(
+      remaining.length > 0
+        ? invited + ' invited. ' + remaining.length + ' could not be notified. Check the contact email and try again.'
+        : invited + ' signer' + (invited === 1 ? '' : 's') + ' invited. Follow their progress below.',
+    );
+    setInviteBusy(false);
+  }
+
   async function remindSigner(signerAddress: string) {
     if (!onRemind) return;
     setAskBusy(signerAddress);
@@ -219,17 +256,19 @@ export default function SigningGuidance({
     const assigned = Boolean(assignment);
     const viewed = Boolean(assignment?.viewedAt);
     const assignedByMe = Boolean(assignment && sessionAddress && assignment.assignedByAddress === sessionAddress);
+    const canRemindAsCreator = Boolean(assignment && sessionAddress && creatorAddress === sessionAddress);
     const notification = notifications.find((item) => item.signerAddress === signerAddress);
+    const notificationChannel = notification?.automatic ? 'Automatic reminder' : notification?.eventType === 'signature_reminder' ? 'Reminder' : 'Email';
     const statusLabel = notification?.state === 'delivered'
-      ? notification.eventType === 'signature_reminder' ? 'Reminder delivered' : 'Email delivered'
+      ? notificationChannel + ' delivered'
       : notification?.state === 'bounced'
-        ? notification.eventType === 'signature_reminder' ? 'Reminder bounced' : 'Email bounced'
+        ? notificationChannel + ' bounced'
         : notification?.state === 'provider_accepted'
-          ? notification.eventType === 'signature_reminder' ? 'Reminder accepted' : 'Email accepted'
+          ? notificationChannel + ' accepted'
           : notification?.state === 'queued'
-            ? notification.eventType === 'signature_reminder' ? 'Reminder queued' : 'Email queued'
+            ? notificationChannel + ' queued'
             : notification?.state === 'failed'
-              ? notification.eventType === 'signature_reminder' ? 'Reminder failed' : 'Email failed'
+              ? notificationChannel + ' failed'
               : assigned && !viewed ? 'Assigned' : '';
     const viewedBadge = viewed ? (
       <span
@@ -255,11 +294,11 @@ export default function SigningGuidance({
     }
 
     const canRepairInitialEmail = assignedByMe && !notification;
-    const canRemind = assignedByMe && (
+    const canRemind = (assignedByMe || canRemindAsCreator) && (
       notification?.state === 'provider_accepted'
       || notification?.state === 'delivered'
     );
-    const canRetryFailed = assignedByMe && (
+    const canRetryFailed = (assignedByMe || canRemindAsCreator) && (
       notification?.state === 'failed'
       || notification?.state === 'bounced'
     );
@@ -385,6 +424,50 @@ export default function SigningGuidance({
           <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
           <div><span className="font-semibold">The signatures need technical attention.</span> Open Advanced details below to see which signature Stellar cannot use.</div>
         </div>
+      )}
+
+      {!authorizationComplete && !hasAuthorizationError && onAsk && privateUnlocked && (inviteCandidates.length > 0 || inviteFeedback) && (
+        <section className="mt-5 rounded-[var(--radius-panel)] border border-[var(--color-rule)] bg-[var(--color-paper-2)] p-4 sm:p-5" aria-label="Invite signers">
+          <div className="flex items-center gap-2 text-[var(--color-ink)]">
+            <Mail className="h-4 w-4 shrink-0 text-[var(--color-accent)]" />
+            <h3 className="text-base font-semibold">Invite signers</h3>
+          </div>
+          <p className="mt-1 text-sm leading-6 text-[var(--color-ink-2)]">
+            Choose who to ask. Invitations do not reserve signing slots or change Stellar authorization.
+          </p>
+          {inviteCandidates.length > 0 && <div className="mt-3 divide-y divide-[var(--color-rule)] border-y border-[var(--color-rule)]">
+            {inviteCandidates.map((address) => (
+              <label key={address} className="flex min-w-0 cursor-pointer items-center gap-3 py-3">
+                <input
+                  type="checkbox"
+                  aria-label={'Invite ' + (labelFor(address, 'signer') || address)}
+                  checked={inviteSelectedNow.includes(address)}
+                  disabled={inviteBusy}
+                  onChange={(event) => setInviteSelection((current) =>
+                    event.target.checked ? [...new Set([...current, address])] : current.filter((item) => item !== address))}
+                  className="h-4 w-4 shrink-0 accent-[var(--color-accent)]"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-[var(--color-ink)]">{labelFor(address, 'signer') || 'Signer'}</span>
+                  <span className="block truncate text-xs text-[var(--color-muted)]">{emailFor(address)}</span>
+                </span>
+              </label>
+            ))}
+          </div>}
+          {inviteCandidates.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-3">
+            <ActionButton
+              variant="secondary"
+              disabled={inviteBusy || inviteSelectedNow.length === 0}
+              onClick={() => void inviteSelectedSigners()}
+              className="min-h-11"
+            >
+              {inviteBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+              {inviteBusy ? 'Sending invitations…' : 'Send ' + inviteSelectedNow.length + ' invitations'}
+            </ActionButton>
+            <span className="text-xs text-[var(--color-muted)]">People not selected can still sign if authorized.</span>
+          </div>}
+          {inviteFeedback && <p role="status" className="mt-3 text-sm text-[var(--color-ink-2)]">{inviteFeedback}</p>}
+        </section>
       )}
 
       {!authorizationComplete && !hasAuthorizationError && (

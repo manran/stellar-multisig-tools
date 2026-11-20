@@ -19,6 +19,7 @@ async function sweepOnce(): Promise<void> {
   let sent = 0;
   let retries = 0;
   let permanentFailures = 0;
+  let skipped = 0;
 
   for (const eventId of eventIds) {
     if (stopping) break;
@@ -26,6 +27,7 @@ async function sweepOnce(): Promise<void> {
     if (result.status === 'sent') sent += 1;
     else if (result.status === 'retry_scheduled') retries += 1;
     else if (result.status === 'permanent_failure') permanentFailures += 1;
+    else if (result.status === 'skipped') skipped += 1;
   }
 
   if (eventIds.length > 0) {
@@ -34,6 +36,7 @@ async function sweepOnce(): Promise<void> {
       sent,
       retries,
       permanentFailures,
+      skipped,
     });
   }
 }

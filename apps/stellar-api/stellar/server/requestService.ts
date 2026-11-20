@@ -745,6 +745,7 @@ async function buildSnapshot(
     mergedXdr: merged.mergedXdr,
     createdAt: request.createdAt,
     expiresAt: request.expiresAt,
+    ...(request.creatorAddress ? { creatorAddress: request.creatorAddress } : {}),
     contributionCount: merged.contributionCount,
     signatureCount: merged.signatureCount,
     ...(request.sorobanOrigin ? { sorobanOrigin: request.sorobanOrigin } : {}),
