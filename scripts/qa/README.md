@@ -29,3 +29,43 @@ is outside the container. Missing Git metadata never discards the test report.
 Each scenario prints PASS or FAIL. The output directory receives screenshots
 and `report.json`, including the checked commit, viewport, failures, and
 unexpected API calls. A failed check or unexpected API call returns exit code 1.
+
+## Hosted Testnet transaction smoke
+
+The browser fixture above cannot prove the live API, durable PostgreSQL,
+Stellar authorization or on-chain execution. Use the complementary
+`hostedTestnetLifecycle.mjs` smoke from a disposable checkout:
+
+```sh
+npm ci --no-audit --no-fund
+node scripts/qa/hostedTestnetLifecycle.mjs         # read-only Testnet runtime check
+node scripts/qa/hostedTestnetLifecycle.mjs --live          # 2-of-3 Human lifecycle
+node scripts/qa/hostedTestnetLifecycle.mjs --live --agent  # scoped Agent signer lifecycle
+```
+
+The live mode always uses `api-testnet.multisig.tools/stellar`, the Testnet
+Horizon and Friendbot. It creates one **ephemeral** Stellar account and applies
+2-of-3 thresholds. An actual wallet-key signature unlocks the hosted API.
+The hosted PostgreSQL Request then receives two separate signer contributions,
+a duplicate (which must not count), an Inbox check, and final submission.
+The smoke checks the confirmed ledger and resulting manage-data value, closed
+share-link privacy, verified signer history and retained Activity. Optional
+`--agent` uses an API credential for one signer: the signing key remains in
+the Testnet client; the credential can contribute but not broadcast, its
+real Agent actor must appear in Activity, and revocation must block reuse.
+
+Only public transaction hashes, Testnet accounts, request IDs, and step
+timestamps appear in its output. It never saves private keys, JWT tokens or
+capability links. No emails or Mainnet transactions are sent. The funded
+ephemeral Testnet account remains on Testnet; this test does not delete it.
+Run it intentionally, not automatically on PR builds. It tests generated
+software keypairs, **not** the Freighter browser extension.
+
+Verified hosted execution on 2026-11-20:
+Request `XKEKKYGX6FQR0TVX`, ledger `5831805`,
+transaction `9d6da0e76a3fb59862d0fdbb951e1479216254fe2cf2f2f537e180abf222f03e`.
+Agent + audit variant: Request `FPXTJ1MBT6BJ2ARQ`, ledger `5831867`,
+transaction `789803d2aa6eaf2b6a6f984079dae53199a690dcbb464507773e856b793a1bf3`.
+This run also verified the real Agent actor ID in retained approval history.
+This is proof for the deployed Testnet API, not evidence that unmerged
+product UI commits have been deployed.
