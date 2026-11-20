@@ -129,12 +129,12 @@ export default function StellarDashboardApp() {
 
   return (
     <StellarWorkspaceShell active="dashboard">
-      <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
+      <main className="mst-workbench-page">
         <div className="mx-auto max-w-6xl">
           <PageHeader
             eyebrow={<span className={accentText}>{testnet ? 'Testnet workspace' : 'Your workspace'}</span>}
-            title="Dashboard"
-            description="See what needs your action first, then start or continue work from the same workspace."
+            title="Overview"
+            description="Your current work, in one place."
           />
 
           <section className="mt-8" aria-labelledby="dashboard-attention">
@@ -169,8 +169,8 @@ export default function StellarDashboardApp() {
               <div className="mst-work-list mt-4">
                 <div className="mst-work-row">
                   <div>
-                    <div className="mst-work-row__title">You're all caught up.</div>
-                    <p className="mst-work-row__copy">{inboxAttentionCopy(inboxSummary)}</p>
+                    <div className="mst-work-row__title">{inboxSummary.pendingCount > 0 ? 'Waiting on others' : "You're all caught up."}</div>
+                    <p className="mst-work-row__copy">{inboxSummary.pendingCount > 0 ? 'No action is required from this wallet right now.' : 'Start a new proposal or review completed activity.'}</p>
                     {inboxSummary.actionCounts.waiting > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2" aria-label="Inbox action summary">
                         {inboxActionCountPresentations(inboxSummary.actionCounts).map((item) => (

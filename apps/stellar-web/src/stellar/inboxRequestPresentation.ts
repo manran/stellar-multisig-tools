@@ -21,7 +21,11 @@ export function describeInboxRequest(request: SigningRequestSnapshot): InboxRequ
 
   const present = (title: string, summary: string): InboxRequestDescription => ({
     title: businessLabel || title,
-    summary: businessLabel ? systemType : summary,
+    // The business label cannot obscure the amount being authorized.
+    // This amount is inspected from the XDR, not taken from a template.
+    summary: businessLabel && semantics.kind === 'payment' && semantics.payment
+      ? semantics.payment.amount + ' ' + semantics.payment.assetCode + ' · ' + systemType
+      : summary,
     systemType,
     source: semantics.sourceAccount,
     inspection,

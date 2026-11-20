@@ -31,12 +31,15 @@ const review = source('../ReviewTransactionSummary.tsx');
 const accountSigningEntry = source('../AccountSigningEntryApp.tsx');
 const xdrQr = source('../XdrQrCode.tsx');
 
-test('mobile workspace navigation keeps full labels visible without truncation at 320px', () => {
-  assert.match(shell, /flex-col gap-1 rounded-xl px-1 py-1\.5/);
-  assert.match(shell, /min-h-11 min-w-0/);
-  assert.match(shell, /sm:flex-row/);
-  assert.match(shell, /grid grid-cols-4 gap-1 lg:block/);
-  assert.match(shell, /bg-\[var\(--color-action\)\]/);
+test('mobile workspace navigation keeps four clear, accessible task destinations at 320px', () => {
+  assert.match(shell, /mst-workspace-navigation/);
+  assert.match(shell, /mst-rail-link/);
+  assert.match(shell, /aria-current=/);
+  assert.match(shell, /aria-haspopup="menu"/);
+  assert.match(stylesheet, /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(stylesheet, /\.mst-rail-link \{[\s\S]*min-height: 3rem/);
+  assert.doesNotMatch(shell, /grid-cols-5/);
+  assert.doesNotMatch(shell, /className="truncate">New/);
 });
 
 test('primary Human surfaces share one page-header grammar', () => {
@@ -67,7 +70,9 @@ test('page identity precedes Proposal workflow progress', () => {
   assert.ok(headerIndex >= 0);
   assert.ok(progressIndex > headerIndex);
   assert.match(request, /title=\{proposalDescription\?\.title \?\? 'Proposal'\}/);
-  assert.ok(request.indexOf('aria-label="Current proposal step"') > progressIndex);
+  const taskIndex = request.indexOf('aria-label="Current proposal step"');
+  assert.ok(taskIndex > headerIndex);
+  assert.ok(taskIndex < progressIndex, 'Current action must precede secondary workflow timeline');
 });
 
 

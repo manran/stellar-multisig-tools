@@ -6,26 +6,27 @@ function source(relativePath: string) {
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8');
 }
 
-test('workspace shell exposes one Human workspace instead of Sign/Manage mode', () => {
+test('workspace navigation prioritizes user work and keeps tools accessible', () => {
   const shell = source('../StellarWorkspaceShell.tsx');
-  assert.doesNotMatch(shell, /WorkspaceModeOnboarding/);
-  assert.doesNotMatch(shell, /getWorkspaceMode|resolveWorkspaceMode/);
-  assert.match(shell, />Home</);
+  const css = source('../index.css');
+  assert.doesNotMatch(shell, /WorkspaceModeOnboarding|getWorkspaceMode|resolveWorkspaceMode/);
+  assert.match(shell, />Overview</);
   assert.match(shell, />Inbox</);
   assert.match(shell, /New<span/);
+  assert.match(shell, />Activity</);
+  assert.match(shell, /mst-rail-tools/);
   assert.match(shell, />Treasuries</);
-  assert.match(shell, /grid-cols-4/);
-  assert.match(shell, />More</);
-  assert.match(shell, /aria-expanded={mobileMoreOpen}[\s\S]*w-full/);
+  assert.match(shell, />Contacts</);
+  assert.match(shell, /aria-label="Main"/);
+  assert.match(shell, /aria-label="Tools"/);
+  assert.match(shell, /aria-expanded={mobileMoreOpen}/);
   assert.match(shell, /pointerdown/);
   assert.match(shell, /event.key === 'Escape'/);
-  assert.match(shell, />Activity</);
-  assert.match(shell, />Contacts</);
-  assert.doesNotMatch(shell, /grid-cols-5/);
-  assert.match(shell, /className="flex min-h-screen[^"]*flex-col/);
-  assert.match(shell, /flex w-full max-w-\[1480px\] flex-1 flex-col lg:grid/);
-  assert.match(shell, /<div className="min-w-0 flex-1">\{children\}<\/div>/);
-  assert.doesNotMatch(shell, /lg:min-h-\[calc\(100vh-4rem\)\]/);
+  assert.match(shell, /openPrivateWorkspace/);
+  assert.match(css, /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.mst-rail-desktop, \.mst-rail-tools, \.mst-rail-note \{ display: none; \}/);
+  assert.match(css, /\.mst-rail-tools \{[\s\S]*display: flex/);
+  assert.doesNotMatch(shell, /Sign mode|Manage mode/);
 });
 
 test('primary wallet menu does not expose workspace philosophy or unlock duration controls', () => {
@@ -43,9 +44,9 @@ test('new transaction entry keeps primary actions separate from low-frequency St
   const app = source('../NewTransactionApp.tsx');
   const contractComposer = source('../ContractCallComposer.tsx');
   assert.match(app, /New proposal/);
-  assert.match(app, /Send payment/);
-  assert.match(app, /Import transaction \(XDR\)/);
-  assert.match(app, /More Stellar actions/);
+  assert.match(app, /Send a payment/);
+  assert.match(app, /Import a prepared transaction/);
+  assert.match(app, /More transaction types/);
   assert.match(app, /Set up multisig/);
   assert.match(app, /stellarHref\('\/account\/signing'\)/);
   assert.match(app, /Call a contract/);
@@ -55,7 +56,7 @@ test('new transaction entry keeps primary actions separate from low-frequency St
   assert.doesNotMatch(contractComposer, /contractArgumentsToScVals/);
   assert.match(contractComposer, /source-free Soroban Intent/);
   assert.match(contractComposer, /Transaction construction happens only after the required Soroban authorization is complete/);
-  assert.ok(app.indexOf('Import transaction (XDR)') < app.indexOf('More Stellar actions'));
+  assert.ok(app.indexOf('Import a prepared transaction') < app.indexOf('More transaction types'));
   assert.match(app, /stellarHref\('\/new\/import'\)/);
   assert.doesNotMatch(app, /stellarHrefWithSearch\('\/new\/import'/);
   assert.doesNotMatch(app, /resolveImportedTransactionNetwork/);

@@ -1,5 +1,13 @@
 [
   {
+    "date": "2026-11-20",
+    "macrostructure": "Workbench",
+    "theme": "locked design.md",
+    "enrichment": "none",
+    "brief": "Task-first maturity redesign of Stellar Human navigation, Inbox, New proposal and Proposal",
+    "scope": "app"
+  },
+  {
     "date": "2026-09-20",
     "scope": "app",
     "macrostructure": "Asymmetric Product Proof / Workbench / Long Document",

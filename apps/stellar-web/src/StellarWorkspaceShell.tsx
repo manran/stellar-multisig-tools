@@ -13,18 +13,7 @@ export type WorkspaceView = 'dashboard' | 'inbox' | 'waiting' | 'ready' | 'activ
 type InboxWorkspaceView = 'inbox' | 'waiting' | 'ready';
 
 function navClass(active: boolean) {
-  return `flex min-h-11 min-w-0 items-center justify-center flex-col gap-1 rounded-xl px-1 py-1.5 text-xs font-semibold transition sm:flex-row sm:gap-2 sm:px-3 sm:py-2.5 sm:text-sm lg:w-full lg:justify-start ${
-    active
-      ? 'bg-black text-white dark:bg-white dark:text-black'
-      : 'text-neutral-600 hover:bg-black/5 hover:text-black dark:text-neutral-300 dark:hover:bg-white/10 dark:hover:text-white'
-  }`;
-}
-
-function newClass(active: boolean) {
-  const accent = active
-    ? 'bg-[var(--color-action-hover)]'
-    : 'bg-[var(--color-action)] hover:bg-[var(--color-action-hover)]';
-  return `flex min-h-11 min-w-0 items-center justify-center flex-col gap-1 rounded-xl px-1 py-1.5 text-xs font-bold text-[var(--color-action-ink)] transition sm:flex-row sm:gap-2 sm:px-3 sm:py-2.5 sm:text-sm lg:mb-5 lg:w-full lg:justify-start lg:px-3 lg:py-3 ${accent}`;
+  return 'mst-rail-link' + (active ? ' mst-rail-link--active' : '');
 }
 
 interface Props {
@@ -37,11 +26,8 @@ interface Props {
 export default function StellarWorkspaceShell({ active, children, networkContext = null }: Props) {
   const { sessionNetwork, networkSource, alignNetworkContext, privateUnlocked, authBusy, unlock } = useStellarWallet();
   const pathname = window.location.pathname;
-  const treasuryActive = active === 'treasury'
-    || pathname.endsWith('/treasury')
-    || pathname.includes('/treasury/');
-  const addressBookActive = active === 'address-book'
-    || pathname.endsWith('/address-book');
+  const treasuryActive = active === 'treasury' || pathname.endsWith('/treasury') || pathname.includes('/treasury/');
+  const addressBookActive = active === 'address-book' || pathname.endsWith('/address-book');
   const inboxActive = active === 'inbox' || active === 'waiting' || active === 'ready';
   const mobileMoreActive = treasuryActive || active === 'contracts' || active === 'activity' || addressBookActive;
   const effectiveNetwork = resolveStellarNetwork(networkContext, sessionNetwork);
@@ -55,17 +41,17 @@ export default function StellarWorkspaceShell({ active, children, networkContext
 
   useEffect(() => {
     if (!mobileMoreOpen) return;
-    function closeOnOutside(event: PointerEvent) {
+    function outside(event: PointerEvent) {
       if (!mobileMoreRef.current?.contains(event.target as Node)) setMobileMoreOpen(false);
     }
-    function closeOnEscape(event: KeyboardEvent) {
+    function escape(event: KeyboardEvent) {
       if (event.key === 'Escape') setMobileMoreOpen(false);
     }
-    document.addEventListener('pointerdown', closeOnOutside);
-    document.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
     return () => {
-      document.removeEventListener('pointerdown', closeOnOutside);
-      document.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('keydown', escape);
     };
   }, [mobileMoreOpen]);
 
@@ -82,44 +68,50 @@ export default function StellarWorkspaceShell({ active, children, networkContext
   }
 
   return (
-    <div data-stellar-network={effectiveNetwork} className="flex min-h-screen w-full max-w-full flex-col overflow-x-hidden bg-[#f6f6f2] text-[#171717] dark:bg-[#090909] dark:text-[#f5f5f0]">
+    <div data-stellar-network={effectiveNetwork} className="mst-workspace-root">
       <StellarHeader />
-
-      <div className="mx-auto flex w-full max-w-[1480px] flex-1 flex-col lg:grid lg:grid-cols-[210px_minmax(0,1fr)]">
-        <aside className="relative min-w-0 border-b border-black/10 px-2 py-2 dark:border-white/10 sm:px-4 sm:py-3 lg:overflow-hidden lg:border-b-0 lg:border-r lg:px-4 lg:py-6">
-          <div className="grid grid-cols-4 gap-1 lg:block">
-            <a href={stellarHref('')} className={`${navClass(active === 'dashboard')} lg:mb-1`}><Home className="h-4 w-4 shrink-0" /> <span className="truncate">Home</span></a>
-            <a href={stellarHref('/inbox')} onClick={(event) => void openPrivateWorkspace(event, stellarHref('/inbox'))} className={navClass(inboxActive)}><Inbox className="h-4 w-4 shrink-0" /> <span className="truncate">Inbox</span></a>
-            <a href={stellarHref('/new')} className={`${newClass(active === 'new')} lg:mt-4`}><Plus className="h-4 w-4 shrink-0" /> <span className="truncate">New<span className="hidden sm:inline"> proposal</span></span></a>
+      <div className="mst-workspace-layout">
+        <aside className="mst-workspace-rail" aria-label="Workspace navigation">
+          <nav className="mst-workspace-navigation" aria-label="Main">
+            <a href={stellarHref('')} aria-current={active === 'dashboard' ? 'page' : undefined} className={navClass(active === 'dashboard')}>
+              <Home className="h-4 w-4 shrink-0" /><span>Overview</span>
+            </a>
+            <a href={stellarHref('/inbox')} onClick={(event) => void openPrivateWorkspace(event, stellarHref('/inbox'))} aria-current={inboxActive ? 'page' : undefined} className={navClass(inboxActive)}>
+              <Inbox className="h-4 w-4 shrink-0" /><span>Inbox</span>
+            </a>
+            <a href={stellarHref('/new')} aria-current={active === 'new' ? 'page' : undefined} className={'mst-rail-link mst-rail-link--create' + (active === 'new' ? ' mst-rail-link--create-active' : '')}>
+              <Plus className="h-4 w-4 shrink-0" /><span>New<span className="hidden sm:inline"> proposal</span></span>
+            </a>
 
             <div ref={mobileMoreRef} className="relative lg:hidden">
-              <button type="button" aria-expanded={mobileMoreOpen} aria-haspopup="menu" onClick={() => setMobileMoreOpen((open) => !open)} className={`${navClass(mobileMoreActive)} w-full`}><Ellipsis className="h-4 w-4 shrink-0" /> <span className="truncate">More</span></button>
+              <button type="button" aria-expanded={mobileMoreOpen} aria-haspopup="menu" aria-label="More workspace tools" onClick={() => setMobileMoreOpen((open) => !open)} className={navClass(mobileMoreActive) + ' w-full'}>
+                <Ellipsis className="h-4 w-4 shrink-0" /><span>More</span>
+              </button>
               {mobileMoreOpen && (
-                <div role="menu" className="absolute right-0 z-30 mt-2 w-48 rounded-2xl border border-black/10 bg-white p-2 shadow-xl shadow-black/10 dark:border-white/10 dark:bg-[#141414]">
-                  <a role="menuitem" href={stellarHref('/contracts')} onClick={() => setMobileMoreOpen(false)} className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-black/5 dark:text-neutral-200 dark:hover:bg-white/10"><Braces className="h-4 w-4 shrink-0" /> <span className="truncate">Contracts</span></a>
-                  <a role="menuitem" href={stellarHref('/treasury')} onClick={() => setMobileMoreOpen(false)} className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-black/5 dark:text-neutral-200 dark:hover:bg-white/10"><Vault className="h-4 w-4 shrink-0" /> <span className="truncate">Treasuries</span></a>
-                  <a role="menuitem" href={stellarHref('/activity')} onClick={(event) => { setMobileMoreOpen(false); void openPrivateWorkspace(event, stellarHref('/activity')); }} className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-black/5 dark:text-neutral-200 dark:hover:bg-white/10"><History className="h-4 w-4 shrink-0" /> <span className="truncate">Activity</span></a>
-                  <a role="menuitem" href={stellarHref('/address-book')} onClick={() => setMobileMoreOpen(false)} className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-black/5 dark:text-neutral-200 dark:hover:bg-white/10"><BookUser className="h-4 w-4 shrink-0" /> <span className="truncate">Contacts</span></a>
+                <div role="menu" className="mst-workspace-mobile-menu">
+                  <a role="menuitem" href={stellarHref('/activity')} onClick={(event) => { setMobileMoreOpen(false); void openPrivateWorkspace(event, stellarHref('/activity')); }} className="mst-workspace-menu-item"><History className="h-4 w-4" />Activity</a>
+                  <a role="menuitem" href={stellarHref('/contracts')} onClick={() => setMobileMoreOpen(false)} className="mst-workspace-menu-item"><Braces className="h-4 w-4" />Contracts</a>
+                  <a role="menuitem" href={stellarHref('/treasury')} onClick={() => setMobileMoreOpen(false)} className="mst-workspace-menu-item"><Vault className="h-4 w-4" />Treasuries</a>
+                  <a role="menuitem" href={stellarHref('/address-book')} onClick={() => setMobileMoreOpen(false)} className="mst-workspace-menu-item"><BookUser className="h-4 w-4" />Contacts</a>
                 </div>
               )}
             </div>
 
-            <div className="hidden lg:block">
-              <a href={stellarHref('/contracts')} className={navClass(active === 'contracts')}><Braces className="h-4 w-4 shrink-0" /> <span className="truncate">Contracts</span></a>
-              <a href={stellarHref('/treasury')} className={navClass(treasuryActive)}><Vault className="h-4 w-4 shrink-0" /> <span className="truncate">Treasuries</span></a>
-              <a href={stellarHref('/activity')} onClick={(event) => void openPrivateWorkspace(event, stellarHref('/activity'))} className={navClass(active === 'activity')}><History className="h-4 w-4 shrink-0" /> <span className="truncate">Activity</span></a>
-              <a href={stellarHref('/address-book')} className={navClass(addressBookActive)}><BookUser className="h-4 w-4 shrink-0" /> <span className="truncate">Contacts</span></a>
-            </div>
-          </div>
+            <a href={stellarHref('/activity')} onClick={(event) => void openPrivateWorkspace(event, stellarHref('/activity'))} aria-current={active === 'activity' ? 'page' : undefined} className={navClass(active === 'activity') + ' mst-rail-desktop'}>
+              <History className="h-4 w-4 shrink-0" /><span>Activity</span>
+            </a>
+          </nav>
 
-          <div className="mt-5 hidden border-t border-black/10 px-3 pt-4 text-xs leading-5 text-neutral-400 dark:border-white/10 lg:block">
-            One workspace for contracts, proposals, approvals, treasuries, and activity.
-          </div>
+          <nav className="mst-rail-tools" aria-label="Tools">
+            <div className="mst-rail-tools__label">Tools</div>
+            <a href={stellarHref('/contracts')} className={navClass(active === 'contracts')} aria-current={active === 'contracts' ? 'page' : undefined}><Braces className="h-4 w-4 shrink-0" />Contracts</a>
+            <a href={stellarHref('/treasury')} className={navClass(treasuryActive)} aria-current={treasuryActive ? 'page' : undefined}><Vault className="h-4 w-4 shrink-0" />Treasuries</a>
+            <a href={stellarHref('/address-book')} className={navClass(addressBookActive)} aria-current={addressBookActive ? 'page' : undefined}><BookUser className="h-4 w-4 shrink-0" />Contacts</a>
+          </nav>
+          <div className="mst-rail-note">Shared authorization, one workspace.</div>
         </aside>
-
-        <div className="min-w-0 flex-1">{children}</div>
+        <div className="mst-workspace-content">{children}</div>
       </div>
-
       <StellarFooter workspace />
     </div>
   );
