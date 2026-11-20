@@ -104,6 +104,30 @@ function OutgoingProgress({
   );
 }
 
+function InboxAttentionCue({
+  request,
+  viewerAddress,
+  signerLabel,
+}: {
+  request: InboxRequestSnapshot;
+  viewerAddress: string;
+  signerLabel: (address: string) => string;
+}) {
+  const progress = useMemo(() =>
+    inboxSenderProgress(request, inboxOutgoingSignerProgress(request, viewerAddress)),
+    [request, viewerAddress],
+  );
+  const failedContact = progress.find((item) => item.needsAttention && item.label === 'Email needs attention');
+  if (!failedContact) return null;
+  return (
+    <div className="mst-inbox-item__attention">
+      <CircleAlert className="h-4 w-4 shrink-0" />
+      <span className="truncate">{signerLabel(failedContact.signerAddress)}</span>
+      <span>Email needs attention</span>
+    </div>
+  );
+}
+
 function DetailPane({
   request,
   description,
@@ -117,19 +141,30 @@ function DetailPane({
 }) {
   const viewerAction = inboxViewerActionPresentation(request.viewerAction);
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4">
+    <section className="mst-inbox-detail-inner" aria-label="Selected proposal">
+      <div className="mst-inbox-detail__top">
+        <span>Selected proposal</span>
         <RequestStatusBadge status={request.status} />
-        <NetworkBadge network={request.network} />
       </div>
-      <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
-        <StatusBadge tone={viewerAction.tone}>{viewerAction.label}</StatusBadge>
-        <p className="mt-2 text-xs leading-5 text-neutral-600 dark:text-neutral-300">{viewerAction.detail}</p>
+      <h2 className="mst-inbox-detail__title">{description.title}</h2>
+      <p className="mst-inbox-detail__summary">{description.summary}</p>
+      <div className="mst-inbox-next-action">
+        <div className="mst-inbox-next-action__label">Your next step</div>
+        <div className="mt-2"><StatusBadge tone={viewerAction.tone}>{viewerAction.label}</StatusBadge></div>
+        <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">{viewerAction.detail}</p>
+        <ActionButton onClick={() => openRequestDetails(request)} className="mt-4 w-full">
+          {viewerAction.cta} <ArrowRight className="h-4 w-4" />
+        </ActionButton>
+      </div>
+      <div className="mst-inbox-preview-evidence">
+        <h3>Transaction summary</h3>
+        <ReviewTransactionSummary inspection={description.inspection} />
+      </div>
+      <details className="mst-inbox-progress-disclosure">
+        <summary>Invitations and signing activity</summary>
         <OutgoingProgress request={request} viewerAddress={viewerAddress} signerLabel={signerLabel} />
-      </div>
-      <ReviewTransactionSummary inspection={description.inspection} />
-      <ActionButton onClick={() => openRequestDetails(request)} className="w-full">{viewerAction.cta} <ArrowRight className="h-4 w-4" /></ActionButton>
-    </div>
+      </details>
+    </section>
   );
 }
 
@@ -255,7 +290,7 @@ export default function InboxApp() {
   const signerLabel = (address: string) => labelFor(address, 'signer') || shortAddress(address);
   return (
     <StellarWorkspaceShell active={view === 'needs' ? 'inbox' : view}>
-      <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
+      <main className="mst-workbench-page">
         <div className="mx-auto max-w-6xl">
         {!privateUnlocked && (
           <PrivateWorkspaceUnlock
@@ -267,19 +302,20 @@ export default function InboxApp() {
 
         {privateUnlocked && unlockedAddress && unlockedNetwork && (
           <>
+            <div className="mst-inbox-page-header">
             <PageHeader
-              icon={<Inbox className="h-6 w-6" />}
               title="Inbox"
-              description="See what needs your action and track the signers you invited."
+              description="Act on what needs you. Follow the rest without opening each proposal."
               meta={data ? <><NetworkBadge network={unlockedNetwork} /><span>{data.pending_count} open {data.pending_count === 1 ? 'work item' : 'work items'}</span></> : <NetworkBadge network={unlockedNetwork} />}
-              actions={<ActionButton variant="secondary" disabled={loading || authBusy || walletBusy} onClick={() => void loadInbox()} aria-label="Refresh inbox" aria-busy={loading}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />{loading ? 'Refreshing…' : 'Refresh'}</ActionButton>}
+              actions={<ActionButton variant="secondary" disabled={loading || authBusy || walletBusy} onClick={() => void loadInbox()} aria-label="Refresh inbox" aria-busy={loading}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">{loading ? 'Refreshing…' : 'Refresh'}</span></ActionButton>}
             />
+            </div>
 
             {data && (
               <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
-                <button type="button" aria-pressed={view === 'needs'} onClick={() => changeView('needs')} className={`min-h-11 rounded-full px-3 py-1.5 font-semibold ${view === 'needs' ? 'bg-black text-white dark:bg-white dark:text-black' : 'border border-black/10 text-neutral-600 hover:bg-black/5 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/10'}`}>Needs me <span className="ml-1 opacity-60">{needsCount}</span></button>
-                <button type="button" aria-pressed={view === 'waiting'} onClick={() => changeView('waiting')} className={`min-h-11 rounded-full px-3 py-1.5 font-semibold ${view === 'waiting' ? 'bg-black text-white dark:bg-white dark:text-black' : 'border border-black/10 text-neutral-600 hover:bg-black/5 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/10'}`}>Waiting <span className="ml-1 opacity-60">{waitingCount}</span></button>
-                <button type="button" aria-pressed={view === 'inbox'} onClick={() => changeView('inbox')} className={`min-h-11 rounded-full px-3 py-1.5 font-semibold ${view === 'inbox' ? 'bg-black text-white dark:bg-white dark:text-black' : 'border border-black/10 text-neutral-600 hover:bg-black/5 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/10'}`}>All <span className="ml-1 opacity-60">{data.pending_count}</span></button>
+                <button type="button" aria-pressed={view === 'needs'} onClick={() => changeView('needs')} data-active={view === 'needs' ? 'true' : 'false'} className="mst-inbox-filter">Needs me <span className="ml-1 opacity-60">{needsCount}</span></button>
+                <button type="button" aria-pressed={view === 'waiting'} onClick={() => changeView('waiting')} data-active={view === 'waiting' ? 'true' : 'false'} className="mst-inbox-filter">Waiting <span className="ml-1 opacity-60">{waitingCount}</span></button>
+                <button type="button" aria-pressed={view === 'inbox'} onClick={() => changeView('inbox')} data-active={view === 'inbox' ? 'true' : 'false'} className="mst-inbox-filter">All <span className="ml-1 opacity-60">{data.pending_count}</span></button>
               </div>
             )}
 
@@ -335,37 +371,25 @@ export default function InboxApp() {
             )}
 
             {data && visibleRequests.length > 0 && (
-              <div className="mt-5 grid min-h-[560px] gap-5 xl:grid-cols-[minmax(300px,0.85fr)_minmax(420px,1.15fr)]">
-                <div className="mst-inbox-list">
+              <div className="mst-inbox-workbench">
+                <div className="mst-inbox-list" aria-label="Proposals">
                   {visibleRequests.map((request) => {
                     const description = descriptions.get(request.id)!;
                     const selected = request.id === selectedId;
                     const sourceAlias = labelFor(description.source, 'account');
                     return (
-                      <button key={request.id} type="button" data-selected={selected ? 'true' : 'false'} onClick={() => { if (window.matchMedia('(min-width: 1280px)').matches) setSelectedId(request.id); else openRequestDetails(request); }} className="mst-inbox-item px-1 sm:px-2">
-                        <div className="flex items-center justify-between gap-3 text-sm">
-                          <RequestStatusBadge status={request.status} />
-                          <span className="text-neutral-500 dark:text-neutral-400">{inboxDeadlineLabel(description.inspection)}</span>
-                        </div>
-                        <h2 className="mt-2 text-lg font-bold leading-6">{description.title}</h2>
-                        <p className="mt-1 line-clamp-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{description.summary}</p>
-                        <div className="mt-3">
+                      <button key={request.id} type="button" data-selected={selected ? 'true' : 'false'} aria-current={selected ? 'true' : undefined} onClick={() => { if (window.matchMedia('(min-width: 1280px)').matches) setSelectedId(request.id); else openRequestDetails(request); }} className="mst-inbox-item">
+                        <div className="mst-inbox-item__head">
                           <StatusBadge tone={inboxViewerActionPresentation(request.viewerAction).tone}>{inboxViewerActionPresentation(request.viewerAction).label}</StatusBadge>
-                          <OutgoingProgress request={request} viewerAddress={unlockedAddress} signerLabel={signerLabel} compact />
+                          <span className="mst-inbox-item__deadline">{inboxDeadlineLabel(description.inspection)}</span>
                         </div>
-                        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
-                          {request.network === 'testnet' && (
-                            <>
-                              <span className="font-semibold text-sky-700 dark:text-sky-300">Testnet</span>
-                              <span>·</span>
-                            </>
-                          )}
-                          <span title={description.source}>{sourceAlias || shortAddress(description.source)}</span>
-                          {sourceAlias && <span className="font-mono opacity-60">{shortAddress(description.source)}</span>}
+                        <h2 className="mst-inbox-item__title">{description.title}</h2>
+                        <p className="mst-inbox-item__summary">{description.summary}</p>
+                        <InboxAttentionCue request={request} viewerAddress={unlockedAddress} signerLabel={signerLabel} />
+                        <div className="mst-inbox-item__foot">
+                          <span className="truncate" title={description.source}>{sourceAlias || shortAddress(description.source)}</span>
+                          <span className="mst-inbox-item__open">{inboxViewerActionPresentation(request.viewerAction).cta}<ArrowRight className="h-4 w-4 shrink-0" /></span>
                         </div>
-                        <span className="mt-4 flex w-full items-center justify-between rounded-xl bg-black px-4 py-2.5 text-sm font-bold text-white dark:bg-white dark:text-black xl:hidden">
-                          {inboxViewerActionPresentation(request.viewerAction).cta} <ArrowRight className="h-4 w-4" />
-                        </span>
                       </button>
                     );
                   })}

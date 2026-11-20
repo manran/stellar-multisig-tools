@@ -132,8 +132,47 @@ Marketing/header chrome is compact and product-led.
 
 - Brand + environment/account control is sufficient.
 - Do not add a five-link marketing nav merely to fill space.
-- Workspace navigation is task-oriented: Home, Inbox, New, Contracts, Treasuries, Activity, Contacts.
+- Primary workspace navigation is **Overview · Inbox · New proposal · Activity**.
+  - Inbox is the operational default for work that needs a signature, review or submission.
+  - New proposal is the only create affordance in the rail; creation leads with payments and saved templates.
+  - Overview is a summary and shortcut, not a second Inbox.
+  - Activity preserves completed evidence and receipt discovery.
+- Contracts, Treasuries and Contacts are **Tools**, visually subordinate in the desktop rail and accessible from the mobile More menu.
 - Advanced/operator routes are not promoted into ordinary Human navigation.
+
+## Task-first workbench (November 2026)
+
+A mature product does not expose its domain model as a page outline.
+The task and the exact action always dominate supporting technical evidence.
+
+- **Inbox:** compact list with one viewer-action label, title, deadline and summary.
+  Select a proposal on desktop to see the **next action first**. Mobile opens
+  the proposal directly. Show the exact transaction review in its supporting
+  region, and place signer notification history behind a labelled disclosure.
+  Do not repeat all signer details in both list and preview.
+- **New proposal:** one prominent Payment creation surface, saved Templates
+  alongside it when space allows, a quiet XDR import row, then specialized
+  Stellar transaction types in an explicit disclosure.
+- **Proposal:** business title → current action → workflow context → exact
+  review/sign/submission/evidence. Keep the validated safety transitions and
+  explicit wallet approval: visual hierarchy must never skip them.
+- **Role projection:** the same Request remains authoritative. Human signers
+  see their own task, operators see progress and controlled reminders, and
+  Agent credentials receive scoped typed tasks. No fabricated signer order or
+  inferred approval quorum.
+
+**Component discipline**
+
+- Do not nest decorative cards. Selected work and primary actions may use
+  one paper-tinted bounded surface; all other groups use spacing and rules.
+- Never pair an unrelated primary CTA with a technical CTA in the same row.
+- Icons describe a real navigation destination or action; do not decorate every
+  heading. Use the shared Lucide icon set and shared action primitives.
+- Treat state labels, sent emails, viewed events, valid signatures, and
+  submitted transactions as distinct facts.
+- Preserve body readability at 320/375/414/768/1280 widths, one-line action
+  controls, and keyboard focus visibility. All data remains live; no mock
+  product facts in production UI.
 
 ## Footer
 

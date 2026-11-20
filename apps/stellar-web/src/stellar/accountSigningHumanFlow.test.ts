@@ -15,10 +15,10 @@ const request = source('../RequestApp.tsx');
 const routes = source('../workspaceRoutes.ts');
 
 test('standalone multisig is a low-frequency entry into the shared account-signing flow', () => {
-  assert.match(newTransaction, /More Stellar actions/);
+  assert.match(newTransaction, /More transaction types/);
   assert.match(newTransaction, /title="Set up multisig"/);
   assert.match(newTransaction, /stellarHref\('\/account\/signing'\)/);
-  assert.ok(newTransaction.indexOf('Send payment') < newTransaction.indexOf('More Stellar actions'));
+  assert.ok(newTransaction.indexOf('Send a payment') < newTransaction.indexOf('More transaction types'));
   assert.match(routes, /path: '\/account\/signing'/);
   assert.match(routes, /path: '\/account\/signing\/edit'/);
 });

@@ -807,7 +807,7 @@ export default function RequestApp() {
 
   return (
     <StellarWorkspaceShell active="detail" networkContext={requestNetwork}>
-      <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
+      <main className="mst-workbench-page">
         <div className="mx-auto max-w-5xl">
 
           {!snapshot && loading && Boolean(initialLocator) && !closedCapability && !requestNeedsUnlock && (
@@ -874,7 +874,7 @@ export default function RequestApp() {
           {error && <div role="alert" className="mt-5 flex gap-3 rounded-2xl border border-[var(--color-danger)] p-4 text-sm text-[var(--color-danger)]"><CircleAlert className="h-5 w-5 shrink-0" />{error}</div>}
 
           {snapshot && inspection && (
-            <div className="space-y-5">
+            <div className="mst-proposal-workbench space-y-5">
               {returnTarget && (
                 <a href={returnTarget.href} className="inline-flex text-sm font-semibold text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white">← {returnTarget.label}</a>
               )}
@@ -898,19 +898,23 @@ export default function RequestApp() {
                 }
               />
 
-              <WorkflowProgress current={workflowStage} />
-
               {nextStep && (
-                <section aria-label="Current proposal step" className="border-b border-[var(--color-rule)] pb-[var(--space-md)]">
-                  <div className="text-xs font-semibold text-[var(--color-muted)]">{nextStep.heading}</div>
-                  <h2 className="mt-1 text-lg font-semibold text-[var(--color-ink)]">{nextStep.title}</h2>
-                  <p className="mt-1 max-w-prose text-sm leading-6 text-[var(--color-ink-2)]">{nextStep.detail}</p>
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <ActionButton variant="secondary" onClick={openCurrentStep}>{nextStep.action.label}</ActionButton>
-                    {walletAlreadySigned && <a href={stellarHref('/inbox')} className="inline-flex min-h-11 items-center text-sm font-semibold text-[var(--color-action)]">Back to Inbox</a>}
+                <section aria-label="Current proposal step" className="mst-proposal-task">
+                  <div className="mst-proposal-task__text">
+                    <p className="mst-proposal-task__label">{nextStep.heading}</p>
+                    <h2>{nextStep.title}</h2>
+                    <p className="mst-proposal-task__detail">{nextStep.detail}</p>
+                  </div>
+                  <div className="mst-proposal-task__actions">
+                    <ActionButton variant={nextStep.heading === 'Next step' ? 'primary' : 'secondary'} onClick={openCurrentStep}>{nextStep.action.label}</ActionButton>
+                    {walletAlreadySigned && <a href={stellarHref('/inbox')} className="mst-proposal-task__back">Back to Inbox</a>}
                   </div>
                 </section>
               )}
+
+              <div className="mst-proposal-progress" aria-label="Transaction workflow">
+                <WorkflowProgress current={workflowStage} />
+              </div>
 
               {walletNetworkMismatch && (
                 <section className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.08] p-4 text-sm">

@@ -268,6 +268,7 @@ async function visible(page, text, role) {
 async function snapshot(page, name, width) {
   const overflow = await page.evaluate(() => ({ width: innerWidth, document: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
   assert.ok(overflow.document <= overflow.width + 1 && overflow.body <= overflow.width + 1, `${name}: horizontal overflow ${JSON.stringify(overflow)}`);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: path.join(output, `${name}-${width}.png`), fullPage: true });
 }
 
@@ -292,7 +293,7 @@ try {
   for (const width of widths) {
     await run('templates-locked-and-cancel', width, { wallet: walletState('', false) }, async ({ page }) => {
       await page.goto(`${origin}/new`);
-      await visible(page, 'Saved templates', 'heading');
+      await visible(page, 'Your templates', 'heading');
       assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), []);
       await snapshot(page, 'new-locked', width);
       await page.evaluate(() => { window.__MST_QA_CANCEL_UNLOCK__ = true; });
@@ -303,6 +304,25 @@ try {
       await page.getByRole('button', { name: 'Show my templates', exact: true }).click();
       await visible(page, 'No saved templates on Testnet yet.');
     });
+
+    if (width === 375 || width === 1280) {
+      await run('overview-workbench', width, {}, async ({ page }) => {
+        await page.goto(origin + '/');
+        await visible(page, 'Overview', 'heading');
+        await visible(page, 'Needs your attention');
+        await snapshot(page, 'overview', width);
+        if (width === 375) {
+          const more = page.getByRole('button', { name: 'More workspace tools' });
+          await more.click();
+          await visible(page, 'Activity', 'menuitem');
+          await visible(page, 'Contracts', 'menuitem');
+          await visible(page, 'Treasuries', 'menuitem');
+          await visible(page, 'Contacts', 'menuitem');
+          await page.keyboard.press('Escape');
+          assert.equal(await more.getAttribute('aria-expanded'), 'false');
+        }
+      });
+    }
 
     await run('templates-recovery', width, { state: { templateStatus: 500 } }, async ({ page, state }) => {
       await page.goto(`${origin}/new?account=${addresses.recipient}`);
@@ -322,9 +342,12 @@ try {
     await run('inbox-progress', width, {}, async ({ page }) => {
       await page.goto(`${origin}/inbox`);
       await visible(page, 'November supplier payment');
-      await visible(page, ' · Email needs attention');
-      await visible(page, 'Email failed');
+      await visible(page, 'Email needs attention');
       await snapshot(page, 'inbox-progress', width);
+      if (width >= 1280) {
+        await page.getByText('Invitations and signing activity', { exact: true }).click();
+        await page.getByText(/Email failed/).first().waitFor({ state: 'visible' });
+      }
       if (width >= 1280) await visible(page, ' · Signed');
     });
 

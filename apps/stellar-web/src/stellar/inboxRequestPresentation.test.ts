@@ -39,7 +39,7 @@ test('Inbox uses reusable template name as business label while preserving MST s
   });
 
   assert.equal(description.title, 'Monthly payroll');
-  assert.equal(description.summary, 'Payment');
+  assert.equal(description.summary, '10.0000000 XLM · Payment');
   assert.equal(description.systemType, 'Payment');
 });
 

@@ -309,7 +309,7 @@ test('New Payment explicitly clears stale form state while Edit payment can rest
 
 test('Treasury New proposal context reaches New and preselects Payment source', () => {
   assert.match(newTransaction, /parseTreasuryRoute\(window\.location\.search\)/);
-  assert.match(newTransaction, /New proposal for/);
+  assert.match(newTransaction, /From <span className="font-mono" title=\{proposalAccount\}>/);
   assert.match(newTransaction, /account: proposalAccount/);
   assert.match(payment, /url\.searchParams\.get\('account'\)/);
   assert.match(payment, /isValidStellarAccountId\(requestedSource\)/);

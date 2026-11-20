@@ -109,40 +109,39 @@ function NewTransactionChoices() {
   }
 
   return (
-    <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
-      <div className="mx-auto max-w-5xl">
-        <div className="border-b border-black/10 pb-5 dark:border-white/10">
-          <h1 className="text-3xl font-bold tracking-tight">New proposal</h1>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-neutral-600 dark:text-neutral-300">Start with the action you want to take. Every proposal goes to Review before anyone signs or submits it.</p>
-          {proposalAccount && <div className="mt-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400">New proposal for <span className="break-all font-mono">{proposalAccount}</span></div>}
-        </div>
+    <main className="mst-workbench-page">
+      <div className="mx-auto max-w-6xl">
+        <header className="mst-page-intro">
+          <h1>New proposal</h1>
+          <p>What would you like to authorize?</p>
+          {proposalAccount && <div className="mt-3 text-xs text-[var(--color-muted)]">From <span className="font-mono" title={proposalAccount}>{proposalAccount.slice(0, 8)}…{proposalAccount.slice(-8)}</span></div>}
+        </header>
 
-        <section className="mt-7" aria-labelledby="primary-action">
-          <div id="primary-action" className="text-sm font-bold">Most common</div>
-          <div className="mst-work-list mt-3">
-            <div className="mst-work-row">
+        <div className="mst-compose-layout">
+          <section className="mst-compose-primary" aria-labelledby="primary-action">
+            <div className="mst-compose-hero">
               <div>
-                <div className={'mst-work-row__meta ' + accentClass}><Send className="h-4 w-4" />Payment</div>
-                <h2 className="mst-work-row__title">Send payment</h2>
-                <p className="mst-work-row__copy">Choose the source, recipient, asset, and amount. Review the exact Stellar transaction before collecting signatures.</p>
+                <span className="mst-compose-hero__symbol"><Send className="h-5 w-5" /></span>
+                <h2 id="primary-action" className="mst-compose-hero__title">Send a payment</h2>
+                <p className="mst-compose-hero__copy">Set the recipient, asset, and amount. Others can review and sign before the payment is submitted.</p>
               </div>
-              <a href={paymentHref} className="mst-action-primary">Start proposal <ArrowRight className="h-4 w-4" /></a>
+              <a href={paymentHref} className="mst-action-primary mst-compose-hero__cta">Create payment <ArrowRight className="h-4 w-4" /></a>
             </div>
+            <a href={stellarHref('/new/import')} className="mst-compose-import">
+              <FileInput className="h-5 w-5 shrink-0" />
+              <span className="min-w-0 flex-1">
+                <strong>Import a prepared transaction</strong>
+                <span className="mst-compose-import__copy">Use XDR from a wallet, CLI, application, or agent.</span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0" />
+            </a>
+          </section>
 
-            <div className="mst-work-row">
-              <div>
-                <div className={'mst-work-row__meta ' + accentClass}><FileInput className="h-4 w-4" />Technical input</div>
-                <h2 className="mst-work-row__title">Import transaction (XDR)</h2>
-                <p className="mst-work-row__copy">Bring in an exact transaction produced by another wallet, CLI, app, or Agent.</p>
-              </div>
-              <a href={stellarHref('/new/import')} className={'mst-work-row__action ' + accentClass}>Import XDR <ArrowRight className="h-4 w-4" /></a>
-            </div>
+          <section className="mst-compose-templates" aria-labelledby="saved-templates" aria-busy={templateLoading}>
+          <div className="mst-compose-templates__header">
+            <h2 id="saved-templates">Your templates</h2>
+            <p>Start with a saved payment setup. Each new proposal is reviewed before signing.</p>
           </div>
-        </section>
-
-        <section className="mt-7" aria-labelledby="saved-templates" aria-busy={templateLoading}>
-          <h2 id="saved-templates" className="text-sm font-bold">Saved templates</h2>
-          <p className="mt-1 text-sm leading-6 text-[var(--color-muted)]">Reuse a payment setup on {networkLabel}. Enter amounts and review the transaction each time.</p>
 
           {!templateScope && (
             <div className="mt-3 border-y border-[var(--color-rule)] py-4">
@@ -180,7 +179,7 @@ function NewTransactionChoices() {
           )}
 
           {currentTemplates?.status === 'ready' && currentTemplates.items.length > 0 && (
-            <div className="mst-work-list mt-3">
+            <div className="mst-work-list mst-compose-template-list">
               {currentTemplates.items.map((template) => (
                 <div key={template.id} className="mst-work-row">
                   <div className="min-w-0">
@@ -204,10 +203,11 @@ function NewTransactionChoices() {
               ))}
             </div>
           )}
-        </section>
+          </section>
+        </div>
 
-        <details className="mt-8 border-y border-black/10 py-4 dark:border-white/10">
-          <summary className="cursor-pointer list-none text-sm font-bold">More Stellar actions</summary>
+        <details className="mst-compose-advanced">
+          <summary className="cursor-pointer list-none text-sm font-semibold">More transaction types</summary>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-500 dark:text-neutral-400">These builders return to the same Review, Sign, Submit, and Done workflow.</p>
           <div className="mst-choice-list">
             <ChoiceRow href={createAccountHref} icon={<UserPlus className="h-5 w-5" />} title="Create Stellar account" description="Fund an inactive G-address with an explicit CreateAccount operation. You can switch to Payment without losing the entered address or amount." network={proposalNetwork} badge="CreateAccount" />
