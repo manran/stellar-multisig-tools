@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
+  ArrowRight,
   CircleAlert,
   ClipboardCopy,
   LoaderCircle,
@@ -36,7 +37,11 @@ import {
   treasurySettingsHref,
   treasurySigningHref,
 } from './treasuryNavigation';
-import { stellarHref } from './workspaceNavigation';
+import { stellarHref, stellarHrefWithSearch } from './workspaceNavigation';
+
+function shortAccount(address: string) {
+  return address.length > 28 ? address.slice(0, 12) + '…' + address.slice(-8) : address;
+}
 
 function TreasuryCard({
   account,
@@ -64,9 +69,9 @@ function TreasuryCard({
             <a href={treasuryOverviewHref(account.accountId, network)} className="text-lg font-bold hover:underline hover:decoration-black/20 hover:underline-offset-4 dark:hover:decoration-white/20">
               {name || (suggested ? 'Multisig account' : nameReady ? 'Unnamed treasury' : 'Treasury')}
             </a>
-            {suggested && <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300">You can manage this account</span>}
+            {suggested && <span className="rounded-full border border-[var(--color-rule)] bg-[var(--color-paper-2)] px-2.5 py-1 text-xs font-semibold text-[var(--color-ink-2)]">Available to manage</span>}
           </div>
-          <div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{account.accountId}</div>
+          <div className="mt-1 font-mono text-xs text-neutral-500 dark:text-neutral-400" title={account.accountId}>{shortAccount(account.accountId)}</div>
         </div>
         <div className="shrink-0 text-right">
           <div className="text-lg font-bold">{account.nativeBalance} XLM</div>
@@ -82,9 +87,12 @@ function TreasuryCard({
 
       <div className="mst-treasury-row__actions">
         {suggested && onAdopt ? (
-          <button type="button" onClick={onAdopt} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-3 py-2 text-white hover:bg-emerald-800"><Plus className="h-4 w-4" />Use as Treasury</button>
+          <button type="button" onClick={onAdopt} className="mst-action-secondary"><Plus className="h-4 w-4" />Add to Treasuries</button>
         ) : (
-          <a href={treasuryOverviewHref(account.accountId, network)} className="rounded-xl border border-black/10 px-3 py-2 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10">Open treasury</a>
+          <>
+          <a href={treasuryOverviewHref(account.accountId, network)} className="mst-treasury-row__action">View account <ArrowRight className="h-4 w-4" /></a>
+          <a href={stellarHrefWithSearch('/new', { account: account.accountId, network })} className="mst-action-primary">New proposal <Plus className="h-4 w-4" /></a>
+          </>
         )}
       </div>
     </article>
@@ -226,8 +234,16 @@ function TreasuryDetail({
             {!adopted && relationship === 'personal_account' && <a href={treasurySigningHref(account.accountId, network, 'create-treasury')} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" />Create treasury</a>}
             {!adopted && relationship !== 'personal_account' && <button type="button" onClick={onAdopt} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 px-3 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300"><Plus className="h-4 w-4" />Use as Treasury</button>}
           </div>
-          <div className="shrink-0 text-right"><div className="text-xl font-bold">{assets.length} {assets.length === 1 ? 'asset' : 'assets'}</div><div className="text-xs text-neutral-500 dark:text-neutral-400">Treasury holdings</div></div>
+          <div className="mst-treasury-detail__balance"><div className="text-xl font-bold tabular-nums">{account.nativeBalance} XLM</div><div className="text-xs text-[var(--color-muted)]">Native balance · {assets.length} {assets.length === 1 ? 'asset' : 'assets'}</div></div>
         </div>
+
+        {adopted && (
+          <nav className="mst-treasury-detail-actions" aria-label="Treasury actions">
+            <a href={stellarHrefWithSearch('/new', { account: account.accountId, network })} className="mst-action-primary"><Plus className="h-4 w-4" />New proposal</a>
+            <a href={treasuryActivityHref(account.accountId, network)} className="mst-action-secondary">Activity</a>
+            <a href={treasurySettingsHref(account.accountId, network)} className="mst-action-secondary"><Settings2 className="h-4 w-4" />Settings</a>
+          </nav>
+        )}
 
         <TreasuryAssets assets={assets} />
 
@@ -255,15 +271,6 @@ function TreasuryDetail({
 
         {advancedSigners.length > 0 && <details className="mst-advanced-panel mt-5"><summary className="cursor-pointer text-sm font-semibold">Advanced signer types · {advancedSigners.length}</summary><div className="mt-3 space-y-2 text-sm text-neutral-600 dark:text-neutral-300">{advancedSigners.map((signer) => <div key={signer.key} className="break-all font-mono text-xs">{signer.type} · {signer.key} · weight {signer.weight}</div>)}</div></details>}
 
-        {adopted && (
-          <div className="mt-7 flex flex-wrap items-center justify-between gap-4 border-t border-black/10 pt-5 dark:border-white/10">
-            <p className="max-w-2xl text-sm leading-6 text-neutral-500 dark:text-neutral-400">Review Treasury history first. Signers, approval rules, Audit access, and other administrative controls live under Settings.</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <a href={treasuryActivityHref(account.accountId, network)} className="rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10">Activity</a>
-              <a href={treasurySettingsHref(account.accountId, network)} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-neutral-600 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"><Settings2 className="h-4 w-4" />Settings</a>
-            </div>
-          </div>
-        )}
       </section>
     </>
   );
@@ -408,9 +415,9 @@ export default function TreasuryApp() {
 
   return (
     <StellarWorkspaceShell active="treasury" networkContext={network}>
-      <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
-        <div className="mx-auto max-w-5xl">
-          {!accountParam && <PageHeader icon={<Vault className="h-6 w-6" />} title="Treasury" description="Treasuries you manage with shared control. MultiSig Tools can discover Stellar accounts this wallet can help authorize; you decide which ones belong in your Treasury list." />}
+      <main className="mst-workbench-page">
+        <div className="mx-auto max-w-6xl">
+          {!accountParam && <PageHeader title="Treasuries" description="Shared accounts you can authorize. Start a proposal or review their signing rules." />}
 
           {!address && <section className="mx-auto max-w-xl py-14 sm:py-20"><Vault className="h-8 w-8 text-neutral-400" /><h2 className="mt-5 text-3xl font-bold">Connect a wallet</h2><p className="mt-2 text-base leading-7 text-neutral-600 dark:text-neutral-300">We'll use public Stellar account data to find accounts this wallet can help authorize.</p><button type="button" disabled={busy} onClick={() => void connect()} className="mt-6 flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-white disabled:opacity-50"><WalletCards className="h-4 w-4" />{busy ? 'Opening wallets…' : 'Connect wallet'}</button></section>}
 
@@ -434,8 +441,8 @@ export default function TreasuryApp() {
 
           {!accountParam && accounts.length > 0 && (
             <div className="mt-6 space-y-8">
-              {confirmedAccounts.length > 0 && <section><div className="mb-3 text-sm font-semibold text-neutral-500 dark:text-neutral-400">Treasuries</div><div className="mst-treasury-collection">{confirmedAccounts.map((account) => <TreasuryCard key={account.accountId} account={account} network={network!} name={treasuryNames[account.accountId]} nameReady={privateReady && treasuryMetadataReady} />)}</div></section>}
-              {suggestedAccounts.length > 0 && <section><div className="mb-1 text-lg font-bold">Accounts you can manage</div><p className="mb-3 text-sm text-neutral-500 dark:text-neutral-400">These accounts already use shared signing on Stellar. Choose the ones you want to manage as Treasuries.</p><div className="mst-treasury-collection">{suggestedAccounts.map((account) => <TreasuryCard key={account.accountId} account={account} network={network!} name={treasuryNames[account.accountId]} nameReady={privateReady && treasuryMetadataReady} suggested onAdopt={() => adoptTreasury(account.accountId)} />)}</div></section>}
+              {confirmedAccounts.length > 0 && <section><div className="mst-operations-section-head"><h2>My treasuries <span className="mst-operations-count">{confirmedAccounts.length}</span></h2></div><div className="mst-treasury-collection">{confirmedAccounts.map((account) => <TreasuryCard key={account.accountId} account={account} network={network!} name={treasuryNames[account.accountId]} nameReady={privateReady && treasuryMetadataReady} />)}</div></section>}
+              {suggestedAccounts.length > 0 && <section><div className="mst-operations-section-head"><h2>Available shared accounts <span className="mst-operations-count">{suggestedAccounts.length}</span></h2><p>These accounts already support shared signing. Add only those you want to manage here.</p></div><div className="mst-treasury-collection">{suggestedAccounts.map((account) => <TreasuryCard key={account.accountId} account={account} network={network!} name={treasuryNames[account.accountId]} nameReady={privateReady && treasuryMetadataReady} suggested onAdopt={() => adoptTreasury(account.accountId)} />)}</div></section>}
               {personalAccount && network && (
                 <section>{treasuryOnboardingDismissed
                   ? <CompactCreateTreasury account={personalAccount} network={network} />

@@ -30,7 +30,7 @@ function relatedSigners(accounts: StellarAccountSnapshot[]): RelatedSigner[] {
 }
 
 export default function AddressBookApp() {
-  const { address, network, busy, connect, privateUnlocked, authBusy, unlock } = useStellarWallet();
+  const { address, network, busy, connect, privateUnlocked, authBusy, unlock, unlockedAddress, unlockedNetwork } = useStellarWallet();
   const { entries, labelFor, saveAlias, loading: aliasesLoading, error: aliasError } = useAddressBook();
   const [accounts, setAccounts] = useState<StellarAccountSnapshot[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,6 +40,19 @@ export default function AddressBookApp() {
   const [newAddress, setNewAddress] = useState('');
   const [newName, setNewName] = useState('');
   const [addError, setAddError] = useState('');
+  const [savingContact, setSavingContact] = useState(false);
+  const [search, setSearch] = useState('');
+  const privateReady = Boolean(privateUnlocked && address && network && unlockedAddress === address && unlockedNetwork === network);
+  const visibleLabelFor = (identity: string, type: 'account' | 'signer') => privateReady ? labelFor(identity, type) : '';
+  const visibleTreasuryNames = privateReady ? treasuryNames : {};
+
+  useEffect(() => {
+    setAdding(false);
+    setNewAddress('');
+    setNewName('');
+    setAddError('');
+    setSearch('');
+  }, [address, network]);
 
   useEffect(() => {
     if (!address || !network) {
@@ -78,19 +91,19 @@ export default function AddressBookApp() {
   const treasuryIdSet = useMemo(() => new Set(treasuryIds), [treasuryIds]);
 
   useEffect(() => {
-    if (!network) {
+    if (!privateReady || !network || !address) {
       setTreasuryNames({});
       return;
     }
     setTreasuryNames(cachedTreasuryNames(sessionStorage, network, treasuryIds));
-    if (!privateUnlocked || !address || treasuryIds.length === 0) return;
+    if (treasuryIds.length === 0) return;
     let cancelled = false;
     const controller = new AbortController();
     void loadSharedTreasuryNames(treasuryIds, network, address, controller.signal)
       .then((names) => { if (!cancelled) setTreasuryNames((current) => ({ ...current, ...names })); })
       .catch(() => undefined);
     return () => { cancelled = true; controller.abort(); };
-  }, [treasuryIds, privateUnlocked, address, network]);
+  }, [treasuryIds, privateReady, address, network]);
 
   const signers = useMemo(() => relatedSigners(accounts), [accounts]);
   const contacts = useMemo(() => {
@@ -99,11 +112,12 @@ export default function AddressBookApp() {
       .filter((entry) => entry.address !== address && !treasuryIdSet.has(entry.address) && !signerAddressSet.has(entry.address))
       .map((entry) => [entry.address, entry]));
     return [...byAddress.values()]
-      .sort((left, right) => labelFor(left.address, 'account').localeCompare(labelFor(right.address, 'account')) || left.address.localeCompare(right.address));
-  }, [entries, address, treasuryIdSet, signers, labelFor]);
+      .sort((left, right) => (privateReady ? labelFor(left.address, 'account') : '').localeCompare((privateReady ? labelFor(right.address, 'account') : '')) || left.address.localeCompare(right.address));
+  }, [entries, address, treasuryIdSet, signers, labelFor, privateReady]);
 
   async function addAddress(event: FormEvent) {
     event.preventDefault();
+    if (savingContact) return;
     const target = newAddress.trim();
     const name = newName.trim();
     if (!isValidStellarAccountId(target)) {
@@ -114,25 +128,41 @@ export default function AddressBookApp() {
       setAddError('Add a name for this address.');
       return;
     }
+    setSavingContact(true);
     setAddError('');
-    setNewAddress('');
-    setNewName('');
-    setAdding(false);
-    void saveAlias(target, 'account', name).catch(() => undefined);
+    try {
+      await saveAlias(target, 'account', name);
+      setNewAddress('');
+      setNewName('');
+      setAdding(false);
+    } catch (cause) {
+      setAddError(cause instanceof Error ? cause.message : 'Could not save this contact.');
+    } finally {
+      setSavingContact(false);
+    }
   }
 
-  const hasContent = treasuryAccounts.length > 0 || signers.length > 0 || contacts.length > 0;
+  const query = search.trim().toLowerCase();
+  const matches = (account: string, name: string) =>
+    !query || account.toLowerCase().includes(query) || name.toLowerCase().includes(query);
+  const visibleSigners = signers.filter((signer) =>
+    matches(signer.address, visibleLabelFor(signer.address, 'signer') + ' ' + visibleLabelFor(signer.address, 'account') + ' ' + (visibleTreasuryNames[signer.address] ?? '')));
+  const visibleContacts = privateReady ? contacts.filter((entry) => matches(entry.address, visibleLabelFor(entry.address, 'account'))) : [];
+  const visibleTreasuries = treasuryAccounts.filter((account) =>
+    matches(account.accountId, treasuryDisplayLabel(visibleTreasuryNames[account.accountId] || '', visibleLabelFor(account.accountId, 'account'))));
+  const visibleCount = visibleSigners.length + visibleContacts.length + visibleTreasuries.length;
+
+  const hasContent = treasuryAccounts.length > 0 || signers.length > 0 || (privateReady && contacts.length > 0);
 
   return (
     <StellarWorkspaceShell active="address-book" networkContext={network}>
-      <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
-        <div className="mx-auto max-w-5xl">
+      <main className="mst-workbench-page">
+        <div className="mx-auto max-w-6xl">
           <PageHeader
-            icon={<BookUser className="h-6 w-6" />}
-            title="Address Book"
-            description="Keep private names and signer contact details with the Stellar addresses you already use."
-            actions={privateUnlocked ? (
-              <button type="button" onClick={() => { setAdding((value) => !value); setAddError(''); }} className="mst-action-secondary">
+            title="Contacts"
+            description="Find signers, manage invitation emails, and reuse saved Stellar addresses."
+            actions={privateReady ? (
+              <button type="button" aria-expanded={adding} onClick={() => { setAdding((value) => !value); setAddError(''); }} className="mst-action-secondary">
                 <Plus className="h-4 w-4" />Add contact
               </button>
             ) : undefined}
@@ -147,18 +177,21 @@ export default function AddressBookApp() {
             </section>
           )}
 
-          {address && !privateUnlocked && (
+          {address && !privateReady && (
             <section className="mst-address-action-row mt-5">
               <div><div className="font-semibold">Saved contact details are private</div><p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Public account relationships are available now. Confirm this wallet when you want to load private names and signer notification emails.</p></div>
               <button type="button" disabled={authBusy} onClick={() => void unlock()} className="mst-action-secondary shrink-0 disabled:opacity-50">{authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Show contact details</button>
             </section>
           )}
 
-          {privateUnlocked && adding && (
+          {privateReady && adding && (
             <form onSubmit={addAddress} className="mst-address-add-form mt-5">
               <div><label htmlFor="address-book-new-address" className="text-sm font-semibold">Contact address</label><input id="address-book-new-address" value={newAddress} onChange={(event) => setNewAddress(event.target.value.trim())} placeholder="G..." spellCheck={false} className="mst-address-control mt-2 w-full font-mono" /></div>
               <div><label htmlFor="address-book-new-name" className="text-sm font-semibold">Name</label><input id="address-book-new-name" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="e.g. Alice" maxLength={64} className="mst-address-control mt-2 w-full" /></div>
-              <button type="submit" className="mst-action-primary">Save</button>
+              <div className="mst-contacts-form-actions">
+                <button type="submit" disabled={savingContact} className="mst-action-primary">{savingContact ? 'Saving…' : 'Save contact'}</button>
+                <button type="button" disabled={savingContact} className="mst-action-secondary" onClick={() => { setAdding(false); setAddError(''); }}>Cancel</button>
+              </div>
               {addError && <div className="text-sm text-red-700 dark:text-red-300 sm:col-span-3">{addError}</div>}
             </form>
           )}
@@ -167,38 +200,27 @@ export default function AddressBookApp() {
 
           {address && (loading || aliasesLoading) && !hasContent && <div className="flex items-center gap-2 py-10 text-sm text-neutral-500 dark:text-neutral-400"><LoaderCircle className="h-4 w-4 animate-spin" />Loading relationships…</div>}
 
-          {treasuryAccounts.length > 0 && (
-            <section className="mt-6">
-              <h2 className="mb-3 text-lg font-bold">Treasuries</h2>
-              <div className="mst-address-list">
-                {treasuryAccounts.map((account) => {
-                  const sharedName = treasuryNames[account.accountId] || '';
-                  const personalNote = labelFor(account.accountId, 'account');
-                  const displayName = treasuryDisplayLabel(sharedName, personalNote) || 'Unnamed treasury';
-                  return (
-                    <div key={account.accountId} className="mst-address-row">
-                      <div className="min-w-0 flex-1"><div className="font-bold">{displayName}</div><div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{account.accountId}</div></div>
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        <a href={stellarHrefWithSearch('/new', { account: account.accountId, network })} className="mst-action-primary">New proposal</a>
-                        <AddressAliasEditor address={account.accountId} subjectType="account" semantics="note" />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+          {address && hasContent && (
+            <div className="mst-contacts-search">
+              <label htmlFor="contact-search">Find a contact</label>
+              <input id="contact-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name or Stellar address" className="mst-address-control" />
+              <span aria-live="polite">{visibleCount} shown</span>
+            </div>
+          )}
+          {address && query && visibleCount === 0 && hasContent && (
+            <p role="status" className="mt-6 text-sm text-[var(--color-ink-2)]">No matching contacts. Try another name or address.</p>
           )}
 
-          {signers.length > 0 && (
-            <section className="mt-6">
-              <h2 className="mb-3 text-lg font-bold">Signers</h2>
+          {visibleSigners.length > 0 && (
+            <section className="mst-contacts-section">
+              <div className="mst-operations-section-head"><h2>Signers <span className="mst-operations-count">{visibleSigners.length}</span></h2><p>People and accounts authorized to sign. Add names and email addresses for invitations.</p></div>
               <div className="mst-address-list">
-                {signers.map((signer) => {
+                {visibleSigners.map((signer) => {
                   const treasuryMaster = treasuryIdSet.has(signer.address);
                   const treasuryLabel = treasuryMaster
-                    ? treasuryDisplayLabel(treasuryNames[signer.address] || '', labelFor(signer.address, 'account'))
+                    ? treasuryDisplayLabel(visibleTreasuryNames[signer.address] || '', visibleLabelFor(signer.address, 'account'))
                     : '';
-                  const alias = treasuryMaster ? '' : labelFor(signer.address, 'signer');
+                  const alias = treasuryMaster ? '' : visibleLabelFor(signer.address, 'signer');
                   const displayName = treasuryMaster ? `${treasuryLabel || 'Treasury'} · account key` : alias || 'Unnamed signer';
                   return (
                     <div key={signer.address} className="mst-address-row">
@@ -214,20 +236,42 @@ export default function AddressBookApp() {
             </section>
           )}
 
-          {privateUnlocked && contacts.length > 0 && (
-            <section className="mt-6">
-              <h2 className="mb-3 text-lg font-bold">Contacts</h2>
+          {privateReady && visibleContacts.length > 0 && (
+            <section className="mst-contacts-section">
+              <div className="mst-operations-section-head"><h2>Saved contacts <span className="mst-operations-count">{visibleContacts.length}</span></h2><p>Other addresses saved for future payments and proposals.</p></div>
               <div className="mst-address-list">
-                {contacts.map((entry) => (
-                  <div key={entry.address} className="mst-address-row"><div className="min-w-0 flex-1"><div className="font-bold">{labelFor(entry.address, 'account')}</div><div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{entry.address}</div></div><AddressAliasEditor address={entry.address} subjectType="account" /></div>
+                {visibleContacts.map((entry) => (
+                  <div key={entry.address} className="mst-address-row"><div className="min-w-0 flex-1"><div className="font-bold">{visibleLabelFor(entry.address, 'account')}</div><div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{entry.address}</div></div><AddressAliasEditor address={entry.address} subjectType="account" /></div>
                 ))}
+              </div>
+            </section>
+          )}
+
+          {visibleTreasuries.length > 0 && (
+            <section className="mst-contacts-section">
+              <div className="mst-operations-section-head"><h2>Treasuries <span className="mst-operations-count">{visibleTreasuries.length}</span></h2><p>Accounts linked to your signers.</p></div>
+              <div className="mst-address-list">
+                {visibleTreasuries.map((account) => {
+                  const sharedName = visibleTreasuryNames[account.accountId] || '';
+                  const personalNote = visibleLabelFor(account.accountId, 'account');
+                  const displayName = treasuryDisplayLabel(sharedName, personalNote) || 'Unnamed treasury';
+                  return (
+                    <div key={account.accountId} className="mst-address-row">
+                      <div className="min-w-0 flex-1"><div className="font-bold">{displayName}</div><div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{account.accountId}</div></div>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <a href={stellarHrefWithSearch('/new', { account: account.accountId, network })} className="mst-action-secondary">New proposal</a>
+                        <AddressAliasEditor address={account.accountId} subjectType="account" semantics="note" />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </section>
           )}
 
           {address && !loading && !aliasesLoading && !hasContent && !error && (
             <section className="py-12 text-sm text-neutral-500 dark:text-neutral-400">
-              Nothing here yet. {privateUnlocked ? 'Add a contact above, or names will appear here as you use them in payments and signing.' : 'Show saved names to add a contact.'}
+              Nothing here yet. {privateReady ? 'Add a contact above, or names will appear here as you use them in payments and signing.' : 'Show saved names to add a contact.'}
             </section>
           )}
         </div>
