@@ -570,6 +570,13 @@ try {
     await run('proposal-managed-submit', width, { state: { request: requestFixture('ready', ['alice', 'bob'], { mode: 'multisigtools' }) } }, async ({ page, state }) => {
       await page.goto(`${origin}/s#${requestId}`);
       await visible(page, 'Submit transaction', 'button');
+      await visible(page, 'Submit this transaction to Stellar Testnet?');
+      assert.equal(await page.getByRole('heading', { name: 'All required signatures are present' }).count(), 0, 'Ready Proposal must not repeat the authorization heading');
+      assert.equal(await page.getByText('Authorization complete', { exact: true }).count(), 1, 'Ready Proposal must show authorization status only once');
+      await page.getByRole('button', { name: 'Review details', exact: true }).click();
+      await visible(page, 'Back to submission', 'button');
+      await page.getByRole('button', { name: 'Back to submission', exact: true }).click();
+      await visible(page, 'Submit transaction', 'button');
       await snapshot(page, 'proposal-ready', width);
       await page.getByRole('button', { name: 'Submit transaction', exact: true }).click();
       await visible(page, 'Confirmed on Stellar', 'heading');
@@ -674,6 +681,7 @@ try {
   await run('proposal-external-submission', 375, { state: { request: requestFixture('ready', ['alice', 'bob'], { mode: 'external', executor: { id: 'fixture-service', label: 'Fixture service' } }) } }, async ({ page, state }) => {
     await page.goto(`${origin}/s#${requestId}`);
     await visible(page, 'Waiting for the originating service', 'heading');
+    await visible(page, 'Fixture service will re-check its business state and submit when its execution conditions are satisfied. MultiSigTools will not broadcast this transaction.');
     assert.equal(await page.getByRole('button', { name: 'Submit transaction', exact: true }).count(), 0);
     assert.equal(state.submitCount, 0);
     await snapshot(page, 'proposal-external', 375);

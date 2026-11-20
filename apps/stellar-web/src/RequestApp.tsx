@@ -317,9 +317,11 @@ export default function RequestApp() {
   );
   const reviewContinueLabel = snapshot?.status === 'submitted'
     ? 'Back to submitted transaction'
-    : signaturesComplete
-      ? 'Back to signature status'
-      : 'Continue to signatures';
+    : snapshot?.status === 'ready'
+      ? 'Back to submission'
+      : signaturesComplete
+        ? 'Back to signature status'
+        : 'Continue to signatures';
   const privateReadyForRequest = Boolean(privateUnlocked && requestNetwork && walletNetwork === requestNetwork);
   const activeCapabilityNeedsActivity = Boolean(
     snapshot
@@ -969,7 +971,7 @@ export default function RequestApp() {
 
                   {contributionMessage && <div role="status" className="flex gap-2 rounded-xl border border-[var(--color-success)] p-4 text-sm text-[var(--color-success)]"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />{contributionMessage}</div>}
 
-                  {!['submitted', 'expired', 'stale', 'blocked'].includes(snapshot.status) && <section id="proposal-signatures" tabIndex={-1} className="scroll-mt-24 focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]">
+                  {!['ready', 'waiting_preconditions', 'submitted', 'expired', 'stale', 'blocked'].includes(snapshot.status) && <section id="proposal-signatures" tabIndex={-1} className="scroll-mt-24 focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]">
                   <SigningGuidance
                     inspection={inspection}
                     authorization={authorization}
@@ -991,17 +993,17 @@ export default function RequestApp() {
                   </section>}
 
                   {snapshot.status === 'ready' && (
-                    <section id="proposal-submission" tabIndex={-1} className="scroll-mt-24 rounded-2xl border border-[var(--color-success)] p-5 sm:p-6 focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]">
-                      <div className="font-semibold text-emerald-800 dark:text-emerald-200">Authorization complete</div>
-                      <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{snapshot.execution?.mode === 'external'
-                        ? `All required signatures are present. ${snapshot.execution.executor.label ?? snapshot.execution.executor.id} owns final execution; MultiSigTools will not broadcast this transaction.`
-                        : executionAlreadyRoutedToMst
-                          ? 'All required signatures are present. This work is already routed through MultiSigTools execution.'
-                          : 'All required signatures are present. Choose how this exact authorized transaction should be executed.'}</p>
+                    <section id="proposal-submission" tabIndex={-1} aria-label="Submission" className="scroll-mt-24 focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]">
+                      {snapshot.execution?.mode !== 'external' && !executionAlreadyRoutedToMst && (
+                        <>
+                          <h2 className="text-lg font-semibold">Choose how to submit</h2>
+                          <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">Let MultiSigTools submit this authorized transaction, or copy the signed XDR to submit elsewhere.</p>
+                        </>
+                      )}
                       {snapshot.execution?.mode === 'external' ? (
                         <div className="mst-execution-note mt-4">
                           <div className="font-semibold">Waiting for external execution</div>
-                          <p className="mt-1 leading-6 text-neutral-600 dark:text-neutral-300">The originating service will re-check its business state and submit after its own execution conditions are satisfied.</p>
+                          <p className="mt-1 leading-6 text-neutral-600 dark:text-neutral-300">{snapshot.execution.executor.label ?? snapshot.execution.executor.id} will re-check its business state and submit when its execution conditions are satisfied. MultiSigTools will not broadcast this transaction.</p>
                         </div>
                       ) : (
                         <>
