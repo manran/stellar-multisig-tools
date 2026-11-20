@@ -129,3 +129,26 @@ test('template references are owner and network scoped', async () => {
     (cause: unknown) => cause instanceof ReusableTemplateServiceError && cause.code === 'template_not_found',
   );
 });
+
+test('template reminder policy opt-in is stored but defaults to off', async () => {
+  const owner = Keypair.random().publicKey();
+  const destination = Keypair.random().publicKey();
+  const store = memoryStore();
+  const definition = {
+    version: 1, source: owner, recipients: [{ destination, assetKey: 'native' }],
+    signingWindowSeconds: 86400,
+  };
+  const created = await createReusableTemplate(store, owner, {
+    network: 'testnet', name: 'Monthly payment', kind: 'payment',
+    definition: { ...definition, autoRemind: true },
+  }, { idFactory: () => 'tpl_abcdefghijklmnop' });
+  assert.equal(created.definition.autoRemind, true);
+  assert.equal((await listReusableTemplates(store, owner, 'testnet'))[0].definition.autoRemind, true);
+  await assert.rejects(
+    () => createReusableTemplate(store, owner, {
+      network: 'testnet', name: 'Bad reminder', kind: 'payment',
+      definition: { ...definition, autoRemind: 'true' },
+    }),
+    (cause: unknown) => cause instanceof ReusableTemplateServiceError && cause.code === 'invalid_template_reminder',
+  );
+});

@@ -187,6 +187,7 @@ function NewTransactionChoices() {
                     <div className={'mst-work-row__meta ' + accentClass}>{template.kind === 'batch_payment' ? 'Batch payment' : 'Payment'}</div>
                     <h3 className="mst-work-row__title">{template.name}</h3>
                     <p className="mst-work-row__copy">{template.definition.recipients.length} recipient{template.definition.recipients.length === 1 ? '' : 's'} · Source <span className="font-mono" title={template.definition.source}>{template.definition.source.slice(0, 8)}…{template.definition.source.slice(-8)}</span></p>
+                    {template.definition.autoRemind && <p className="mt-1 text-xs font-medium text-[var(--color-ink-2)]">Automatic email reminders enabled</p>}
                     {proposalAccount && template.definition.source !== proposalAccount && <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">This template uses a different source account.</p>}
                   </div>
                   <a

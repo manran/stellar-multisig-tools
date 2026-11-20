@@ -144,16 +144,15 @@ export async function requireSigningRequestReminder(
       'request_reminder_assignment_required',
     );
   }
-  if (assignment.assignedByAddress !== remindedByAddress) {
+  const stored = await store.getRequest(requestId);
+  if (!stored) throw new RequestAssignmentServiceError('Signing request not found.', 404, 'request_not_found');
+  if (assignment.assignedByAddress !== remindedByAddress && stored.creatorAddress !== remindedByAddress) {
     throw new RequestAssignmentServiceError(
-      'Only the signer who sent the original Ask can send its email reminder.',
+      'Only the original requester or the signer who sent the Ask can send a reminder.',
       403,
       'request_reminder_not_owner',
     );
   }
-
-  const stored = await store.getRequest(requestId);
-  if (!stored) throw new RequestAssignmentServiceError('Signing request not found.', 404, 'request_not_found');
   const access = options.signerAccess ?? signerCanAccessTransaction;
   const [reminderActorAllowed, signerAllowed] = await Promise.all([
     access(remindedByAddress, stored.baseXdr, stored.network),

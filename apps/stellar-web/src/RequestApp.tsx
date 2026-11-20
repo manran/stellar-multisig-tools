@@ -971,6 +971,7 @@ export default function RequestApp() {
                     authorization={authorization}
                     sourceAnalyses={sourceAnalyses}
                     walletAddress={walletAddress}
+                    creatorAddress={snapshot.creatorAddress}
                     walletBusy={walletBusy || contributing}
                     walletError={walletError}
                     onConnectWallet={() => void chooseSignerWallet()}

@@ -377,6 +377,31 @@ Principal signer
 
 It does not belong to a Treasury or to the Agent itself.
 
+Agent callers receive the existing `requests[]` plus a parallel, machine-readable
+`tasks[]` array (one task for each verified Classic Request), and `action_count`.
+Each Task includes `state`, `nextActions[].code`, `requiredAccess` and
+`available` for **this exact Agent credential**. A Read-only Agent may see an
+action it is not permitted to perform. Do not use a task as a substitute for
+fresh transaction authorization.
+
+Current delivery:
+
+- Human signers receive an explicit Assignment and optional private-contact email.
+- Programs and AI Agents **pull** `GET /inbox` with an `msa_...` credential and
+  consume `tasks[]`; then fetch `GET /request` before taking an action.
+- The existing signed Integration webhook reports **Service Job** changes, not
+  delegated Signer Agent work. Never subscribe an Agent to another signer's
+  Integration callback.
+- Agent push notification subscriptions are not implemented yet. The future
+  opt-in, per-Principal HTTPS callback should carry only `eventId`,
+  `resourceKind`, `resourceId` and `change`. The receiver then authenticates
+  and fetches current Task state. Require SSRF-safe HTTPS registration, HMAC,
+  timestamp/replay protection, a durable outbox, bounded retries and explicit
+  credential revocation before enabling it.
+
+Polling is a fallback, not a substitute for the eventual push channel.
+Consumers should use bounded backoff and avoid busy-loop polling.
+
 ### Saved contracts
 
 `/contracts` exposes the Principal's private Contract workspace references. Read lists; Write/Sign may keep or forget a C-address. The optional request network must match the credential Principal.

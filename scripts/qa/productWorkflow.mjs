@@ -162,6 +162,7 @@ async function fixturePage(width, options = {}) {
     inboxStatus: 200, inbox: inboxFixture(), request: requestFixture(), requestError: null,
     requestGetCount: 0, inboxGetCount: 0, contributionCount: 0, submitCount: 0, retentionCount: 0,
     requestAccess: { shareable: false, activityBound: true }, requestGetResponse: null, horizonAccount: null,
+    inviteContacts: false, assignments: [], notifications: [],
     ...options.state,
   };
   await page.route('**/*', async (route) => {
@@ -192,7 +193,10 @@ async function fixturePage(width, options = {}) {
       state.inboxGetCount++;
       return json(state.inboxStatus === 200 ? state.inbox : { error: 'Fixture inbox load failure.' }, state.inboxStatus);
     }
-    if (url.pathname === '/api/address-book') return json({ entries: ['alice', 'bob', 'carol'].map((name) => ({ address: addresses[name], subjectType: 'signer', label: name[0].toUpperCase() + name.slice(1) })) });
+    if (url.pathname === '/api/address-book') return json({ entries: ['alice', 'bob', 'carol'].map((name) => ({
+      address: addresses[name], subjectType: 'signer', label: name[0].toUpperCase() + name.slice(1),
+      ...(state.inviteContacts && name !== 'alice' ? { notificationEmail: name + '@example.org' } : {}),
+    })) });
     if (url.pathname === '/api/contracts') return json({ contracts: [] });
     if (url.pathname === '/api/treasury-box') return json({ metadataByAccount: {} });
     if (url.pathname === '/api/runtime-config') return json({ stellarNetwork: 'testnet', fixedNetwork: 'testnet', capabilities: { classicManagedExecution: { testnet: false, public: false } } });
@@ -207,7 +211,7 @@ async function fixturePage(width, options = {}) {
           finally { reply.onDone?.(); }
         }
         if (state.requestError) return json(state.requestError, 410);
-        return json({ request: state.request, access: state.requestAccess, coordination: { assignments: [], notifications: [] } });
+        return json({ request: state.request, access: state.requestAccess, coordination: { assignments: state.assignments, notifications: state.notifications } });
       }
       if (request.method() === 'PATCH') {
         const body = request.postDataJSON();
@@ -216,6 +220,24 @@ async function fixturePage(width, options = {}) {
           state.retentionCount++;
           state.requestAccess = { ...state.requestAccess, activityBound: true };
           return json({ request: state.request, access: state.requestAccess });
+        }
+        if (body.assignSigner) {
+          assert.ok(state.inviteContacts, 'Only the invitation fixture may create assignments');
+          assert.equal(request.headers()['x-multisig-session-address'], addresses.alice);
+          const assignment = {
+            version: 1, signerAddress: body.assignSigner, assignedByAddress: addresses.alice,
+            assignedAt: '2026-11-20T12:00:00Z',
+          };
+          state.assignments = [...state.assignments, assignment];
+          state.notifications = [...state.notifications, {
+            channel: 'email', eventType: 'signature_requested', signerAddress: body.assignSigner,
+            actorAddress: addresses.alice, state: 'queued', createdAt: assignment.assignedAt,
+          }];
+          return json({
+            request: state.request, assignment, created: true,
+            coordination: { assignments: state.assignments, notifications: state.notifications },
+            notification: { channel: 'email', status: 'queued' },
+          });
         }
         assert.ok(body.signedXdr, 'QA only accepts an explicit signed XDR contribution');
         const transaction = TransactionBuilder.fromXDR(body.signedXdr, Networks.TESTNET);
@@ -351,6 +373,38 @@ try {
       await visible(page, 'Needs 1 more approval power');
       await snapshot(page, 'proposal-weighted', width);
     });
+
+    if (width === 375 || width === 1280) {
+      await run('proposal-bulk-invites', width, {
+        state: { inviteContacts: true, requestAccess: { shareable: true, activityBound: true } },
+      }, async ({ page, state }) => {
+        await page.goto(origin + '/s#' + requestId);
+        await visible(page, 'November supplier payment', 'heading');
+        await page.getByRole('button', { name: 'Review transaction', exact: true }).click();
+        await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
+        await visible(page, 'Invite signers', 'heading');
+        const button = page.getByRole('button', { name: 'Send 0 invitations' });
+        assert.equal(await button.isDisabled(), true, 'No signer is preselected');
+        await page.getByRole('checkbox', { name: 'Invite Bob' }).check();
+        if (width === 1280) await page.getByRole('checkbox', { name: 'Invite Carol' }).check();
+        const expected = width === 1280 ? 2 : 1;
+        await visible(page, 'Send ' + expected + ' invitations', 'button');
+        await snapshot(page, 'proposal-invite-selection', width);
+        await page.getByRole('button', { name: 'Send ' + expected + ' invitations' }).click();
+        try {
+          await visible(page, expected + ' signer' + (expected === 1 ? '' : 's') + ' invited. Follow their progress below.');
+        } catch {
+          throw Error('Bulk invite result: ' + JSON.stringify({
+            assignments: state.assignments.map((item) => item.signerAddress),
+            feedback: await page.getByRole('status').allTextContents(),
+            error: await page.getByRole('alert').allTextContents(),
+          }));
+        }
+        assert.equal(state.assignments.length, expected);
+        assert.equal(state.notifications.length, expected);
+        await snapshot(page, 'proposal-invite-sent', width);
+      });
+    }
 
     await run('proposal-managed-submit', width, { state: { request: requestFixture('ready', ['alice', 'bob'], { mode: 'multisigtools' }) } }, async ({ page, state }) => {
       await page.goto(`${origin}/s#${requestId}`);

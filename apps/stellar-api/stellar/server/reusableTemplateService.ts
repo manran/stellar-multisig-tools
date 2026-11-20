@@ -93,11 +93,15 @@ function parseDefinition(
   if (typeof record.signingWindowSeconds !== 'number' || !isTransactionLifetimeSeconds(record.signingWindowSeconds)) {
     throw new ReusableTemplateServiceError('Template signing window is invalid.', 400, 'invalid_template_signing_window');
   }
+  if (record.autoRemind !== undefined && typeof record.autoRemind !== 'boolean') {
+    throw new ReusableTemplateServiceError('Automatic reminder setting must be true or false.', 400, 'invalid_template_reminder');
+  }
   return {
     version: 1,
     source,
     recipients,
     signingWindowSeconds: record.signingWindowSeconds,
+    ...(record.autoRemind === true ? { autoRemind: true as const } : {}),
   };
 }
 

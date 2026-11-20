@@ -1,4 +1,6 @@
 import type { Pool } from 'pg';
+import { templateReminderAutomationEnabled, templateReminderStillNeeded } from './templateReminderScheduler.js';
+import { isTemplateAutoReminderEventId, templateReminderDispatchDecision } from '../db/postgresHumanNotificationOutbox.js';
 import { coordinationPool } from '../db/postgres.js';
 import {
   claimHumanNotificationEvent,
@@ -26,6 +28,7 @@ export type HumanNotificationDispatchResult =
   | { status: 'sent'; providerMessageId: string }
   | { status: 'retry_scheduled'; errorCode: string; nextAvailableAt: string }
   | { status: 'permanent_failure'; errorCode: string; httpStatus?: number }
+  | { status: 'skipped' }
   | { status: 'lease_lost' };
 
 type SendEmail = (
@@ -60,6 +63,9 @@ export async function dispatchHumanNotificationEvent(
     from?: string;
     webOrigin?: string;
     sendEmail?: SendEmail;
+    automationEnabled?: boolean;
+    verifyTemplateReminder?: (requestId: string, actorAddress: string, signerAddress: string, expiresAt: string) => Promise<boolean>;
+    templateReminderGate?: typeof templateReminderDispatchDecision;
   } = {},
 ): Promise<HumanNotificationDispatchResult> {
   const pool = dependencies.pool ?? coordinationPool();
@@ -82,6 +88,44 @@ export async function dispatchHumanNotificationEvent(
     return completed
       ? { status: 'sent', providerMessageId: previousSuccess.providerMessageId }
       : { status: 'lease_lost' };
+  }
+
+  // Recheck the chain-derived Request state directly before an automatic send.
+  // A signed, completed, expired, or no-longer-authorized signer is not a
+  // notification failure, and must never receive a stale reminder.
+  if (isTemplateAutoReminderEventId(record.eventId)) {
+    let needed = false;
+    let retryAt: Date | null = null;
+    try {
+      if (dependencies.automationEnabled ?? templateReminderAutomationEnabled()) {
+        const decision = await (dependencies.templateReminderGate ?? templateReminderDispatchDecision)(
+          eventId, now(), pool,
+        );
+        if (decision.state === 'wait') retryAt = decision.retryAt;
+        else if (decision.state === 'send') {
+          needed = await (dependencies.verifyTemplateReminder ?? templateReminderStillNeeded)(
+            record.requestId,
+            record.actorAddress,
+            record.recipientSignerAddress,
+            record.expiresAt,
+          );
+        }
+      }
+    } catch {
+      retryAt = new Date(now().getTime() + 5 * 60_000);
+    }
+    if (retryAt) {
+      const released = await releaseHumanNotificationEvent(eventId, leaseToken, retryAt, pool);
+      return released
+        ? { status: 'retry_scheduled', errorCode: 'reminder_not_due_or_state_unavailable', nextAvailableAt: retryAt.toISOString() }
+        : { status: 'lease_lost' };
+    }
+    if (!needed) {
+      const completed = await completeHumanNotificationEvent(eventId, leaseToken, {
+        outcome: 'skipped', completedAt: now(), errorCode: 'no_longer_needed',
+      }, pool);
+      return completed ? { status: 'skipped' } : { status: 'lease_lost' };
+    }
   }
 
   const startedAt = now();

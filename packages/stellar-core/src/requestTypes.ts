@@ -58,6 +58,7 @@ export interface SigningRequestSnapshot {
   mergedXdr: string;
   createdAt: string;
   expiresAt: string;
+  creatorAddress?: string;
   contributionCount: number;
   signatureCount: number;
   status: SigningRequestStatus;
@@ -91,6 +92,7 @@ export type SigningRequestNotificationDeliveryState =
 export interface SigningRequestNotificationSummary {
   channel: 'email';
   eventType: SigningRequestNotificationEventType;
+  automatic?: true;
   signerAddress: string;
   actorAddress: string;
   state: SigningRequestNotificationDeliveryState;
