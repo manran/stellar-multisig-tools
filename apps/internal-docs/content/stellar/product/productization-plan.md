@@ -65,6 +65,88 @@ Current Testnet productization status:
 
 Signer/threshold Reusable Templates remain a candidate, not a completeness requirement. Learn from real Payment/Batch Template use before expanding the Template catalog mechanically.
 
+## November 2026 — workflow polish, not feature expansion
+
+**Product reference:** DocuSign's sender-to-recipient task model, adapted to Stellar shared authorization. Reuse existing Proposal, Assignment, Activity, Template, Inbox, and execution evidence. No new generic workflow engine.
+
+**Baseline:** Dashboard and Inbox already prioritize work; Reusable Templates and email delivery/view evidence already exist. The gap is the presentation of a single Proposal to the sender and the signer.
+
+### P0 — Make each Proposal legible
+
+- Show the Template business label, or derive a factual transaction title from the exact XDR, on the Proposal detail page.
+- Show Proposal status, network, and non-secret ID without making the ID the primary title.
+- State the next task or waiting reason accurately for Review, awaiting signatures, already signed, ready, external execution, submitted, expired, stale, blocked, and ledger-precondition cases.
+- Do not claim the current wallet can sign unless authorization has been verified; never treat a notification or a view as authorization.
+- Keep full transaction review, signer policy, authorization, and final submission confirmation intact.
+- Verify with presentation unit tests, build/typecheck, 320/375/414/768 responsive checks, and a real Testnet signing walk-through. Merge only after verification.
+
+### P1 — Recipient experience
+
+- Follow a real notification from email to wallet confirmation, exact transaction review, signature contribution, and visible acknowledgement.
+- Reduce intervening choices; never require account registration to sign with a current authorized wallet.
+- Preserve sender-controlled Assignment and the non-secret email locator. Keep private capability links separate from ordinary email.
+- Accept when a recipient can answer: which proposal and wallet, what will change, whether I have signed, and what happens next. Show a requester identity only when the API supplies verified provenance.
+
+### P2 — Sender progress
+
+- Show requested, provider-accepted/delivered, authenticated Viewed, signed, and ready-to-submit as distinct facts from the existing coordination and signing evidence.
+- Show only sender-owned invitations, respecting current signer authorization.
+- Offer reminders only where the existing Assignment rules permit them. Avoid additional polling.
+- Accept when the sender can identify the pending person and next available action without opening technical evidence.
+
+### P3 — First-use and Templates
+
+- Prioritize common payment and saved Template tasks. Keep imported XDR, multi-source, and specialized Soroban operations under explicit advanced routes.
+- Validate first-use with a person unfamiliar with Stellar transaction internals. Expand Templates only from observed use cases.
+
+### Release and collaboration boundary
+
+Run Testnet before a live release. This work keeps signing authority, execution ownership, API/storage schema, Mainnet deployment, and on-chain semantics intact. PR #19 incorporates the unmerged PR #17 design pilot, fixes its review-state transition, and preserves the A3 brand already on main. Review the combined result once.
+
+### 2026-11-20 — Participant workflow round
+
+**Product decision:** finish the existing participant journey before expanding the feature set. Each screen must answer: what is this proposal, what is my next action, and what happens after it?
+
+| User problem | Implemented change | Acceptance evidence |
+| --- | --- | --- |
+| An invitation opens an unexplained wallet prompt | Keep the non-secret Proposal ID visible; explain identity verification; show the selected wallet and an explicit change action | No wallet prompt on page mount; correct wallet opens the same proposal |
+| The next task is described but hard to find | Add task links that focus Review, signing progress, submission, or the issue without replacing the proposal URL fragment | Keyboard focus reaches the correct section; private locator remains intact |
+| Signing has no clear end point | Keep the server-confirmed contribution acknowledgement, separate signature completion from submission, and offer an Inbox exit | Signed wallet and remaining requirements remain visible after refresh |
+| A routed Submit button can do nothing | Accept the final explicit Submit action for an already selected MST route; preserve external ownership, Mainnet confirmation and effects review | Routed MST sends one PUT; external route has no signer-side Submit |
+| An expired proposal still offers signing | Hide closed-state signature actions and guard handlers; distinguish MST collaboration expiry from Stellar expiry | Expired/stale/blocked views cannot trigger wallet signing; network status can be checked before replacement |
+| Sender cannot tell whom to follow up with | Verify invited signers against actual XDR; separate transaction signatures from fee-envelope signatures; put unresolved email failures first | Email/View alone never becomes Signed; no reminder suggested after required authorization is complete |
+| Network failure looks like an empty workspace | Keep same-wallet Inbox rows on transient refresh failure; offer retry or explicit wallet confirmation as appropriate | 500 preserves marked stale data; 401/403 and identity mismatch clear it |
+| Templates disappear or seem unavailable to new users | Keep Templates discoverable with locked/loading/empty/error/reconfirm states and source-account context | Failed load can recover; responses from another wallet/network never display |
+| Changing signer can reuse stale private data | Make the Intent wallet chooser explicit; scope Request/Intent loads and action results to the verified viewer | Late responses from a former wallet cannot restore its private view |
+
+**Reference choices:** [DocuSign's sender status and templates](https://www.docusign.com/blog/how-to-get-started-docusign-esignature) inform the next-action and reuse patterns. [DocuSeal's quick start](https://www.docuseal.com/resources/quick-start) informs pending/completed visibility and completion evidence. MST keeps wallet proof, weighted Stellar authority, and Sign versus Submit as distinct steps.
+
+**Verification:** unit/contract tests and production build, followed by `scripts/qa/productWorkflow.mjs` at 320/375/414/768/1280 px. The browser harness renders real components with isolated API and wallet fixtures; it does not send emails or submit transactions. Record the exact commit and results in PR #19.
+
+**Release check still required:** a real recipient opens a Testnet email, confirms a supported wallet, reviews and signs; the sender observes progress and completes the configured submission route. Verify the hosted API, actual wallet prompts, and receipt in this walk-through. A fixture replay does not replace this check.
+
+### 2026-11-20 — Authorization truth at a glance
+
+The Proposal task panel uses verified current-account eligibility to distinguish
+**Your signature is needed**, **Your signature is recorded**, **Waiting for an authorized signer**,
+and **Collect the required signatures** when account rules are still unknown.
+Never infer wallet authority from an invitation, email, or unsigned XDR.
+
+In the signing region, show **matched / required approval power** for weighted
+source-account requirements. Keep separate accounts independent: no combined
+numerator, no inferred signer count, no cross-account threshold sum. Continue
+showing exact N-of-M signer rows only when the existing policy analysis proves
+that the weights are uniform. Show mandatory extra signer preconditions in
+addition to account thresholds; preserve Core-order and fee-bump evidence in
+advanced authorization details.
+
+**Acceptance:** unit tests cover 2-power + 1-power signers, multiple accounts,
+extra signers, unknown Horizon rules, and expired states. Browser regression
+must verify the eligible wallet sees the next action without asserting that
+mere signature count meets threshold. No signing policy, API, or server changes.
+
+**Next product evidence:** observe a first-time sender and recipient using one real Payment proposal. Record where they hesitate or need an explanation. Use that evidence to prioritize the next round; do not add another template category or workflow engine by default.
+
 ## Product rule
 
 Build for today's users; keep the foundation compatible with tomorrow's larger teams.

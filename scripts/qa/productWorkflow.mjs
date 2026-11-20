@@ -1,0 +1,615 @@
+#!/usr/bin/env node
+// Browser-only product regression checks. Every wallet, API, and Horizon response
+// is a local fixture. This script never sends email or broadcasts a transaction.
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { Account, Asset, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk/base';
+import { createServer } from 'vite';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const output = process.env.MST_QA_OUTPUT || path.join(os.tmpdir(), 'mst-product-workflow-qa');
+const { chromium } = await import(process.env.MST_QA_PLAYWRIGHT_MODULE || 'playwright');
+const widths = [320, 375, 414, 768, 1280];
+const requestId = 'QA00000000000001';
+const capability = 'QA'.repeat(13);
+// Published deterministic test seeds are used only inside intercepted fixtures.
+const keys = Object.fromEntries(['alice', 'bob', 'carol', 'source', 'recipient'].map((name, index) =>
+  [name, Keypair.fromRawEd25519Seed(Buffer.alloc(32, index + 1))]));
+const addresses = Object.fromEntries(Object.entries(keys).map(([name, key]) => [name, key.publicKey()]));
+const now = new Date().toISOString();
+const expiry = new Date(Date.now() + 3_600_000).toISOString();
+const unsigned = new TransactionBuilder(new Account(addresses.source, '100'), {
+  fee: '100', networkPassphrase: Networks.TESTNET,
+}).addOperation(Operation.payment({ destination: addresses.recipient, asset: Asset.native(), amount: '10' }))
+  .setTimebounds(0, Math.floor(Date.now() / 1000) + 3600).build();
+
+function signedXdr(...signers) {
+  const transaction = TransactionBuilder.fromXDR(unsigned.toXDR(), Networks.TESTNET);
+  for (const signer of signers) transaction.sign(keys[signer]);
+  return transaction.toXDR();
+}
+
+function requestFixture(status = 'awaiting_signatures', signers = [], execution) {
+  return {
+    id: requestId, network: 'testnet', transactionHash: Buffer.from(unsigned.hash()).toString('hex'),
+    baseXdr: unsigned.toXDR(), mergedXdr: signedXdr(...signers),
+    createdAt: now, expiresAt: expiry, contributionCount: signers.length, signatureCount: signers.length,
+    status, statusReason: status === 'awaiting_signatures' ? 'signatures_required'
+      : status === 'ready' ? 'authorization_complete' : status === 'expired' ? 'request_expired'
+        : status === 'submitted' ? 'ledger_confirmed' : status === 'stale' ? 'sequence_stale' : 'preconditions_failed',
+    statusDetail: status === 'expired' ? 'The proposal signing window has closed.' : 'Review the current transaction conditions.',
+    template: { id: 'tpl_qa_payroll', version: 1, name: 'November supplier payment' },
+    ...(execution ? { execution } : {}),
+    ...(status === 'submitted' ? { submission: { transactionHash: Buffer.from(unsigned.hash()).toString('hex'), ledger: 123456, submittedAt: now } } : {}),
+  };
+}
+
+function inboxFixture(owner = addresses.alice) {
+  const event = (eventId, type, subjectAddress, extra = {}) => ({
+    eventId, type, occurredAt: now, actorAddress: owner, subjectAddress, ...extra,
+  });
+  return {
+    address: owner, network: 'testnet', pending_count: 1, action_count: 0,
+    action_counts: { actionRequired: 0, signatureNeeded: 0, readyToSubmit: 0, needsAttention: 0, waiting: 1, readyForExecutionRouting: 0 },
+    intents: [],
+    requests: [{
+      ...requestFixture('awaiting_signatures', ['alice']), viewerAction: 'waiting_for_others',
+      coordinationEvents: [
+        event('1', 'signer_requested', addresses.alice),
+        event('2', 'signer_requested', addresses.bob),
+        event('3', 'signer_requested', addresses.carol),
+        event('4', 'notification_failed', addresses.carol, { notificationKind: 'signature_requested' }),
+        event('5', 'notification_delivered', addresses.bob, { notificationKind: 'signature_requested' }),
+        event('6', 'proposal_viewed', addresses.bob, { actorAddress: addresses.bob }),
+      ],
+    }],
+  };
+}
+
+function templateFixture(name = 'Monthly suppliers') {
+  return {
+    id: 'tpl_qa_monthly', network: 'testnet', name, kind: 'payment', currentVersion: 1,
+    definition: { version: 1, source: addresses.source, recipients: [{ destination: addresses.recipient, assetKey: 'native' }], signingWindowSeconds: 3600 },
+    createdAt: now, updatedAt: now,
+  };
+}
+
+const walletModule = `
+import React, { createContext, useContext, useState } from 'react';
+const Context = createContext(null);
+export function StellarWalletProvider({ children }) {
+  const [identity, setIdentity] = useState(window.__MST_QA_INITIAL_WALLET__);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const apply = (patch) => setIdentity((old) => ({ ...old, ...patch }));
+  window.__MST_QA_SET_WALLET__ = apply;
+  const calls = window.__MST_QA_WALLET_CALLS__ ||= [];
+  const value = {
+    ...identity, busy: false, authBusy: false, error: '', authError: '',
+    networkSource: 'wallet', sessionExpiresAt: null, unlockExpiresAt: Date.now() + 3600000,
+    accountMenuOpen, setAccountMenuOpen,
+    connect: async () => { calls.push('connect'); return identity.address; },
+    unlock: async () => {
+      calls.push('unlock');
+      if (window.__MST_QA_CANCEL_UNLOCK__) throw new Error('The user rejected this request.');
+      const address = identity.address || window.__MST_QA_DEFAULT_ADDRESS__;
+      apply({ address, sessionAddress: address, network: 'testnet', sessionNetwork: 'testnet', privateUnlocked: true, unlockedAddress: address, unlockedNetwork: 'testnet' });
+      return address;
+    },
+    lock: async () => apply({ privateUnlocked: false, unlockedAddress: '', unlockedNetwork: null }),
+    clear: () => apply({ address: '', sessionAddress: '', privateUnlocked: false, unlockedAddress: '', unlockedNetwork: null }),
+    sign: async (xdr, network) => { calls.push('sign'); return window.__MST_QA_SIGN__({ xdr, network, address: identity.address }); },
+    signAuthEntry: async () => { throw new Error('Soroban wallet signing is not part of this fixture.'); },
+    refreshSession: async () => {}, alignNetworkContext: async () => {}, selectNetworkContext: async () => {},
+  };
+  return React.createElement(Context.Provider, { value }, children);
+}
+export function useStellarWallet() { return useContext(Context); }
+`;
+
+const walletPlugin = {
+  name: 'mst-isolated-product-qa-wallet', enforce: 'pre',
+  resolveId(source) {
+    if (/^(?:\.\/|\.\.\/).*StellarWalletContext(?:\.tsx)?$/.test(source)) return '\0mst-qa-wallet';
+  },
+  load(id) { if (id === '\0mst-qa-wallet') return walletModule; },
+};
+
+await mkdir(output, { recursive: true });
+process.env.VITE_STELLAR_DEPLOYMENT_NETWORK = 'testnet';
+const server = await createServer({
+  root: path.join(root, 'apps/stellar-web'), configFile: path.join(root, 'apps/stellar-web/vite.config.ts'),
+  plugins: [walletPlugin], logLevel: 'warn',
+  server: { host: '127.0.0.1', port: 4177, strictPort: true, hmr: false },
+});
+await server.listen();
+const origin = 'http://127.0.0.1:4177';
+const browser = await chromium.launch({ headless: true });
+const results = [];
+const unexpectedRequests = [];
+const pageErrors = [];
+
+function walletState(address = addresses.alice, unlocked = true) {
+  return { address, sessionAddress: address, network: 'testnet', sessionNetwork: 'testnet', privateUnlocked: unlocked,
+    unlockedAddress: unlocked ? address : '', unlockedNetwork: unlocked ? 'testnet' : null };
+}
+
+async function fixturePage(width, options = {}) {
+  const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', timezoneId: 'Asia/Shanghai' });
+  const page = await context.newPage();
+  page.setDefaultTimeout(10_000);
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.addInitScript(({ wallet, defaultAddress }) => {
+    window.__MST_QA_INITIAL_WALLET__ = wallet;
+    window.__MST_QA_DEFAULT_ADDRESS__ = defaultAddress;
+    window.__MST_QA_WALLET_CALLS__ = [];
+  }, { wallet: options.wallet ?? walletState(), defaultAddress: addresses.alice });
+  await page.exposeFunction('__MST_QA_SIGN__', ({ xdr, network, address }) => {
+    assert.equal(network, 'testnet');
+    const signer = Object.values(keys).find((key) => key.publicKey() === address);
+    assert.ok(signer, 'Only a fixture key may sign');
+    const transaction = TransactionBuilder.fromXDR(xdr, Networks.TESTNET);
+    assert.equal(Buffer.from(transaction.hash()).toString('hex'), Buffer.from(unsigned.hash()).toString('hex'));
+    transaction.sign(signer);
+    return transaction.toXDR();
+  });
+  const state = {
+    templateStatus: 200, templates: [], templateOwner: addresses.alice, templateDelay: null,
+    inboxStatus: 200, inbox: inboxFixture(), request: requestFixture(), requestError: null,
+    requestGetCount: 0, inboxGetCount: 0, contributionCount: 0, submitCount: 0, retentionCount: 0,
+    requestAccess: { shareable: false, activityBound: true }, requestGetResponse: null, horizonAccount: null,
+    ...options.state,
+  };
+  await page.route('**/*', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
+    if (url.hostname === 'horizon-testnet.stellar.org') {
+      if (url.pathname.startsWith('/accounts/')) return json(state.horizonAccount ?? {
+        account_id: url.pathname.split('/').at(-1), sequence: '100', subentry_count: 3, num_sponsoring: 0, num_sponsored: 0,
+        balances: [{ asset_type: 'native', balance: '1000.0000000' }],
+        thresholds: { low_threshold: 2, med_threshold: 2, high_threshold: 2 },
+        signers: ['alice', 'bob', 'carol'].map((name) => ({ key: addresses[name], type: 'ed25519_public_key', weight: 1 })),
+      });
+      return json({ error: 'No ledger operations in browser QA.' }, 404);
+    }
+    if (url.origin !== origin) {
+      // External resources cannot contact a live service from this fixture run.
+      return route.abort();
+    }
+    if (!url.pathname.startsWith('/api/')) return route.continue();
+    if (url.pathname === '/api/templates') {
+      const response = { address: state.templateOwner, templates: state.templates };
+      const status = state.templateStatus;
+      if (state.templateDelay) await state.templateDelay;
+      return json(status === 200 ? response : { error: 'Fixture template load failure.' }, status);
+    }
+    if (url.pathname === '/api/inbox') {
+      state.inboxGetCount++;
+      return json(state.inboxStatus === 200 ? state.inbox : { error: 'Fixture inbox load failure.' }, state.inboxStatus);
+    }
+    if (url.pathname === '/api/address-book') return json({ entries: ['alice', 'bob', 'carol'].map((name) => ({ address: addresses[name], subjectType: 'signer', label: name[0].toUpperCase() + name.slice(1) })) });
+    if (url.pathname === '/api/contracts') return json({ contracts: [] });
+    if (url.pathname === '/api/treasury-box') return json({ metadataByAccount: {} });
+    if (url.pathname === '/api/runtime-config') return json({ stellarNetwork: 'testnet', fixedNetwork: 'testnet', capabilities: { classicManagedExecution: { testnet: false, public: false } } });
+    if (url.pathname === '/api/request') {
+      assert.equal(request.headers()['x-multisig-request-id'], requestId);
+      if (request.method() === 'GET') {
+        state.requestGetCount++;
+        if (state.requestGetResponse) {
+          const reply = state.requestGetResponse(request);
+          if (reply.delay) await reply.delay;
+          try { return await json(reply.body, reply.status ?? 200); }
+          finally { reply.onDone?.(); }
+        }
+        if (state.requestError) return json(state.requestError, 410);
+        return json({ request: state.request, access: state.requestAccess, coordination: { assignments: [], notifications: [] } });
+      }
+      if (request.method() === 'PATCH') {
+        const body = request.postDataJSON();
+        if (body.retainActivity === true) {
+          assert.equal(request.headers()['x-multisig-session-address'], addresses.alice, 'Retention must use the newly verified wallet');
+          state.retentionCount++;
+          state.requestAccess = { ...state.requestAccess, activityBound: true };
+          return json({ request: state.request, access: state.requestAccess });
+        }
+        assert.ok(body.signedXdr, 'QA only accepts an explicit signed XDR contribution');
+        const transaction = TransactionBuilder.fromXDR(body.signedXdr, Networks.TESTNET);
+        assert.equal(Buffer.from(transaction.hash()).toString('hex'), Buffer.from(unsigned.hash()).toString('hex'));
+        assert.ok(transaction.signatures.some((signature) => keys.alice.verify(transaction.hash(), signature.signature)));
+        state.contributionCount++;
+        state.request = { ...state.request, mergedXdr: body.signedXdr, contributionCount: 1, signatureCount: 1 };
+        return json({ request: state.request, addedSignatureCount: 1, duplicateSignatureCount: 0 });
+      }
+      if (request.method() === 'PUT') {
+        state.submitCount++;
+        assert.equal(state.request.status, 'ready');
+        state.request = { ...requestFixture('submitted', ['alice', 'bob']), execution: state.request.execution };
+        return json({ request: state.request });
+      }
+    }
+    unexpectedRequests.push(`${request.method()} ${url.pathname}`);
+    return json({ error: 'Unexpected fixture request.' }, 404);
+  });
+  return { page, context, state, errors };
+}
+
+async function visible(page, text, role) {
+  const locator = role ? page.getByRole(role, { name: text, exact: true }) : page.getByText(text, { exact: true });
+  await locator.first().waitFor({ state: 'visible' });
+}
+
+async function snapshot(page, name, width) {
+  const overflow = await page.evaluate(() => ({ width: innerWidth, document: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
+  assert.ok(overflow.document <= overflow.width + 1 && overflow.body <= overflow.width + 1, `${name}: horizontal overflow ${JSON.stringify(overflow)}`);
+  await page.screenshot({ path: path.join(output, `${name}-${width}.png`), fullPage: true });
+}
+
+async function run(name, width, options, check) {
+  const fixture = await fixturePage(width, options);
+  try {
+    await check(fixture);
+    assert.deepEqual(fixture.errors, [], 'No uncaught browser errors');
+    results.push({ name, width, passed: true });
+    console.log(`PASS ${name} ${width}px`);
+  } catch (error) {
+    results.push({ name, width, passed: false, error: error.message });
+    await fixture.page.screenshot({ path: path.join(output, `FAILED-${name}-${width}.png`), fullPage: true }).catch(() => {});
+    console.error(`FAIL ${name} ${width}px: ${error.message}`);
+  } finally {
+    pageErrors.push(...fixture.errors.map((message) => ({ name, width, message })));
+    await fixture.context.close();
+  }
+}
+
+try {
+  for (const width of widths) {
+    await run('templates-locked-and-cancel', width, { wallet: walletState('', false) }, async ({ page }) => {
+      await page.goto(`${origin}/new`);
+      await visible(page, 'Saved templates', 'heading');
+      assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), []);
+      await snapshot(page, 'new-locked', width);
+      await page.evaluate(() => { window.__MST_QA_CANCEL_UNLOCK__ = true; });
+      await page.getByRole('button', { name: 'Show my templates', exact: true }).click();
+      await visible(page, 'Show my templates', 'button');
+      assert.equal(await page.getByRole('alert').count(), 0);
+      await page.evaluate(() => { window.__MST_QA_CANCEL_UNLOCK__ = false; });
+      await page.getByRole('button', { name: 'Show my templates', exact: true }).click();
+      await visible(page, 'No saved templates on Testnet yet.');
+    });
+
+    await run('templates-recovery', width, { state: { templateStatus: 500 } }, async ({ page, state }) => {
+      await page.goto(`${origin}/new?account=${addresses.recipient}`);
+      await visible(page, 'Retry templates', 'button');
+      state.templateStatus = 200;
+      state.templates = [templateFixture()];
+      await page.getByRole('button', { name: 'Retry templates', exact: true }).click();
+      await visible(page, 'Monthly suppliers', 'heading');
+      await visible(page, 'This template uses a different source account.');
+      await snapshot(page, 'new-templates', width);
+      const link = page.getByRole('link', { name: 'Use template', exact: true });
+      const href = new URL(await link.getAttribute('href'), origin);
+      assert.equal(href.searchParams.get('template'), 'tpl_qa_monthly');
+      assert.equal(href.searchParams.get('network'), 'testnet');
+    });
+
+    await run('inbox-progress', width, {}, async ({ page }) => {
+      await page.goto(`${origin}/inbox`);
+      await visible(page, 'November supplier payment');
+      await visible(page, ' · Email needs attention');
+      await visible(page, 'Email failed');
+      await snapshot(page, 'inbox-progress', width);
+      if (width >= 1280) await visible(page, ' · Signed');
+    });
+
+    await run('proposal-review-sign', width, {}, async ({ page, state }) => {
+      await page.goto(`${origin}/s#${requestId}`);
+      await visible(page, 'November supplier payment', 'heading');
+      await page.getByRole('button', { name: 'Review transaction', exact: true }).click();
+      assert.equal(new URL(page.url()).hash, `#${requestId}`);
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'proposal-review');
+      await snapshot(page, 'proposal-review', width);
+      await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
+      await page.getByRole('button', { name: 'Sign', exact: true }).click();
+      await visible(page, 'Your signature is recorded', 'heading');
+      assert.equal(state.contributionCount, 1);
+      assert.equal(state.submitCount, 0);
+      await page.getByRole('button', { name: 'View signing progress', exact: true }).click();
+      assert.equal(new URL(page.url()).hash, `#${requestId}`);
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'proposal-signatures');
+      await snapshot(page, 'proposal-signed', width);
+    });
+
+    await run('proposal-weighted-approval', width, {
+      wallet: walletState(addresses.bob),
+      state: {
+        request: requestFixture('awaiting_signatures', ['alice']),
+        horizonAccount: {
+          account_id: addresses.source, sequence: '100', subentry_count: 2,
+          num_sponsoring: 0, num_sponsored: 0,
+          balances: [{ asset_type: 'native', balance: '1000.0000000' }],
+          thresholds: { low_threshold: 1, med_threshold: 3, high_threshold: 3 },
+          signers: [
+            { key: addresses.alice, type: 'ed25519_public_key', weight: 2 },
+            { key: addresses.bob, type: 'ed25519_public_key', weight: 1 },
+            { key: addresses.carol, type: 'ed25519_public_key', weight: 1 },
+          ],
+        },
+      },
+    }, async ({ page }) => {
+      await page.goto(origin + '/s#' + requestId);
+      await visible(page, 'November supplier payment', 'heading');
+      await page.getByRole('button', { name: 'Review transaction', exact: true }).click();
+      await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
+      await visible(page, 'Your signature is needed', 'heading');
+      await visible(page, 'Approval power required');
+      await visible(page, '2 / 3');
+      await visible(page, 'Needs 1 more approval power');
+      await snapshot(page, 'proposal-weighted', width);
+    });
+
+    await run('proposal-managed-submit', width, { state: { request: requestFixture('ready', ['alice', 'bob'], { mode: 'multisigtools' }) } }, async ({ page, state }) => {
+      await page.goto(`${origin}/s#${requestId}`);
+      await visible(page, 'Submit transaction', 'button');
+      await snapshot(page, 'proposal-ready', width);
+      await page.getByRole('button', { name: 'Submit transaction', exact: true }).click();
+      await visible(page, 'Confirmed on Stellar', 'heading');
+      assert.equal(state.submitCount, 1, 'Final Submit issues exactly one PUT');
+      await snapshot(page, 'proposal-confirmed', width);
+    });
+  }
+
+  await run('templates-loading-and-owner-switch', 375, {}, async ({ page, state }) => {
+    let release;
+    state.templateDelay = new Promise((resolve) => { release = resolve; });
+    state.templates = [templateFixture('Alice private template')];
+    await page.goto(`${origin}/new`);
+    await visible(page, 'Loading templates…');
+    state.templateDelay = null;
+    state.templates = [templateFixture('Bob private template')];
+    state.templateOwner = addresses.bob;
+    await page.evaluate((wallet) => window.__MST_QA_SET_WALLET__(wallet), walletState(addresses.bob));
+    await visible(page, 'Bob private template', 'heading');
+    release();
+    assert.equal(await page.getByText('Alice private template', { exact: true }).count(), 0);
+    await snapshot(page, 'templates-owner-switch', 375);
+  });
+
+  for (const status of [401, 403, 'wrong-owner']) {
+    await run(`templates-${status}`, 375, { state: status === 'wrong-owner' ? { templateOwner: addresses.bob, templates: [templateFixture('Wrong owner secret')] } : { templateStatus: status } }, async ({ page, state }) => {
+      await page.goto(`${origin}/new`);
+      await visible(page, 'Confirm wallet', 'button');
+      assert.equal(await page.getByText('Wrong owner secret', { exact: true }).count(), 0);
+      state.templateStatus = 200;
+      state.templateOwner = addresses.alice;
+      state.templates = [];
+      await page.getByRole('button', { name: 'Confirm wallet', exact: true }).click();
+      await visible(page, 'No saved templates on Testnet yet.');
+    });
+  }
+
+  for (const status of [500, 401, 403, 'wrong-owner', 'wrong-network']) {
+    await run(`inbox-refresh-${status}`, 375, {}, async ({ page, state }) => {
+      await page.goto(`${origin}/inbox`);
+      await visible(page, 'November supplier payment');
+      if (status === 'wrong-owner') state.inbox = { ...state.inbox, address: addresses.bob };
+      else if (status === 'wrong-network') state.inbox = { ...state.inbox, network: 'public' };
+      else state.inboxStatus = status;
+      await page.getByRole('button', { name: 'Refresh inbox', exact: true }).click();
+      await page.getByRole('alert').waitFor({ state: 'visible' });
+      if (status === 500) {
+        await visible(page, 'November supplier payment');
+        await visible(page, 'Showing the last loaded proposals. Refresh to check their current status.');
+      } else {
+        assert.equal(await page.getByText('November supplier payment', { exact: true }).count(), 0);
+        await visible(page, 'Confirm wallet', 'button');
+        const requestsBeforeCancellation = state.inboxGetCount;
+        await page.evaluate(() => { window.__MST_QA_CANCEL_UNLOCK__ = true; });
+        await page.getByRole('button', { name: 'Confirm wallet', exact: true }).click();
+        assert.equal(state.inboxGetCount, requestsBeforeCancellation, 'Cancelling wallet proof must not retry private data');
+        await page.evaluate(() => { window.__MST_QA_CANCEL_UNLOCK__ = false; });
+        state.inboxStatus = 200;
+        state.inbox = inboxFixture();
+        await page.getByRole('button', { name: 'Confirm wallet', exact: true }).click();
+        await visible(page, 'November supplier payment');
+      }
+      assert.equal(await page.getByText("You're all caught up.", { exact: true }).count(), 0);
+    });
+  }
+
+  await run('inbox-empty-filters', 375, { state: { inbox: { ...inboxFixture(), pending_count: 0, requests: [],
+    action_counts: { actionRequired: 0, signatureNeeded: 0, readyToSubmit: 0, needsAttention: 0, waiting: 0, readyForExecutionRouting: 0 } } } }, async ({ page }) => {
+    await page.goto(`${origin}/inbox?view=needs`);
+    await visible(page, 'Nothing needs your action.', 'heading');
+    await page.getByRole('button', { name: /^Waiting\s*0$/ }).click();
+    await visible(page, 'Nothing is waiting.', 'heading');
+    await page.getByRole('button', { name: /^All\s*0$/ }).click();
+    await visible(page, "You're all caught up.", 'heading');
+    await snapshot(page, 'inbox-empty', 375);
+  });
+
+  await run('proposal-private-entry', 375, { wallet: walletState('', false) }, async ({ page, state }) => {
+    await page.goto(`${origin}/s#${requestId}`);
+    await visible(page, 'Open your proposal', 'heading');
+    await visible(page, 'Proposal QA00-0000-0000-0001');
+    assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), []);
+    assert.equal(state.requestGetCount, 0);
+    assert.equal(new URL(page.url()).hash, `#${requestId}`);
+    await snapshot(page, 'proposal-private-entry', 375);
+    await page.getByRole('button', { name: 'Open proposal', exact: true }).click();
+    await visible(page, 'November supplier payment', 'heading');
+  });
+
+  await run('proposal-choose-submission', 375, { state: { request: requestFixture('ready', ['alice', 'bob']) } }, async ({ page, state }) => {
+    await page.goto(`${origin}/s#${requestId}`);
+    await visible(page, 'Choose how to submit', 'heading');
+    assert.equal(await page.getByRole('button', { name: 'Submit transaction', exact: true }).count(), 0);
+    await page.getByRole('button', { name: /MultiSigTools submits/ }).click();
+    await visible(page, 'Submit transaction', 'button');
+    assert.equal(state.submitCount, 0);
+    await page.getByRole('button', { name: 'Submit transaction', exact: true }).click();
+    await visible(page, 'Confirmed on Stellar', 'heading');
+    assert.equal(state.submitCount, 1);
+  });
+
+  await run('proposal-external-submission', 375, { state: { request: requestFixture('ready', ['alice', 'bob'], { mode: 'external', executor: { id: 'fixture-service', label: 'Fixture service' } }) } }, async ({ page, state }) => {
+    await page.goto(`${origin}/s#${requestId}`);
+    await visible(page, 'Waiting for the originating service', 'heading');
+    assert.equal(await page.getByRole('button', { name: 'Submit transaction', exact: true }).count(), 0);
+    assert.equal(state.submitCount, 0);
+    await snapshot(page, 'proposal-external', 375);
+  });
+
+  for (const status of ['expired', 'blocked', 'stale']) {
+    await run(`proposal-${status}`, 375, { state: { request: requestFixture(status) } }, async ({ page, state }) => {
+      await page.goto(`${origin}/s#${requestId}`);
+      await visible(page, 'This proposal cannot continue in MultiSigTools.');
+      await page.getByRole('button', { name: 'Review the issue', exact: true }).click();
+      assert.equal(new URL(page.url()).hash, `#${requestId}`);
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'proposal-issue');
+      await page.getByText('Advanced', { exact: true }).click();
+      assert.equal(await page.getByText('Sign proposal', { exact: true }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Add signed XDR', exact: true }).count(), 0);
+      assert.equal(state.contributionCount + state.submitCount, 0);
+      await snapshot(page, `proposal-${status}`, 375);
+    });
+  }
+
+  await run('proposal-closed-without-ledger-result', 375, { state: { requestError: { error: 'The capability is closed.', code: 'request_capability_closed', network: 'testnet' } } }, async ({ page }) => {
+    await page.goto(`${origin}/s#${requestId}${capability}`);
+    await visible(page, 'This private link is closed', 'heading');
+    assert.equal(await page.getByText('Transaction confirmed', { exact: true }).count(), 0);
+    await snapshot(page, 'proposal-closed-unknown', 375);
+  });
+
+  await run('proposal-retain-after-proof', 375, { wallet: walletState('', false), state: { requestAccess: { shareable: true, activityBound: false } } }, async ({ page, state }) => {
+    await page.goto(`${origin}/s#${requestId}${capability}`);
+    await visible(page, 'Keep this transaction in Activity');
+    assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), []);
+    const saved = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/request'
+      && response.request().method() === 'PATCH' && response.request().postDataJSON()?.retainActivity === true);
+    await page.getByRole('button', { name: 'Save to Activity', exact: true }).click();
+    await saved;
+    await page.getByRole('button', { name: 'Save to Activity', exact: true }).waitFor({ state: 'detached' });
+    await visible(page, 'November supplier payment', 'heading');
+    assert.equal(state.retentionCount, 1, 'One explicit proof saves Activity once');
+    assert.equal(state.requestAccess.activityBound, true);
+    assert.equal(await page.getByText(/Not saved to Activity/).count(), 0);
+    assert.equal(state.contributionCount + state.submitCount, 0);
+    await snapshot(page, 'proposal-retained', 375);
+  });
+
+  for (const status of [403, 500]) {
+    await run(`proposal-history-preview-${status}`, 375, { wallet: walletState(addresses.bob) }, async ({ page, state }) => {
+      const delayed = Promise.withResolvers();
+      const preview = { ...requestFixture(), template: { id: 'tpl_qa_private', version: 1, name: 'Alice private history proposal' } };
+      state.requestGetResponse = () => ({ status, delay: delayed.promise, body: { error: 'Fixture access failed.', code: status === 403 ? 'request_access_denied' : 'request_failed' } });
+      await page.goto(`${origin}/new`);
+      await visible(page, 'New proposal', 'heading');
+      await page.evaluate(() => {
+        window.__MST_QA_PRIVATE_LEAKS__ = [];
+        new MutationObserver(() => {
+          if (document.body.textContent.includes('Alice private history proposal')) window.__MST_QA_PRIVATE_LEAKS__.push('preview');
+        }).observe(document.body, { childList: true, characterData: true, subtree: true });
+      });
+      const requested = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/request');
+      await page.evaluate(async ({ preview, reviewedBy }) => {
+        const { navigateWorkspace } = await import('/src/workspaceNavigation.ts');
+        navigateWorkspace('/s', { hash: preview.id, state: { requestPreview: preview, requestJustCreated: true, requestReviewedByAddress: reviewedBy } });
+      }, { preview, reviewedBy: addresses.alice });
+      await requested;
+      assert.equal(await page.getByText('Alice private history proposal', { exact: true }).count(), 0);
+      delayed.resolve();
+      if (status === 403) await visible(page, 'This wallet cannot open this proposal', 'heading');
+      else await page.getByRole('alert').waitFor({ state: 'visible' });
+      assert.deepEqual(await page.evaluate(() => window.__MST_QA_PRIVATE_LEAKS__), []);
+      assert.equal(await page.getByText('Alice private history proposal', { exact: true }).count(), 0);
+      await snapshot(page, `proposal-preview-denied-${status}`, 375);
+    });
+  }
+
+  await run('proposal-late-other-wallet-response', 375, {}, async ({ page, state }) => {
+    const delayed = Promise.withResolvers();
+    const completed = Promise.withResolvers();
+    const privateRequest = { ...requestFixture(), template: { id: 'tpl_qa_private', version: 1, name: 'Alice delayed private proposal' } };
+    state.requestGetResponse = (request) => request.headers()['x-multisig-session-address'] === addresses.alice
+      ? { delay: delayed.promise, onDone: completed.resolve, body: { request: privateRequest, access: state.requestAccess } }
+      : { status: 403, body: { error: 'Fixture signer denied.', code: 'request_access_denied' } };
+    const requested = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/request');
+    await page.goto(`${origin}/s#${requestId}`);
+    await requested;
+    await page.evaluate((wallet) => window.__MST_QA_SET_WALLET__(wallet), walletState(addresses.bob));
+    await visible(page, 'This wallet cannot open this proposal', 'heading');
+    delayed.resolve();
+    await completed.promise;
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await page.getByText('Alice delayed private proposal', { exact: true }).count(), 0);
+    await visible(page, 'This wallet cannot open this proposal', 'heading');
+    await snapshot(page, 'proposal-late-other-wallet', 375);
+  });
+
+  await run('proposal-denial-invalidates-same-wallet-poll', 375, {}, async ({ page, state }) => {
+    const delayed = Promise.withResolvers();
+    const completed = Promise.withResolvers();
+    const pollSelected = Promise.withResolvers();
+    let phase = 'initial';
+    state.requestGetResponse = () => {
+      if (phase === 'poll') {
+        pollSelected.resolve();
+        return { delay: delayed.promise, onDone: completed.resolve, body: { request: state.request, access: state.requestAccess } };
+      }
+      if (phase === 'denied') return { status: 403, body: { error: 'Fixture signer revoked.', code: 'request_access_denied' } };
+      return { body: { request: state.request, access: state.requestAccess } };
+    };
+    await page.clock.install();
+    await page.goto(`${origin}/s#${requestId}`);
+    await visible(page, 'November supplier payment', 'heading');
+    phase = 'poll';
+    const poll = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/request');
+    await page.clock.fastForward(30_100);
+    await poll;
+    // A request event can precede its route handler. Wait until the old poll's
+    // response is actually captured before making the explicit refresh fail.
+    await pollSelected.promise;
+    phase = 'denied';
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await visible(page, 'This wallet cannot open this proposal', 'heading');
+    delayed.resolve();
+    await completed.promise;
+    await page.clock.runFor(50);
+    assert.equal(await page.getByText('November supplier payment', { exact: true }).count(), 0);
+    await visible(page, 'This wallet cannot open this proposal', 'heading');
+    await snapshot(page, 'proposal-same-wallet-denied', 375);
+  });
+
+  await run('proposal-creator-review-handoff', 375, {}, async ({ page, state }) => {
+    await page.goto(`${origin}/new`);
+    await visible(page, 'New proposal', 'heading');
+    await page.evaluate(async ({ preview, reviewedBy }) => {
+      const { navigateWorkspace } = await import('/src/workspaceNavigation.ts');
+      navigateWorkspace('/s', { hash: preview.id, state: { requestPreview: preview, requestJustCreated: true, requestReviewedByAddress: reviewedBy } });
+    }, { preview: state.request, reviewedBy: addresses.alice });
+    await visible(page, 'Your signature is needed', 'heading');
+    await visible(page, 'Sign', 'button');
+    assert.ok(state.requestGetCount > 0, 'Creator handoff still checks current private access');
+    assert.equal(await page.getByRole('button', { name: 'Continue to signatures', exact: true }).count(), 0);
+  });
+} finally {
+  await browser.close();
+  await server.close();
+  let commit = process.env.MST_QA_COMMIT;
+  if (!commit) {
+    try { commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+    catch { commit = 'unavailable; set MST_QA_COMMIT for a mounted worktree'; }
+  }
+  const report = { commit,
+    generatedAt: new Date().toISOString(), method: 'Actual React UI in Chromium; fixture wallet, API, and Horizon; no broadcast or email.', widths,
+    passed: results.filter((item) => item.passed).length, failed: results.filter((item) => !item.passed).length, unexpectedRequests, pageErrors, results };
+  await writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+  console.log(JSON.stringify({ passed: report.passed, failed: report.failed, unexpectedRequests, pageErrors, output }));
+  if (report.failed || unexpectedRequests.length) process.exitCode = 1;
+}

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, CircleAlert, Inbox, LoaderCircle, RefreshCw } from 'lucide-react';
 import { useAddressBook } from './AddressBookContext';
 import PrivateWorkspaceUnlock from './PrivateWorkspaceUnlock';
-import { NetworkBadge, PageHeader, RequestStatusBadge, StatusBadge } from './MultiSigUi';
+import { ActionButton, NetworkBadge, PageHeader, RequestStatusBadge, StatusBadge } from './MultiSigUi';
 import ReviewTransactionSummary from './ReviewTransactionSummary';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
@@ -16,11 +16,13 @@ import {
   inboxDeadlineLabel,
   inboxOutgoingSignerProgress,
 } from './stellar/inboxRequestPresentation';
+import { inboxSenderProgress } from './stellar/inboxSenderProgress';
 import { intentAuthorizationWindowLabel, intentViewerActionNeedsAction, intentViewerActionPresentation } from './stellar/sorobanIntentPresentation';
 import type { InboxSorobanIntentSnapshot } from '../../../packages/stellar-core/src/sorobanIntentApiTypes';
 import type { InboxRequestDescription } from './stellar/inboxRequestPresentation';
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
+import { isWalletUserRejected } from './stellar/walletKit';
 
 interface InboxResponse {
   address: string;
@@ -76,16 +78,25 @@ function OutgoingProgress({
   signerLabel: (address: string) => string;
   compact?: boolean;
 }) {
-  const progress = inboxOutgoingSignerProgress(request, viewerAddress);
+  const progress = useMemo(() => inboxSenderProgress(request, inboxOutgoingSignerProgress(request, viewerAddress)), [request, viewerAddress]);
   if (progress.length === 0) return null;
   const visible = compact ? progress.slice(0, 2) : progress;
   return (
-    <div className="mt-2 space-y-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
+    <div className={`mt-2 text-xs leading-5 text-[var(--color-muted)] ${compact ? 'space-y-2' : 'space-y-3'}`}>
       {visible.map((item) => (
         <div key={item.signerAddress} title={item.signerAddress}>
-          <span className="font-semibold text-neutral-700 dark:text-neutral-200">Asked {signerLabel(item.signerAddress)}</span>
-          {item.notification && <span> · {item.notification.label}</span>}
-          {item.viewedAt && <span> · Viewed</span>}
+          <div>
+            <span className="font-semibold text-[var(--color-ink-2)]">Asked {signerLabel(item.signerAddress)}</span>
+            <span className={item.needsAttention ? 'font-semibold text-[var(--color-danger)]' : item.signature === 'transaction' ? 'font-semibold text-[var(--color-success)]' : ''}> · {item.label}</span>
+          </div>
+          <div>
+            {item.notification && <span>{item.notification.label}{!compact && <> · <time dateTime={item.notification.occurredAt}>{new Date(item.notification.occurredAt).toLocaleString()}</time></>}</span>}
+            {item.viewedAt && <span>{item.notification && ' · '}Viewed{!compact && <> · <time dateTime={item.viewedAt}>{new Date(item.viewedAt).toLocaleString()}</time></>}</span>}
+          </div>
+          {!compact && <>
+            <div>Asked <time dateTime={item.askedAt}>{new Date(item.askedAt).toLocaleString()}</time></div>
+            <p className="mt-1 text-[var(--color-ink-2)]">{item.detail}</p>
+          </>}
         </div>
       ))}
       {compact && progress.length > visible.length && <div>+{progress.length - visible.length} more asked signer{progress.length - visible.length === 1 ? '' : 's'}</div>}
@@ -117,7 +128,7 @@ function DetailPane({
         <OutgoingProgress request={request} viewerAddress={viewerAddress} signerLabel={signerLabel} />
       </div>
       <ReviewTransactionSummary inspection={description.inspection} />
-      <button type="button" onClick={() => openRequestDetails(request)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-base font-semibold text-white hover:bg-emerald-700">{viewerAction.cta} <ArrowRight className="h-4 w-4" /></button>
+      <ActionButton onClick={() => openRequestDetails(request)} className="w-full">{viewerAction.cta} <ArrowRight className="h-4 w-4" /></ActionButton>
     </div>
   );
 }
@@ -128,27 +139,65 @@ export default function InboxApp() {
     privateUnlocked,
     unlockedAddress,
     unlockedNetwork,
+    authBusy,
+    busy: walletBusy,
+    unlock,
   } = useStellarWallet();
-  const [data, setData] = useState<InboxResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [loadedData, setData] = useState<InboxResponse | null>(null);
+  const [loadingFor, setLoadingFor] = useState('');
+  const [loadError, setLoadError] = useState({ session: '', message: '', requiresVerification: false });
+  const activeLoad = useRef<AbortController | null>(null);
   const [selectedId, setSelectedId] = useState('');
   const [view, setView] = useState<InboxView>(() => viewFromUrl());
+  const session = privateUnlocked && unlockedAddress && unlockedNetwork ? `${unlockedNetwork}:${unlockedAddress}` : '';
+  const currentSession = useRef(session);
+  currentSession.current = session;
+  const data = session && loadedData?.address === unlockedAddress && loadedData.network === unlockedNetwork ? loadedData : null;
+  const loading = Boolean(session && loadingFor === session);
+  const error = loadError.session === session ? loadError.message : '';
+  const requiresVerification = loadError.session === session && loadError.requiresVerification;
 
-  async function loadInbox() {
+  const loadInbox = useCallback(async () => {
     if (!privateUnlocked || !unlockedAddress || !unlockedNetwork) return;
-    setLoading(true);
-    setError('');
+    activeLoad.current?.abort();
+    const controller = new AbortController();
+    activeLoad.current = controller;
+    setLoadingFor(session);
+    setLoadError({ session, message: '', requiresVerification: false });
+    let needsVerification = false;
     try {
-      const response = await fetch('/api/inbox', { cache: 'no-store' });
+      const response = await fetch('/api/inbox', { cache: 'no-store', signal: controller.signal });
+      needsVerification = response.status === 401 || response.status === 403;
+      if (!controller.signal.aborted && needsVerification) setData(null);
       const body = await response.json() as InboxResponse & { error?: string };
       if (!response.ok) throw new Error(body.error || 'Unable to load your inbox.');
-      setData(body);
+      if (body.address !== unlockedAddress || body.network !== unlockedNetwork) {
+        needsVerification = true;
+        if (!controller.signal.aborted) setData(null);
+        throw new Error('The wallet session changed. Confirm your wallet and try again.');
+      }
+      if (!controller.signal.aborted) setData(body);
     } catch (cause) {
-      setData(null);
-      setError(cause instanceof Error ? cause.message : 'Unable to load your inbox.');
+      if (!controller.signal.aborted) setLoadError({ session, message: cause instanceof Error ? cause.message : 'Unable to load your inbox.', requiresVerification: needsVerification });
     } finally {
-      setLoading(false);
+      if (activeLoad.current === controller) {
+        setLoadingFor('');
+        activeLoad.current = null;
+      }
+    }
+  }, [privateUnlocked, unlockedAddress, unlockedNetwork, session]);
+
+  async function confirmInboxWallet() {
+    if (authBusy || walletBusy || loading || !unlockedNetwork) return;
+    try {
+      const verifiedAddress = await unlock(undefined, unlockedNetwork);
+      // A renewed proof for the same identity does not change the effect key.
+      // A different identity is loaded by the scoped session effect instead.
+      if (verifiedAddress === unlockedAddress && currentSession.current === session) await loadInbox();
+    } catch (cause) {
+      if (!isWalletUserRejected(cause)) {
+        setLoadError({ session, message: cause instanceof Error ? cause.message : 'Unable to confirm this wallet. Try again.', requiresVerification: true });
+      }
     }
   }
 
@@ -161,9 +210,11 @@ export default function InboxApp() {
   }
 
   useEffect(() => {
+    setData(null);
+    setSelectedId('');
     if (privateUnlocked && unlockedAddress && unlockedNetwork) void loadInbox();
-    else setData(null);
-  }, [privateUnlocked, unlockedAddress, unlockedNetwork]);
+    return () => activeLoad.current?.abort();
+  }, [privateUnlocked, unlockedAddress, unlockedNetwork, loadInbox]);
 
   const descriptions = useMemo(() => new Map(
     (data?.requests ?? []).map((request) => [request.id, describeInboxRequest(request)]),
@@ -219,35 +270,44 @@ export default function InboxApp() {
             <PageHeader
               icon={<Inbox className="h-6 w-6" />}
               title="Inbox"
-              description="Transactions waiting for your signature, submission, review, or the next signer."
+              description="See what needs your action and track the signers you invited."
               meta={data ? <><NetworkBadge network={unlockedNetwork} /><span>{data.pending_count} open {data.pending_count === 1 ? 'work item' : 'work items'}</span></> : <NetworkBadge network={unlockedNetwork} />}
-              actions={<button type="button" disabled={loading} onClick={() => void loadInbox()} aria-label="Refresh inbox" className="rounded-xl border border-black/10 p-2.5 hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/10"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button>}
+              actions={<ActionButton variant="secondary" disabled={loading || authBusy || walletBusy} onClick={() => void loadInbox()} aria-label="Refresh inbox" aria-busy={loading}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />{loading ? 'Refreshing…' : 'Refresh'}</ActionButton>}
             />
 
-            {data && data.pending_count > 0 && (
+            {data && (
               <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
-                {needsCount > 0 && <button type="button" aria-pressed={view === 'needs'} onClick={() => changeView('needs')} className={`rounded-full px-3 py-1.5 font-semibold ${view === 'needs' ? 'bg-black text-white dark:bg-white dark:text-black' : 'border border-black/10 text-neutral-600 hover:bg-black/5 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/10'}`}>Needs me <span className="ml-1 opacity-60">{needsCount}</span></button>}
-                {waitingCount > 0 && <button type="button" aria-pressed={view === 'waiting'} onClick={() => changeView('waiting')} className={`rounded-full px-3 py-1.5 font-semibold ${view === 'waiting' ? 'bg-black text-white dark:bg-white dark:text-black' : 'border border-black/10 text-neutral-600 hover:bg-black/5 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/10'}`}>Waiting <span className="ml-1 opacity-60">{waitingCount}</span></button>}
-                <button type="button" aria-pressed={view === 'inbox'} onClick={() => changeView('inbox')} className={`rounded-full px-3 py-1.5 font-semibold ${view === 'inbox' ? 'bg-black text-white dark:bg-white dark:text-black' : 'border border-black/10 text-neutral-600 hover:bg-black/5 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/10'}`}>All <span className="ml-1 opacity-60">{data.pending_count}</span></button>
+                <button type="button" aria-pressed={view === 'needs'} onClick={() => changeView('needs')} className={`min-h-11 rounded-full px-3 py-1.5 font-semibold ${view === 'needs' ? 'bg-black text-white dark:bg-white dark:text-black' : 'border border-black/10 text-neutral-600 hover:bg-black/5 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/10'}`}>Needs me <span className="ml-1 opacity-60">{needsCount}</span></button>
+                <button type="button" aria-pressed={view === 'waiting'} onClick={() => changeView('waiting')} className={`min-h-11 rounded-full px-3 py-1.5 font-semibold ${view === 'waiting' ? 'bg-black text-white dark:bg-white dark:text-black' : 'border border-black/10 text-neutral-600 hover:bg-black/5 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/10'}`}>Waiting <span className="ml-1 opacity-60">{waitingCount}</span></button>
+                <button type="button" aria-pressed={view === 'inbox'} onClick={() => changeView('inbox')} className={`min-h-11 rounded-full px-3 py-1.5 font-semibold ${view === 'inbox' ? 'bg-black text-white dark:bg-white dark:text-black' : 'border border-black/10 text-neutral-600 hover:bg-black/5 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/10'}`}>All <span className="ml-1 opacity-60">{data.pending_count}</span></button>
               </div>
             )}
 
-            {error && <div className="mt-5 flex gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
-            {loading && !data && <div className="mt-8 flex items-center gap-3 text-base text-neutral-500 dark:text-neutral-400"><LoaderCircle className="h-5 w-5 animate-spin" />Loading…</div>}
+            {error && <div role="alert" className="mt-5 flex flex-wrap items-start gap-3 rounded-xl border border-[var(--color-danger)] p-4 text-sm">
+              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-danger)]" />
+              <div className="min-w-0 flex-1"><p>{error}</p>{data && <p className="mt-1 text-[var(--color-muted)]">Showing the last loaded proposals. Refresh to check their current status.</p>}</div>
+              <ActionButton variant="secondary" size="sm" className="min-h-11" disabled={loading || authBusy || walletBusy} aria-busy={authBusy} onClick={() => requiresVerification ? void confirmInboxWallet() : void loadInbox()}>{authBusy ? 'Confirm in wallet…' : requiresVerification ? 'Confirm wallet' : 'Try again'}</ActionButton>
+            </div>}
+            {loading && !data && <div role="status" className="mt-8 flex items-center gap-3 text-base text-neutral-500 dark:text-neutral-400"><LoaderCircle className="h-5 w-5 animate-spin" />Loading proposals…</div>}
 
-            {data && view === 'inbox' && data.pending_count === 0 && (
+            {data && !loading && !error && view === 'inbox' && data.pending_count === 0 && (
               <section className="mx-auto max-w-xl py-16 text-center sm:py-24">
                 <Inbox className="mx-auto h-8 w-8 text-neutral-400" />
                 <h2 className="mt-4 text-2xl font-bold">You're all caught up.</h2>
-                <a href={stellarHref('/new')} className="mt-6 inline-flex items-center gap-2 rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10">New transaction <ArrowRight className="h-4 w-4" /></a>
+                <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">No open proposals for this wallet. Completed proposals are in Activity.</p>
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                  <a href={stellarHref('/new')} className="mst-action-primary">New proposal <ArrowRight className="h-4 w-4" /></a>
+                  <a href={stellarHref('/activity')} className="inline-flex min-h-11 items-center px-3 text-sm font-semibold text-[var(--color-ink-2)]">View Activity</a>
+                </div>
               </section>
             )}
 
-            {data && view !== 'inbox' && visibleRequests.length === 0 && visibleIntents.length === 0 && (
+            {data && !loading && !error && view !== 'inbox' && visibleRequests.length === 0 && visibleIntents.length === 0 && (
               <section className="mx-auto max-w-xl py-16 text-center sm:py-24">
                 <Inbox className="mx-auto h-8 w-8 text-neutral-400" />
                 <h2 className="mt-4 text-2xl font-bold">{view === 'needs' ? 'Nothing needs your action.' : 'Nothing is waiting.'}</h2>
-                <button type="button" onClick={() => changeView('inbox')} className="mt-6 inline-flex rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10">Show all Inbox</button>
+                <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">{view === 'needs' ? 'Waiting proposals can still need another signer or submission by an external service.' : 'Use Needs me to find proposals you can act on.'}</p>
+                <ActionButton variant="secondary" onClick={() => changeView('inbox')} className="mt-6">Show all proposals</ActionButton>
               </section>
             )}
 

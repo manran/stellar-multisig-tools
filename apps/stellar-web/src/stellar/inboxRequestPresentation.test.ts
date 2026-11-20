@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Account, Asset, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk/base';
-import { describeInboxRequest, inboxOutgoingSignerProgress } from './inboxRequestPresentation.js';
+import { describeInboxRequest, inboxOutgoingSignerProgress, proposalNextStep } from './inboxRequestPresentation.js';
 
 function paymentXdr() {
   const source = Keypair.random().publicKey();
@@ -112,4 +112,73 @@ test('Inbox outgoing progress keeps sender asks separate from email delivery and
       occurredAt: '2026-11-01T01:03:00.000Z',
     },
   }]);
+});
+
+
+test('Proposal presents the next task without claiming an unauthorized wallet can sign', () => {
+  const options = { reviewComplete: false, walletAlreadySigned: false, executionRoutedToMst: false };
+  assert.deepEqual(proposalNextStep('awaiting_signatures', options), {
+    heading: 'Next step',
+    title: 'Review this transaction',
+    detail: 'Check the affected accounts, recipients, and changes before continuing to signatures.',
+    action: { label: 'Review transaction', target: 'review' },
+  });
+  const waiting = proposalNextStep('awaiting_signatures', { ...options, reviewComplete: true });
+  assert.equal(waiting.title, 'Collect the required signatures');
+  assert.doesNotMatch(waiting.detail, /your signature is needed/i);
+  const signed = proposalNextStep('awaiting_signatures', { ...options, reviewComplete: true, walletAlreadySigned: true });
+  assert.equal(signed.heading, 'Current status');
+  assert.equal(signed.title, 'Your signature is recorded');
+  assert.equal(signed.action.target, 'signatures');
+  assert.match(signed.detail, /has not been submitted/);
+});
+
+test('Proposal distinguishes self-managed, external and unchosen execution', () => {
+  const options = { reviewComplete: true, walletAlreadySigned: false, executionRoutedToMst: false };
+  assert.equal(proposalNextStep('ready', options).title, 'Choose how to submit');
+  assert.equal(proposalNextStep('ready', { ...options, executionRoutedToMst: true }).title, 'Review and submit');
+  const external = proposalNextStep('ready', { ...options, executionMode: 'external', executionRoutedToMst: true });
+  assert.equal(external.heading, 'Current status');
+  assert.equal(external.title, 'Waiting for the originating service');
+  assert.equal(external.action.target, 'submission');
+});
+
+test('Proposal terminal and blocked statuses take precedence over the review step', () => {
+  const options = { reviewComplete: false, walletAlreadySigned: false, executionRoutedToMst: false };
+  assert.equal(proposalNextStep('submitted', options).title, 'Confirmed on Stellar');
+  assert.equal(proposalNextStep('waiting_preconditions', options).heading, 'Current status');
+  assert.equal(proposalNextStep('blocked', options).title, 'This proposal needs review');
+  assert.equal(proposalNextStep('stale', options).heading, 'Current status');
+  assert.equal(proposalNextStep('expired', options).title, 'This proposal has expired');
+});
+
+test('Proposal expiry distinguishes the collaboration window from the Stellar time limit', () => {
+  const options = { reviewComplete: true, walletAlreadySigned: true, executionRoutedToMst: true };
+  const closed = proposalNextStep('expired', { ...options, statusReason: 'request_expired' });
+  assert.match(closed.detail, /exported transaction may still be valid/);
+  assert.match(closed.detail, /Check its network record/);
+  assert.equal(closed.action.target, 'issue');
+  const expiredTransaction = proposalNextStep('expired', { ...options, statusReason: 'transaction_expired' });
+  assert.match(expiredTransaction.detail, /Stellar transaction time limit has passed/);
+  assert.doesNotMatch(expiredTransaction.detail, /may still be valid/);
+});
+
+test('Proposal next step names the current wallet action only after authorization is checked', () => {
+  const options = { reviewComplete: true, walletAlreadySigned: false, executionRoutedToMst: false };
+  const eligible = proposalNextStep('awaiting_signatures', { ...options, walletSigningState: 'can_sign' });
+  assert.equal(eligible.title, 'Your signature is needed');
+  assert.equal(eligible.action.label, 'Review and sign');
+  assert.match(eligible.detail, /Signing does not submit/);
+  const other = proposalNextStep('awaiting_signatures', { ...options, walletSigningState: 'other_signer' });
+  assert.equal(other.heading, 'Current status');
+  assert.equal(other.title, 'Waiting for an authorized signer');
+  const unknown = proposalNextStep('awaiting_signatures', { ...options, walletSigningState: 'unknown' });
+  assert.equal(unknown.title, 'Collect the required signatures');
+  const signed = proposalNextStep('awaiting_signatures', { ...options, walletAlreadySigned: true, walletSigningState: 'signed' });
+  assert.equal(signed.title, 'Your signature is recorded');
+  const needsReview = proposalNextStep('awaiting_signatures', { ...options, walletSigningState: 'needs_review' });
+  assert.equal(needsReview.title, 'Signing details need review');
+  assert.equal(needsReview.action.target, 'signatures');
+  const expired = proposalNextStep('expired', { ...options, walletSigningState: 'can_sign' });
+  assert.equal(expired.title, 'This proposal has expired');
 });

@@ -16,6 +16,7 @@ const signingRoom = source('../SigningRoomApp.tsx');
 const accountSigningEntry = source('../AccountSigningEntryApp.tsx');
 const accountControl = source('../StellarAccountControl.tsx');
 const header = source('../StellarHeader.tsx');
+const stylesheet = source('../index.css');
 const request = source('../RequestApp.tsx');
 const receipt = source('../TransactionReceiptApp.tsx');
 const treasury = source('../TreasuryApp.tsx');
@@ -26,6 +27,11 @@ const product = source('../../../internal-docs/content/stellar/product/human-pro
 const uxDesignSystem = source('../../../internal-docs/content/stellar/product/ux-design-system.md');
 
 const symmetricNetworkToggle = /\(\['public', 'testnet'\] as StellarNetwork\[\]\)\.map/;
+
+test('Testnet badge never overlaps the workspace wordmark on narrow phones', () => {
+  assert.match(header, /fixedDeploymentNetwork && <NetworkBadge network=\{fixedDeploymentNetwork\}/);
+  assert.match(stylesheet, /@media \(max-width: 28rem\) \{\s*\.mst-header \.mst-brand__name \{\s*display: none/);
+});
 
 test('normal Human composers inherit network instead of exposing a symmetric switch', () => {
   for (const surface of [payment, claimable, transfer, designer]) {

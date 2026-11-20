@@ -153,6 +153,11 @@ test('exact N-of-M signing uses one discrete signer presentation without repeati
   assert.match(signingGuidance, /policy\?\.exactNOfM \? null : signaturesRemaining !== null/);
 });
 
+test('signature feedback clears once authorization is ready or the transaction is submitted', () => {
+  assert.match(requestUi, /setContributionMessage\(body\.request\.status === 'awaiting_signatures'/);
+  assert.match(requestUi, /if \(next\.status !== 'awaiting_signatures' \|\| !sameRequest\) setContributionMessage\(''\)/);
+});
+
 test('human signing turns a connected wrong wallet into an actionable identity choice', () => {
   assert.doesNotMatch(signingGuidance, />Change<\/button>/);
   assert.match(signingGuidance, /Sign proposal/);
@@ -505,9 +510,10 @@ test('Request owns an explicit reversible submit confirmation', () => {
   assert.match(requestUi, /Transaction confirmed/);
   assert.match(requestUi, />View network record<\/a>/);
   assert.doesNotMatch(requestUi, />View on Horizon<\/a>/);
-  assert.match(requestUi, />Choose another route<\/button>/);
+  assert.match(requestUi, />Choose another route<\/ActionButton>/);
+  assert.match(requestUi, /setSubmitArmed\(false\); setMainnetConfirmed\(false\);/);
   assert.match(requestUi, /!executionAlreadyRoutedToMst/);
-  assert.match(requestUi, /snapshot\.status !== 'ready' \|\| !submitArmed/);
+  assert.match(requestUi, /if \(!submitArmed && !executionAlreadyRoutedToMst\) return/);
 });
 
 test('generic operation Review keeps exact fields but folds long operation sets on screen', () => {
@@ -571,8 +577,8 @@ test('primary wallet menu hides private-session duration while Prepare owns tran
 });
 
 test('private destinations confirm the wallet inside the user action instead of requiring a separate Unlock step', () => {
-  assert.match(requestUi, /Confirm your wallet/);
-  assert.match(requestUi, /buttonLabel="Open transaction"/);
+  assert.match(requestUi, /Open your proposal/);
+  assert.match(requestUi, /buttonLabel="Open proposal"/);
   assert.match(requestUi, /contributionGrantActive/);
   assert.match(requestUi, /if \(!privateReadyForRequest && !contributionGrantActive\) await unlock\(undefined, snapshot\.network\)/);
   assert.match(transactionReceipt, /history_access_denied/);

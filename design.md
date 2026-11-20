@@ -174,6 +174,17 @@ Use:
 - Testnet sky environment identity;
 - evidence and error tones.
 
+## Implementation guardrails
+
+- `apps/stellar-web` is the active Stellar Human UI. Use its `tokens.css`, `src/index.css`, and `src/MultiSigUi.tsx` as the runtime design authority; do not copy styles from the older combined `apps/web` tree.
+- New primary, secondary, and destructive actions reuse `ActionButton`. Page-level buttons can own behavior and placement, but must not invent their own brand-colored CTA styling.
+- Use semantic CSS variables for colors and fonts. Add or revise tokens in `apps/stellar-web/tokens.css`; do not introduce raw hex, RGB, OKLCH, or new Tailwind palette utilities in page/component source.
+- `--color-action` is the primary interaction color. Its Mainnet/Testnet value is set at the network boundary. `--color-success`, `--color-warning`, and `--color-danger` retain outcome meaning independently of the network.
+- In pull requests, `scripts/check-ui-design.mjs` rejects **new** hard-coded color/font declarations and branded palette utilities in either web source tree. Existing legacy usage is a cleanup backlog, not a reason to disable the rule.
+- Proposal signer, wallet-connection, notification, and share-link CTAs in `SigningGuidance.tsx` reuse `ActionButton`; state copy and confirmation remain owned by the business controller.
+- Focus outlines must meet 3:1 contrast with the work surface. Action labels must meet 4.5:1 against their fill in both light and dark themes. `apps/stellar-web/src/stellar/designContrast.test.ts` guards these conditions.
+- Validate the Proposal workbench on Mainnet and Testnet at 320, 375, 414, 768, and desktop widths before merging. Color changes must never alter wallet, authorization, submission, or routing behavior.
+
 ## What pages MAY differ on
 
 - macrostructure within the page-type family;
@@ -196,11 +207,11 @@ Verify 320 / 375 / 414 / 768 and 1280x800 where relevant.
 
 ### tokens.css
 
-The canonical Human Web runtime values live in `apps/web/tokens.css`. It must include all semantic color, font, spacing, type, easing, duration, rule and radius tokens used by redesigned Human surfaces.
+The canonical Stellar Human Web runtime values live in `apps/stellar-web/tokens.css`. It must include all semantic color, font, spacing, type, easing, duration, rule and radius tokens used by redesigned Human surfaces.
 
 ### Tailwind v4 @theme
 
-Tailwind consumes semantic tokens through `apps/web/src/index.css`. New Hallmark surfaces prefer CSS variables or semantic utilities over raw one-off values.
+Tailwind consumes semantic tokens through `apps/stellar-web/src/index.css`. New Hallmark surfaces prefer CSS variables or semantic utilities over raw one-off values.
 
 ### DTCG tokens.json
 

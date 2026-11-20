@@ -79,6 +79,7 @@ interface CreatedRequest {
   capability: string;
   snapshot: SigningRequestSnapshot;
   activityBound: boolean;
+  reviewedByAddress: string;
 }
 
 function transactionHashHex(xdrValue: string, network: StellarNetwork): string | null {
@@ -346,6 +347,7 @@ export default function SigningRoomApp() {
       capability: body.capability,
       snapshot: body.request,
       activityBound: body.access?.activityBound ?? false,
+      reviewedByAddress: verifiedAddress,
     };
   }
 
@@ -491,6 +493,7 @@ export default function SigningRoomApp() {
         state: {
           requestPreview: request.snapshot,
           requestJustCreated: true,
+          requestReviewedByAddress: request.reviewedByAddress,
           requestActivityBound: request.activityBound,
           returnTo: postFreezeReturnTarget.href,
           returnLabel: postFreezeReturnTarget.label,

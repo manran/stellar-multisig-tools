@@ -190,7 +190,7 @@ test('Activity retention explains that the share link ends without implying the 
   assert.doesNotMatch(notice, /will close as soon as|Submission will close this private link/);
   assert.match(request, /Transaction confirmed/);
   assert.match(request, /Confirmed on Stellar/);
-  assert.match(request, /private share link no longer exposes proposal details/);
+  assert.match(request, /This private link is closed/);
   assert.doesNotMatch(request, /This private link has finished/);
 });
 
