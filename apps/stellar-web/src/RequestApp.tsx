@@ -16,6 +16,7 @@ import PrivateNoteCard from './PrivateNoteCard';
 import PrivateWorkspaceUnlock from './PrivateWorkspaceUnlock';
 import { ActionButton, NetworkFact, PageHeader, RequestStatusBadge, WorkflowProgress } from './MultiSigUi';
 import ReviewTransactionSummary from './ReviewTransactionSummary';
+import SaintSecurityTimeline from './SaintSecurityTimeline';
 import SorobanEffectsDiffView from './SorobanEffectsDiffView';
 import SigningGuidance from './SigningGuidance';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
@@ -918,6 +919,16 @@ export default function RequestApp() {
                 <WorkflowProgress current={workflowStage} />
               </div>
 
+              {import.meta.env.VITE_SAINT_SECURITY_TIMELINE_ENABLED === 'true'
+                && snapshot.network === 'testnet'
+                && privateReadyForRequest
+                && inspection.transactionSourceAccount.startsWith('G')
+                && <SaintSecurityTimeline
+                  key={snapshot.id + ':' + inspection.transactionSourceAccount}
+                  address={inspection.transactionSourceAccount}
+                  createdAt={snapshot.createdAt}
+                />}
+
               {walletNetworkMismatch && (
                 <section className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.08] p-4 text-sm">
                   <div className="flex gap-3">
@@ -987,140 +998,3 @@ export default function RequestApp() {
                     onRemind={snapshot.status === 'awaiting_signatures' && shareable && privateReadyForRequest && assignmentApiAvailable ? remindSignerToSign : undefined}
                     assignments={assignments}
                     notifications={notifications}
-                    shareCreatesLink={shareable}
-                    knownComplete={signaturesComplete}
-                  />
-                  </section>}
-
-                  {snapshot.status === 'ready' && (
-                    <section id="proposal-submission" tabIndex={-1} aria-label="Submission" className="scroll-mt-24 focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]">
-                      {snapshot.execution?.mode !== 'external' && !executionAlreadyRoutedToMst && (
-                        <>
-                          <h2 className="text-lg font-semibold">Choose how to submit</h2>
-                          <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">Let MultiSigTools submit this authorized transaction, or copy the signed XDR to submit elsewhere.</p>
-                        </>
-                      )}
-                      {snapshot.execution?.mode === 'external' ? (
-                        <div className="mst-execution-note mt-4">
-                          <div className="font-semibold">Waiting for external execution</div>
-                          <p className="mt-1 leading-6 text-neutral-600 dark:text-neutral-300">{snapshot.execution.executor.label ?? snapshot.execution.executor.id} will re-check its business state and submit when its execution conditions are satisfied. MultiSigTools will not broadcast this transaction.</p>
-                        </div>
-                      ) : (
-                        <>
-                          {submissionEffectsDiff && <div className="mt-4"><SorobanEffectsDiffView diff={submissionEffectsDiff} /></div>}
-                          {submissionEffectsDiff?.requiresReauthorization ? (
-                            <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/[0.07] p-4 text-sm">
-                              <div className="font-semibold text-red-700 dark:text-red-300">Submission stopped: contract effects changed structurally.</div>
-                              <p className="mt-1 leading-6 text-neutral-600 dark:text-neutral-300">The existing signatures cannot approve a different effect shape. Return to the original Soroban Intent, refresh authorization, and create a fresh Proposal.</p>
-                            </div>
-                          ) : !submitArmed && !executionAlreadyRoutedToMst ? (
-                            <div className="mst-execution-route-list mt-4">
-                              <button type="button" onClick={() => setSubmitArmed(true)} className="mst-execution-route-row">
-                                <span className="flex items-center gap-2 text-sm font-semibold"><Send className="h-4 w-4" />MultiSigTools submits</span>
-                                <span className="text-xs leading-5 text-neutral-500 dark:text-neutral-400">Re-check final conditions, then broadcast this exact authorized transaction through MultiSigTools.</span>
-                              </button>
-                              <button type="button" onClick={() => void copyXdr()} className="mst-execution-route-row">
-                                <span className="flex items-center gap-2 text-sm font-semibold"><ClipboardCopy className="h-4 w-4" />Handle outside MultiSigTools</span>
-                                <span className="text-xs leading-5 text-neutral-500 dark:text-neutral-400">Copy the fully authorized XDR for another wallet, CLI, service, or operator to submit. Copying is not handoff or submission evidence.</span>
-                                <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">{copied === 'xdr' ? 'Authorized XDR copied' : 'Copy authorized XDR'}</span>
-                              </button>
-                            </div>
-                          ) : (
-                            <div className={`mt-4 rounded-xl border p-4 ${snapshot.network === 'public' ? 'border-red-500/30 bg-red-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}>
-                              <div className="text-sm font-semibold">Submit this transaction to Stellar {snapshot.network === 'public' ? 'Mainnet' : 'Testnet'}?</div>
-                              <p className="mt-1 text-sm opacity-70">Once Stellar confirms it, this transaction cannot be withdrawn.</p>
-                              {submissionEffectsDiff?.requiresExplicitReview && <p className="mt-3 text-sm font-semibold text-red-700 dark:text-red-300">The final simulation found a material numeric change. Continuing accepts this exact effects digest; the server will simulate again before broadcast and stop if it changes again.</p>}
-                              {snapshot.network === 'public' && (
-                                <label className="mt-3 flex cursor-pointer items-start gap-3">
-                                  <input type="checkbox" checked={mainnetConfirmed} onChange={(event) => setMainnetConfirmed(event.target.checked)} className="mt-1" />
-                                  <span className="text-sm font-semibold">I intend to submit this transaction on Mainnet.</span>
-                                </label>
-                              )}
-                              <div className="mt-4 flex flex-wrap gap-2">
-                                <ActionButton onClick={() => void submitRequest(submissionEffectsDiff?.requiresExplicitReview ? submissionEffectsDiff.currentDigest : undefined)} disabled={submitting || (snapshot.network === 'public' && !mainnetConfirmed)} aria-busy={submitting}>{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{submitting ? 'Checking and submitting…' : submissionEffectsDiff?.requiresExplicitReview ? 'Accept effects & submit' : 'Submit transaction'}</ActionButton>
-                                {!executionAlreadyRoutedToMst && <ActionButton variant="secondary" disabled={submitting} onClick={() => { setSubmitArmed(false); setMainnetConfirmed(false); }}>Choose another route</ActionButton>}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </section>
-                  )}
-
-                  {snapshot.status === 'waiting_preconditions' && (
-                    <section id="proposal-issue" tabIndex={-1} className="scroll-mt-24 rounded-2xl border border-[var(--color-warning)] p-5 text-sm focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]">
-                      <div className="flex gap-3"><CircleAlert className="h-5 w-5 shrink-0 text-amber-500" /><div><div className="font-semibold">Signatures are complete, but this transaction is still waiting.</div><div className="mt-1 opacity-65">{snapshot.statusDetail}</div></div></div>
-                    </section>
-                  )}
-
-                  {snapshot.submission && (
-                    <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.08] p-5">
-                      <div className="flex items-center gap-2 font-semibold text-emerald-800 dark:text-emerald-200"><CheckCircle2 className="h-5 w-5" />Transaction confirmed</div>
-                      <div className="mt-2 text-sm opacity-65">Confirmed in ledger {snapshot.submission.ledger} · {new Date(snapshot.submission.submittedAt).toLocaleString()}</div>
-                      <div className="mt-2 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{snapshot.submission.transactionHash}</div>
-                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm font-semibold">
-                        <button type="button" onClick={() => void openTransactionReceipt()} className="underline decoration-black/20 underline-offset-4 dark:decoration-white/20">Transaction receipt</button>
-                        <a href={horizonTransactionUrl(snapshot.submission.transactionHash, snapshot.network)} target="_blank" rel="noreferrer" className="underline decoration-black/20 underline-offset-4 dark:decoration-white/20">View network record</a>
-                        <a href={stellarExpertTransactionUrl(snapshot.submission.transactionHash, snapshot.network)} target="_blank" rel="noreferrer" className="underline decoration-black/20 underline-offset-4 dark:decoration-white/20">View on StellarExpert</a>
-                      </div>
-                      <a href={stellarHref('/inbox')} className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-[var(--color-action)]">Continue to Inbox</a>
-                    </section>
-                  )}
-
-                  {(snapshot.status === 'expired' || snapshot.status === 'stale' || snapshot.status === 'blocked') && (
-                    <section id="proposal-issue" tabIndex={-1} className="scroll-mt-24 rounded-2xl border border-[var(--color-danger)] p-5 text-sm focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]">
-                      <div className="flex gap-3"><CircleAlert className="h-5 w-5 shrink-0 text-[var(--color-danger)]" /><div><div className="font-semibold">This proposal cannot continue in MultiSigTools.</div><div className="mt-1 text-[var(--color-ink-2)]">{snapshot.statusDetail}</div></div></div>
-                      <div className="mt-4 flex flex-wrap items-center gap-3">
-                        <ActionButton variant="secondary" disabled={loading} onClick={() => void load(requestLocatorString(snapshot.id, capability))}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Check latest status</ActionButton>
-                        <a href={stellarExpertTransactionUrl(snapshot.transactionHash, snapshot.network)} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center font-semibold text-[var(--color-action)]">Check network record</a>
-                      </div>
-                    </section>
-                  )}
-
-                  {terminalCapability && (
-                    <section className="mst-request-context-row">
-                      <div className="text-neutral-600 dark:text-neutral-300"><span className="font-semibold text-neutral-900 dark:text-white">Private link closed.</span> Finished proposals use retained wallet history instead of the old share link.</div>
-                      <button type="button" onClick={() => void openActivity()} className="font-semibold text-emerald-700 dark:text-emerald-300">View Activity</button>
-                    </section>
-                  )}
-                </>
-              )}
-
-              <details className="group mst-advanced-panel">
-                <summary className="cursor-pointer list-none text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"><span className="flex items-center justify-between gap-4"><span>Advanced</span><span className="text-sm font-normal opacity-55 group-open:hidden">Request id · XDR · Stellar authorization</span><span className="hidden text-sm font-normal opacity-55 group-open:inline">Hide details</span></span></summary>
-                <div className="mt-5 space-y-6 border-t border-black/10 pt-5 dark:border-white/10">
-                  <div className="mst-request-advanced-facts">
-                    <div><span className="font-semibold">Request id:</span> <span className="break-all font-mono">{displayRequestId(snapshot.id)}</span></div>
-                    {snapshot.sorobanOrigin && <div className="mt-2"><span className="font-semibold">Soroban origin:</span> Intent <span className="font-mono">{displayRequestId(snapshot.sorobanOrigin.intentId)}</span> · plan revision {snapshot.sorobanOrigin.authorizationPlanRevision} · prepared {new Date(snapshot.sorobanOrigin.executionPreparedAt).toLocaleString()}</div>}
-                    <div className="mt-2">Created {new Date(snapshot.createdAt).toLocaleString()} · signing closes {new Date(snapshot.expiresAt).toLocaleString()}</div>
-                    <div className="mt-2">{snapshot.contributionCount} contribution{snapshot.contributionCount === 1 ? '' : 's'} · {snapshot.signatureCount} signature{snapshot.signatureCount === 1 ? '' : 's'}</div>
-                    <div className="mt-2 break-all font-mono opacity-60">{snapshot.transactionHash}</div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <ActionButton variant="secondary" size="sm" onClick={() => void copyXdr()}><ClipboardCopy className="h-3.5 w-3.5" />{copied === 'xdr' ? 'XDR copied' : 'Copy XDR'}</ActionButton>
-                      {snapshot.status === 'awaiting_signatures' && <ActionButton variant="secondary" size="sm" aria-expanded={showXdrQr} onClick={() => setShowXdrQr((visible) => !visible)}><QrCode className="h-3.5 w-3.5" />{showXdrQr ? 'Hide QR' : 'Show QR'}</ActionButton>}
-                    </div>
-                    {snapshot.status === 'awaiting_signatures' && showXdrQr && <div className="mt-4"><XdrQrCode xdr={snapshot.mergedXdr} /></div>}
-                  </div>
-
-                  <TransactionInspectorSummary inspection={inspection} status={authorizationStatus} />
-                  <TransactionAuthorizationResults inspection={inspection} authorization={authorization} sourceAnalyses={sourceAnalyses} />
-
-                  {snapshot.status === 'awaiting_signatures' && (
-                    <div>
-                      <div className="text-sm font-semibold">Add a signed XDR manually</div>
-                      <p className="mt-1 text-sm opacity-65">Use this for a CLI, hardware signer, or another external signing tool.</p>
-                      <form onSubmit={contribute} className="mt-3">
-                        <textarea value={signedXdr} onChange={(event) => setSignedXdr(event.target.value)} rows={6} spellCheck={false} placeholder="Signed XDR of this exact transaction..." className="mst-request-control w-full resize-y font-mono text-xs leading-5" />
-                        <ActionButton type="submit" disabled={contributing || !signedXdr.trim()} className="mt-3">{contributing && <LoaderCircle className="h-4 w-4 animate-spin" />}Add signed XDR</ActionButton>
-                      </form>
-                    </div>
-                  )}
-                </div>
-              </details>
-            </div>
-          )}
-        </div>
-      </main>
-    </StellarWorkspaceShell>
-  );
-}

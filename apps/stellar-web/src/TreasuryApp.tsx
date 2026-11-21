@@ -12,7 +12,7 @@ import {
   WalletCards,
 } from 'lucide-react';
 import AddressAliasEditor from './AddressAliasEditor';
-import SaintSignerDiscovery from './SaintSignerDiscovery';
+import SaintSecurityTimeline from './SaintSecurityTimeline';
 import { PageHeader } from './MultiSigUi';
 import { useAddressBook } from './AddressBookContext';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
@@ -204,6 +204,8 @@ function TreasuryDetail({
   nameReady,
   relationship,
   onAdopt,
+  historyReady,
+  onUnlockHistory,
 }: {
   account: StellarAccountSnapshot;
   network: StellarNetwork;
@@ -212,6 +214,8 @@ function TreasuryDetail({
   nameReady: boolean;
   relationship: ReturnType<typeof classifyTreasuryRelationship>;
   onAdopt: () => void;
+  historyReady: boolean;
+  onUnlockHistory: () => void;
 }) {
   const { labelFor } = useAddressBook();
   const analysis = analyzeAccountAuthorization(account);
@@ -269,6 +273,14 @@ function TreasuryDetail({
             {reusableSigners.length === 0 && <div className="px-4 py-4 text-sm text-neutral-500 dark:text-neutral-400">No active signing keys.</div>}
           </div>
         </div>
+
+        {network === 'testnet' && import.meta.env.VITE_SAINT_SECURITY_TIMELINE_ENABLED === 'true' && (
+          historyReady
+            ? <SaintSecurityTimeline address={account.accountId} />
+            : <div className="mt-7 text-sm text-[var(--color-ink-2)]">
+                <button type="button" className="font-semibold text-[var(--color-action)] underline" onClick={onUnlockHistory}>Confirm wallet to view security history</button>
+              </div>
+        )}
 
         {advancedSigners.length > 0 && <details className="mst-advanced-panel mt-5"><summary className="cursor-pointer text-sm font-semibold">Advanced signer types · {advancedSigners.length}</summary><div className="mt-3 space-y-2 text-sm text-neutral-600 dark:text-neutral-300">{advancedSigners.map((signer) => <div key={signer.key} className="break-all font-mono text-xs">{signer.type} · {signer.key} · weight {signer.weight}</div>)}</div></details>}
 
@@ -424,14 +436,6 @@ export default function TreasuryApp() {
 
           {address && !privateReady && !accountParam && <section className="mst-treasury-action-row mt-5"><div><div className="font-semibold">Treasury names are private</div><p className="mt-1 text-sm leading-6 text-neutral-500 dark:text-neutral-400">Public account relationships are available now. Confirm this wallet only when you want to load shared Treasury names and other private details.</p></div><button type="button" disabled={authBusy} onClick={() => void unlock()} className="flex shrink-0 items-center gap-2 rounded-xl border border-emerald-500/30 px-4 py-2.5 text-sm font-semibold text-emerald-700 disabled:opacity-50 dark:text-emerald-300">{authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Show private details</button></section>}
 
-          {import.meta.env.VITE_SAINT_DISCOVERY_ENABLED === 'true' && address && network === 'testnet' && privateReady && !accountParam && (
-            <SaintSignerDiscovery
-              key={address}
-              signer={address}
-              knownAccounts={accounts.map((account) => account.accountId)}
-            />
-          )}
-
           {error && <div className="mt-5 flex gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
           {address && loading && accounts.length === 0 && <div className="flex items-center gap-2 py-10 text-sm text-neutral-500 dark:text-neutral-400"><LoaderCircle className="h-4 w-4 animate-spin" />Loading Treasury accounts…</div>}
           {address && !loading && !accountParam && accounts.length === 0 && !error && <section className="py-12 text-sm text-neutral-500 dark:text-neutral-400">No shared-control Stellar accounts were found for this wallet.</section>}
@@ -446,6 +450,8 @@ export default function TreasuryApp() {
             nameReady={privateReady && treasuryMetadataReady}
             relationship={selectedRelationship}
             onAdopt={() => adoptTreasury(selected.accountId)}
+            historyReady={privateReady}
+            onUnlockHistory={() => void unlock()}
           />}
 
           {!accountParam && accounts.length > 0 && (

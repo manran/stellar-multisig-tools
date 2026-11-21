@@ -5,6 +5,7 @@ declare global {
     readonly env: {
       readonly VITE_STELLAR_DEPLOYMENT_NETWORK?: string;
       readonly VITE_SAINT_DISCOVERY_ENABLED?: string;
+      readonly VITE_SAINT_SECURITY_TIMELINE_ENABLED?: string;
     };
   }
 }

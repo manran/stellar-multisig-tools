@@ -25,6 +25,7 @@ const apiFiles = [
   'payment-prepare.ts',
   'request.ts',
   'runtime-config.ts',
+  'saint-account-security.ts',
   'saint-signer-resources.ts',
   'stellar-toml.ts',
   'templates.ts',
