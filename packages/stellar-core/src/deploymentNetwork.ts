@@ -4,6 +4,7 @@ declare global {
   interface ImportMeta {
     readonly env: {
       readonly VITE_STELLAR_DEPLOYMENT_NETWORK?: string;
+      readonly VITE_SAINT_DISCOVERY_ENABLED?: string;
     };
   }
 }
