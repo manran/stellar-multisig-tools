@@ -183,8 +183,9 @@ test('Proposal distinguishes self-managed, external and unchosen execution', () 
     ...options, walletAlreadySigned: true, isCreator: false,
   });
   assert.match(signedRecipient.detail, /Your signature is recorded/);
-  assert.match(signedRecipient.detail, /An authorized signer must choose/);
-  assert.match(ready.detail, /All approvals are in/);
+  assert.match(signedRecipient.detail, /Choose how to submit it/);
+  assert.doesNotMatch(signedRecipient.detail, /authorized signer must/);
+  assert.match(ready.detail, /All required signatures are in/);
   assert.equal(proposalNextStep('ready', { ...options, executionRoutedToMst: true }).title, 'Review and submit');
   const external = proposalNextStep('ready', { ...options, executionMode: 'external', executionRoutedToMst: true });
   assert.equal(external.heading, 'Current status');
