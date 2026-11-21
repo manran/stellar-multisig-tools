@@ -81,6 +81,7 @@ interface ParsedRequestLocator {
 
 interface RequestNavigationState {
   requestPreview?: SigningRequestSnapshot;
+  focusSignerFollowup?: boolean;
   requestJustCreated?: boolean;
   requestReviewedByAddress?: string;
   requestActivityBound?: boolean;
@@ -181,20 +182,22 @@ function requestNavigationState(requestId: string): {
   justCreated: boolean;
   activityBound: boolean;
   reviewedByAddress: string;
+  focusSignerFollowup: boolean;
 } {
   const state = window.history.state as RequestNavigationState | null;
   if (!isCurrentWorkspaceNavigationState(state)) {
-    return { preview: null, returnTarget: null, justCreated: false, activityBound: false, reviewedByAddress: '' };
+    return { preview: null, returnTarget: null, justCreated: false, activityBound: false, reviewedByAddress: '', focusSignerFollowup: false };
   }
   const preview = state?.requestPreview?.id === requestId ? state.requestPreview : null;
   const reviewedByAddress = typeof state?.requestReviewedByAddress === 'string' ? state.requestReviewedByAddress : '';
+  const focusSignerFollowup = Boolean(preview && state?.focusSignerFollowup);
   if (!state?.returnTo) {
-    return { preview, returnTarget: null, justCreated: Boolean(state?.requestJustCreated), activityBound: Boolean(state?.requestActivityBound), reviewedByAddress };
+    return { preview, returnTarget: null, justCreated: Boolean(state?.requestJustCreated), activityBound: Boolean(state?.requestActivityBound), reviewedByAddress, focusSignerFollowup };
   }
   try {
     const target = new URL(state.returnTo);
     if (target.origin !== window.location.origin) {
-      return { preview, returnTarget: null, justCreated: Boolean(state?.requestJustCreated), activityBound: Boolean(state?.requestActivityBound), reviewedByAddress };
+      return { preview, returnTarget: null, justCreated: Boolean(state?.requestJustCreated), activityBound: Boolean(state?.requestActivityBound), reviewedByAddress, focusSignerFollowup };
     }
     return {
       preview,
@@ -202,9 +205,10 @@ function requestNavigationState(requestId: string): {
       justCreated: Boolean(state.requestJustCreated),
       activityBound: Boolean(state.requestActivityBound),
       reviewedByAddress,
+      focusSignerFollowup,
     };
   } catch {
-    return { preview, returnTarget: null, justCreated: Boolean(state?.requestJustCreated), activityBound: Boolean(state?.requestActivityBound), reviewedByAddress };
+    return { preview, returnTarget: null, justCreated: Boolean(state?.requestJustCreated), activityBound: Boolean(state?.requestActivityBound), reviewedByAddress, focusSignerFollowup };
   }
 }
 
@@ -237,7 +241,7 @@ export default function RequestApp() {
   const [signedXdr, setSignedXdr] = useState('');
   const [showXdrQr, setShowXdrQr] = useState(false);
   const [reviewComplete, setReviewComplete] = useState(() => Boolean(
-    navigation.justCreated || (initialPreview && initialPreview.status !== 'awaiting_signatures'),
+    navigation.justCreated || navigation.focusSignerFollowup || (initialPreview && initialPreview.status !== 'awaiting_signatures'),
   ));
   const [loading, setLoading] = useState(Boolean(initialRequest.capability));
   const [requestNeedsUnlock, setRequestNeedsUnlock] = useState(Boolean(
@@ -254,7 +258,7 @@ export default function RequestApp() {
   const [contributionMessage, setContributionMessage] = useState('');
   const [contributionGrantExpiresAt, setContributionGrantExpiresAt] = useState<number | null>(null);
   const [copied, setCopied] = useState<'link' | 'xdr' | null>(null);
-  const [focusSection, setFocusSection] = useState<'review' | 'signatures' | 'submission' | 'issue' | null>(null);
+  const [focusSection, setFocusSection] = useState<'review' | 'signatures' | 'submission' | 'issue' | null>(navigation.focusSignerFollowup ? 'signatures' : null);
   const [pendingRetention, setPendingRetention] = useState<{ id: string; address: string } | null>(null);
   const {
     address: walletAddress,
@@ -499,10 +503,11 @@ export default function RequestApp() {
   useEffect(() => {
     if (!focusSection) return;
     const section = document.getElementById(`proposal-${focusSection}`);
-    section?.focus({ preventScroll: true });
-    section?.scrollIntoView({ block: 'start' });
+    if (!section) return;
+    section.focus({ preventScroll: true });
+    section.scrollIntoView({ block: 'start' });
     setFocusSection(null);
-  }, [focusSection, reviewComplete]);
+  }, [focusSection, reviewComplete, snapshot?.id, inspection, sourceAnalyses.length]);
 
   useEffect(() => {
     if (!pendingRetention || !privateReadyForRequest || !snapshot) return;

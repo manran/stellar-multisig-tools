@@ -509,6 +509,20 @@ try {
       await snapshot(page, 'inbox-progress', width);
     });
 
+    if (width === 375 || width === 1280) {
+      await run('inbox-follow-up-focus', width, {
+        state: { request: { ...requestFixture('awaiting_signatures', ['alice']), creatorAddress: addresses.alice } },
+      }, async ({ page }) => {
+        await page.goto(origin + '/inbox');
+        if (width >= 1280) await page.getByRole('button', { name: 'Follow up with signers' }).click();
+        else await page.locator('.mst-inbox-list .mst-inbox-item').first().click();
+        await visible(page, 'Your signature is recorded', 'heading');
+        await page.locator('#proposal-signatures').waitFor({ state: 'visible' });
+        await page.waitForFunction(() => document.activeElement?.id === 'proposal-signatures');
+        await snapshot(page, 'inbox-follow-up-focus', width);
+      });
+    }
+
     if (width === 375) {
       await run('inbox-recipient-has-no-creator-follow-up', width, {
         wallet: walletState(addresses.bob),
