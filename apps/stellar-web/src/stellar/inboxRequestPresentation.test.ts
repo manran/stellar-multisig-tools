@@ -153,7 +153,24 @@ test('Proposal presents the next task without claiming an unauthorized wallet ca
   assert.equal(signed.heading, 'Current status');
   assert.equal(signed.title, 'Your signature is recorded');
   assert.equal(signed.action.target, 'signatures');
-  assert.match(signed.detail, /has not been submitted/);
+  assert.match(signed.detail, /Your part is done for now/);
+  const sender = proposalNextStep('awaiting_signatures', {
+    ...options, reviewComplete: true, walletAlreadySigned: true,
+    isCreator: true, canCoordinate: true,
+  });
+  assert.equal(sender.heading, 'Next step');
+  assert.equal(sender.action.label, 'Invite or remind signers');
+  assert.equal(sender.action.target, 'signatures');
+  const noInvitePermission = proposalNextStep('awaiting_signatures', {
+    ...options, reviewComplete: true, walletAlreadySigned: true,
+    isCreator: true, canCoordinate: false,
+  });
+  assert.equal(noInvitePermission.action.label, 'View signing progress');
+  const recipient = proposalNextStep('awaiting_signatures', {
+    ...options, reviewComplete: true, walletAlreadySigned: true,
+    isCreator: false, canCoordinate: true,
+  });
+  assert.equal(recipient.action.label, 'View signing progress');
 });
 
 test('Proposal distinguishes self-managed, external and unchosen execution', () => {
@@ -161,7 +178,13 @@ test('Proposal distinguishes self-managed, external and unchosen execution', () 
   const ready = proposalNextStep('ready', options);
   assert.equal(ready.title, 'Ready to submit');
   assert.equal(ready.action.target, 'submission');
-  assert.match(ready.detail, /required signatures are present/);
+  assert.match(ready.detail, /has not been submitted/);
+  const signedRecipient = proposalNextStep('ready', {
+    ...options, walletAlreadySigned: true, isCreator: false,
+  });
+  assert.match(signedRecipient.detail, /Your signature is recorded/);
+  assert.match(signedRecipient.detail, /An authorized signer must choose/);
+  assert.match(ready.detail, /All approvals are in/);
   assert.equal(proposalNextStep('ready', { ...options, executionRoutedToMst: true }).title, 'Review and submit');
   const external = proposalNextStep('ready', { ...options, executionMode: 'external', executionRoutedToMst: true });
   assert.equal(external.heading, 'Current status');

@@ -291,6 +291,20 @@ async function fixturePage(width, options = {}) {
             notification: { channel: 'email', status: 'queued' },
           });
         }
+        if (body.remindSigner) {
+          assert.ok(state.inviteContacts);
+          assert.equal(request.headers()['x-multisig-session-address'], addresses.alice);
+          state.remindCount = (state.remindCount ?? 0) + 1;
+          state.notifications = [...state.notifications, {
+            channel: 'email', eventType: 'signature_reminder', signerAddress: body.remindSigner,
+            actorAddress: addresses.alice, state: 'queued', createdAt: now,
+          }];
+          return json({
+            request: state.request,
+            coordination: { assignments: state.assignments, notifications: state.notifications },
+            notification: { channel: 'email', status: 'queued' },
+          });
+        }
         assert.ok(body.signedXdr, 'QA only accepts an explicit signed XDR contribution');
         const transaction = TransactionBuilder.fromXDR(body.signedXdr, Networks.TESTNET);
         assert.equal(Buffer.from(transaction.hash()).toString('hex'), Buffer.from(unsigned.hash()).toString('hex'));
@@ -544,14 +558,15 @@ try {
         await page.getByRole('button', { name: 'Review transaction', exact: true }).click();
         await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
         await visible(page, 'Invite signers', 'heading');
-        const button = page.getByRole('button', { name: 'Send 0 invitations' });
+        const button = page.getByRole('button', { name: 'Select signers above' });
         assert.equal(await button.isDisabled(), true, 'No signer is preselected');
         await page.getByRole('checkbox', { name: 'Invite Bob' }).check();
         if (width === 1280) await page.getByRole('checkbox', { name: 'Invite Carol' }).check();
         const expected = width === 1280 ? 2 : 1;
-        await visible(page, 'Send ' + expected + ' invitations', 'button');
+        const sendLabel = 'Send ' + expected + ' invitation' + (expected === 1 ? '' : 's');
+        await visible(page, sendLabel, 'button');
         await snapshot(page, 'proposal-invite-selection', width);
-        await page.getByRole('button', { name: 'Send ' + expected + ' invitations' }).click();
+        await page.getByRole('button', { name: sendLabel }).click();
         try {
           await visible(page, expected + ' signer' + (expected === 1 ? '' : 's') + ' invited. Follow their progress below.');
         } catch {
@@ -564,6 +579,74 @@ try {
         assert.equal(state.assignments.length, expected);
         assert.equal(state.notifications.length, expected);
         await snapshot(page, 'proposal-invite-sent', width);
+      });
+    }
+
+    if (width === 375 || width === 1280) {
+      await run('proposal-creator-followup-no-email', width, {
+        state: {
+          request: { ...requestFixture('awaiting_signatures', ['alice']), creatorAddress: addresses.alice },
+          requestAccess: { shareable: true, activityBound: true },
+        },
+      }, async ({ page, state }) => {
+        await page.goto(origin + '/s#' + requestId);
+        await visible(page, 'November supplier payment', 'heading');
+        // An already-signed proposal opens at the signature status by default.
+        await visible(page, 'Your signature is recorded', 'heading');
+        await visible(page, 'Invite or remind signers', 'button');
+        await page.getByRole('button', { name: 'Invite or remind signers' }).click();
+        assert.equal(await page.evaluate(() => document.activeElement?.id), 'proposal-signatures');
+        await visible(page, 'Waiting for other signatures', 'heading');
+        await visible(page, '1 more signer needs to sign. 2 eligible unsigned signers are listed below.');
+        await visible(page, 'Follow up with signers', 'heading');
+        await visible(page, 'Add a contact email to an eligible signer below, or share the private link.');
+        assert.equal(state.assignments.length, 0, 'No automatic invitations without saved email and selection');
+        await snapshot(page, 'proposal-owner-followup', width);
+      });
+      await run('proposal-creator-reminder', width, {
+        state: {
+          request: { ...requestFixture('awaiting_signatures', ['alice']), creatorAddress: addresses.alice },
+          requestAccess: { shareable: true, activityBound: true },
+          inviteContacts: true,
+          assignments: [{
+            version: 1, signerAddress: addresses.bob, assignedByAddress: addresses.alice,
+            assignedAt: now,
+          }],
+          notifications: [{
+            channel: 'email', eventType: 'signature_requested', signerAddress: addresses.bob,
+            actorAddress: addresses.alice, state: 'delivered', createdAt: now,
+          }],
+        },
+      }, async ({ page, state }) => {
+        await page.goto(origin + '/s#' + requestId);
+        await visible(page, 'November supplier payment', 'heading');
+        // An already-signed proposal opens at the signature status by default.
+        await page.getByRole('button', { name: 'Invite or remind signers' }).click();
+        await visible(page, 'Email delivered');
+        assert.equal(await page.getByRole('button', { name: 'Ask Carol to sign' }).count(), 0, 'Invitation is offered only once, in the invitation chooser');
+        const remind = page.getByRole('button', { name: 'Remind', exact: true });
+        await remind.click();
+        await visible(page, 'Reminder queued');
+        assert.equal(state.remindCount, 1);
+        assert.equal(state.assignments.length, 1);
+        await snapshot(page, 'proposal-owner-reminder', width);
+      });
+      await run('proposal-recipient-signed-waiting', width, {
+        wallet: walletState(addresses.bob),
+        state: {
+          request: { ...requestFixture('awaiting_signatures', ['bob']), creatorAddress: addresses.alice },
+          requestAccess: { shareable: true, activityBound: true },
+        },
+      }, async ({ page }) => {
+        await page.goto(origin + '/s#' + requestId);
+        await visible(page, 'November supplier payment', 'heading');
+        // An already-signed proposal opens at the signature status by default.
+        await visible(page, 'Your signature is recorded', 'heading');
+        await visible(page, 'Your part is done for now. Other authorized signers must approve before this transaction can be submitted.');
+        await visible(page, 'View signing progress', 'button');
+        assert.equal(await page.getByRole('button', { name: 'Invite or remind signers' }).count(), 0);
+        await visible(page, 'Back to Inbox', 'link');
+        await snapshot(page, 'proposal-recipient-signed', width);
       });
     }
 

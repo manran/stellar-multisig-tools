@@ -182,7 +182,9 @@ test('signer coordination uses private Contacts before email Ask and keeps capab
   assert.doesNotMatch(askHandler, /requestUrl\(/);
   assert.match(requestApi, /status: 'enqueue_failed'/);
   assert.match(signingGuidance, /Retry email/);
-  assert.match(signingGuidance, /notifications\.find\(\(item\) => item\.signerAddress === signerAddress\)/);
+  assert.match(signingGuidance, /notifications\.reduce<SigningRequestNotificationSummary \| undefined>/);
+  assert.match(signingGuidance, /item\.signerAddress !== signerAddress/);
+  assert.match(signingGuidance, /Date\.parse\(item\.createdAt\) >= Date\.parse\(latest\.createdAt\)/);
   assert.match(signingGuidance, /notificationChannel/);
   assert.match(signingGuidance, /Automatic reminder/);
   assert.match(signingGuidance, /' delivered'/);
