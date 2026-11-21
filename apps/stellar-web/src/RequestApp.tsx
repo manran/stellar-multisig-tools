@@ -737,6 +737,7 @@ export default function RequestApp() {
     try {
       await navigator.clipboard.writeText(requestUrl(snapshot.id, capability));
       setCopied('link');
+      setShareJustCreated(true);
     } catch {
       setError('Could not copy the private link. Allow clipboard access, then try again.');
     }
