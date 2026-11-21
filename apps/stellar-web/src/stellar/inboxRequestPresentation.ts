@@ -145,8 +145,8 @@ export function proposalNextStep(
       heading: 'Next step',
       title: 'Ready to submit',
       detail: options.walletAlreadySigned
-        ? 'Your signature is recorded. All approvals are in, but this transaction has not been submitted. An authorized signer must choose a submission route.'
-        : 'All approvals are in, but this transaction has not been submitted. Choose a submission route.',
+        ? 'Your signature is recorded. All required signatures are in, but this transaction has not been submitted. Choose how to submit it.'
+        : 'All required signatures are in, but this transaction has not been submitted. Choose how to submit it.',
       action: { label: 'View submission options', target: 'submission' },
     };
   }

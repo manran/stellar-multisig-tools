@@ -737,6 +737,7 @@ export default function RequestApp() {
     try {
       await navigator.clipboard.writeText(requestUrl(snapshot.id, capability));
       setCopied('link');
+      setShareJustCreated(true);
     } catch {
       setError('Could not copy the private link. Allow clipboard access, then try again.');
     }
@@ -947,7 +948,10 @@ export default function RequestApp() {
                 <section className="flex items-start justify-between gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-4 py-3">
                   <div className="flex min-w-0 gap-3">
                     <Share2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" />
-                    <div><div className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">Private link ready</div><p className="mt-0.5 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Anyone with this private link can view the active Proposal. The link never grants Stellar signing authority.</p></div>
+                    <div>
+                      <div className="text-sm font-semibold text-[var(--color-success)]">Private link ready</div>
+                      <p className="mt-0.5 text-xs leading-5 text-[var(--color-ink-2)]">Anyone with this private link can view the active Proposal and submit the transaction once it is fully signed. The link cannot add signatures or change the transaction.</p>
+                    </div>
                   </div>
                   <button type="button" onClick={() => setShareJustCreated(false)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-paper-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]" aria-label="Dismiss private link reminder"><X className="h-4 w-4" /></button>
                 </section>
