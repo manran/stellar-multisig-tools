@@ -647,9 +647,9 @@ export default function SigningGuidance({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-xl font-bold">{shareBusy ? 'Preparing private link' : shareError ? 'Could not prepare link' : 'Private link ready'}</h3>
-                {!shareBusy && !shareError && <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Anyone with this link can view the active Proposal. The link never grants Stellar signing authority.</p>}
+                {!shareBusy && !shareError && <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Anyone with this link can view the active Proposal and submit the transaction once it is fully signed. The link cannot add signatures or change the transaction.</p>}
                 <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">
-                  {shareBusy ? 'You can stay on this transaction while we prepare the link.' : shareError ? shareError : 'Send it only to the signer you want to review and sign this transaction.'}
+                  {shareBusy ? 'You can stay on this transaction while we prepare the link.' : shareError ? shareError : 'Share this link only with people you trust to review or submit the transaction.'}
                 </p>
               </div>
               {!shareBusy && <button type="button" onClick={() => setShareModalOpen(false)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-paper-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]" aria-label="Close"><X className="h-5 w-5" /></button>}
