@@ -296,6 +296,17 @@ Rerun Reference Integration E2E only when changes touch:
 
 Pure visual/layout changes use browser/task regression, not fresh chain transactions.
 
+### Varial real-extension E2E — reuse upstream, stop retry loops (2026-11-21)
+
+**Single test route:** use [Varial's upstream Playwright fixtures](https://github.com/stellar/freighter/tree/master/extension/e2e-tests), not a new wallet initialization script or a simulated extension.
+
+- [`helpers/login.ts`](https://github.com/stellar/freighter/blob/master/extension/e2e-tests/helpers/login.ts): `login` creates and imports a temporary mnemonic and selects Testnet; `loginAndFund` also funds with Friendbot; `loginToTestAccount` is a deterministic/stub-friendly helper, **not** proof of a live signing flow.
+- [`test-fixtures.ts`](https://github.com/stellar/freighter/blob/master/extension/e2e-tests/test-fixtures.ts) loads the real extension in Chromium. [`integration-tests/freighterApiIntegration.test.ts`](https://github.com/stellar/freighter/blob/master/extension/e2e-tests/integration-tests/freighterApiIntegration.test.ts) shows the extension's real connection and sign-transaction prompts.
+- Create two **separate, isolated browser profiles** with distinct **Testnet-only** wallets. Initialize once; reuse only within the authorized isolated test environment. Keep passwords, recovery phrases, private keys, and profile contents out of Git, PRs, chat, screenshots, and logs. Never use a user's real wallet.
+- Fund test accounts with Friendbot, configure the Testnet signer threshold, then test MST: A connects/reviews/invites, B confirms the actual Varial wallet prompt and signs, the sender sees the verified contribution, and the designated executor submits and receives a ledger receipt. Assert wallet identity, network, signatures, and on-chain result—not just buttons or API mock calls.
+- **Stop rule:** if the environment's tool safety gate blocks wallet initialization or credential input, stop immediately. Do **not** keep retrying variants of the command, change execution channels, or write another importer to bypass the gate. Record the exact blocked step once; have an authorized tester initialize an isolated test profile through Varial, then resume from that prepared profile. Do not treat the block as a product defect.
+- Keep evidence levels distinct: fixture browser regression, live Testnet SDK/HTTP signing, and **real Varial extension** signing are three separate checks. A pass at one level does not close another. Record commit, wallet extension version, Testnet transaction hash, and the remaining gap in the PR/test report.
+
 ## 10. Mainnet operational hardening — later gate
 
 Before enabling Mainnet managed Classic:
