@@ -448,7 +448,9 @@ export default function SigningGuidance({
             {inviteCandidates.length > 0
               ? 'Choose who to ask. Invitations do not reserve signing slots or change Stellar authorization.'
               : unaskedTargets.length > 0
-                ? 'Add a contact email to an eligible signer below, or share the private link.'
+                ? onShare
+                  ? 'Add a contact email to an eligible signer below, or share the private link.'
+                  : 'Add a contact email to an eligible signer below to send an invitation.'
                 : 'Invitations are recorded. Check delivery and viewing status below; reminders are available when permitted.'}
           </p>
           {inviteCandidates.length > 0 && <div className="mt-3 divide-y divide-[var(--color-rule)] border-y border-[var(--color-rule)]">

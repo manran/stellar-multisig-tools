@@ -181,6 +181,13 @@ test('signer coordination uses private Contacts before email Ask and keeps capab
   const askHandler = requestUi.match(/async function askSignerToSign\(signerAddress: string\): Promise<AssignSigningRequestResponse\['notification'\]> \{([\s\S]*?)\n  \}/)?.[1] ?? '';
   assert.ok(askHandler);
   assert.match(askHandler, /assignSigner: signerAddress/);
+  assert.match(requestUi, /const canCoordinateSigners = Boolean\(privateReadyForRequest && walletAddress && assignmentApiAvailable\)/);
+  assert.match(requestUi, /onAsk=\{snapshot\.status === 'awaiting_signatures' && canCoordinateSigners/);
+  assert.match(requestUi, /onRemind=\{snapshot\.status === 'awaiting_signatures' && canCoordinateSigners/);
+  assert.doesNotMatch(askHandler, /!shareable/);
+  assert.match(signingGuidance, /Add a contact email to an eligible signer below to send an invitation/);
+  assert.match(inbox, /isCreatorWaitingForSigners/);
+  assert.match(inbox, /Follow up with signers/);
   assert.match(askHandler, /return body\.notification/);
   assert.doesNotMatch(askHandler, /requestUrl\(/);
   assert.match(requestApi, /status: 'enqueue_failed'/);
