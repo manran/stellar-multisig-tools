@@ -590,8 +590,7 @@ try {
       }, async ({ page, state }) => {
         await page.goto(origin + '/s#' + requestId);
         await visible(page, 'November supplier payment', 'heading');
-        await page.getByRole('button', { name: 'Review transaction', exact: true }).click();
-        await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
+        // An already-signed proposal opens at the signature status by default.
         await visible(page, 'Your signature is recorded', 'heading');
         await visible(page, 'Invite or remind signers', 'button');
         await page.getByRole('button', { name: 'Invite or remind signers' }).click();
@@ -620,8 +619,7 @@ try {
       }, async ({ page, state }) => {
         await page.goto(origin + '/s#' + requestId);
         await visible(page, 'November supplier payment', 'heading');
-        await page.getByRole('button', { name: 'Review transaction', exact: true }).click();
-        await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
+        // An already-signed proposal opens at the signature status by default.
         await page.getByRole('button', { name: 'Invite or remind signers' }).click();
         await visible(page, 'Email delivered');
         const remind = page.getByRole('button', { name: 'Remind', exact: true });
@@ -640,8 +638,7 @@ try {
       }, async ({ page }) => {
         await page.goto(origin + '/s#' + requestId);
         await visible(page, 'November supplier payment', 'heading');
-        await page.getByRole('button', { name: 'Review transaction', exact: true }).click();
-        await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
+        // An already-signed proposal opens at the signature status by default.
         await visible(page, 'Your signature is recorded', 'heading');
         await visible(page, 'Your part is done for now. Other authorized signers must approve before this transaction can be submitted.');
         await visible(page, 'View signing progress', 'button');
