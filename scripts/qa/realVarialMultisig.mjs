@@ -161,6 +161,36 @@ const {Keypair,Horizon,Networks,Operation,TransactionBuilder,Asset}=require('@st
 const horizon=new Horizon.Server('https://horizon-testnet.stellar.org');
 const mst='https://stellar-testnet.multisig.tools';
 let a=null,b=null;let pA=null,pB=null;
+const EMAIL_LIVE = process.env.MST_VARIAL_EMAIL_E2E === '1';
+const TEST_EMAIL = 'delivered@resend.dev';
+let contactSaved=false;
+let mailStatus='not_tested';
+async function mstApi(page, path, method, body, requestId='', capability='', address='') {
+ const result=await page.evaluate(async input=>{
+  const headers={'content-type':'application/json',...(input.address?{'x-multisig-session-address':input.address}:{}),...(input.requestId?{'X-MultiSig-Request-Id':input.requestId}:{}),...(input.capability?{'X-MultiSig-Capability':input.capability}:{})};
+  const r=await fetch(input.path,{method:input.method,credentials:'include',headers,...(input.body!==undefined?{body:JSON.stringify(input.body)}:{})});
+  const b=await r.json().catch(()=>({}));return {status:r.status,body:b};
+ },{path,method,body,requestId,capability,address});
+ if(result.status<200||result.status>=300)throw new Error(`${method} ${path} status ${result.status}: ${result.body?.code||result.body?.error||'unknown'}`);
+ return result.body;
+}
+async function coordination(page,id,cap,address) {
+ return mstApi(page,'/api/request','GET',undefined,id,cap,address);
+}
+async function waitEmailState(page,id,cap,address,states,timeoutMs=20000) {
+ const until=Date.now()+timeoutMs;let last='unavailable';
+ while(Date.now()<until){
+  const body=await coordination(page,id,cap,address);
+  const notifications=body.coordination?.notifications||[];
+  const latest=notifications.find(x=>x.signerAddress===b.address);
+  last=latest?.state||'none';
+  if(states.includes(last))return latest;
+  await new Promise(r=>setTimeout(r,1500));
+ }
+ log('notification_status_timeout',{expected:states,last});return last;
+}
+
+
 const ui=async(p)=>({headings:(await p.locator('h1,h2,h3').allTextContents()).map(x=>x.trim()).slice(0,9),buttons:(await p.getByRole('button').allTextContents()).map(x=>x.trim()).filter(Boolean).slice(0,19),alerts:(await p.getByRole('alert').allTextContents()).slice(0,4)});
 async function loginMst(wallet){
   const page=await wallet.context.newPage();
@@ -209,11 +239,47 @@ try{
  await approvePrompt(a.context,/Confirm Transaction/i);
  await pA.getByRole('button',{name:'Signed',exact:true}).waitFor({state:'visible',timeout:30000});
  log('mst_owner_signed');
+ if(EMAIL_LIVE){
+ const id=new URL(shareUrl).hash.slice(1,17);
+ const cap=new URL(shareUrl).hash.slice(17);
+ if(!/^[A-Za-z0-9_-]{16}$/.test(id)||!cap)throw new Error('Unexpected private proposal locator');
+ const contact=await mstApi(pA,'/api/address-book','PUT',{address:b.address,subject_type:'signer',label:'Varial E2E Test Recipient',notification_email:TEST_EMAIL},'','',a.address);
+ if(contact.entry?.notification_email!==TEST_EMAIL)throw new Error('Contact not stored');
+ contactSaved=true;
+ log('test_contact_saved',{recipient:'resend_synthetic_delivery'});
+ const asked=await mstApi(pA,'/api/request','PATCH',{assignSigner:b.address},id,cap,a.address);
+ log('email_invitation',{status:asked.notification?.status,assignments:asked.coordination?.assignments?.length});
+ if(!['queued','already_queued'].includes(asked.notification?.status))throw new Error('Initial email was not queued');
+ let delivered=await waitEmailState(pA,id,cap,a.address,['delivered','provider_accepted']);
+ mailStatus=typeof delivered==='string' ? delivered : delivered?.state??'not_reported';
+ log('email_invitation_provider_state',{state:mailStatus});
+ const reminded=await mstApi(pA,'/api/request','PATCH',{remindSigner:b.address},id,cap,a.address);
+ log('email_reminder',{status:reminded.notification?.status});
+ if(reminded.notification?.status!=='queued')throw new Error('Reminder email was not queued');
+ const reminderEvidence=await waitEmailState(pA,id,cap,a.address,['delivered','provider_accepted']);
+ const reminderState=typeof reminderEvidence==='string' ? reminderEvidence : reminderEvidence?.state??'not_reported';
+ log('email_reminder_provider_state',{state:reminderState});
+ mailStatus=([mailStatus,reminderState].every(state=>['delivered','provider_accepted'].includes(state)))?'provider_accepted':'unconfirmed';
+ const nonSecretEmailLink=mst+'/s#'+id;
+ if(nonSecretEmailLink.includes(cap))throw new Error('Email locator leaked capability');
+ log('email_cta_locator_ready',{proposalId:id,containsBearer:false});
+ }
+
  pB=await loginMst(b);
- await pB.goto(shareUrl,{waitUntil:'domcontentloaded'});
+ await pB.goto(EMAIL_LIVE ? mst+'/s#'+new URL(shareUrl).hash.slice(1,17) : shareUrl,{waitUntil:'domcontentloaded'});
+ if(EMAIL_LIVE)log('recipient_email_locator_opened',{hasCapability:false});
  await pB.waitForTimeout(1200);
  const open=pB.getByRole('button',{name:/Open proposal|Open transaction/i}).first();
- if(await open.count()&&await open.isVisible())await open.click();
+ if(await open.count()&&await open.isVisible()){
+  await open.click();
+  if(EMAIL_LIVE)await approvePrompt(b.context,/Sign message|Confirm Transaction/i).catch(()=>{});
+ }
+ if(EMAIL_LIVE){
+  const coordinationState=await coordination(pA,new URL(shareUrl).hash.slice(1,17),new URL(shareUrl).hash.slice(17),a.address);
+  const wasViewed=Boolean(coordinationState.coordination?.assignments?.find(x=>x.signerAddress===b.address)?.viewedAt);
+  log('recipient_viewed',{recorded:wasViewed});
+  if(!wasViewed)throw new Error('Recipient Viewed fact not recorded');
+ }
  const reviewContinue=pB.getByRole('button',{name:'Continue to signatures'}).first();
  if(await reviewContinue.count()&&await reviewContinue.isVisible()){await reviewContinue.click();log('mst_recipient_reviewed');}
  await pB.getByRole('button',{name:'Sign',exact:true}).waitFor({state:'visible',timeout:35000});
@@ -239,12 +305,18 @@ try{
  const receipt=await receiptResponse.json();
  if(!receipt.successful||!Number.isInteger(receipt.ledger))throw new Error('Horizon receipt not confirmed');
  log('MST_VARIAL_REAL_MULTISIG_PASS',{transactionHash:receipt.hash,ledger:receipt.ledger,treasury:treasury.publicKey(),walletVersion:extensionVersion});
+ if(EMAIL_LIVE && mailStatus==='unconfirmed')throw new Error('Wallet and chain PASS; email invite/reminder still queued with no provider acceptance/delivery evidence');
+
 }catch(e){
  log('MST_VARIAL_E2E_FAILED',{message:String(e.message).slice(0,330)});
  if(pA)log('MST_A_LAST_UI',await ui(pA).catch(()=>({unavailable:true})));
  if(pB)log('MST_B_LAST_UI',await ui(pB).catch(()=>({unavailable:true})));
  process.exitCode=1;
 }finally{
+ if(contactSaved && pA && a && b){
+   await mstApi(pA,'/api/address-book','DELETE',{address:b.address,subject_type:'signer'},'','',a.address).catch(()=>{});
+   log('test_contact_cleanup');
+ }
  for(const wallet of [a,b]){if(wallet){await wallet.context.close().catch(()=>{});await fs.rm(wallet.profile,{recursive:true,force:true}).catch(()=>{})}}
  await fs.rm(PROFILE_ROOT,{recursive:true,force:true}).catch(()=>{});
 }
