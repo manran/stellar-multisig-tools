@@ -44,6 +44,29 @@ test('Inbox uses reusable template name as business label while preserving MST s
 });
 
 
+test('Payment titles stay readable while exact destination remains in transaction evidence', () => {
+  const xdr = paymentXdr();
+  const description = describeInboxRequest({
+    id: '0123456789ABCDEF',
+    network: 'testnet',
+    transactionHash: 'hash',
+    baseXdr: xdr,
+    mergedXdr: xdr,
+    createdAt: '2026-10-31T00:00:00Z',
+    expiresAt: '2026-11-01T00:00:00Z',
+    contributionCount: 0,
+    signatureCount: 0,
+    status: 'awaiting_signatures',
+    statusReason: 'signatures_required',
+  });
+  const recipient = description.inspection.operations[0]?.fields.find((field) => field.label === 'Destination')?.value;
+  assert.equal(description.title, 'Send 10.0000000 XLM');
+  assert.match(description.summary, /^To G[A-Z2-7]{9}…[A-Z2-7]{8}$/);
+  assert.equal(recipient?.length, 56);
+  assert.doesNotMatch(description.title, /G[A-Z2-7]{55}/);
+  assert.ok(recipient && !description.summary.includes(recipient));
+});
+
 test('Inbox outgoing progress keeps sender asks separate from email delivery and authenticated view', () => {
   const sender = Keypair.random().publicKey();
   const bob = Keypair.random().publicKey();
@@ -135,7 +158,10 @@ test('Proposal presents the next task without claiming an unauthorized wallet ca
 
 test('Proposal distinguishes self-managed, external and unchosen execution', () => {
   const options = { reviewComplete: true, walletAlreadySigned: false, executionRoutedToMst: false };
-  assert.equal(proposalNextStep('ready', options).title, 'Choose how to submit');
+  const ready = proposalNextStep('ready', options);
+  assert.equal(ready.title, 'Ready to submit');
+  assert.equal(ready.action.target, 'submission');
+  assert.match(ready.detail, /required signatures are present/);
   assert.equal(proposalNextStep('ready', { ...options, executionRoutedToMst: true }).title, 'Review and submit');
   const external = proposalNextStep('ready', { ...options, executionMode: 'external', executionRoutedToMst: true });
   assert.equal(external.heading, 'Current status');
