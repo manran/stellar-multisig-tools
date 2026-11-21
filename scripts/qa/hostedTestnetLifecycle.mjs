@@ -12,6 +12,7 @@ const FAUCET = 'https://friendbot.stellar.org';
 const LIVE = process.argv.includes('--live');
 const AGENT = process.argv.includes('--agent');
 const COORDINATION = process.argv.includes('--coordination');
+const PROPOSER = process.argv.includes('--proposer');
 const now = () => new Date().toISOString();
 const trace = [];
 function record(step, extra = {}) {
@@ -84,6 +85,149 @@ function requestHeaders(id, capability, extra = {}) {
   return { 'x-multisig-request-id': id, ...(capability ? { 'x-multisig-capability': capability } : {}), ...extra };
 }
 
+/** Dedicated authorized non-signer G-wallet Testnet lifecycle. New disposable keys
+ * only. Never persist sessions/seeds. Uses a funded 2-of-3 account to pay itself. */
+async function proposerE2E() {
+  const alice = Keypair.random();
+  const bob = Keypair.random();
+  const carol = Keypair.random();
+  const finance = Keypair.random();
+  const source = alice.publicKey();
+  await fund(source);
+  const funded = await horizon('/accounts/' + source);
+  const setup = new TransactionBuilder(new Account(source, funded.sequence), {
+    fee: BASE_FEE, networkPassphrase: Networks.TESTNET,
+  })
+    .addOperation(Operation.setOptions({ signer: { ed25519PublicKey: bob.publicKey(), weight: 1 } }))
+    .addOperation(Operation.setOptions({ signer: { ed25519PublicKey: carol.publicKey(), weight: 1 } }))
+    .addOperation(Operation.setOptions({ masterWeight: 1, lowThreshold: 2, medThreshold: 2, highThreshold: 2 }))
+    .setTimeout(120).build();
+  setup.sign(alice);
+  check((await submitXdr(setup.toXdr())).successful, 'Unable to create temporary Testnet Treasury');
+  record('proposer-temporary-2-of-3-treasury', { account: source });
+
+  const ownerToken = await unlock(alice);
+  const financeToken = await unlock(finance);
+  const ownerHeaders = { ...cookieHeaders(ownerToken), 'x-multisig-session-address': source };
+  const financeHeaders = { ...cookieHeaders(financeToken), 'x-multisig-session-address': finance.publicKey() };
+  record('unfunded-nonsigner-wallet-unlocked');
+  // Build an intentionally fixed same-account payment: no third-party value transfer.
+  const templateCreated = await call('/templates', 'POST', {
+    network: 'testnet', name: 'Testnet delegated QA', kind: 'payment',
+    definition: {
+      version: 1, source, recipients: [{ destination: source, assetKey: 'native' }],
+      signingWindowSeconds: 3600,
+    },
+  }, ownerHeaders, 201);
+  const id = templateCreated.template?.id;
+  check(typeof id === 'string' && templateCreated.template.definition.source === source,
+    'Treasury signer could not create reusable payment Template');
+  record('treasury-signer-template-created');
+  const reference = { id, version: 1 };
+  const noGrant = await call('/request', 'POST', {
+    network: 'testnet', templatePayment: { template: reference, amount: '1', memo: 'MST-TPL-QA' },
+  }, financeHeaders, 403);
+  check(noGrant.code === 'template_proposer_not_authorized', 'Unapproved non-signer can create Request');
+  record('unapproved-proposer-blocked');
+
+  const granted = await call('/templates', 'PATCH', {
+    network: 'testnet', templateId: id, proposerAddress: finance.publicKey(), action: 'grant',
+  }, ownerHeaders);
+  check(granted.proposerAddresses?.includes(finance.publicKey()), 'Template grant not persisted');
+  const visible = await call('/templates?network=testnet', 'GET', undefined, financeHeaders);
+  check(visible.templates?.some((item) => item.id === id && item.ownerAddress === source
+    && !item.proposerAddresses), 'Delegated wallet cannot see its Template or can see unrelated grants');
+  record('nonsigner-wallet-received-template-grant');
+
+  const invalid = await call('/request', 'POST', {
+    network: 'testnet', templatePayment: {
+      template: reference, amount: '1', memo: 'MST-TPL-QA', destination: bob.publicKey(),
+    },
+  }, financeHeaders, 400);
+  check(invalid.code === 'invalid_template_payment', 'Delegated wallet modified fixed destination');
+  record('arbitrary-payment-overrides-denied');
+
+  const created = await call('/request', 'POST', {
+    network: 'testnet', templatePayment: { template: reference, amount: '1', memo: 'MST-TPL-QA' },
+  }, financeHeaders, 201);
+  const requestId = created.request?.id;
+  check(typeof requestId === 'string' && created.request.proposerAddress === finance.publicKey()
+    && !created.request.creatorAddress && !created.capability,
+  'Request incorrectly treats non-signer as signer or mints a bearer capability');
+  const unsignedXdr = created.request.baseXdr;
+  const unsigned = TransactionBuilder.fromXdr(unsignedXdr, Networks.TESTNET);
+  check(unsigned.source === source && unsigned.signatures.length === 0
+    && unsigned.operations.length === 1 && unsigned.operations[0].type === 'payment'
+    && unsigned.operations[0].destination === source,
+  'Server changed fixed source, recipient or delegated authorization boundary');
+  record('unfunded-proposer-created-immutable-payment-request', { requestId });
+  const requestFinanceHeaders = requestHeaders(requestId, '', financeHeaders);
+  const own = await call('/request', 'GET', undefined, requestFinanceHeaders);
+  check(own.request?.id === requestId && own.request.proposerAddress === finance.publicKey(),
+    'Proposer cannot read their own active Request');
+  const financeInbox = await call('/inbox', 'GET', undefined, financeHeaders);
+  check(financeInbox.requests?.some((item) => item.id === requestId && item.viewerAction === 'proposer_waiting'),
+    'Unfunded proposer Request absent from personal Inbox');
+  record('proposer-inbox-without-signer-task');
+  const unauthorizedSigned = TransactionBuilder.fromXdr(unsignedXdr, Networks.TESTNET);
+  unauthorizedSigned.sign(bob);
+  const deniedSignature = await call('/request', 'PATCH', {
+    signedXdr: unauthorizedSigned.toXdr(),
+  }, requestFinanceHeaders, 403);
+  check(deniedSignature.code === 'proposer_signature_denied', 'Proposer bypassed signature contribution control');
+  const deniedSubmit = await call('/request', 'PUT', {}, requestFinanceHeaders, 403);
+  check(deniedSubmit.code === 'proposer_submit_denied', 'Proposer bypassed API submission permission');
+  record('proposer-sign-and-submit-denied');
+
+  const asked = await call('/request', 'PATCH', { assignSigner: bob.publicKey() }, requestFinanceHeaders);
+  check(asked.assignment?.assignedByAddress === finance.publicKey()
+    && asked.notification?.status === 'no_contact_email', 'Proposer Ask did not retain attribution');
+  record('proposer-requested-treasury-signature-without-email');
+
+  const revoked = await call('/templates', 'PATCH', {
+    network: 'testnet', templateId: id, proposerAddress: finance.publicKey(), action: 'revoke',
+  }, ownerHeaders);
+  check(!revoked.proposerAddresses?.includes(finance.publicKey()), 'Revocation not retained');
+  const revokedCreate = await call('/request', 'POST', {
+    network: 'testnet', templatePayment: { template: reference, amount: '1', memo: 'MST-TPL-QA' },
+  }, financeHeaders, 403);
+  check(revokedCreate.code === 'template_proposer_not_authorized', 'Revoked proposer still creates Request');
+  const revokedAsk = await call('/request', 'PATCH', {
+    assignSigner: carol.publicKey(),
+  }, requestFinanceHeaders, 403);
+  check(revokedAsk.code === 'template_proposer_not_authorized', 'Revoked proposer still sends Ask');
+  check((await call('/request', 'GET', undefined, requestFinanceHeaders)).request.id === requestId,
+    'Revocation erased previously created Request');
+  record('revoked-proposer-still-sees-old-request');
+
+  const aliceSigned = TransactionBuilder.fromXdr(unsignedXdr, Networks.TESTNET);
+  aliceSigned.sign(alice);
+  const ownerContribution = await call('/request', 'PATCH', { signedXdr: aliceSigned.toXdr() },
+    requestHeaders(requestId, '', ownerHeaders));
+  check(ownerContribution.addedSignatureCount === 1, 'Current Treasury signer contribution rejected');
+  const bobToken = await unlock(bob);
+  const bobSigned = TransactionBuilder.fromXdr(unsignedXdr, Networks.TESTNET);
+  bobSigned.sign(bob);
+  const bobContribution = await call('/request', 'PATCH', { signedXdr: bobSigned.toXdr() },
+    requestHeaders(requestId, '', { ...cookieHeaders(bobToken), 'x-multisig-session-address': bob.publicKey() }));
+  check(bobContribution.request.status === 'ready', 'Both Treasury signatures did not authorize payment');
+  const submitted = await call('/request', 'PUT', {}, requestHeaders(requestId, '', ownerHeaders));
+  const txHash = submitted.request?.submission?.transactionHash;
+  check(submitted.request?.status === 'submitted' && typeof txHash === 'string',
+    'A current Treasury signer could not submit the Request');
+  const chain = await horizon('/transactions/' + txHash);
+  check(chain.successful && chain.hash === txHash, 'No matching successful Testnet ledger transaction');
+  record('treasury-signers-confirmed-payment-on-ledger', { ledger: chain.ledger });
+  const history = await call('/request?view=history', 'GET', undefined, requestFinanceHeaders);
+  check(history.request?.status === 'submitted', 'Proposer lost closed Request history');
+  const activity = await call('/activity?request=' + encodeURIComponent(requestId), 'GET', undefined, financeHeaders);
+  check(activity.item, 'Proposer cannot view completed Activity');
+  record('proposer-retained-transaction-receipt');
+  console.log('LIVE TEMPLATE PROPOSER TESTNET E2E PASSED');
+  console.log(JSON.stringify({ requestId, ledger: chain.ledger, transactionHash: chain.hash,
+    proposerFunded: false, evidence: trace }, null, 2));
+}
+
 async function main() {
   const runtime = await call('/runtime-config');
   check(runtime.fixedNetwork === 'testnet', 'Refusing non-Testnet API deployment');
@@ -93,6 +237,7 @@ async function main() {
     console.log('READ-ONLY PASS. Re-run with --live for one explicit Testnet-only transaction.');
     return;
   }
+  if (PROPOSER) return proposerE2E();
 
   // New keys only. Never use a supplied wallet or retain seeds on disk.
   const alice = Keypair.random();
