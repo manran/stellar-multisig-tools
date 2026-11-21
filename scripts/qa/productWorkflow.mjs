@@ -558,14 +558,15 @@ try {
         await page.getByRole('button', { name: 'Review transaction', exact: true }).click();
         await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
         await visible(page, 'Invite signers', 'heading');
-        const button = page.getByRole('button', { name: 'Send 0 invitations' });
+        const button = page.getByRole('button', { name: 'Select signers above' });
         assert.equal(await button.isDisabled(), true, 'No signer is preselected');
         await page.getByRole('checkbox', { name: 'Invite Bob' }).check();
         if (width === 1280) await page.getByRole('checkbox', { name: 'Invite Carol' }).check();
         const expected = width === 1280 ? 2 : 1;
-        await visible(page, 'Send ' + expected + ' invitations', 'button');
+        const sendLabel = 'Send ' + expected + ' invitation' + (expected === 1 ? '' : 's');
+        await visible(page, sendLabel, 'button');
         await snapshot(page, 'proposal-invite-selection', width);
-        await page.getByRole('button', { name: 'Send ' + expected + ' invitations' }).click();
+        await page.getByRole('button', { name: sendLabel }).click();
         try {
           await visible(page, expected + ' signer' + (expected === 1 ? '' : 's') + ' invited. Follow their progress below.');
         } catch {
@@ -622,6 +623,7 @@ try {
         // An already-signed proposal opens at the signature status by default.
         await page.getByRole('button', { name: 'Invite or remind signers' }).click();
         await visible(page, 'Email delivered');
+        assert.equal(await page.getByRole('button', { name: 'Ask Carol to sign' }).count(), 0, 'Invitation is offered only once, in the invitation chooser');
         const remind = page.getByRole('button', { name: 'Remind', exact: true });
         await remind.click();
         await visible(page, 'Reminder queued');

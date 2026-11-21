@@ -327,7 +327,7 @@ export default function SigningGuidance({
           </span>
         )}
         {viewedBadge}
-        {onAsk && (!assigned || canRepairInitialEmail) && (
+        {onAsk && (canRepairInitialEmail || (!assigned && !inviteCandidates.includes(signerAddress))) && (
           <ActionButton
             variant="secondary"
             size="sm"
@@ -478,7 +478,7 @@ export default function SigningGuidance({
               className="min-h-11"
             >
               {inviteBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-              {inviteBusy ? 'Sending invitations…' : 'Send ' + inviteSelectedNow.length + ' invitations'}
+              {inviteBusy ? 'Sending invitations…' : inviteSelectedNow.length === 0 ? 'Select signers above' : 'Send ' + inviteSelectedNow.length + ' invitation' + (inviteSelectedNow.length === 1 ? '' : 's')}
             </ActionButton>
             <span className="text-xs text-[var(--color-muted)]">People not selected can still sign if authorized.</span>
           </div>}
