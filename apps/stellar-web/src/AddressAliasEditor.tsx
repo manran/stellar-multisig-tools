@@ -13,7 +13,13 @@ interface Props {
   showEmailPreview?: boolean;
 }
 
-export default function AddressAliasEditor({
+export default function AddressAliasEditor(props: Props) {
+  const { privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
+  if (!privateUnlocked || !unlockedAddress || !unlockedNetwork) return null;
+  return <ScopedAddressAliasEditor key={`${unlockedNetwork}:${unlockedAddress}`} {...props} />;
+}
+
+function ScopedAddressAliasEditor({
   address,
   subjectType,
   compact = false,
@@ -21,7 +27,6 @@ export default function AddressAliasEditor({
   allowNotificationEmail = false,
   showEmailPreview = true,
 }: Props) {
-  const { privateUnlocked } = useStellarWallet();
   const { labelFor, emailFor, saveAlias, removeAlias } = useAddressBook();
   const currentLabel = labelFor(address, subjectType);
   const currentEmail = allowNotificationEmail ? emailFor(address) : '';
@@ -72,8 +77,6 @@ export default function AddressAliasEditor({
       setBusy(false);
     }
   }
-
-  if (!privateUnlocked) return null;
 
   if (!editing) {
     return (

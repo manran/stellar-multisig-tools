@@ -216,6 +216,7 @@ async function fixturePage(width, options = {}) {
     if (url.pathname === '/api/address-book') {
       if (request.method() === 'PUT') {
         const body = request.postDataJSON();
+        if (state.contactSaveDelays?.[body.address]) await state.contactSaveDelays[body.address];
         if (state.contactSaveStatus !== 200) return json({ error: 'Contact could not be saved.' }, state.contactSaveStatus);
         state.contactSaveCount++;
         const entry = { address: body.address, subject_type: body.subject_type, label: body.label, ...(body.notification_email ? { notification_email: body.notification_email } : {}), created_at: now, updated_at: now };
@@ -450,6 +451,76 @@ try {
         assert.equal(state.contactSaveCount, 1);
         await snapshot(page, 'contacts-workbench', width);
       });
+
+      if (width === 375) {
+        await run('contacts-concurrent-saves-keep-both-signers', width, {}, async ({ page, state }) => {
+          let releaseBob;
+          state.contactSaveDelays = {
+            [addresses.bob]: new Promise((resolve) => { releaseBob = resolve; }),
+          };
+          await page.goto(origin + '/address-book');
+          await visible(page, 'Contacts', 'heading');
+          const bob = page.locator('.mst-address-row').filter({ hasText: addresses.bob });
+          const carol = page.locator('.mst-address-row').filter({ hasText: addresses.carol });
+          await bob.getByRole('button', { name: 'Edit contact Bob' }).click();
+          await bob.getByPlaceholder('e.g. Bob').fill('Bob operations');
+          await bob.getByRole('textbox', { name: 'Notification email' }).fill('bob.ops@example.org');
+          const bobSaved = page.waitForResponse((response) => response.url().endsWith('/api/address-book')
+            && response.request().method() === 'PUT' && response.request().postDataJSON().address === addresses.bob);
+          await bob.getByRole('button', { name: 'Save contact' }).click();
+
+          await carol.getByRole('button', { name: 'Edit contact Carol' }).click();
+          await carol.getByPlaceholder('e.g. Bob').fill('Carol operations');
+          await carol.getByRole('textbox', { name: 'Notification email' }).fill('carol.ops@example.org');
+          await carol.getByRole('button', { name: 'Save contact' }).click();
+          await carol.getByRole('button', { name: 'Edit contact Carol operations' }).waitFor({ state: 'visible' });
+          releaseBob();
+          await bobSaved;
+          await bob.getByRole('button', { name: 'Edit contact Bob operations' }).waitFor({ state: 'visible' });
+          await carol.getByRole('button', { name: 'Edit contact Carol operations' }).waitFor({ state: 'visible' });
+          assert.equal(state.contactSaveCount, 2);
+          await bob.getByRole('button', { name: 'Edit contact Bob operations' }).click();
+          assert.equal(await bob.getByRole('textbox', { name: 'Notification email' }).inputValue(), 'bob.ops@example.org');
+          await bob.getByRole('button', { name: 'Cancel contact editing' }).click();
+          await carol.getByRole('button', { name: 'Edit contact Carol operations' }).click();
+          assert.equal(await carol.getByRole('textbox', { name: 'Notification email' }).inputValue(), 'carol.ops@example.org');
+          await carol.getByRole('button', { name: 'Cancel contact editing' }).click();
+          await snapshot(page, 'contacts-concurrent-saves', width);
+        });
+
+        await run('contacts-inflight-save-does-not-leak-across-wallets', width, {}, async ({ page, state }) => {
+          let releaseAlice;
+          state.contactSaveDelays = {
+            [addresses.carol]: new Promise((resolve) => { releaseAlice = resolve; }),
+          };
+          await page.goto(origin + '/address-book');
+          await visible(page, 'Contacts', 'heading');
+          const carol = page.locator('.mst-address-row').filter({ hasText: addresses.carol });
+          await carol.getByRole('button', { name: 'Edit contact Carol' }).click();
+          await carol.getByPlaceholder('e.g. Bob').fill('Alice private draft');
+          await carol.getByRole('textbox', { name: 'Notification email' }).fill('alice-only@example.org');
+          const aliceSaved = page.waitForResponse((response) => response.url().endsWith('/api/address-book')
+            && response.request().method() === 'PUT' && response.request().postDataJSON().address === addresses.carol);
+          await carol.getByRole('button', { name: 'Save contact' }).click();
+
+          // Bob's contact store is empty. Alice's pending response must stay in Alice's scope.
+          state.addressEntries = [];
+          const bobLoaded = page.waitForResponse((response) => response.url().endsWith('/api/address-book')
+            && response.request().method() === 'GET');
+          await page.evaluate((wallet) => window.__MST_QA_SET_WALLET__(wallet), walletState(addresses.bob));
+          await bobLoaded;
+          assert.equal(await page.getByText('Alice private draft', { exact: true }).count(), 0,
+            'Old wallet contacts must be hidden immediately after switching');
+          releaseAlice();
+          await aliceSaved;
+          await page.waitForTimeout(100);
+          assert.equal(await page.getByText('Alice private draft', { exact: true }).count(), 0,
+            'Late save from another wallet must not overwrite private contacts');
+          assert.equal(await page.locator('input[value="alice-only@example.org"]').count(), 0,
+            'Old wallet email draft must not survive a wallet change');
+          await snapshot(page, 'contacts-wallet-boundary', width);
+        });
+      }
 
       await run('agent-access-confirmed-revoke', width, {}, async ({ page, state }) => {
         await page.goto(origin + '/agent-access');

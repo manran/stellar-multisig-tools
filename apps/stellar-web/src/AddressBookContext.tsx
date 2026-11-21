@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useStellarWallet } from './StellarWalletContext';
 import { preferredAddressEntry, preferredAddressLabel } from './stellar/addressIdentity';
@@ -83,25 +83,42 @@ function newestEntry(entries: AddressAliasEntry[]): AddressAliasEntry | null {
 
 export function AddressBookProvider({ children }: { children: ReactNode }) {
   const { privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
-  const [entries, setEntries] = useState<AddressAliasEntry[]>([]);
+  const owner = privateUnlocked && unlockedAddress && unlockedNetwork ? `${unlockedNetwork}:${unlockedAddress}` : '';
+  const scopeRef = useRef({ owner, revision: 0 });
+  if (scopeRef.current.owner !== owner) scopeRef.current = { owner, revision: 0 };
+  const scope = scopeRef.current;
+  const [book, setBook] = useState<{ owner: string; entries: AddressAliasEntry[] }>({ owner: '', entries: [] });
+  // Never render private contacts from an old wallet, even for one render.
+  const entries = owner && book.owner === owner ? book.entries : [];
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const replaceEntries = useCallback((next: AddressAliasEntry[]) => {
-    setEntries(next);
-    if (unlockedAddress && unlockedNetwork) writeCache(unlockedAddress, unlockedNetwork, next);
-  }, [unlockedAddress, unlockedNetwork]);
+  const replaceEntries = useCallback((update: (current: AddressAliasEntry[]) => AddressAliasEntry[]) => {
+    if (!scope.owner || scopeRef.current !== scope) return;
+    scope.revision += 1;
+    setBook((current) => {
+      if (scopeRef.current !== scope || current.owner !== scope.owner) return current;
+      return { owner: scope.owner, entries: update(current.entries) };
+    });
+  }, [scope]);
 
   useEffect(() => {
-    if (!privateUnlocked || !unlockedAddress || !unlockedNetwork) {
-      setEntries([]);
+    if (book.owner === owner && owner && unlockedAddress && unlockedNetwork) {
+      writeCache(unlockedAddress, unlockedNetwork, book.entries);
+    }
+  }, [book, owner, unlockedAddress, unlockedNetwork]);
+
+  useEffect(() => {
+    if (!scope.owner || !unlockedAddress || !unlockedNetwork) {
+      setBook({ owner: '', entries: [] });
       setError('');
       setLoading(false);
       return;
     }
 
     const cached = readCache(unlockedAddress, unlockedNetwork);
-    setEntries(cached);
+    setBook({ owner: scope.owner, entries: cached });
+    const revisionAtLoad = scope.revision;
     setLoading(cached.length === 0);
     setError('');
 
@@ -117,9 +134,8 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
         return (body.entries ?? []).map(parseEntry).filter((entry): entry is AddressAliasEntry => Boolean(entry));
       })
       .then((loaded) => {
-        if (cancelled) return;
-        setEntries(loaded);
-        writeCache(unlockedAddress, unlockedNetwork, loaded);
+        if (cancelled || scopeRef.current !== scope || scope.revision !== revisionAtLoad) return;
+        setBook((current) => current.owner === scope.owner ? { owner: scope.owner, entries: loaded } : current);
       })
       .catch((cause) => {
         if (!cancelled && !controller.signal.aborted) {
@@ -134,7 +150,7 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       controller.abort();
     };
-  }, [privateUnlocked, unlockedAddress, unlockedNetwork]);
+  }, [scope, unlockedAddress, unlockedNetwork]);
 
   const labels = useMemo(() => {
     const map = new Map<string, string>();
@@ -173,9 +189,9 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
     const value = label.trim();
     if (!value) throw new Error('Name cannot be empty.');
 
-    const previous = entries;
+    const previousForAddress = entries.filter((entry) => entry.address === address);
     const now = new Date().toISOString();
-    const existing = newestEntry(previous.filter((entry) => entry.address === address));
+    const existing = newestEntry(previousForAddress);
     const requestedEmail = notificationEmail === undefined ? (emailFor(address) || undefined) : notificationEmail || undefined;
     const optimistic: AddressAliasEntry = {
       address,
@@ -185,7 +201,7 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
       createdAt: existing?.createdAt || now,
       updatedAt: now,
     };
-    replaceEntries([...previous.filter((entry) => entry.address !== address), optimistic]);
+    replaceEntries((current) => [...current.filter((entry) => entry.address !== address), optimistic]);
     setError('');
 
     try {
@@ -205,10 +221,10 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
       if (!response.ok) throw new Error(body.error || `Unable to save name (${response.status}).`);
       const entry = parseEntry(body.entry);
       if (!entry) throw new Error('Address book returned an invalid entry.');
-      replaceEntries([...previous.filter((item) => item.address !== address), entry]);
+      replaceEntries((current) => [...current.filter((item) => item.address !== address), entry]);
 
       const opposite = subjectType === 'account' ? 'signer' : 'account';
-      if (previous.some((item) => item.address === address && item.subjectType === opposite)) {
+      if (previousForAddress.some((item) => item.subjectType === opposite)) {
         void fetch('/api/address-book', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -216,23 +232,21 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
         }).catch(() => undefined);
       }
     } catch (cause) {
-      replaceEntries(previous);
+      replaceEntries((current) => [...current.filter((item) => item.address !== address), ...previousForAddress]);
       const message = cause instanceof Error ? cause.message : 'Unable to save name.';
-      setError(message);
+      if (scopeRef.current === scope) setError(message);
       throw new Error(message);
     }
-  }, [privateUnlocked, unlockedAddress, unlockedNetwork, entries, replaceEntries, emailFor]);
+  }, [privateUnlocked, unlockedAddress, unlockedNetwork, entries, replaceEntries, emailFor, scope]);
 
   const removeAlias = useCallback(async (address: string, subjectType: AddressAliasSubjectType) => {
     if (!privateUnlocked || !unlockedAddress || !unlockedNetwork) {
       throw new Error('Unlock your private workspace to change private names.');
     }
-    const previous = entries;
-    const storedTypes = [...new Set(previous
-      .filter((item) => item.address === address)
-      .map((item) => item.subjectType))];
+    const previousForAddress = entries.filter((item) => item.address === address);
+    const storedTypes = [...new Set(previousForAddress.map((item) => item.subjectType))];
     const types = storedTypes.length > 0 ? storedTypes : [subjectType];
-    replaceEntries(previous.filter((item) => item.address !== address));
+    replaceEntries((current) => current.filter((item) => item.address !== address));
     setError('');
 
     try {
@@ -246,12 +260,12 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
         if (!response.ok) throw new Error(body.error || `Unable to remove name (${response.status}).`);
       }));
     } catch (cause) {
-      replaceEntries(previous);
+      replaceEntries((current) => [...current.filter((item) => item.address !== address), ...previousForAddress]);
       const message = cause instanceof Error ? cause.message : 'Unable to remove name.';
-      setError(message);
+      if (scopeRef.current === scope) setError(message);
       throw new Error(message);
     }
-  }, [privateUnlocked, unlockedAddress, unlockedNetwork, entries, replaceEntries]);
+  }, [privateUnlocked, unlockedAddress, unlockedNetwork, entries, replaceEntries, scope]);
 
   const value = useMemo<AddressBookContextValue>(() => ({
     entries,
