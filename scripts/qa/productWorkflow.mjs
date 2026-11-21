@@ -394,7 +394,9 @@ try {
     }
 
     if (width === 375 || width === 1280) {
-      await run('overview-failed-email-is-actionable', width, {}, async ({ page }) => {
+      await run('overview-failed-email-is-actionable', width, {
+        state: { request: { ...requestFixture('awaiting_signatures', ['alice']), creatorAddress: addresses.alice } },
+      }, async ({ page }) => {
         await page.goto(origin + '/');
         await visible(page, '1 signer email needs follow-up');
         await visible(page, 'November supplier payment');
