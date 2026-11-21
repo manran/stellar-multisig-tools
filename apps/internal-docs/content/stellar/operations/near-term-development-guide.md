@@ -320,7 +320,29 @@ Pure visual/layout changes use browser/task regression, not fresh chain transact
 
 **Execution contract:** start with a read-only preflight of both versions, profiles, network and Testnet readiness. Use only isolated, disposable profiles or a deliberately prepared copy of a historical profile; do not overwrite archived profiles or expose secrets. If initialized profiles are absent or locked and an automated credential/onboarding operation is blocked by the tool's safety gate, **stop at that step**, do not rewrite or reroute credential automation, and ask an authorized tester to prepare the isolated profile once. Resume real Varial -> MST signing only when the test wallet can be unlocked legitimately. Distinguish that run from the already proven SDK/HTTP 2-of-3 and mock-browser regressions.
 
-**2026-11-21 preflight outcome:** read-only Chromium inspection of *copies* of four existing profiles (`/opt/FED/fed-real-transfer-{owner,recipient}` and `/opt/mst-e2e/classic-hosted-20260920143527-218592-{owner,signer-b}`) loaded the real historical Freighter 5.48.0 extension. **All four showed an Unlock/password prompt; none exposed an unlocked account view.** No credential input or wallet signing occurred. Historical profiles remain untouched. The next real-extension E2E gate is legitimate unlock or authorized one-time initialization of disposable profiles; do not report the four locked profiles as ready, and do not retry blocked credential automation.
+**2026-11-21 preflight outcome:** read-only Chromium inspection of *copies* of four existing profiles (`/opt/FED/fed-real-transfer-{owner,recipient}` and `/opt/mst-e2e/classic-hosted-20260920143527-218592-{owner,signer-b}`) loaded the real historical Freighter 5.48.0 extension. **All four showed an Unlock/password prompt; none exposed an unlocked account view.** No credential input or wallet signing occurred. Historical profiles remain untouched. At that preflight stage, the next E2E gate was legitimate unlock or authorized one-time initialization of disposable profiles; do not report the four locked profiles as ready, and do not retry blocked credential automation.
+
+### Live Varial 5.53.0 E2E acceptance — 2026-11-21
+
+The authorized E2E host `DeepSeekHarnessPlugins` successfully ran the existing FedNetwork test and a separate **real MST** Testnet 2-of-2 signing flow. Both used the official unpacked Varial 5.53.0 extension (release zip SHA-256 `44e8aab2e68ca4b2c4f4af56a81e1e37632b06e2ee115962dc61f931e71bb71a`), isolated Chromium profiles, real extension prompts and Friendbot-funded disposable accounts.
+
+- FedNetwork real-wallet transfer + cleanup: **PASS**. Testnet ledger `5841276`, transaction `1e93b27a5eb60ed4e32c73074b4f3eb36cec40825bfc35319f694f7d80e8a4ee`. The older 5.48.0 extension also passed its original unmodified FedNetwork runner (ledger `5841233`).
+- **MST real Varial 2-of-2: PASS**. Built a Testnet Treasury with two distinct extension-wallet signers (threshold 2); imported an unsigned 0.05 XLM payment; created a Proposal; both wallets signed through real Varial confirmation popups; selected `MultiSigTools submits`; and confirmed the payment via Horizon. Ledger `5841391`, transaction `4f7f68b428f3c438f57e9a2b19cb708e26745dc2604768728d979574a74e8702`. The reusable regression script itself was then run independently with **Exit 0 / PASS**: ledger `5841421`, transaction `359a6401fc54e9b7307503570fbc0e30ca31fd3d4224972531984cb778c7344c`.
+- An initial script falsely failed when querying the hash of the **original unsigned** XDR after MST finalized the transaction. The correct post-submit check queries Treasury history and verifies a successful payment operation with the exact amount, source and destination, then retrieves the receipt. Do not equate the pre-submission hash with the final transaction hash.
+- A fresh route load may require confirming the wallet-signed login message again. Recipient follows the Proposal's **Review -> Continue to signatures -> Sign** path. Both are expected state transitions, not failures.
+
+**Reusable regression script:** `scripts/qa/realVarialMultisig.mjs`. It is an explicit opt-in live Testnet test (not CI), creates and tears down unique temporary wallet profiles, does not export keys or mnemonic phrases, and does not modify Mainnet. Example on an authorized host with matching Playwright/Chromium:
+
+```sh
+MST_VARIAL_LIVE_E2E=1 \
+MST_VARIAL_EXTENSION_DIR=/path/to/unpacked-varial \
+MST_VARIAL_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+xvfb-run -a node scripts/qa/realVarialMultisig.mjs
+```
+
+Use a Playwright version that matches the installed Chromium revision. The first attempt on this host failed because Playwright 1.63 expected Chromium 1243 while only 1228 was installed; Playwright 1.61.1 matched Chromium 1228. That is a tooling dependency mismatch, **not** a wallet defect or credential-policy failure.
+
+This evidence closes the real **Varial wallet + MST signing + Testnet submission** check. It does not verify email invitation delivery/reminder workflows or Mainnet.
 
 ## 10. Mainnet operational hardening — later gate
 
