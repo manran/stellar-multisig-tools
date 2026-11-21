@@ -61,6 +61,13 @@ function shortAddress(address: string) {
   return address.length <= 24 ? address : `${address.slice(0, 12)}…${address.slice(-9)}`;
 }
 
+function isCreatorWaitingForSigners(request: InboxRequestSnapshot, viewerAddress: string): boolean {
+  return Boolean(viewerAddress)
+    && request.creatorAddress === viewerAddress
+    && request.status === 'awaiting_signatures'
+    && request.viewerAction === 'waiting_for_others';
+}
+
 function viewFromUrl(): InboxView {
   const value = new URLSearchParams(window.location.search).get('view');
   if (value === 'needs' || value === 'waiting') return value;
@@ -79,7 +86,11 @@ function OutgoingProgress({
   compact?: boolean;
 }) {
   const progress = useMemo(() => inboxSenderProgress(request, inboxOutgoingSignerProgress(request, viewerAddress)), [request, viewerAddress]);
-  if (progress.length === 0) return null;
+  if (progress.length === 0) return (
+    <p className="mt-2 text-xs leading-5 text-[var(--color-muted)]">
+      No invitations yet. Open the proposal to choose an eligible signer.
+    </p>
+  );
   const visible = compact ? progress.slice(0, 2) : progress;
   return (
     <div className={`mt-2 text-xs leading-5 text-[var(--color-muted)] ${compact ? 'space-y-2' : 'space-y-3'}`}>
@@ -140,6 +151,7 @@ function DetailPane({
   signerLabel: (address: string) => string;
 }) {
   const viewerAction = inboxViewerActionPresentation(request.viewerAction);
+  const followUp = isCreatorWaitingForSigners(request, viewerAddress);
   return (
     <section className="mst-inbox-detail-inner" aria-label="Selected proposal">
       <div className="mst-inbox-detail__top">
@@ -151,19 +163,28 @@ function DetailPane({
       <div className="mst-inbox-next-action">
         <div className="mst-inbox-next-action__label">Your next step</div>
         <div className="mt-2"><StatusBadge tone={viewerAction.tone}>{viewerAction.label}</StatusBadge></div>
-        <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">{viewerAction.detail}</p>
+        <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">{followUp ? 'Your signature is recorded. Check who is waiting and follow up when needed.' : viewerAction.detail}</p>
         <ActionButton onClick={() => openRequestDetails(request)} className="mt-4 w-full">
-          {viewerAction.cta} <ArrowRight className="h-4 w-4" />
+          {followUp ? 'Follow up with signers' : viewerAction.cta} <ArrowRight className="h-4 w-4" />
         </ActionButton>
       </div>
+      {followUp && (
+        <section className="mt-4 border-t border-[var(--color-rule)] pt-4" aria-label="Signer follow-up">
+          <h3 className="text-sm font-semibold text-[var(--color-ink)]">Signer follow-up</h3>
+          <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">People you asked. Open the proposal to see all eligible signers.</p>
+          <OutgoingProgress request={request} viewerAddress={viewerAddress} signerLabel={signerLabel} />
+        </section>
+      )}
       <div className="mst-inbox-preview-evidence">
         <h3>Transaction summary</h3>
         <ReviewTransactionSummary inspection={description.inspection} />
       </div>
-      <details className="mst-inbox-progress-disclosure">
-        <summary>Invitations and signing activity</summary>
-        <OutgoingProgress request={request} viewerAddress={viewerAddress} signerLabel={signerLabel} />
-      </details>
+      {!followUp && (
+        <details className="mst-inbox-progress-disclosure">
+          <summary>Invitations and signing activity</summary>
+          <OutgoingProgress request={request} viewerAddress={viewerAddress} signerLabel={signerLabel} />
+        </details>
+      )}
     </section>
   );
 }
@@ -377,6 +398,7 @@ export default function InboxApp() {
                     const description = descriptions.get(request.id)!;
                     const selected = request.id === selectedId;
                     const sourceAlias = labelFor(description.source, 'account');
+                    const followUp = isCreatorWaitingForSigners(request, unlockedAddress);
                     return (
                       <button key={request.id} type="button" data-selected={selected ? 'true' : 'false'} aria-current={selected ? 'true' : undefined} onClick={() => { if (window.matchMedia('(min-width: 1280px)').matches) setSelectedId(request.id); else openRequestDetails(request); }} className="mst-inbox-item">
                         <div className="mst-inbox-item__head">
@@ -385,10 +407,16 @@ export default function InboxApp() {
                         </div>
                         <h2 className="mst-inbox-item__title">{description.title}</h2>
                         <p className="mst-inbox-item__summary">{description.summary}</p>
-                        <InboxAttentionCue request={request} viewerAddress={unlockedAddress} signerLabel={signerLabel} />
+                        {followUp && (
+                          <div className="mt-3 border-t border-[var(--color-rule)] pt-2" aria-label="Signer follow-up">
+                            <span className="text-xs font-semibold text-[var(--color-ink-2)]">Signer follow-up</span>
+                            <OutgoingProgress request={request} viewerAddress={unlockedAddress} signerLabel={signerLabel} compact />
+                          </div>
+                        )}
+                        {!followUp && <InboxAttentionCue request={request} viewerAddress={unlockedAddress} signerLabel={signerLabel} />}
                         <div className="mst-inbox-item__foot">
                           <span className="truncate" title={description.source}>{sourceAlias || shortAddress(description.source)}</span>
-                          <span className="mst-inbox-item__open">{inboxViewerActionPresentation(request.viewerAction).cta}<ArrowRight className="h-4 w-4 shrink-0" /></span>
+                          <span className="mst-inbox-item__open">{followUp ? 'Follow up' : inboxViewerActionPresentation(request.viewerAction).cta}<ArrowRight className="h-4 w-4 shrink-0" /></span>
                         </div>
                       </button>
                     );

@@ -302,11 +302,12 @@ export default function RequestApp() {
     : 'sign';
   const requestNetwork = snapshot?.network ?? closedCapability?.network ?? null;
   const privateReadyForRequest = Boolean(privateUnlocked && requestNetwork && walletNetwork === requestNetwork);
+  const canCoordinateSigners = Boolean(privateReadyForRequest && walletAddress && assignmentApiAvailable);
   const nextStep = snapshot ? proposalNextStep(snapshot.status, {
     reviewComplete,
     walletAlreadySigned,
     isCreator: Boolean(walletAddress && walletAddress === snapshot.creatorAddress),
-    canCoordinate: Boolean(shareable && privateReadyForRequest && assignmentApiAvailable),
+    canCoordinate: canCoordinateSigners,
     walletSigningState,
     executionMode: snapshot.execution?.mode,
     executionRoutedToMst: executionAlreadyRoutedToMst,
@@ -701,7 +702,7 @@ export default function RequestApp() {
   }
 
   async function askSignerToSign(signerAddress: string): Promise<AssignSigningRequestResponse['notification']> {
-    if (!snapshot || !shareable || !walletAddress || !privateReadyForRequest) {
+    if (!snapshot || !canCoordinateSigners) {
       throw new Error('Confirm your current signer wallet before asking someone to sign.');
     }
     const body = await apiJson<AssignSigningRequestResponse>(await fetch('/api/request', {
@@ -716,7 +717,7 @@ export default function RequestApp() {
   }
 
   async function remindSignerToSign(signerAddress: string): Promise<RemindSigningRequestResponse['notification']> {
-    if (!snapshot || !shareable || !walletAddress || !privateReadyForRequest) {
+    if (!snapshot || !canCoordinateSigners) {
       throw new Error('Confirm the signer wallet that sent the original request before sending a reminder.');
     }
     const body = await apiJson<RemindSigningRequestResponse>(await fetch('/api/request', {
@@ -1000,11 +1001,11 @@ export default function RequestApp() {
                     onConnectWallet={() => void chooseSignerWallet()}
                     onSignWithWallet={() => void signRequestWithWallet()}
                     onShare={shareable ? () => requestUrl(snapshot.id, capability) : undefined}
-                    onAsk={snapshot.status === 'awaiting_signatures' && shareable && privateReadyForRequest && assignmentApiAvailable ? askSignerToSign : undefined}
-                    onRemind={snapshot.status === 'awaiting_signatures' && shareable && privateReadyForRequest && assignmentApiAvailable ? remindSignerToSign : undefined}
+                    onAsk={snapshot.status === 'awaiting_signatures' && canCoordinateSigners ? askSignerToSign : undefined}
+                    onRemind={snapshot.status === 'awaiting_signatures' && canCoordinateSigners ? remindSignerToSign : undefined}
                     assignments={assignments}
                     notifications={notifications}
-shareCreatesLink={shareable}
+                    shareCreatesLink={shareable}
                     knownComplete={signaturesComplete}
                   />
                   </section>}

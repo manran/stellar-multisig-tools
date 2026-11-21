@@ -57,7 +57,7 @@ function inboxFixture(owner = addresses.alice) {
     action_counts: { actionRequired: 0, signatureNeeded: 0, readyToSubmit: 0, needsAttention: 0, waiting: 1, readyForExecutionRouting: 0 },
     intents: [],
     requests: [{
-      ...requestFixture('awaiting_signatures', ['alice']), viewerAction: 'waiting_for_others',
+      ...requestFixture('awaiting_signatures', ['alice']), creatorAddress: owner, viewerAction: 'waiting_for_others',
       coordinationEvents: [
         event('1', 'signer_requested', addresses.alice),
         event('2', 'signer_requested', addresses.bob),
@@ -276,6 +276,7 @@ async function fixturePage(width, options = {}) {
         if (body.assignSigner) {
           assert.ok(state.inviteContacts, 'Only the invitation fixture may create assignments');
           assert.equal(request.headers()['x-multisig-session-address'], addresses.alice);
+          if (!state.requestAccess.shareable) assert.equal(request.headers()['x-multisig-capability'], undefined, 'Inbox invitation must use the verified signer session');
           const assignment = {
             version: 1, signerAddress: body.assignSigner, assignedByAddress: addresses.alice,
             assignedAt: '2026-11-20T12:00:00Z',
@@ -494,14 +495,59 @@ try {
     await run('inbox-progress', width, {}, async ({ page }) => {
       await page.goto(`${origin}/inbox`);
       await visible(page, 'November supplier payment');
-      await visible(page, 'Email needs attention');
-      await snapshot(page, 'inbox-progress', width);
+      const card = page.locator('.mst-inbox-list .mst-inbox-item').first();
+      await card.getByText('Signer follow-up', { exact: true }).waitFor({ state: 'visible' });
+      await card.getByText('Awaiting signature').waitFor({ state: 'visible' });
+      await card.getByText('Email needs attention').waitFor({ state: 'visible' });
+      await card.getByText('Follow up', { exact: true }).waitFor({ state: 'visible' });
       if (width >= 1280) {
-        await page.getByText('Invitations and signing activity', { exact: true }).click();
-        await page.getByText(/Email failed/).first().waitFor({ state: 'visible' });
+        await visible(page, 'Signer follow-up', 'heading');
+        await visible(page, 'Follow up with signers', 'button');
+        await visible(page, 'Email failed');
+        await visible(page, ' · Signed');
       }
-      if (width >= 1280) await visible(page, ' · Signed');
+      await snapshot(page, 'inbox-progress', width);
     });
+
+    if (width === 375) {
+      await run('inbox-recipient-has-no-creator-follow-up', width, {
+        wallet: walletState(addresses.bob),
+        state: {
+          inbox: {
+            ...inboxFixture(addresses.bob),
+            requests: [{ ...requestFixture('awaiting_signatures', ['bob']), creatorAddress: addresses.alice, viewerAction: 'waiting_for_others', coordinationEvents: [] }],
+          },
+        },
+      }, async ({ page }) => {
+        await page.goto(origin + '/inbox');
+        await visible(page, 'November supplier payment');
+        assert.equal(await page.getByText('Signer follow-up', { exact: true }).count(), 0);
+        await visible(page, 'View status');
+        await snapshot(page, 'inbox-recipient-waiting', width);
+      });
+
+      await run('inbox-creator-can-invite-without-bearer-link', width, {
+        state: {
+          request: { ...requestFixture('awaiting_signatures', ['alice']), creatorAddress: addresses.alice },
+          requestAccess: { shareable: false, activityBound: true },
+          inviteContacts: true,
+        },
+      }, async ({ page, state }) => {
+        await page.goto(origin + '/inbox');
+        await page.locator('.mst-inbox-list .mst-inbox-item').first().click();
+        await visible(page, 'Your signature is recorded', 'heading');
+        await visible(page, 'Invite or remind signers', 'button');
+        await page.getByRole('button', { name: 'Invite or remind signers' }).click();
+        await visible(page, 'Invite signers', 'heading');
+        await page.getByRole('checkbox', { name: 'Invite Bob' }).check();
+        await page.getByRole('button', { name: 'Send 1 invitation' }).click();
+        await visible(page, '1 signer invited. Follow their progress below.');
+        assert.equal(state.assignments.length, 1);
+        assert.equal(state.assignments[0].signerAddress, addresses.bob);
+        assert.equal(state.submitCount, 0);
+        await snapshot(page, 'inbox-creator-session-invite', width);
+      });
+    }
 
     await run('proposal-review-sign', width, {}, async ({ page, state }) => {
       await page.goto(`${origin}/s#${requestId}`);
