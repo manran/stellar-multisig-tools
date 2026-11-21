@@ -78,14 +78,14 @@ export default function SaintSignerDiscovery({
           {result ? 'Refresh SAINT' : 'Check with SAINT'}
         </button>
       </div>
-      {error && <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-300">{error}</p>}
+      {error && <p role="alert" className="mt-3 text-sm text-[var(--color-danger)]">{error}</p>}
       {result && (
         <div className="mt-4 space-y-3 text-sm">
           <p className="text-neutral-600 dark:text-neutral-300">
             {result.resources.length} current relationship(s) returned. {additional.length} not in the standard account list.
             {' '}SAINT publication through Ledger {result.publication.through}.
           </p>
-          {incomplete && <p className="text-amber-700 dark:text-amber-300">Discovery is incomplete. Missing accounts or contracts must not be treated as proof of no signing relationship.</p>}
+          {incomplete && <p className="text-[var(--color-warning)]">Discovery is incomplete. Missing accounts or contracts must not be treated as proof of no signing relationship.</p>}
           {additional.map((resource) => (
             <div key={resource.address} className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-rule)] pt-3">
               <div>
