@@ -177,17 +177,17 @@ async function mstApi(page, path, method, body, requestId='', capability='', add
 async function coordination(page,id,cap,address) {
  return mstApi(page,'/api/request','GET',undefined,id,cap,address);
 }
-async function waitEmailState(page,id,cap,address,states,timeoutMs=20000) {
+async function waitEmailState(page,id,cap,address,eventType,states,timeoutMs=20000) {
  const until=Date.now()+timeoutMs;let last='unavailable';
  while(Date.now()<until){
   const body=await coordination(page,id,cap,address);
   const notifications=body.coordination?.notifications||[];
-  const latest=notifications.find(x=>x.signerAddress===b.address);
+  const latest=notifications.find(x=>x.signerAddress===b.address && x.eventType===eventType);
   last=latest?.state||'none';
   if(states.includes(last))return latest;
   await new Promise(r=>setTimeout(r,1500));
  }
- log('notification_status_timeout',{expected:states,last});return last;
+ log('notification_status_timeout',{eventType,expected:states,last});return last;
 }
 
 
@@ -250,13 +250,13 @@ try{
  const asked=await mstApi(pA,'/api/request','PATCH',{assignSigner:b.address},id,cap,a.address);
  log('email_invitation',{status:asked.notification?.status,assignments:asked.coordination?.assignments?.length});
  if(!['queued','already_queued'].includes(asked.notification?.status))throw new Error('Initial email was not queued');
- let delivered=await waitEmailState(pA,id,cap,a.address,['delivered','provider_accepted']);
+ let delivered=await waitEmailState(pA,id,cap,a.address,'signature_requested',['delivered','provider_accepted']);
  mailStatus=typeof delivered==='string' ? delivered : delivered?.state??'not_reported';
  log('email_invitation_provider_state',{state:mailStatus});
  const reminded=await mstApi(pA,'/api/request','PATCH',{remindSigner:b.address},id,cap,a.address);
  log('email_reminder',{status:reminded.notification?.status});
  if(reminded.notification?.status!=='queued')throw new Error('Reminder email was not queued');
- const reminderEvidence=await waitEmailState(pA,id,cap,a.address,['delivered','provider_accepted']);
+ const reminderEvidence=await waitEmailState(pA,id,cap,a.address,'signature_reminder',['delivered','provider_accepted']);
  const reminderState=typeof reminderEvidence==='string' ? reminderEvidence : reminderEvidence?.state??'not_reported';
  log('email_reminder_provider_state',{state:reminderState});
  mailStatus=([mailStatus,reminderState].every(state=>['delivered','provider_accepted'].includes(state)))?'provider_accepted':'unconfirmed';
