@@ -371,7 +371,7 @@ test('freeze point hands every post-review action to Request', () => {
   assert.match(requestUi, /signRequestWithWallet/);
   assert.match(requestUi, /async function submitRequest/);
   assert.match(requestUi, /requestPreview/);
-  assert.match(requestUi, /navigation\.justCreated \|\| \(initialPreview/);
+  assert.match(requestUi, /navigation\.justCreated \|\| navigation\.focusSignerFollowup \|\| \(initialPreview/);
 });
 
 test('known creator Activity access survives Review to Proposal navigation', () => {

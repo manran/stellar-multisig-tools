@@ -36,11 +36,12 @@ interface InboxResponse {
 
 type InboxView = 'inbox' | 'needs' | 'waiting';
 
-function openRequestDetails(request: InboxRequestSnapshot) {
+function openRequestDetails(request: InboxRequestSnapshot, focusSignerFollowup = false) {
   navigateWorkspace('/request', {
     hash: request.id,
     state: {
       requestPreview: request,
+      focusSignerFollowup,
       returnTo: window.location.href,
       returnLabel: 'Back to Inbox',
     },
@@ -164,7 +165,7 @@ function DetailPane({
         <div className="mst-inbox-next-action__label">Your next step</div>
         <div className="mt-2"><StatusBadge tone={viewerAction.tone}>{viewerAction.label}</StatusBadge></div>
         <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">{followUp ? 'Your signature is recorded. Check who is waiting and follow up when needed.' : viewerAction.detail}</p>
-        <ActionButton onClick={() => openRequestDetails(request)} className="mt-4 w-full">
+        <ActionButton onClick={() => openRequestDetails(request, followUp)} className="mt-4 w-full">
           {followUp ? 'Follow up with signers' : viewerAction.cta} <ArrowRight className="h-4 w-4" />
         </ActionButton>
       </div>
@@ -400,7 +401,7 @@ export default function InboxApp() {
                     const sourceAlias = labelFor(description.source, 'account');
                     const followUp = isCreatorWaitingForSigners(request, unlockedAddress);
                     return (
-                      <button key={request.id} type="button" data-selected={selected ? 'true' : 'false'} aria-current={selected ? 'true' : undefined} onClick={() => { if (window.matchMedia('(min-width: 1280px)').matches) setSelectedId(request.id); else openRequestDetails(request); }} className="mst-inbox-item">
+                      <button key={request.id} type="button" data-selected={selected ? 'true' : 'false'} aria-current={selected ? 'true' : undefined} onClick={() => { if (window.matchMedia('(min-width: 1280px)').matches) setSelectedId(request.id); else openRequestDetails(request, followUp); }} className="mst-inbox-item">
                         <div className="mst-inbox-item__head">
                           <StatusBadge tone={inboxViewerActionPresentation(request.viewerAction).tone}>{inboxViewerActionPresentation(request.viewerAction).label}</StatusBadge>
                           <span className="mst-inbox-item__deadline">{inboxDeadlineLabel(description.inspection)}</span>
