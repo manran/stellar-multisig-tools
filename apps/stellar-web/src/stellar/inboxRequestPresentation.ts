@@ -13,6 +13,10 @@ export interface InboxRequestDescription {
   inspection: TransactionXdrInspection;
 }
 
+function conciseRecipient(address: string): string {
+  return address.length > 22 ? `${address.slice(0, 10)}…${address.slice(-8)}` : address;
+}
+
 export function describeInboxRequest(request: SigningRequestSnapshot): InboxRequestDescription {
   const inspection = inspectTransactionXdr(request.mergedXdr, request.network);
   const semantics = projectTransactionSemantics(inspection);
@@ -37,8 +41,12 @@ export function describeInboxRequest(request: SigningRequestSnapshot): InboxRequ
       'Update who can sign and how many approvals this account requires.',
     );
   }
-  if (semantics.kind === 'payment' && semantics.primaryOperation) {
-    return present(semantics.primaryOperation.summary, 'Payment');
+  if (semantics.kind === 'payment' && semantics.primaryOperation && semantics.payment) {
+    const payment = semantics.payment;
+    const title = payment.amount && payment.assetCode
+      ? `Send ${payment.amount} ${payment.assetCode}`
+      : semantics.primaryOperation.summary;
+    return present(title, payment.destination ? `To ${conciseRecipient(payment.destination)}` : 'Payment');
   }
   if (semantics.kind === 'batch_payment') {
     return present(
@@ -131,7 +139,7 @@ export function proposalNextStep(
     if (options.executionRoutedToMst) {
       return { heading: 'Next step', title: 'Review and submit', detail: 'All required signatures are present. Review the final effects before submitting.', action: { label: 'View submission details', target: 'submission' } };
     }
-    return { heading: 'Next step', title: 'Choose how to submit', detail: 'All required signatures are present. Select who will submit the transaction.', action: { label: 'View submission options', target: 'submission' } };
+    return { heading: 'Next step', title: 'Ready to submit', detail: 'The required signatures are present. Choose how this transaction will be submitted to Stellar.', action: { label: 'View submission options', target: 'submission' } };
   }
   if (options.walletSigningState === 'needs_review') {
     return { heading: 'Current status', title: 'Signing details need review', detail: 'Stellar Core cannot use the current signatures as prepared. Check the authorization evidence before collecting more.', action: { label: 'Review signing details', target: 'signatures' } };
