@@ -16,7 +16,7 @@ import {
   inboxDeadlineLabel,
   inboxOutgoingSignerProgress,
 } from './stellar/inboxRequestPresentation';
-import { inboxSenderProgress } from './stellar/inboxSenderProgress';
+import { inboxHasFailedSignerEmail, inboxSenderProgress } from './stellar/inboxSenderProgress';
 import { intentAuthorizationWindowLabel, intentViewerActionNeedsAction, intentViewerActionPresentation } from './stellar/sorobanIntentPresentation';
 import type { InboxSorobanIntentSnapshot } from '../../../packages/stellar-core/src/sorobanIntentApiTypes';
 import type { InboxRequestDescription } from './stellar/inboxRequestPresentation';
@@ -282,8 +282,7 @@ export default function InboxApp() {
 
   const failedFollowups = useMemo(() => new Set(
     (data?.requests ?? [])
-      .filter((request) => inboxSenderProgress(request, inboxOutgoingSignerProgress(request, unlockedAddress))
-        .some((item) => item.label === 'Email needs attention'))
+      .filter((request) => inboxHasFailedSignerEmail(request, unlockedAddress))
       .map((request) => request.id),
   ), [data, unlockedAddress]);
   const needsAction = (request: InboxRequestSnapshot) =>

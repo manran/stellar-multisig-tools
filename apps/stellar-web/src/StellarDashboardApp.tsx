@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { MouseEvent } from 'react';
 import { ArrowRight, History, Inbox, Plus, Vault } from 'lucide-react';
 import { NetworkBadge, PageHeader, StatusBadge } from './MultiSigUi';
@@ -8,11 +8,15 @@ import { isWalletUserRejected } from './stellar/walletKit';
 import { inboxActionCountPresentations, inboxViewerActionNeedsAction, inboxViewerActionPresentation } from '../../../packages/stellar-core/src/inboxPresentation';
 import type { InboxActionCounts, InboxRequestSnapshot } from '../../../packages/stellar-core/src/inboxPresentation';
 import { describeInboxRequest, inboxDeadlineLabel } from './stellar/inboxRequestPresentation';
+import { inboxHasFailedSignerEmail } from './stellar/inboxSenderProgress';
 import { intentAuthorizationWindowLabel, intentViewerActionNeedsAction, intentViewerActionPresentation } from './stellar/sorobanIntentPresentation';
 import type { InboxSorobanIntentSnapshot } from '../../../packages/stellar-core/src/sorobanIntentApiTypes';
+import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
 import { navigateWorkspace, stellarHref, stellarHrefWithSearch } from './workspaceNavigation';
 
 interface InboxCountResponse {
+  address?: string;
+  network?: StellarNetwork;
   pending_count?: number;
   action_count?: number;
   action_counts?: InboxActionCounts;
@@ -27,14 +31,15 @@ interface DashboardInboxSummary {
   intents: InboxSorobanIntentSnapshot[];
 }
 
-function inboxAttentionCopy(summary: DashboardInboxSummary | null) {
+function inboxAttentionCopy(summary: DashboardInboxSummary | null, emailAttentionCount = 0) {
   if (!summary) return 'See proposals that need your signature, submission, or review.';
   const { pendingCount, actionCounts } = summary;
-  if (actionCounts.actionRequired === 0) {
+  if (actionCounts.actionRequired === 0 && emailAttentionCount === 0) {
     if (pendingCount === 0) return 'No open proposals need your action right now.';
     return `${pendingCount} open ${pendingCount === 1 ? 'proposal is' : 'proposals are'} waiting on other signers or ledger conditions.`;
   }
   const parts: string[] = [];
+  if (emailAttentionCount > 0) parts.push(`${emailAttentionCount} signer email${emailAttentionCount === 1 ? '' : 's'} need${emailAttentionCount === 1 ? 's' : ''} follow-up`);
   if (actionCounts.readyForExecutionRouting > 0) parts.push(`${actionCounts.readyForExecutionRouting} ready to choose execution`);
   if (actionCounts.signatureNeeded > 0) parts.push(`${actionCounts.signatureNeeded} need${actionCounts.signatureNeeded === 1 ? 's' : ''} your signature`);
   if (actionCounts.readyToSubmit > 0) parts.push(`${actionCounts.readyToSubmit} ready to submit`);
@@ -50,40 +55,58 @@ export default function StellarDashboardApp() {
   const {
     sessionNetwork,
     privateUnlocked,
+    unlockedAddress,
+    unlockedNetwork,
     authBusy,
     unlock,
   } = useStellarWallet();
-  const [inboxSummary, setInboxSummary] = useState<DashboardInboxSummary | null>(null);
+  const owner = privateUnlocked && unlockedAddress && unlockedNetwork ? `${unlockedNetwork}:${unlockedAddress}` : '';
+  const [loadedInbox, setLoadedInbox] = useState<{ owner: string; summary: DashboardInboxSummary } | null>(null);
+  // Never render a previous wallet's private Inbox summary, even briefly.
+  const inboxSummary = owner && loadedInbox?.owner === owner ? loadedInbox.summary : null;
 
   useEffect(() => {
-    let cancelled = false;
-    if (!privateUnlocked) {
-      setInboxSummary(null);
-      return () => { cancelled = true; };
+    if (!owner || !unlockedAddress || !unlockedNetwork) {
+      setLoadedInbox(null);
+      return;
     }
-
-    void fetch('/api/inbox', { cache: 'no-store' })
+    const controller = new AbortController();
+    void fetch('/api/inbox', { cache: 'no-store', signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) return null;
         return await response.json() as InboxCountResponse;
       })
       .then((body) => {
+        if (controller.signal.aborted) return;
         if (
-          !cancelled
-          && typeof body?.pending_count === 'number'
+          body?.address === unlockedAddress && body.network === unlockedNetwork
+          && typeof body.pending_count === 'number'
           && body.action_counts
           && typeof body.action_counts.actionRequired === 'number'
           && Array.isArray(body.requests)
         ) {
-          setInboxSummary({ pendingCount: body.pending_count, actionCounts: body.action_counts, requests: body.requests, intents: Array.isArray(body.intents) ? body.intents : [] });
-        }
+          setLoadedInbox({ owner, summary: {
+            pendingCount: body.pending_count,
+            actionCounts: body.action_counts,
+            requests: body.requests,
+            intents: Array.isArray(body.intents) ? body.intents : [],
+          } });
+        } else setLoadedInbox(null);
       })
       .catch(() => {
-        if (!cancelled) setInboxSummary(null);
+        if (!controller.signal.aborted) setLoadedInbox(null);
       });
+    return () => controller.abort();
+  }, [owner, unlockedAddress, unlockedNetwork]);
 
-    return () => { cancelled = true; };
-  }, [privateUnlocked]);
+  const failedEmails = useMemo(() => new Set(
+    (inboxSummary?.requests ?? [])
+      .filter((request) => inboxHasFailedSignerEmail(request, unlockedAddress))
+      .map((request) => request.id),
+  ), [inboxSummary, unlockedAddress]);
+  const actionRequired = (inboxSummary?.actionCounts.actionRequired ?? 0) +
+    (inboxSummary?.requests ?? []).filter((request) =>
+      failedEmails.has(request.id) && !inboxViewerActionNeedsAction(request.viewerAction)).length;
 
   async function openPrivateDestination(event: MouseEvent<HTMLAnchorElement>, href: string) {
     if (privateUnlocked) return;
@@ -97,11 +120,12 @@ export default function StellarDashboardApp() {
     }
   }
 
-  function openRequestDetails(request: InboxRequestSnapshot) {
+  function openRequestDetails(request: InboxRequestSnapshot, focusSignerFollowup = false) {
     navigateWorkspace('/request', {
       hash: request.id,
       state: {
         requestPreview: request,
+        focusSignerFollowup,
         returnTo: window.location.href,
         returnLabel: 'Back to Home',
       },
@@ -141,7 +165,7 @@ export default function StellarDashboardApp() {
             <div className="flex items-end justify-between gap-4">
               <div>
                 <div id="dashboard-attention" className="text-sm font-bold">Needs your attention</div>
-                <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{inboxAttentionCopy(inboxSummary)}</p>
+                <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{inboxAttentionCopy(inboxSummary, failedEmails.size)}</p>
               </div>
               {inboxSummary && inboxSummary.pendingCount > 0 && (
                 <a href={stellarHref('/inbox')} className={'shrink-0 text-sm font-bold ' + accentText}>Open Inbox</a>
@@ -165,7 +189,7 @@ export default function StellarDashboardApp() {
               </div>
             )}
 
-            {inboxSummary && inboxSummary.actionCounts.actionRequired === 0 && (
+            {inboxSummary && actionRequired === 0 && (
               <div className="mst-work-list mt-4">
                 <div className="mst-work-row">
                   <div>
@@ -186,7 +210,7 @@ export default function StellarDashboardApp() {
               </div>
             )}
 
-            {inboxSummary && inboxSummary.actionCounts.actionRequired > 0 && (
+            {inboxSummary && actionRequired > 0 && (
               <div className="mst-work-list mt-4">
                 {intentAttention.map((intent) => {
                   const action = intentViewerActionPresentation(intent.viewerAction);
@@ -206,14 +230,18 @@ export default function StellarDashboardApp() {
                     </button>
                   );
                 })}
-                {inboxSummary.requests.filter((request) => inboxViewerActionNeedsAction(request.viewerAction)).slice(0, requestAttentionLimit).map((request) => {
+                {inboxSummary.requests.filter((request) =>
+                  inboxViewerActionNeedsAction(request.viewerAction) || failedEmails.has(request.id))
+                  .slice(0, requestAttentionLimit).map((request) => {
                   const description = describeInboxRequest(request);
                   const action = inboxViewerActionPresentation(request.viewerAction);
+                  const failedEmail = failedEmails.has(request.id);
+                  const urgentEmailFailure = failedEmail && !inboxViewerActionNeedsAction(request.viewerAction);
                   return (
-                    <button key={request.id} type="button" onClick={() => openRequestDetails(request)} className="mst-work-row">
+                    <button key={request.id} type="button" onClick={() => openRequestDetails(request, failedEmail)} className="mst-work-row">
                       <div>
                         <div className="mst-work-row__meta">
-                          <StatusBadge tone={action.tone}>{action.label}</StatusBadge>
+                          <StatusBadge tone={urgentEmailFailure ? 'danger' : action.tone}>{urgentEmailFailure ? 'Follow-up needed' : action.label}</StatusBadge>
                           <NetworkBadge network={request.network} />
                           <span>{inboxDeadlineLabel(description.inspection)}</span>
                         </div>
@@ -221,7 +249,7 @@ export default function StellarDashboardApp() {
                         <p className="mst-work-row__copy">{description.summary}</p>
                         <div className="mt-2 font-mono text-xs text-neutral-400">{shortAddress(description.source)}</div>
                       </div>
-                      <span className={'mst-work-row__action ' + accentText}>{action.cta} <ArrowRight className="h-4 w-4" /></span>
+                      <span className={'mst-work-row__action ' + accentText}>{failedEmail ? 'Follow up' : action.cta} <ArrowRight className="h-4 w-4" /></span>
                     </button>
                   );
                 })}
