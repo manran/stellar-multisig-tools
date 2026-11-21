@@ -20,6 +20,8 @@ export interface StoredSigningRequest {
   expiresAt: string;
   /** Verified signer Principal that created the Request, when one was available. */
   creatorAddress?: string;
+  /** Verified wallet that initiated a delegated Template payment, never a signer identity. */
+  proposerAddress?: string;
   /** Machine caller provenance when creation came through Agent or Service access. */
   creatorActor?: MachineCallerProvenance;
   /** External Integration ownership/execution context. Absent for ordinary signer-owned Requests. */
@@ -93,6 +95,7 @@ export interface SigningRequestStore {
   createRequest(request: StoredSigningRequest): Promise<void>;
   getRequest(id: string): Promise<StoredSigningRequest | null>;
   listRequests?(): Promise<StoredSigningRequest[]>;
+  listRequestsByProposer?(network: StellarNetwork, address: string): Promise<StoredSigningRequest[]>;
   /**
    * Discovery optimization only. Callers must still perform live authorization
    * checks before returning private Request data.

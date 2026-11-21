@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Braces, Clock3, FileInput, KeyRound, LoaderCircle, RefreshCw, Send, ShieldCheck, UserPlus, UsersRound } from 'lucide-react';
 import PaymentComposer from './PaymentComposer';
+import TemplateProposerComposer from './TemplateProposerComposer';
 import ClaimablePaymentComposer from './ClaimablePaymentComposer';
 import TransferComposer from './TransferComposer';
 import { ActionButton, NetworkFallbackChoice, WorkflowProgress } from './MultiSigUi';
@@ -37,6 +38,51 @@ function ChoiceRow({ href, icon, title, description, network, badge }: { href: s
       </div>
       <a href={href} className={'mst-choice-row__action ' + accentClass}>Continue <ArrowRight className="h-4 w-4" /></a>
     </div>
+  );
+}
+
+function TemplateGrantControls({ template, sessionAddress, network }: { template: ReusableTemplateSummary; sessionAddress: string; network: StellarNetwork }) {
+  const [address, setAddress] = useState('');
+  const [proposers, setProposers] = useState(template.proposerAddresses ?? []);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  if (!sessionAddress || template.ownerAddress !== sessionAddress || template.kind !== 'payment') return null;
+
+  async function update(action: 'grant' | 'revoke', proposerAddress: string) {
+    setBusy(true); setError('');
+    try {
+      const response = await fetch('/api/templates', {
+        method: 'PATCH',
+        headers: { ...privateSessionAddressHeaders(sessionAddress), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ network, templateId: template.id, proposerAddress, action }),
+      });
+      const body = await response.json() as { proposerAddresses?: string[]; error?: string };
+      if (!response.ok || !Array.isArray(body.proposerAddresses)) throw new Error(body.error || 'Unable to update Template permission.');
+      setProposers(body.proposerAddresses);
+      if (action === 'grant') setAddress('');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to update Template permission.');
+    } finally { setBusy(false); }
+  }
+  return (
+    <details className="mt-3 text-sm">
+      <summary className="cursor-pointer font-semibold text-[var(--color-accent)]">Allow another wallet to request payments</summary>
+      <p className="mt-2 leading-6 text-[var(--color-ink-2)]">This grants permission to prepare payments from this Template. It does not grant any Stellar signing rights.</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <input aria-label="Proposer G address" value={address} onChange={(event) => setAddress(event.target.value.trim())}
+          placeholder="G... wallet address" className="mst-request-control min-w-0 flex-1 font-mono text-xs" />
+        <ActionButton type="button" variant="secondary" disabled={!isValidStellarAccountId(address) || address === sessionAddress || busy}
+          onClick={() => void update('grant', address)}>Allow</ActionButton>
+      </div>
+      {proposers.length > 0 && <ul className="mt-3 space-y-2">
+        {proposers.map((proposer) => <li key={proposer} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="break-all font-mono" title={proposer}>{proposer}</span>
+          <button type="button" disabled={busy} onClick={() => void update('revoke', proposer)}
+            className="min-h-11 font-semibold text-[var(--color-danger)] disabled:opacity-40">Revoke</button>
+        </li>)}
+      </ul>}
+      {error && <p role="alert" className="mt-2 text-xs text-[var(--color-danger)]">{error}</p>}
+    </details>
   );
 }
 
@@ -187,17 +233,19 @@ function NewTransactionChoices() {
                     <h3 className="mst-work-row__title">{template.name}</h3>
                     <p className="mst-work-row__copy">{template.definition.recipients.length} recipient{template.definition.recipients.length === 1 ? '' : 's'} · Source <span className="font-mono" title={template.definition.source}>{template.definition.source.slice(0, 8)}…{template.definition.source.slice(-8)}</span></p>
                     {template.definition.autoRemind && <p className="mt-1 text-xs font-medium text-[var(--color-ink-2)]">Automatic email reminders enabled</p>}
+                    {template.ownerAddress && template.ownerAddress !== sessionAddress && <p className="mt-1 text-xs font-semibold text-[var(--color-accent)]">You are authorized to initiate payments from this Template.</p>}
+                    <TemplateGrantControls template={template} sessionAddress={sessionAddress} network={proposalNetwork} />
                     {proposalAccount && template.definition.source !== proposalAccount && <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">This template uses a different source account.</p>}
                   </div>
                   <a
-                    href={stellarHrefWithSearch('/new/payment', {
+                    href={stellarHrefWithSearch(template.ownerAddress && template.ownerAddress !== sessionAddress ? '/new/proposer' : '/new/payment', {
                       fresh: '1',
                       template: template.id,
                       network: proposalNetwork,
                     })}
                     className="mst-work-row__action"
                   >
-                    Use template <ArrowRight className="h-4 w-4" />
+                    {template.ownerAddress && template.ownerAddress !== sessionAddress ? 'Request payment' : 'Use template'} <ArrowRight className="h-4 w-4" />
                   </a>
                 </div>
               ))}
@@ -289,6 +337,7 @@ export default function NewTransactionApp() {
   const { sessionNetwork, networkSource } = useStellarWallet();
   const pathname = window.location.pathname;
   const isPayment = pathname.endsWith('/new/payment');
+  const isProposer = pathname.endsWith('/new/proposer');
   const isCreateAccount = pathname.endsWith('/new/create-account');
   const isBatch = pathname.endsWith('/new/batch');
   const isClaimable = pathname.endsWith('/new/claimable');
@@ -302,11 +351,13 @@ export default function NewTransactionApp() {
     : sessionNetwork
       ? networkSource === 'wallet' ? 'wallet' : 'context'
       : 'default';
-  const editor = isPayment || isCreateAccount || isBatch || isClaimable || isMultiParty || isContract || isImport;
+  const editor = isPayment || isProposer || isCreateAccount || isBatch || isClaimable || isMultiParty || isContract || isImport;
 
   return (
     <StellarWorkspaceShell active="new" networkContext={editor ? network : null}>
-      {isPayment || isCreateAccount || isBatch
+      {isProposer
+        ? <TemplateProposerComposer network={network} />
+        : isPayment || isCreateAccount || isBatch
         ? <PaymentComposer network={network} />
         : isClaimable
             ? <ClaimablePaymentComposer network={network} />

@@ -215,7 +215,8 @@ function synthesizedEvents(
   submission: StoredSubmissionResult | null,
 ): ActivityFactEvent[] {
   const events = [event(request.id, 'created', 'request_created', request.createdAt, {
-    ...(request.creatorAddress ? { actorAddress: request.creatorAddress } : {}),
+    ...(request.creatorAddress || request.proposerAddress
+      ? { actorAddress: request.creatorAddress ?? request.proposerAddress } : {}),
     ...(request.creatorActor ? { actor: request.creatorActor } : {}),
   })];
   if (request.privateCommitment) {
@@ -314,7 +315,7 @@ async function activityItemForRequest(
     participants.map((item) => item.address),
     options.knownSignerAddresses,
   );
-  const viewerParticipated = projected.participated || Boolean(participant);
+  const viewerParticipated = projected.participated || Boolean(participant) || request.proposerAddress === address;
   if (options.scope !== 'treasury' && !viewerParticipated) return null;
   if (projected.participated && !participant) {
     await persistProvenParticipant(store, request, address, projected.events);

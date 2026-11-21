@@ -183,6 +183,7 @@ async function writeActivityRequestIndex(request: StoredSigningRequest): Promise
   const addresses = [...new Set([
     ...(request.discoverySignerKeys ?? subjects.directSignerKeys),
     ...(request.creatorAddress ? [request.creatorAddress] : []),
+    ...(request.proposerAddress ? [request.proposerAddress] : []),
   ])].filter(isValidStellarAccountId);
   await writeIndexPaths([
     ...subjects.sourceAccountIds.map((accountId) =>
@@ -315,6 +316,7 @@ async function ensureActivityIndex(): Promise<void> {
         const addresses = [...new Set([
           ...(request.discoverySignerKeys ?? subjects.directSignerKeys),
           ...(request.creatorAddress ? [request.creatorAddress] : []),
+          ...(request.proposerAddress ? [request.proposerAddress] : []),
         ])].filter(isValidStellarAccountId);
         for (const address of addresses) {
           indexPaths.push(activityPathForSubject(activityAddressPrefix(address), request.id));
@@ -412,7 +414,8 @@ export const blobSigningRequestStore: SigningRequestStore = {
       requestId: request.id,
       type: 'request_created',
       occurredAt: request.createdAt,
-      ...(request.creatorAddress ? { actorAddress: request.creatorAddress } : {}),
+      ...(request.creatorAddress || request.proposerAddress
+        ? { actorAddress: request.creatorAddress ?? request.proposerAddress } : {}),
     });
   },
 
@@ -422,6 +425,13 @@ export const blobSigningRequestStore: SigningRequestStore = {
 
   listRequests() {
     return listAllRequests();
+  },
+
+  async listRequestsByProposer(network, address) {
+    await ensureActivityIndex();
+    const ids = await requestIdsForPrefix(activityAddressPrefix(address));
+    const requests = await readJsonBatch<StoredSigningRequest>(ids.map((id) => requestPath(id)));
+    return requests.filter((item) => item.network === network && item.proposerAddress === address);
   },
 
   async listRequestsByDiscoverySubjects(network, sourceAccountIds, directSignerKey) {

@@ -29,6 +29,7 @@ import { createIntegrationPaymentSigningRequest, createIntegrationSigningRequest
 import { ClassicManagedChannelServiceError } from '../server/classicManagedChannelService.js';
 import { ClassicManagedChannelConfigurationError } from '../server/classicManagedChannelConfig.js';
 import { ClassicPaymentPrepareError, type ClassicPaymentInstruction } from '../../../../packages/stellar-core/src/classicPaymentPrepare.js';
+import { prepareTemplateProposerPayment } from '../server/templateProposerPayment.js';
 import { BoxServiceError } from '../server/boxService.js';
 import {
   contributionGrantCookie,
@@ -83,7 +84,7 @@ import {
   queueSignatureReminderEmail,
   queueSignatureRequestedEmail,
 } from '../server/humanNotificationService.js';
-import { ReusableTemplateServiceError, resolveReusableTemplateReference } from '../server/reusableTemplateService.js';
+import { ReusableTemplateServiceError, resolveReusableTemplateReference, authorizeTemplateProposer } from '../server/reusableTemplateService.js';
 import {
   enforcePreparedSorobanTransaction,
   SorobanSimulationError,
@@ -129,7 +130,7 @@ const serviceOptions = {
   },
 };
 
-type RequestAccessMode = 'capability' | 'session' | 'contribution' | 'agent' | 'service';
+type RequestAccessMode = 'capability' | 'session' | 'proposer' | 'contribution' | 'agent' | 'service';
 type RequestAuthorizationPurpose = 'active' | 'history';
 type ClosedCapabilityStatus = Extract<SigningRequestStatus, 'submitted' | 'expired'>;
 
@@ -414,6 +415,24 @@ async function authorizeRequest(
       privateCommitment: stored.privateCommitment,
     };
   }
+  if (session && stored.proposerAddress === session.address) {
+    // If an ordinary proposer later becomes an actual signer, the on-chain
+    // permission takes precedence. The Template grant must not block it.
+    let signerNow = false;
+    if (purpose === 'active') {
+      try {
+        signerNow = await signerCanAccessTransaction(session.address, stored.baseXdr, stored.network, accountLoader);
+      } catch {
+        // Network unavailability never invents signer permissions.
+        signerNow = false;
+      }
+    }
+    return {
+      id, stored, mode: signerNow ? 'session' : 'proposer', network: stored.network,
+      actorAddress: session.address, activityBound: true, capabilityMatched: false,
+      privateCommitment: stored.privateCommitment,
+    };
+  }
   if (session && purpose === 'history') {
     const participant = await signingRequestStore.getRequestParticipant?.(id, session.address) ?? null;
     if (participant) {
@@ -651,7 +670,7 @@ export async function GET(request: Request): Promise<Response> {
       return capabilityClosedResponse(access.network, access.capabilityClosed);
     }
 
-    if (historyRequested && (!access.actorAddress || !['session', 'contribution', 'agent'].includes(access.mode))) {
+    if (historyRequested && (!access.actorAddress || !['session', 'proposer', 'contribution', 'agent'].includes(access.mode))) {
       throw new SigningRequestServiceError(
         'Unlock an authorized signer wallet to view retained transaction history.',
         403,
@@ -803,6 +822,9 @@ export async function POST(request: Request): Promise<Response> {
     const machineCaller = await machineCallerFromRequest(blobAgentCredentialStore, request);
     const integrationCredential = machineCaller?.kind === 'service' ? machineCaller.credential : null;
     const agentCredential = machineCaller?.kind === 'agent' ? machineCaller.credential : null;
+    if (machineCaller && body.templatePayment !== undefined) {
+      throw new SigningRequestServiceError('Delegated Template payments require a verified Human wallet.', 403, 'template_human_identity_required');
+    }
     if (machineCaller && body.template !== undefined) {
       throw new SigningRequestServiceError('Reusable Template linkage is available only to the Human proposal workflow in this version.', 400, 'template_linkage_unsupported');
     }
@@ -964,6 +986,43 @@ export async function POST(request: Request): Promise<Response> {
         }),
       }, result.replayed ? 200 : 201);
     }
+    if (body.templatePayment !== undefined) {
+      if (xdr.trim() || body.template !== undefined || body.payment !== undefined
+        || body.privateNote !== undefined || body.privateCommitment !== undefined
+        || body.sorobanIntentId !== undefined) {
+        throw new SigningRequestServiceError(
+          'Delegated Template payments accept only a Template reference, amount and memo.',
+          400, 'template_payment_conflicting_input',
+        );
+      }
+      const network = body.network;
+      if (network !== 'public' && network !== 'testnet') {
+        throw new SigningRequestServiceError('Network must be public or testnet.', 400, 'invalid_network');
+      }
+      assertDeploymentNetwork(network);
+      const session = await verifiedSignerSessionFromRequest(blobAuthStore, request, network);
+      if (!session) {
+        throw new SigningRequestServiceError('Confirm your proposer wallet first.', 401, 'template_proposer_identity_required');
+      }
+      const prepared = await prepareTemplateProposerPayment(
+        runtimeReusableTemplateStore(), session.address, network, body.templatePayment,
+      );
+      const beforeCreate = requestCreationQuota(request, network, `proposer:${session.address}`);
+      const store = withSigningRequestCreate(signingRequestStore, async (stored) => {
+        await beforeCreate();
+        return signingRequestStore.createRequest({
+          ...stored,
+          proposerAddress: session.address,
+          templateRef: prepared.templateRef,
+        });
+      });
+      const result = await createSigningRequest(store, { network, xdr: prepared.prepared.xdr }, serviceOptions);
+      return noStoreJson({
+        request: { ...result, proposerAddress: session.address, template: prepared.templateRef },
+        access: { shareable: false, activityBound: true },
+        context: {},
+      }, 201);
+    }
     const privateCommitment = privateCommitmentForCreate(body, xdr);
     const privateNoteText = privateNoteForCreate(body);
     if (privateCommitment && privateNoteText) {
@@ -1104,8 +1163,16 @@ export async function PATCH(request: Request): Promise<Response> {
     if (access.mode === 'agent') {
       requireAgentPermission(access, body.decision === 'decline' ? 'write' : 'sign');
     }
+    if (access.mode === 'proposer') {
+      if (body.assignSigner === undefined && body.remindSigner === undefined) {
+        throw new SigningRequestServiceError('A proposer may coordinate, but cannot sign or change transaction state.', 403, 'proposer_signature_denied');
+      }
+      await authorizeTemplateProposer(
+        runtimeReusableTemplateStore(), access.actorAddress!, access.network, access.stored.templateRef,
+      );
+    }
     if (body.remindSigner !== undefined) {
-      if (!access.actorAddress || !['session', 'capability'].includes(access.mode)) {
+      if (!access.actorAddress || !['session', 'capability', 'proposer'].includes(access.mode)) {
         throw new RequestAssignmentServiceError(
           'Confirm the signer wallet that sent the original request before sending a reminder.',
           401,
@@ -1119,6 +1186,7 @@ export async function PATCH(request: Request): Promise<Response> {
         body.remindSigner,
         {
           snapshotLoader: (store, requestId) => getSigningRequest(store, requestId, serviceOptions),
+          allowProposer: access.mode === 'proposer',
         },
       );
       let notification: RemindSigningRequestResponse['notification'];
@@ -1145,7 +1213,7 @@ export async function PATCH(request: Request): Promise<Response> {
       } satisfies RemindSigningRequestResponse);
     }
     if (body.assignSigner !== undefined) {
-      if (!access.actorAddress || !['session', 'capability'].includes(access.mode)) {
+      if (!access.actorAddress || !['session', 'capability', 'proposer'].includes(access.mode)) {
         throw new RequestAssignmentServiceError(
           'Confirm a current signer wallet before asking someone to sign.',
           401,
@@ -1159,6 +1227,7 @@ export async function PATCH(request: Request): Promise<Response> {
         body.assignSigner,
         {
           snapshotLoader: (store, requestId) => getSigningRequest(store, requestId, serviceOptions),
+          allowProposer: access.mode === 'proposer',
         },
       );
       let notification: AssignSigningRequestResponse['notification'];
@@ -1329,6 +1398,9 @@ export async function PUT(request: Request): Promise<Response> {
         403,
         'integration_submit_denied',
       );
+    }
+    if (access.mode === 'proposer') {
+      throw new SigningRequestServiceError('A Template proposer cannot submit transactions through MultiSigTools.', 403, 'proposer_submit_denied');
     }
     if (access.mode === 'agent') {
       throw new SigningRequestServiceError(

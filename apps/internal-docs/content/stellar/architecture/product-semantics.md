@@ -122,6 +122,21 @@ Ordinary signing has no registration or Treasury-creation prerequisite. A signer
 - Participation is not an authenticated private session. A signed XDR may be forwarded or become public, so a transaction signature must never be accepted as an Unlock/session credential by itself.
 - **Unlock is short-lived proof for private surfaces, not onboarding, membership, or a transaction-workflow step.** It remains challenge-bound identity proof through the private-session protocol (SEP-53, with the defined fallback where needed).
 - A user may sign first and Unlock later. When that signer later proves the same wallet identity, MultiSigTools can project the retained history that address is authorized to see.
+
+### Delegated Template proposer (non-signer Human)
+
+A verified G wallet may hold an **off-chain Template proposer grant** without being a current
+signer for the Treasury. It can create a **single-recipient Payment Request** by choosing only
+an amount and memo under fixed Template source, recipient, asset, and signing window.
+The backend rebuilds the exact XDR and checks both live owner-signer policy and the active
+grant on every creation. The Request separately records `proposerAddress`; `creatorAddress`
+continues to mean a verified signer, and is **never** populated with an ineligible proposer.
+
+The delegated proposer sees their own Request/Activity, may invite and remind eligible signers
+while the grant remains valid, and never gains signature or submit authority from the grant.
+If that wallet becomes a **real** current Stellar signer, its live on-chain signing authority
+remains usable. No arbitrary XDR, organization/team identity, or user registration is
+created by this feature. See `apps/internal-docs/content/stellar/product/template-proposer-v1.md`.
 - The product should minimize Unlock friction by performing necessary wallet confirmation inside the user's requested protected action and continuing that action after authorization. It should not weaken the private-history authorization boundary merely to remove a prompt.
 
 ## 4. Identity projection

@@ -36,6 +36,7 @@ export const CANONICAL_STELLAR_ROUTES = [
   { path: '/inbox', kind: 'inbox', mode: 'sign' },
   { path: '/new', kind: 'new', mode: null },
   { path: '/new/payment', kind: 'new', mode: null },
+  { path: '/new/proposer', kind: 'new', mode: null },
   { path: '/new/create-account', kind: 'new', mode: null },
   { path: '/new/batch', kind: 'new', mode: null },
   { path: '/new/claimable', kind: 'new', mode: null },

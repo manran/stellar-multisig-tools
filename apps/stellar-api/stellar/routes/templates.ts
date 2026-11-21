@@ -7,7 +7,8 @@ import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import {
   ReusableTemplateServiceError,
   createReusableTemplate,
-  listReusableTemplates,
+  listWalletTemplates,
+  updateTemplateProposer,
 } from '../server/reusableTemplateService.js';
 import {
   ReusableTemplateStorageUnavailableError,
@@ -49,7 +50,7 @@ export async function GET(request: Request): Promise<Response> {
     }
     assertDeploymentNetwork(network);
     const owner = await ownerAddress(request);
-    const templates = await listReusableTemplates(runtimeReusableTemplateStore(), owner, network);
+    const templates = await listWalletTemplates(runtimeReusableTemplateStore(), owner, network);
     return noStoreJson({ address: owner, templates });
   } catch (cause) {
     return errorResponse(cause);
@@ -72,6 +73,25 @@ export async function POST(request: Request): Promise<Response> {
       definition: body.definition,
     });
     return noStoreJson({ template }, 201);
+  } catch (cause) {
+    return errorResponse(cause);
+  }
+}
+
+/** Only the Template's owning verified signer may grant or revoke a proposer. */
+export async function PATCH(request: Request): Promise<Response> {
+  try {
+    const owner = await ownerAddress(request);
+    const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    if (body.network !== 'public' && body.network !== 'testnet') {
+      throw new ReusableTemplateServiceError('Network must be public or testnet.', 400, 'invalid_network');
+    }
+    assertDeploymentNetwork(body.network);
+    const proposerAddresses = await updateTemplateProposer(
+      runtimeReusableTemplateStore(), owner, body.network,
+      body.templateId, body.proposerAddress, body.action,
+    );
+    return noStoreJson({ proposerAddresses });
   } catch (cause) {
     return errorResponse(cause);
   }

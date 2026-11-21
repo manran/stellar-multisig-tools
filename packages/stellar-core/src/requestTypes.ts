@@ -59,6 +59,8 @@ export interface SigningRequestSnapshot {
   createdAt: string;
   expiresAt: string;
   creatorAddress?: string;
+  /** Wallet that initiated this Template Proposal; not automatically a transaction signer. */
+  proposerAddress?: string;
   contributionCount: number;
   signatureCount: number;
   status: SigningRequestStatus;

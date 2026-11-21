@@ -746,6 +746,7 @@ async function buildSnapshot(
     createdAt: request.createdAt,
     expiresAt: request.expiresAt,
     ...(request.creatorAddress ? { creatorAddress: request.creatorAddress } : {}),
+    ...(request.proposerAddress ? { proposerAddress: request.proposerAddress } : {}),
     contributionCount: merged.contributionCount,
     signatureCount: merged.signatureCount,
     ...(request.sorobanOrigin ? { sorobanOrigin: request.sorobanOrigin } : {}),

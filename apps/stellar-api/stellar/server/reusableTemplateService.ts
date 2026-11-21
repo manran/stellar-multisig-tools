@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import { isValidStellarAccountId } from '../../../../packages/stellar-core/src/horizon.js';
+import { isValidStellarAccountId, loadAccount } from '../../../../packages/stellar-core/src/horizon.js';
+import type { StellarAccountSnapshot } from '../../../../packages/stellar-core/src/types.js';
 import type {
   ReusablePaymentTemplateDefinitionV1,
   ReusableTemplateKind,
@@ -108,6 +109,7 @@ function parseDefinition(
 function publicTemplate(value: StoredReusableTemplateVersion): ReusableTemplateSummary {
   return {
     id: value.template.id,
+    ownerAddress: value.template.ownerAddress,
     network: value.template.network,
     name: value.template.name,
     kind: value.template.kind,
@@ -204,4 +206,101 @@ export async function resolveReusableTemplateReference(
     name: stored.template.name,
     kind: stored.template.kind,
   };
+}
+
+/** A delegated wallet can only initiate payments while the Template owner's on-chain
+ * signer relationship is current. A Template grant never grants a transaction signature. */
+export async function requireTemplateOwnerSigner(
+  record: StoredReusableTemplateVersion,
+  accountLoader: typeof loadAccount = loadAccount,
+): Promise<void> {
+  let account: StellarAccountSnapshot;
+  try {
+    account = await accountLoader(record.definition.source, record.template.network);
+  } catch {
+    throw new ReusableTemplateServiceError("Unable to verify the Template owner's current signing authority.", 503, 'template_owner_policy_unavailable');
+  }
+  if (!account.signers.some((signer) =>
+    signer.key === record.template.ownerAddress && signer.type === 'ed25519_public_key' && signer.weight > 0)) {
+    throw new ReusableTemplateServiceError(
+      'The Template owner is no longer an active signer for its Treasury.',
+      403,
+      'template_owner_signer_required',
+    );
+  }
+}
+
+export async function authorizeTemplateProposer(
+  store: ReusableTemplateStore,
+  proposer: string,
+  network: StellarNetwork,
+  reference: unknown,
+  accountLoader: typeof loadAccount = loadAccount,
+): Promise<StoredReusableTemplateVersion> {
+  if (!reference || typeof reference !== 'object' || Array.isArray(reference)) {
+    throw new ReusableTemplateServiceError('Valid Template id and version are required.', 400, 'invalid_template_reference');
+  }
+  const { id, version } = reference as { id?: unknown; version?: unknown };
+  if (typeof id !== 'string' || !TEMPLATE_ID.test(id)
+    || typeof version !== 'number' || !Number.isInteger(version) || version < 1) {
+    throw new ReusableTemplateServiceError('Valid Template id and version are required.', 400, 'invalid_template_reference');
+  }
+  const record = await store.getTemplateVersion(id, version);
+  if (!record || record.template.network !== network || record.template.archivedAt
+    || record.template.currentVersion !== version || record.template.kind !== 'payment') {
+    throw new ReusableTemplateServiceError('This payment Template is not available.', 404, 'template_not_found');
+  }
+  if (!store.hasActiveGrant || !await store.hasActiveGrant(id, proposer)) {
+    throw new ReusableTemplateServiceError('This wallet has no active permission to propose from the Template.', 403, 'template_proposer_not_authorized');
+  }
+  await requireTemplateOwnerSigner(record, accountLoader);
+  return record;
+}
+
+export async function updateTemplateProposer(
+  store: ReusableTemplateStore,
+  owner: string,
+  network: StellarNetwork,
+  templateId: unknown,
+  proposerAddress: unknown,
+  action: unknown,
+  accountLoader: typeof loadAccount = loadAccount,
+): Promise<string[]> {
+  const id = typeof templateId === 'string' ? templateId : '';
+  const proposer = typeof proposerAddress === 'string' ? proposerAddress.trim() : '';
+  if (!TEMPLATE_ID.test(id) || !isValidStellarAccountId(proposer)
+    || proposer === owner || (action !== 'grant' && action !== 'revoke')) {
+    throw new ReusableTemplateServiceError('Choose a different valid G-address and a grant or revoke action.', 400, 'invalid_template_proposer');
+  }
+  const record = await store.getTemplateVersion(id, 1);
+  if (!record || record.template.ownerAddress !== owner || record.template.network !== network
+    || record.template.archivedAt || record.template.kind !== 'payment') {
+    throw new ReusableTemplateServiceError('Payment Template not found for this wallet.', 404, 'template_not_found');
+  }
+  await requireTemplateOwnerSigner(record, accountLoader);
+  if (!store.grantProposer || !store.revokeProposer || !store.listProposers) {
+    throw new ReusableTemplateServiceError('Template grants are not available.', 503, 'template_grants_unavailable');
+  }
+  if (action === 'grant') await store.grantProposer(id, proposer, owner);
+  else await store.revokeProposer(id, proposer, owner);
+  return store.listProposers(id);
+}
+
+/** The owner sees grants; a proposer sees only Templates granted to their wallet. */
+export async function listWalletTemplates(
+  store: ReusableTemplateStore,
+  address: string,
+  network: StellarNetwork,
+): Promise<ReusableTemplateSummary[]> {
+  const owned = await store.listTemplates(address, network);
+  const delegated = await store.listGrantedTemplates?.(address, network) ?? [];
+  const ownedIds = new Set(owned.map((item) => item.template.id));
+  return [
+    ...await Promise.all(owned.map(async (item) => ({
+      ...publicTemplate(item),
+      proposerAddresses: await store.listProposers?.(item.template.id) ?? [],
+    }))),
+    ...delegated.filter((item) => !ownedIds.has(item.template.id) && item.template.kind === 'payment')
+      .map(publicTemplate),
+  ];
 }

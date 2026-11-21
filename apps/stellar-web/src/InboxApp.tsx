@@ -64,9 +64,9 @@ function shortAddress(address: string) {
 
 function isCreatorWaitingForSigners(request: InboxRequestSnapshot, viewerAddress: string): boolean {
   return Boolean(viewerAddress)
-    && request.creatorAddress === viewerAddress
     && request.status === 'awaiting_signatures'
-    && request.viewerAction === 'waiting_for_others';
+    && ((request.creatorAddress === viewerAddress && request.viewerAction === 'waiting_for_others')
+      || (request.proposerAddress === viewerAddress && request.viewerAction === 'proposer_waiting'));
 }
 
 function viewFromUrl(): InboxView {
@@ -167,7 +167,9 @@ function DetailPane({
       <div className="mst-inbox-next-action">
         <div className="mst-inbox-next-action__label">Your next step</div>
         <div className="mt-2"><StatusBadge tone={urgentEmailFailure ? 'danger' : viewerAction.tone}>{urgentEmailFailure ? 'Follow-up needed' : viewerAction.label}</StatusBadge></div>
-        <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">{needsEmailFollowUp ? 'An email to a signer needs attention. Check the contact and follow up.' : followUp ? 'Your signature is recorded. Check who is waiting and follow up when needed.' : viewerAction.detail}</p>
+        <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">{needsEmailFollowUp ? 'An email to a signer needs attention. Check the contact and follow up.' : followUp ? (request.proposerAddress === viewerAddress
+          ? 'Your payment request is waiting for Treasury signatures. Invite or follow up with eligible signers.'
+          : 'Your signature is recorded. Check who is waiting and follow up when needed.') : viewerAction.detail}</p>
         <ActionButton onClick={() => openRequestDetails(request, followUp)} className="mt-4 w-full">
           {followUp ? 'Follow up with signers' : viewerAction.cta} <ArrowRight className="h-4 w-4" />
         </ActionButton>

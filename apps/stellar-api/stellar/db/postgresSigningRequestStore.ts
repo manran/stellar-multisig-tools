@@ -16,6 +16,7 @@ import type { Pool, PoolClient } from 'pg';
 import { blobRequestPrivateDataStore } from '../server/blobRequestPrivateDataStore.js';
 import type { RequestPrivateDataStore } from '../server/requestPrivateDataStore.js';
 import { requestDiscoverySubjects } from '../server/requestDiscovery.js';
+import { ReusableTemplateServiceError } from '../server/reusableTemplateService.js';
 import type {
   SigningRequestStore,
   StoredRequestAssignment,
@@ -35,6 +36,7 @@ interface RequestRow {
   created_at: Date | string;
   expires_at: Date | string;
   creator_address: string | null;
+  proposer_address: string | null;
   creator_actor: MachineCallerProvenance | null;
   integration_context: RequestIntegrationContext | null;
   instruction_digest: string | null;
@@ -66,7 +68,7 @@ async function readRequest(
 ): Promise<StoredSigningRequest | null> {
   const result = await db.query<RequestRow>(
     `SELECT r.id, r.network, r.base_xdr, r.transaction_hash, r.created_at, r.expires_at,
-            r.creator_address, r.creator_actor, r.integration_context, r.instruction_digest,
+            r.creator_address, r.proposer_address, r.creator_actor, r.integration_context, r.instruction_digest,
             r.execution_policy, r.discovery_signer_keys, r.capability_hash,
             r.soroban_effects_baseline, r.soroban_origin,
             r.reusable_template_id, r.reusable_template_version,
@@ -92,6 +94,7 @@ async function readRequest(
     createdAt: iso(row.created_at),
     expiresAt: iso(row.expires_at),
     ...(row.creator_address ? { creatorAddress: row.creator_address } : {}),
+    ...(row.proposer_address ? { proposerAddress: row.proposer_address } : {}),
     ...(row.creator_actor ? { creatorActor: row.creator_actor } : {}),
     ...(row.integration_context ? { integration: row.integration_context } : {}),
     ...(row.instruction_digest ? { instructionDigest: row.instruction_digest } : {}),
@@ -224,21 +227,43 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
     const activitySigners = [...new Set([
       ...discoverySigners,
       ...(request.creatorAddress ? [request.creatorAddress] : []),
+      ...(request.proposerAddress ? [request.proposerAddress] : []),
     ])].filter(isValidStellarAccountId);
     await putPrivateRoot(this.privateStore, request);
 
     await withPostgresTransaction(this.pool, async (client) => {
+      if (request.proposerAddress) {
+        // Serialize a new delegated Request with concurrent grant revocation.
+        const grant = await client.query(
+          `SELECT 1 FROM mst_stellar.reusable_template_proposer_grants g
+             JOIN mst_stellar.reusable_templates t ON t.id = g.template_id
+            WHERE g.template_id = $1 AND g.proposer_address = $2
+              AND g.revoked_at IS NULL AND t.network = $3
+              AND t.current_version = $4 AND t.archived_at IS NULL
+              AND t.kind = 'payment'
+            FOR SHARE OF g, t`,
+          [request.templateRef?.id ?? '', request.proposerAddress,
+            request.network, request.templateRef?.version ?? 0],
+        );
+        if (!grant.rowCount) {
+          throw new ReusableTemplateServiceError(
+            'Template permission changed before the payment request was saved.',
+            403, 'template_proposer_not_authorized',
+          );
+        }
+      }
       await client.query(
         `INSERT INTO mst_stellar.classic_requests (
            id, network, base_xdr, transaction_hash, created_at, expires_at,
            creator_address, creator_actor, integration_service_id, integration_context,
            instruction_digest, execution_policy, discovery_signer_keys, capability_hash,
            soroban_effects_baseline, soroban_origin,
-           reusable_template_id, reusable_template_version, has_private_data
+           reusable_template_id, reusable_template_version, has_private_data,
+           proposer_address
          ) VALUES (
            $1, $2, $3, $4, $5, $6,
            $7, $8, $9, $10, $11, $12, $13, $14,
-           $15, $16, $17, $18, $19
+           $15, $16, $17, $18, $19, $20
          )`,
         [
           request.id,
@@ -260,6 +285,7 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
           request.templateRef?.id ?? null,
           request.templateRef?.version ?? null,
           Boolean(request.initialPrivateNote || request.privateCommitment),
+          request.proposerAddress ?? null,
         ],
       );
       await insertSubjects(client, request.id, request.network, 'discovery', 'account', subjects.sourceAccountIds);
@@ -272,7 +298,8 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
         requestId: request.id,
         type: 'request_created',
         occurredAt: request.createdAt,
-        ...(request.creatorAddress ? { actorAddress: request.creatorAddress } : {}),
+        ...(request.creatorAddress || request.proposerAddress
+          ? { actorAddress: request.creatorAddress ?? request.proposerAddress } : {}),
         ...(request.creatorActor ? { actor: request.creatorActor } : {}),
       });
       if (this.emitOutbox && request.integration) {
@@ -295,6 +322,17 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
   async listRequests(): Promise<StoredSigningRequest[]> {
     const ids = await this.pool.query<{ id: string }>(
       'SELECT id FROM mst_stellar.classic_requests ORDER BY created_at DESC, id DESC',
+    );
+    const values = await Promise.all(ids.rows.map((row) => this.getRequest(row.id)));
+    return values.filter((value): value is StoredSigningRequest => Boolean(value));
+  }
+
+  async listRequestsByProposer(network: StellarNetwork, address: string): Promise<StoredSigningRequest[]> {
+    const ids = await this.pool.query<{ id: string }>(
+      `SELECT id FROM mst_stellar.classic_requests
+        WHERE network = $1 AND proposer_address = $2
+        ORDER BY created_at DESC, id DESC LIMIT 100`,
+      [network, address],
     );
     const values = await Promise.all(ids.rows.map((row) => this.getRequest(row.id)));
     return values.filter((value): value is StoredSigningRequest => Boolean(value));

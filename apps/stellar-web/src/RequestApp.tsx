@@ -306,11 +306,27 @@ export default function RequestApp() {
     : 'sign';
   const requestNetwork = snapshot?.network ?? closedCapability?.network ?? null;
   const privateReadyForRequest = Boolean(privateUnlocked && requestNetwork && walletNetwork === requestNetwork);
+  const isDelegatedProposer = Boolean(snapshot?.proposerAddress && walletAddress === snapshot.proposerAddress
+    && privateReadyForRequest && walletSigningState !== 'can_sign' && walletSigningState !== 'signed');
   const canCoordinateSigners = Boolean(privateReadyForRequest && walletAddress && assignmentApiAvailable);
-  const nextStep = snapshot ? proposalNextStep(snapshot.status, {
+  const nextStep = isDelegatedProposer && reviewComplete && snapshot?.status === 'awaiting_signatures'
+    ? {
+        heading: 'Next step',
+        title: 'Treasury signatures needed',
+        detail: 'You requested this payment. Invite eligible Treasury signers or follow up with people you already asked.',
+        action: { label: 'Invite or remind signers', target: 'signatures' as const },
+      }
+    : isDelegatedProposer && reviewComplete && snapshot?.status === 'ready'
+      ? {
+          heading: 'Current status',
+          title: 'Approved · waiting for submission',
+          detail: 'The required Stellar signatures are present. An authorized signer can submit this payment.',
+          action: { label: 'View submission status', target: 'submission' as const },
+        }
+      : snapshot ? proposalNextStep(snapshot.status, {
     reviewComplete,
     walletAlreadySigned,
-    isCreator: Boolean(walletAddress && walletAddress === snapshot.creatorAddress),
+    isCreator: Boolean(walletAddress && (walletAddress === snapshot.creatorAddress || walletAddress === snapshot.proposerAddress)),
     canCoordinate: canCoordinateSigners,
     walletSigningState,
     executionMode: snapshot.execution?.mode,
@@ -749,6 +765,18 @@ export default function RequestApp() {
     }
   }
 
+  async function copySignerLink() {
+    if (!snapshot || !isDelegatedProposer) return;
+    setCopied(null);
+    setError('');
+    try {
+      await navigator.clipboard.writeText(requestUrl(snapshot.id, ''));
+      setCopied('link');
+    } catch {
+      setError('Could not copy the signer link. Allow clipboard access, then try again.');
+    }
+  }
+
   async function copyXdr() {
     if (!snapshot) return;
     setCopied(null);
@@ -950,6 +978,15 @@ export default function RequestApp() {
                 </section>
               )}
 
+              {isDelegatedProposer && (
+                <section className="rounded-xl border border-[var(--color-rule)] bg-[var(--color-paper-2)] p-4 text-sm">
+                  <div className="font-semibold">You requested this payment</div>
+                  <p className="mt-1 leading-6 text-[var(--color-ink-2)]">Treasury signers review and approve it. This wallet cannot sign or submit. You can invite eligible signers and follow progress.</p>
+                  <button type="button" onClick={() => void copySignerLink()}
+                    className="mt-3 min-h-11 font-semibold text-[var(--color-action)]">{copied === 'link' ? 'Signer link copied' : 'Copy link for authorized signers'}</button>
+                </section>
+              )}
+
               {shareJustCreated && shareable && (
                 <section className="flex items-start justify-between gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-4 py-3">
                   <div className="flex min-w-0 gap-3">
@@ -1001,6 +1038,8 @@ export default function RequestApp() {
                     sourceAnalyses={sourceAnalyses}
                     walletAddress={walletAddress}
                     creatorAddress={snapshot.creatorAddress}
+                    proposerAddress={snapshot.proposerAddress}
+                    readOnlyProposer={isDelegatedProposer}
                     walletBusy={walletBusy || contributing}
                     walletError={walletError}
                     onConnectWallet={() => void chooseSignerWallet()}
@@ -1015,7 +1054,14 @@ export default function RequestApp() {
                   />
                   </section>}
 
-                  {snapshot.status === 'ready' && (
+                  {snapshot.status === 'ready' && isDelegatedProposer && (
+                    <section id="proposal-submission" className="rounded-xl border border-[var(--color-rule)] p-5 text-sm">
+                      <h2 className="font-semibold">All signatures collected</h2>
+                      <p className="mt-2 leading-6 text-[var(--color-ink-2)]">A Treasury signer can submit the approved transaction. Your payment request remains visible here until it is confirmed.</p>
+                    </section>
+                  )}
+
+                  {snapshot.status === 'ready' && !isDelegatedProposer && (
                     <section id="proposal-submission" tabIndex={-1} aria-label="Submission" className="scroll-mt-24 focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]">
                       {snapshot.execution?.mode !== 'external' && !executionAlreadyRoutedToMst && (
                         <>
@@ -1119,16 +1165,16 @@ export default function RequestApp() {
                     <div className="mt-2">{snapshot.contributionCount} contribution{snapshot.contributionCount === 1 ? '' : 's'} · {snapshot.signatureCount} signature{snapshot.signatureCount === 1 ? '' : 's'}</div>
                     <div className="mt-2 break-all font-mono opacity-60">{snapshot.transactionHash}</div>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <ActionButton variant="secondary" size="sm" onClick={() => void copyXdr()}><ClipboardCopy className="h-3.5 w-3.5" />{copied === 'xdr' ? 'XDR copied' : 'Copy XDR'}</ActionButton>
-                      {snapshot.status === 'awaiting_signatures' && <ActionButton variant="secondary" size="sm" aria-expanded={showXdrQr} onClick={() => setShowXdrQr((visible) => !visible)}><QrCode className="h-3.5 w-3.5" />{showXdrQr ? 'Hide QR' : 'Show QR'}</ActionButton>}
+                      {!isDelegatedProposer && <ActionButton variant="secondary" size="sm" onClick={() => void copyXdr()}><ClipboardCopy className="h-3.5 w-3.5" />{copied === 'xdr' ? 'XDR copied' : 'Copy XDR'}</ActionButton>}
+                      {snapshot.status === 'awaiting_signatures' && !isDelegatedProposer && <ActionButton variant="secondary" size="sm" aria-expanded={showXdrQr} onClick={() => setShowXdrQr((visible) => !visible)}><QrCode className="h-3.5 w-3.5" />{showXdrQr ? 'Hide QR' : 'Show QR'}</ActionButton>}
                     </div>
-                    {snapshot.status === 'awaiting_signatures' && showXdrQr && <div className="mt-4"><XdrQrCode xdr={snapshot.mergedXdr} /></div>}
+                    {snapshot.status === 'awaiting_signatures' && !isDelegatedProposer && showXdrQr && <div className="mt-4"><XdrQrCode xdr={snapshot.mergedXdr} /></div>}
                   </div>
 
                   <TransactionInspectorSummary inspection={inspection} status={authorizationStatus} />
                   <TransactionAuthorizationResults inspection={inspection} authorization={authorization} sourceAnalyses={sourceAnalyses} />
 
-                  {snapshot.status === 'awaiting_signatures' && (
+                  {snapshot.status === 'awaiting_signatures' && !isDelegatedProposer && (
                     <div>
                       <div className="text-sm font-semibold">Add a signed XDR manually</div>
                       <p className="mt-1 text-sm opacity-65">Use this for a CLI, hardware signer, or another external signing tool.</p>

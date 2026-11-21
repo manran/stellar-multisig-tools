@@ -224,3 +224,62 @@ test('legacy exact Soroban Proposal stays on the already-routed submit path when
 
   assert.equal(projected.viewerAction, 'submit');
 });
+
+
+test('non-signer proposer sees only own live Request as waiting, not a signature/submit task', async () => {
+  const { Account, Asset, Keypair, Networks, Operation, TransactionBuilder } = await import('@stellar/stellar-sdk');
+  const source = Keypair.random().publicKey();
+  const proposer = Keypair.random().publicKey();
+  const other = Keypair.random().publicKey();
+  const destination = Keypair.random().publicKey();
+  const tx = new TransactionBuilder(new Account(source, '1'), {
+    fee: '100', networkPassphrase: Networks.TESTNET,
+  }).addOperation(Operation.payment({ destination, asset: Asset.native(), amount: '1' }))
+    .setTimeout(3600).build();
+  const request: StoredSigningRequest = {
+    version: 1, id: 'ABCDEF0123456789', network: 'testnet',
+    baseXdr: tx.toXDR(), transactionHash: Buffer.from(tx.hash()).toString('hex'),
+    createdAt: '2026-11-21T09:00:00.000Z', expiresAt: '2026-11-21T13:00:00.000Z',
+    proposerAddress: proposer,
+  };
+  const store = baseStore({
+    async getRequest(id) { return id === request.id ? request : null; },
+    async listRequestsByProposer(_network, address) { return address === proposer ? [request] : []; },
+    async listRequestsByDiscoverySubjects() { return []; },
+    async listContributions() { return []; },
+    async getSubmission() { return null; },
+    async listRequestCoordinationEvents() { return [{
+      version: 1, eventId: 'asked', requestId: request.id,
+      type: 'signer_requested', occurredAt: '2026-11-21T09:01:00.000Z',
+      actorAddress: proposer, subjectAddress: source,
+    }]; },
+  });
+  const sourceAccount = {
+    accountId: source, sequence: '1', subentryCount: 0, numSponsoring: 0, numSponsored: 0,
+    nativeBalance: '100', nativeSellingLiabilities: '0',
+    balances: [{ assetType: 'native', assetCode: 'XLM', balance: '100', sellingLiabilities: '0', buyingLiabilities: '0' }],
+    thresholds: { low: 1, medium: 2, high: 2 },
+    signers: [{ key: source, type: 'ed25519_public_key', weight: 1 }],
+  } as const;
+  const options = {
+    network: 'testnet' as const,
+    now: new Date('2026-11-21T10:00:00.000Z'),
+    accountLoader: async () => ({ ...sourceAccount, balances: [...sourceAccount.balances], signers: [...sourceAccount.signers] }),
+    networkParametersLoader: async () => ({
+      ledgerSequence: 300, ledgerClosedAt: '2026-11-21T09:59:00.000Z', baseFeeInStroops: 100, baseReserveInStroops: 5_000_000,
+    }),
+  };
+  const own = await listSignerInbox(store, proposer, options);
+  assert.equal(own.length, 1);
+  assert.equal(own[0].proposerAddress, proposer);
+  const others = await listSignerInbox(store, other, options);
+  assert.deepEqual(others, []);
+  const { projectHumanInboxRequests } = await import('./requestInbox.js');
+  const [item] = await projectHumanInboxRequests(store, proposer, own);
+  assert.equal(item.viewerAction, 'proposer_waiting');
+  assert.equal(item.coordinationEvents?.length, 1);
+  const [ready] = await projectHumanInboxRequests(store, proposer, [{
+    ...own[0], status: 'ready', statusReason: 'authorization_complete',
+  }]);
+  assert.equal(ready.viewerAction, 'proposer_ready');
+});

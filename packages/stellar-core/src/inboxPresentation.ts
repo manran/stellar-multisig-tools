@@ -7,6 +7,8 @@ export type InboxViewerAction =
   | 'route_execution'
   | 'submit'
   | 'waiting_for_others'
+  | 'proposer_waiting'
+  | 'proposer_ready'
   | 'waiting_preconditions'
   | 'waiting_execution'
   | 'attention'
@@ -95,6 +97,8 @@ export function inboxViewerActionPresentation(action: InboxViewerAction): {
   tone: 'warning' | 'success' | 'danger' | 'neutral';
 } {
   switch (action) {
+    case 'proposer_waiting': return { label: 'Waiting for signatures', detail: 'You prepared this payment. Treasury signers must approve it.', cta: 'View progress', tone: 'neutral' };
+    case 'proposer_ready': return { label: 'Approved · awaiting submission', detail: 'Signers approved the payment. An authorized signer can submit it.', cta: 'View progress', tone: 'success' };
     case 'sign':
       return {
         label: 'Your signature is needed',
