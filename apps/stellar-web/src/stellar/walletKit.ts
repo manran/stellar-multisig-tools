@@ -9,6 +9,12 @@ const LEDGER_WALLET_ID = 'LEDGER';
 const TREZOR_WALLET_ID = 'TREZOR';
 const HARDWARE_WALLET_SUPPORT_EMAIL = 'support@multisig.tools';
 
+export function nameVarialWallet<T extends { productId: string; productName: string }>(modules: T[]): T[] {
+  const legacyModule = modules.find((module) => module.productId === 'freighter');
+  if (legacyModule) legacyModule.productName = 'Varial';
+  return modules;
+}
+
 export type WalletNetworkSource = 'wallet' | 'application';
 
 export interface WalletIdentity {
@@ -75,7 +81,7 @@ async function loadKit(includeHardwareWallets = false) {
 
   if (!initialized || (shouldLoadHardwareWallets && !hardwareModulesLoaded)) {
     const hardwareModules = shouldLoadHardwareWallets ? await loadHardwareWalletModules() : [];
-    StellarWalletsKit.init({ modules: [...defaultModules(), ...hardwareModules] });
+    StellarWalletsKit.init({ modules: [...nameVarialWallet(defaultModules()), ...hardwareModules] });
     initialized = true;
     hardwareModulesLoaded = hardwareModulesLoaded || shouldLoadHardwareWallets;
   }

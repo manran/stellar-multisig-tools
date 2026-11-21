@@ -64,7 +64,7 @@ test('Ledger and Trezor are explicit signer transports inside the existing walle
   assert.match(walletKit, /shouldLoadHardwareWallets = includeHardwareWallets \|\| selectedHardwareWallet/);
   assert.match(walletKit, /shouldLoadHardwareWallets \? await loadHardwareWalletModules\(\) : \[\]/);
   assert.match(walletKit, /connectWalletIdentity[\s\S]*loadKit\(true\)/);
-  assert.match(walletKit, /modules: \[\.\.\.defaultModules\(\), \.\.\.hardwareModules\]/);
+  assert.match(walletKit, /modules: \[\.\.\.nameVarialWallet\(defaultModules\(\)\), \.\.\.hardwareModules\]/);
   assert.match(walletKit, /import\('buffer'\)/);
   assert.match(packageJson, /"buffer": "\^6\.0\.3"/);
   assert.match(walletKit, /HARDWARE_WALLET_SUPPORT_EMAIL = 'support@multisig\.tools'/);
