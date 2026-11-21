@@ -2,7 +2,9 @@ import { analyzeEnvelopeSignatures } from '../../../../packages/stellar-core/src
 import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 import { isValidStellarAccountId } from '../../../../packages/stellar-core/src/horizon.js';
 import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
+import { inboxOutgoingSignerProgress } from './inboxRequestPresentation.js';
 import type { InboxOutgoingSignerProgress } from './inboxRequestPresentation.js';
+import type { InboxRequestSnapshot } from '../../../../packages/stellar-core/src/inboxPresentation.js';
 
 export interface InboxSenderProgress extends InboxOutgoingSignerProgress {
   signature: 'transaction' | 'fee' | 'none' | 'unknown';
@@ -63,4 +65,10 @@ export function inboxSenderProgress(
     };
   }).sort((left, right) => Number(right.needsAttention) - Number(left.needsAttention)
     || Number(left.signature === 'transaction' || left.signature === 'fee') - Number(right.signature === 'transaction' || right.signature === 'fee'));
+}
+
+/** The same sender-specific email evidence drives Inbox and Overview attention. */
+export function inboxHasFailedSignerEmail(request: InboxRequestSnapshot, viewerAddress: string): boolean {
+  return inboxSenderProgress(request, inboxOutgoingSignerProgress(request, viewerAddress))
+    .some((item) => item.label === 'Email needs attention');
 }

@@ -394,6 +394,44 @@ try {
     }
 
     if (width === 375 || width === 1280) {
+      await run('overview-failed-email-is-actionable', width, {}, async ({ page }) => {
+        await page.goto(origin + '/');
+        await visible(page, '1 signer email needs follow-up');
+        await visible(page, 'November supplier payment');
+        await visible(page, 'Follow-up needed');
+        const proposal = page.locator('.mst-work-list .mst-work-row').filter({ hasText: 'November supplier payment' });
+        await proposal.getByText('Follow up', { exact: true }).waitFor({ state: 'visible' });
+        await snapshot(page, 'overview-email-followup', width);
+        await proposal.click();
+        await visible(page, 'Your signature is recorded', 'heading');
+        await page.waitForFunction(() => document.activeElement?.id === 'proposal-signatures');
+      });
+    }
+
+    if (width === 375) {
+      await run('overview-wallet-change-keeps-private-inbox-scoped', width, {}, async ({ page, state }) => {
+        await page.goto(origin + '/');
+        await visible(page, 'November supplier payment');
+        state.inbox = {
+          ...inboxFixture(addresses.bob), pending_count: 0, action_count: 0,
+          action_counts: {
+            actionRequired: 0, signatureNeeded: 0, readyToSubmit: 0,
+            needsAttention: 0, waiting: 0, readyForExecutionRouting: 0,
+          },
+          requests: [], intents: [],
+        };
+        const bobLoad = page.waitForResponse((response) => response.url().endsWith('/api/inbox') && response.status() === 200);
+        await page.evaluate((wallet) => window.__MST_QA_SET_WALLET__(wallet), walletState(addresses.bob));
+        assert.equal(await page.getByText('November supplier payment', { exact: true }).count(), 0,
+          'Previous wallet private proposal must disappear on wallet change');
+        await bobLoad;
+        await visible(page, "You're all caught up.");
+        assert.equal(await page.getByText('1 signer email needs follow-up').count(), 0);
+        await snapshot(page, 'overview-wallet-change', width);
+      });
+    }
+
+    if (width === 375 || width === 1280) {
       await run('treasury-proposal-shortcut', width, {}, async ({ page }) => {
         await page.goto(origin + '/treasury');
         await page.getByRole('button', { name: 'Add to Treasuries' }).waitFor({ state: 'visible' });
