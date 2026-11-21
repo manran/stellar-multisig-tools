@@ -145,6 +145,9 @@ export default function SigningGuidance({
     Boolean(emailFor(key))
     && !assignments.some((assignment) => assignment.signerAddress === key));
   const inviteSelectedNow = inviteSelection.filter((key) => inviteCandidates.includes(key));
+  const isCreator = Boolean(sessionAddress && creatorAddress === sessionAddress);
+  const unaskedTargets = shareTargets.filter((key) =>
+    !assignments.some((assignment) => assignment.signerAddress === key));
 
   const shouldShowShare = shareTargets.length > 0 || (!walletAddress && neededWalletKeys.size > 0);
   const remainingSignatureCopy = exactSignaturesRemaining === null
@@ -257,7 +260,10 @@ export default function SigningGuidance({
     const viewed = Boolean(assignment?.viewedAt);
     const assignedByMe = Boolean(assignment && sessionAddress && assignment.assignedByAddress === sessionAddress);
     const canRemindAsCreator = Boolean(assignment && sessionAddress && creatorAddress === sessionAddress);
-    const notification = notifications.find((item) => item.signerAddress === signerAddress);
+    const notification = notifications.reduce<SigningRequestNotificationSummary | undefined>((latest, item) => {
+      if (item.signerAddress !== signerAddress) return latest;
+      return !latest || Date.parse(item.createdAt) >= Date.parse(latest.createdAt) ? item : latest;
+    }, undefined);
     const notificationChannel = notification?.automatic ? 'Automatic reminder' : notification?.eventType === 'signature_reminder' ? 'Reminder' : 'Email';
     const statusLabel = notification?.state === 'delivered'
       ? notificationChannel + ' delivered'
@@ -396,7 +402,13 @@ export default function SigningGuidance({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] opacity-40">Signatures</div>
-          <h2 className="mt-2 text-2xl font-bold">{authorizationComplete ? 'All required signatures are present' : 'Who needs to sign?'}</h2>
+          <h2 className="mt-2 text-2xl font-bold">{authorizationComplete ? 'All required signatures are present' : walletAlreadySigned ? 'Waiting for other signatures' : 'Who needs to sign?'}</h2>
+          {!authorizationComplete && !hasAuthorizationError && walletAlreadySigned && (
+            <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">
+              {remainingSignatureCopy}
+              {shareTargets.length > 0 && ' ' + shareTargets.length + ' eligible unsigned signer' + (shareTargets.length === 1 ? ' is' : 's are') + ' listed below.'}
+            </p>
+          )}
         </div>
         {authorizationComplete && <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-600" />}
       </div>
@@ -426,14 +438,18 @@ export default function SigningGuidance({
         </div>
       )}
 
-      {!authorizationComplete && !hasAuthorizationError && onAsk && privateUnlocked && (inviteCandidates.length > 0 || inviteFeedback) && (
-        <section className="mt-5 rounded-[var(--radius-panel)] border border-[var(--color-rule)] bg-[var(--color-paper-2)] p-4 sm:p-5" aria-label="Invite signers">
+      {!authorizationComplete && !hasAuthorizationError && onAsk && privateUnlocked && (inviteCandidates.length > 0 || inviteFeedback || (walletAlreadySigned && isCreator && shareTargets.length > 0)) && (
+        <section className="mt-5 rounded-[var(--radius-panel)] border border-[var(--color-rule)] bg-[var(--color-paper-2)] p-4 sm:p-5" aria-label="Invite and follow up with signers">
           <div className="flex items-center gap-2 text-[var(--color-ink)]">
             <Mail className="h-4 w-4 shrink-0 text-[var(--color-accent)]" />
-            <h3 className="text-base font-semibold">Invite signers</h3>
+            <h3 className="text-base font-semibold">{inviteCandidates.length > 0 ? 'Invite signers' : 'Follow up with signers'}</h3>
           </div>
           <p className="mt-1 text-sm leading-6 text-[var(--color-ink-2)]">
-            Choose who to ask. Invitations do not reserve signing slots or change Stellar authorization.
+            {inviteCandidates.length > 0
+              ? 'Choose who to ask. Invitations do not reserve signing slots or change Stellar authorization.'
+              : unaskedTargets.length > 0
+                ? 'Add a contact email to an eligible signer below, or share the private link.'
+                : 'Invitations are recorded. Check delivery and viewing status below; reminders are available when permitted.'}
           </p>
           {inviteCandidates.length > 0 && <div className="mt-3 divide-y divide-[var(--color-rule)] border-y border-[var(--color-rule)]">
             {inviteCandidates.map((address) => (

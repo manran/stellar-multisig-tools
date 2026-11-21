@@ -300,15 +300,18 @@ export default function RequestApp() {
   const workflowStage = snapshot
     ? proposalWorkflowStage(snapshot.status, { reviewComplete, signaturesComplete })
     : 'sign';
+  const requestNetwork = snapshot?.network ?? closedCapability?.network ?? null;
+  const privateReadyForRequest = Boolean(privateUnlocked && requestNetwork && walletNetwork === requestNetwork);
   const nextStep = snapshot ? proposalNextStep(snapshot.status, {
     reviewComplete,
     walletAlreadySigned,
+    isCreator: Boolean(walletAddress && walletAddress === snapshot.creatorAddress),
+    canCoordinate: Boolean(shareable && privateReadyForRequest && assignmentApiAvailable),
     walletSigningState,
     executionMode: snapshot.execution?.mode,
     executionRoutedToMst: executionAlreadyRoutedToMst,
     statusReason: snapshot.statusReason,
   }) : null;
-  const requestNetwork = snapshot?.network ?? closedCapability?.network ?? null;
   const walletNetworkMismatch = Boolean(
     snapshot
     && walletAddress
@@ -323,7 +326,6 @@ export default function RequestApp() {
       : signaturesComplete
         ? 'Back to signature status'
         : 'Continue to signatures';
-  const privateReadyForRequest = Boolean(privateUnlocked && requestNetwork && walletNetwork === requestNetwork);
   const activeCapabilityNeedsActivity = Boolean(
     snapshot
     && capability

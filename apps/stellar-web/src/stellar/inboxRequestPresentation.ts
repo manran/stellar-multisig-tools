@@ -104,6 +104,8 @@ export function proposalNextStep(
   options: {
     reviewComplete: boolean;
     walletAlreadySigned: boolean;
+    isCreator?: boolean;
+    canCoordinate?: boolean;
     walletSigningState?: 'can_sign' | 'other_signer' | 'unknown' | 'signed' | 'needs_review';
     executionMode?: 'multisigtools' | 'external';
     executionRoutedToMst: boolean;
@@ -139,13 +141,33 @@ export function proposalNextStep(
     if (options.executionRoutedToMst) {
       return { heading: 'Next step', title: 'Review and submit', detail: 'All required signatures are present. Review the final effects before submitting.', action: { label: 'View submission details', target: 'submission' } };
     }
-    return { heading: 'Next step', title: 'Ready to submit', detail: 'The required signatures are present. Choose how this transaction will be submitted to Stellar.', action: { label: 'View submission options', target: 'submission' } };
+    return {
+      heading: 'Next step',
+      title: 'Ready to submit',
+      detail: options.walletAlreadySigned
+        ? 'Your signature is recorded. All approvals are in, but this transaction has not been submitted. An authorized signer must choose a submission route.'
+        : 'All approvals are in, but this transaction has not been submitted. Choose a submission route.',
+      action: { label: 'View submission options', target: 'submission' },
+    };
   }
   if (options.walletSigningState === 'needs_review') {
     return { heading: 'Current status', title: 'Signing details need review', detail: 'Stellar Core cannot use the current signatures as prepared. Check the authorization evidence before collecting more.', action: { label: 'Review signing details', target: 'signatures' } };
   }
   if (options.walletAlreadySigned) {
-    return { heading: 'Current status', title: 'Your signature is recorded', detail: 'This proposal has not been submitted. Check signing progress for the remaining requirements.', action: { label: 'View signing progress', target: 'signatures' } };
+    if (options.isCreator && options.canCoordinate) {
+      return {
+        heading: 'Next step',
+        title: 'Your signature is recorded',
+        detail: 'More authorized signatures are needed. Invite an eligible signer, or remind someone you already asked.',
+        action: { label: 'Invite or remind signers', target: 'signatures' },
+      };
+    }
+    return {
+      heading: 'Current status',
+      title: 'Your signature is recorded',
+      detail: 'Your part is done for now. Other authorized signers must approve before this transaction can be submitted.',
+      action: { label: 'View signing progress', target: 'signatures' },
+    };
   }
   if (options.walletSigningState === 'can_sign') {
     return { heading: 'Next step', title: 'Your signature is needed', detail: 'This wallet is an eligible signer. Review the signing requirements before approving. Signing does not submit the transaction.', action: { label: 'Review and sign', target: 'signatures' } };
