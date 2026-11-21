@@ -307,6 +307,21 @@ Pure visual/layout changes use browser/task regression, not fresh chain transact
 - **Stop rule:** if the environment's tool safety gate blocks wallet initialization or credential input, stop immediately. Do **not** keep retrying variants of the command, change execution channels, or write another importer to bypass the gate. Record the exact blocked step once; have an authorized tester initialize an isolated test profile through Varial, then resume from that prepared profile. Do not treat the block as a product defect.
 - Keep evidence levels distinct: fixture browser regression, live Testnet SDK/HTTP signing, and **real Varial extension** signing are three separate checks. A pass at one level does not close another. Record commit, wallet extension version, Testnet transaction hash, and the remaining gap in the PR/test report.
 
+### Reuse existing FedNetwork / MST real-wallet harness (2026-11-21)
+
+**Do not rediscover wallet setup.** There is already working local code on the authorized E2E host:
+
+- `/opt/FED/fed.network/test/e2e/freighter-transfer.mjs`: `createWallet()` starts two separate Chromium persistent profiles with the real extension, captures public Testnet addresses, funds with Friendbot, selects Testnet, and configures auto-lock. `approvePrompt()` accepts explicit connection, message-signing, transaction-signing, and Soroban authorization prompts. It also checks the prompt network.
+- `/opt/FED/fed.network/scripts/run-real-freighter-transfer-e2e.sh` and `docs/testnet-real-wallet-e2e.md`: launch requirements and end-to-end FedNetwork -> MST -> ledger flow. Harness dependencies are at `/opt/browser-e2e`; the installed historical extension is `/opt/mst-e2e/freighter/unpacked`.
+- `/opt/browser-e2e/mst-classic-hosted-freighter-e2e.mjs` and `/opt/mst-e2e/classic-hosted-freighter-e2e-result.json`: MST-specific precedent with real extension connection, wallet challenge, two independent signatures, managed submission and ledger verification. Prior run 2026-09-20: **PASS**, Testnet ledger `4778856`, transaction `b33d9f430b8627fbe1e853b0f6ed10b73ab44d4800b161da3aba41b24e095509`.
+- The FedNetwork 2026-11-19 run (`/opt/FED/retirement-evidence/transfer-e2e-20261119.log`) **did not pass**: it initialized two wallets but later timed out waiting for the hidden `#manage-sign-button`. Keep this as a failure record, not authorization evidence.
+
+**Version / migration check:** existing Fed/MST harness and unpacked extension were written for Freighter `5.48.0`; current official Varial release is `5.53.0`. Confirm selectors, flow states and popup labels against the installed release. Update wallet chooser matching from only `Freighter` to `Varial` when needed, while keeping the underlying `freighter` wallet-module identifier unchanged. Preserve the existing authority, network and transaction checks.
+
+**Execution contract:** start with a read-only preflight of both versions, profiles, network and Testnet readiness. Use only isolated, disposable profiles or a deliberately prepared copy of a historical profile; do not overwrite archived profiles or expose secrets. If initialized profiles are absent or locked and an automated credential/onboarding operation is blocked by the tool's safety gate, **stop at that step**, do not rewrite or reroute credential automation, and ask an authorized tester to prepare the isolated profile once. Resume real Varial -> MST signing only when the test wallet can be unlocked legitimately. Distinguish that run from the already proven SDK/HTTP 2-of-3 and mock-browser regressions.
+
+**2026-11-21 preflight outcome:** read-only Chromium inspection of *copies* of four existing profiles (`/opt/FED/fed-real-transfer-{owner,recipient}` and `/opt/mst-e2e/classic-hosted-20260920143527-218592-{owner,signer-b}`) loaded the real historical Freighter 5.48.0 extension. **All four showed an Unlock/password prompt; none exposed an unlocked account view.** No credential input or wallet signing occurred. Historical profiles remain untouched. The next real-extension E2E gate is legitimate unlock or authorized one-time initialization of disposable profiles; do not report the four locked profiles as ready, and do not retry blocked credential automation.
+
 ## 10. Mainnet operational hardening — later gate
 
 Before enabling Mainnet managed Classic:
