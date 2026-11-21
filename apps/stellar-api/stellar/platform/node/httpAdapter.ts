@@ -20,6 +20,7 @@ import * as openapi from '../../routes/openapi.js';
 import * as operations from '../../routes/operations.js';
 import * as paymentPrepare from '../../routes/payment-prepare.js';
 import * as requestRoute from '../../routes/request.js';
+import * as saintSignerResources from '../../routes/saint-signer-resources.js';
 import * as runtimeConfig from '../../routes/runtime-config.js';
 import * as stellarToml from '../../routes/stellar-toml.js';
 import * as treasuries from '../../routes/treasuries.js';
@@ -50,6 +51,7 @@ const routes: Record<string, RouteModule> = {
   operations,
   'payment-prepare': paymentPrepare,
   request: requestRoute,
+  'saint-signer-resources': saintSignerResources,
   'runtime-config': runtimeConfig,
   'stellar-toml': stellarToml,
   treasuries,

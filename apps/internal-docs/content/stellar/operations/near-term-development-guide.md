@@ -359,6 +359,22 @@ A real Varial 5.53.0 Testnet run covered **Human coordination, signing, submissi
 
 **Operations check for future `queued` stalls:** on the SAINT Testnet backend, inspect `mst-testnet-api-human-notification-worker-1`, the `human_notification_deliveries.error_code` and `human_notification_outbox.available_at` columns, then the secret's read permission from the container's runtime UID. Do not rotate the API key or recreate the webhook when the error is file access. Apply any retry acceleration only to clearly isolated, controlled test events.
 
+### SAINT private Testnet signer discovery — first consumer (2026-11-21)
+
+**Boundary:** SAINT -> MultiSigTools only. MST sends only a verified signer's public G address to SAINT; never a private Workspace, Contact, XDR, transaction signature, request capability, Agent credential, or bearer cookie. SAINT discovers and explains publicly observed relationships, not authorizations, transaction construction, signer threshold sufficiency, policy, or execution decisions. MST's existing Horizon/RPC checks stay authoritative.
+
+**Live SAINT read-only contract (not the older Permission Graph API V1):**
+- Testnet private Mesh consumer: `http://100.96.0.4:18510`; Mainnet private Mesh `http://100.96.0.4:18500`. Both are read-only network-isolated ingress; neither is a browser endpoint.
+- `GET /healthz` returns `network`, `network_fingerprint` and `registry_set_id`.
+- `GET /v1/signer-resources?subject=<G>&kind=ed25519_key` returns `saint.signer-resources.v1`. `publication.network` is the **network fingerprint**, not the string `testnet`; `publication.registry` is the generation. The response has status, explicit completion indicators, target current configuration, relation proof, observed Ledger, frontiers and bounded continuations.
+- Tested inside the actual MST Testnet API container network: SAINT `/healthz` and `/v1/address-current` return HTTP 200. A real `/v1/signer-resources` lookup for signer `GC6QGJOJOMK7KUVGMFTJSQRNMD6O6VV6U2BMTE5STDEN22WWH3KS5RCZ` found the previously tested 2-of-2 Treasury `GBSRIGOOKQMM33DT7VEK5L3WCKA6323PYYMEPNZ6O2ME22QJVYLMCW3U`, weight 1, thresholds 2, and current RPC proof. SAINT returned `partial` with `role_catalog_page_limit`; no global completeness claim.
+
+**MST first slice:** backend-only configuration `SAINT_TESTNET_CONSUMER_URL` (Testnet Compose), `GET /api/saint-signer-resources` proxied through the existing MST API route, and an opt-in **Explore signer relationships** section under Treasuries after wallet identity confirmation. Human sessions or signer-owned Read-capable Agent credentials select the signer; the requester cannot submit an arbitrary address. The backend performs only two SAINT GET calls, binds Testnet network fingerprint + Registry generation, and reduces the response to current configured relations with fresh RPC proof. It forwards no authorization headers. Results are never imported as wallet authority or automatically adopted as Treasuries. The interface preserves explicit partial/incomplete flags and checks any linked account independently.
+
+**Verification:** targeted SAINT contract tests, TypeScript API + Web checks, Vite production build, and a genuine private-network read of the current SAINT Testnet API from an isolated instance of the MST backend runtime. Mainnet remains disabled. Do not expose any new port or modify SAINT's resident, sync, Registry, or data files.
+
+**Release gates:** keep the UI behind `VITE_SAINT_DISCOVERY_ENABLED=true` (off by default); deploy the backend handler and Testnet-only consumer URL before enabling the corresponding web surface on hosted Testnet. Verify wallet-session authentication, server-side origin/Registry matching, the partial result on the real account, network failure without impacting signing, and the Testnet reset case (new Registry generation means no stale suggestions). No automatic Mainnet rollout.
+
 ## 10. Mainnet operational hardening — later gate
 
 Before enabling Mainnet managed Classic:
