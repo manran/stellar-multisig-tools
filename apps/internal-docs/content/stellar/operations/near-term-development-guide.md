@@ -320,6 +320,8 @@ Pure visual/layout changes use browser/task regression, not fresh chain transact
 
 **Execution contract:** start with a read-only preflight of both versions, profiles, network and Testnet readiness. Use only isolated, disposable profiles or a deliberately prepared copy of a historical profile; do not overwrite archived profiles or expose secrets. If initialized profiles are absent or locked and an automated credential/onboarding operation is blocked by the tool's safety gate, **stop at that step**, do not rewrite or reroute credential automation, and ask an authorized tester to prepare the isolated profile once. Resume real Varial -> MST signing only when the test wallet can be unlocked legitimately. Distinguish that run from the already proven SDK/HTTP 2-of-3 and mock-browser regressions.
 
+**2026-11-21 preflight outcome:** read-only Chromium inspection of *copies* of four existing profiles (`/opt/FED/fed-real-transfer-{owner,recipient}` and `/opt/mst-e2e/classic-hosted-20260920143527-218592-{owner,signer-b}`) loaded the real historical Freighter 5.48.0 extension. **All four showed an Unlock/password prompt; none exposed an unlocked account view.** No credential input or wallet signing occurred. Historical profiles remain untouched. The next real-extension E2E gate is legitimate unlock or authorized one-time initialization of disposable profiles; do not report the four locked profiles as ready, and do not retry blocked credential automation.
+
 ## 10. Mainnet operational hardening — later gate
 
 Before enabling Mainnet managed Classic:
