@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, CircleAlert, LoaderCircle, ShieldCheck } from 'lucide-react';
 import { ActionButton, NetworkBadge, WorkflowProgress } from './MultiSigUi';
@@ -22,6 +22,8 @@ export default function TemplateProposerComposer({ network }: Props) {
   const id = new URLSearchParams(window.location.search).get('template') ?? '';
   const verified = Boolean(privateUnlocked && sessionAddress && unlockedAddress === sessionAddress && unlockedNetwork === network);
   const scope = verified ? `${network}:${sessionAddress}:${id}` : '';
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
   const [loaded, setLoaded] = useState<{ scope: string; template: ReusableTemplateSummary | null } | null>(null);
   const [loading, setLoading] = useState(false);
   const [amount, setAmount] = useState('');
@@ -38,6 +40,10 @@ export default function TemplateProposerComposer({ network }: Props) {
   useEffect(() => {
     setLoaded(null);
     setReview(false);
+    setAmount('');
+    setMemo('');
+    setSaving(false);
+    setError('');
     if (!scope) return;
     const controller = new AbortController();
     setLoading(true);
@@ -71,6 +77,7 @@ export default function TemplateProposerComposer({ network }: Props) {
     if (!review) { setReview(true); return; }
     setSaving(true);
     setError('');
+    const submittedScope = scope;
     try {
       const response = await fetch('/api/request', {
         method: 'POST',
@@ -85,6 +92,7 @@ export default function TemplateProposerComposer({ network }: Props) {
         }),
       });
       const body = await response.json() as CreateSigningRequestResponse & { error?: string };
+      if (scopeRef.current !== submittedScope) return;
       if (!response.ok || !body.request) throw new Error(body.error || 'Unable to create Proposal.');
       navigateWorkspace('/s', {
         hash: body.request.id,
@@ -95,8 +103,8 @@ export default function TemplateProposerComposer({ network }: Props) {
         },
       });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to create Proposal.');
-    } finally { setSaving(false); }
+      if (scopeRef.current === submittedScope) setError(cause instanceof Error ? cause.message : 'Unable to create Proposal.');
+    } finally { if (scopeRef.current === submittedScope) setSaving(false); }
   }
 
   return (

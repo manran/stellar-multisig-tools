@@ -281,6 +281,7 @@ async function fixturePage(width, options = {}) {
         if (!state.proposerGrants.includes(addresses.carol)) {
           return json({ code: 'template_proposer_not_authorized', error: 'This wallet is not authorized for this Template.' }, 403);
         }
+        if (state.proposerPostDelay) await state.proposerPostDelay;
         state.proposerRequestCount++;
         const payment = new TransactionBuilder(new Account(addresses.source, '100'), {
           fee: '100', networkPassphrase: Networks.TESTNET,
@@ -718,6 +719,42 @@ try {
         await visible(page, 'Signer follow-up');
         await snapshot(page, 'delegated-payment-inbox', width);
       });
+
+      if (width === 375) {
+        await run('delegated-wallet-switch-clears-draft-and-ignores-old-request', width, {
+          wallet: walletState(addresses.carol),
+          state: {
+            templateOwner: addresses.carol,
+            templates: [{ ...templateFixture(), ownerAddress: addresses.alice }],
+            proposerGrants: [addresses.carol, addresses.bob],
+          },
+        }, async ({ page, state }) => {
+          let releaseOldRequest;
+          state.proposerPostDelay = new Promise((resolve) => { releaseOldRequest = resolve; });
+          await page.goto(`${origin}/new/proposer?template=tpl_qa_monthly&network=testnet`);
+          await visible(page, 'Request a payment', 'heading');
+          await page.getByRole('textbox', { name: 'Payment amount' }).fill('12.5');
+          await page.getByRole('textbox', { name: 'On-chain memo (optional)' }).fill('INV-401');
+          await page.getByRole('button', { name: 'Review request' }).click();
+          const oldPost = page.waitForRequest((request) => request.url().endsWith('/api/request')
+            && request.method() === 'POST');
+          await page.getByRole('button', { name: 'Create signing request' }).click();
+          await oldPost;
+          state.templateOwner = addresses.bob;
+          await page.evaluate((wallet) => window.__MST_QA_SET_WALLET__(wallet), walletState(addresses.bob));
+          const amount = page.getByRole('textbox', { name: 'Payment amount' });
+          await amount.waitFor({ state: 'visible' });
+          assert.equal(await amount.inputValue(), '', 'An old wallet amount must not carry to a new wallet');
+          assert.equal(await page.getByRole('textbox', { name: 'On-chain memo (optional)' }).inputValue(), '',
+            'An old wallet memo must not carry to a new wallet');
+          releaseOldRequest();
+          await page.waitForTimeout(150);
+          assert.equal(new URL(page.url()).pathname, '/new/proposer',
+            'A late Request created by the old wallet must not hijack new wallet navigation');
+          assert.equal(state.proposerRequestCount, 1);
+          await snapshot(page, 'proposer-wallet-change-isolation', width);
+        });
+      }
 
       await run('delegated-wallet-revoked-cannot-create-payment', width, {
         wallet: walletState(addresses.carol),
