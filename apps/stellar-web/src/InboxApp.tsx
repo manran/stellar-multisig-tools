@@ -145,14 +145,17 @@ function DetailPane({
   description,
   viewerAddress,
   signerLabel,
+  needsEmailFollowUp,
 }: {
   request: InboxRequestSnapshot;
   description: InboxRequestDescription;
   viewerAddress: string;
   signerLabel: (address: string) => string;
+  needsEmailFollowUp: boolean;
 }) {
   const viewerAction = inboxViewerActionPresentation(request.viewerAction);
-  const followUp = isCreatorWaitingForSigners(request, viewerAddress);
+  const followUp = isCreatorWaitingForSigners(request, viewerAddress) || needsEmailFollowUp;
+  const urgentEmailFailure = needsEmailFollowUp && !inboxViewerActionNeedsAction(request.viewerAction);
   return (
     <section className="mst-inbox-detail-inner" aria-label="Selected proposal">
       <div className="mst-inbox-detail__top">
@@ -163,8 +166,8 @@ function DetailPane({
       <p className="mst-inbox-detail__summary">{description.summary}</p>
       <div className="mst-inbox-next-action">
         <div className="mst-inbox-next-action__label">Your next step</div>
-        <div className="mt-2"><StatusBadge tone={viewerAction.tone}>{viewerAction.label}</StatusBadge></div>
-        <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">{followUp ? 'Your signature is recorded. Check who is waiting and follow up when needed.' : viewerAction.detail}</p>
+        <div className="mt-2"><StatusBadge tone={urgentEmailFailure ? 'danger' : viewerAction.tone}>{urgentEmailFailure ? 'Follow-up needed' : viewerAction.label}</StatusBadge></div>
+        <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">{needsEmailFollowUp ? 'An email to a signer needs attention. Check the contact and follow up.' : followUp ? 'Your signature is recorded. Check who is waiting and follow up when needed.' : viewerAction.detail}</p>
         <ActionButton onClick={() => openRequestDetails(request, followUp)} className="mt-4 w-full">
           {followUp ? 'Follow up with signers' : viewerAction.cta} <ArrowRight className="h-4 w-4" />
         </ActionButton>
@@ -277,17 +280,27 @@ export default function InboxApp() {
     (data?.requests ?? []).map((request) => [request.id, describeInboxRequest(request)]),
   ), [data]);
 
-  const needsCount = data?.action_counts.actionRequired ?? 0;
-  const waitingCount = data?.action_counts.waiting ?? 0;
+  const failedFollowups = useMemo(() => new Set(
+    (data?.requests ?? [])
+      .filter((request) => inboxSenderProgress(request, inboxOutgoingSignerProgress(request, unlockedAddress))
+        .some((item) => item.label === 'Email needs attention'))
+      .map((request) => request.id),
+  ), [data, unlockedAddress]);
+  const needsAction = (request: InboxRequestSnapshot) =>
+    inboxViewerActionNeedsAction(request.viewerAction) || failedFollowups.has(request.id);
+  const addedAttention = (data?.requests ?? []).filter((request) =>
+    failedFollowups.has(request.id) && !inboxViewerActionNeedsAction(request.viewerAction)).length;
+  const needsCount = (data?.action_counts.actionRequired ?? 0) + addedAttention;
+  const waitingCount = Math.max(0, (data?.action_counts.waiting ?? 0) - addedAttention);
 
   const visibleRequests = useMemo(() => {
     const requests = [...(data?.requests ?? [])].sort((left, right) =>
-      Number(inboxViewerActionNeedsAction(right.viewerAction)) - Number(inboxViewerActionNeedsAction(left.viewerAction)),
+      Number(needsAction(right)) - Number(needsAction(left)),
     );
-    if (view === 'needs') return requests.filter((request) => inboxViewerActionNeedsAction(request.viewerAction));
-    if (view === 'waiting') return requests.filter((request) => !inboxViewerActionNeedsAction(request.viewerAction));
+    if (view === 'needs') return requests.filter(needsAction);
+    if (view === 'waiting') return requests.filter((request) => !needsAction(request));
     return requests;
-  }, [data, view]);
+  }, [data, view, failedFollowups]);
 
   const visibleIntents = useMemo(() => {
     const intents = [...(data?.intents ?? [])].sort((left, right) =>
@@ -399,11 +412,14 @@ export default function InboxApp() {
                     const description = descriptions.get(request.id)!;
                     const selected = request.id === selectedId;
                     const sourceAlias = labelFor(description.source, 'account');
-                    const followUp = isCreatorWaitingForSigners(request, unlockedAddress);
+                    const failedEmail = failedFollowups.has(request.id);
+                    const followUp = isCreatorWaitingForSigners(request, unlockedAddress) || failedEmail;
+                    const viewerAction = inboxViewerActionPresentation(request.viewerAction);
+                    const urgentEmailFailure = failedEmail && !inboxViewerActionNeedsAction(request.viewerAction);
                     return (
                       <button key={request.id} type="button" data-selected={selected ? 'true' : 'false'} aria-current={selected ? 'true' : undefined} onClick={() => { if (window.matchMedia('(min-width: 1280px)').matches) setSelectedId(request.id); else openRequestDetails(request, followUp); }} className="mst-inbox-item">
                         <div className="mst-inbox-item__head">
-                          <StatusBadge tone={inboxViewerActionPresentation(request.viewerAction).tone}>{inboxViewerActionPresentation(request.viewerAction).label}</StatusBadge>
+                          <StatusBadge tone={urgentEmailFailure ? 'danger' : viewerAction.tone}>{urgentEmailFailure ? 'Follow-up needed' : viewerAction.label}</StatusBadge>
                           <span className="mst-inbox-item__deadline">{inboxDeadlineLabel(description.inspection)}</span>
                         </div>
                         <h2 className="mst-inbox-item__title">{description.title}</h2>
@@ -431,6 +447,7 @@ export default function InboxApp() {
                       description={selectedDescription}
                       viewerAddress={unlockedAddress}
                       signerLabel={signerLabel}
+                      needsEmailFollowUp={failedFollowups.has(selectedRequest.id)}
                     />
                   </div>
                 )}
