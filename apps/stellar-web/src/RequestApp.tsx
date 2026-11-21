@@ -16,6 +16,7 @@ import PrivateNoteCard from './PrivateNoteCard';
 import PrivateWorkspaceUnlock from './PrivateWorkspaceUnlock';
 import { ActionButton, NetworkFact, PageHeader, RequestStatusBadge, WorkflowProgress } from './MultiSigUi';
 import ReviewTransactionSummary from './ReviewTransactionSummary';
+import SaintSecurityTimeline from './SaintSecurityTimeline';
 import SorobanEffectsDiffView from './SorobanEffectsDiffView';
 import SigningGuidance from './SigningGuidance';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
@@ -918,6 +919,16 @@ export default function RequestApp() {
                 <WorkflowProgress current={workflowStage} />
               </div>
 
+              {import.meta.env.VITE_SAINT_SECURITY_TIMELINE_ENABLED === 'true'
+                && snapshot.network === 'testnet'
+                && privateReadyForRequest
+                && inspection.transactionSourceAccount.startsWith('G')
+                && <SaintSecurityTimeline
+                  key={snapshot.id + ':' + inspection.transactionSourceAccount}
+                  address={inspection.transactionSourceAccount}
+                  createdAt={snapshot.createdAt}
+                />}
+
               {walletNetworkMismatch && (
                 <section className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.08] p-4 text-sm">
                   <div className="flex gap-3">
@@ -987,7 +998,7 @@ export default function RequestApp() {
                     onRemind={snapshot.status === 'awaiting_signatures' && shareable && privateReadyForRequest && assignmentApiAvailable ? remindSignerToSign : undefined}
                     assignments={assignments}
                     notifications={notifications}
-                    shareCreatesLink={shareable}
+shareCreatesLink={shareable}
                     knownComplete={signaturesComplete}
                   />
                   </section>}

@@ -21,6 +21,7 @@ import * as operations from '../../routes/operations.js';
 import * as paymentPrepare from '../../routes/payment-prepare.js';
 import * as requestRoute from '../../routes/request.js';
 import * as saintSignerResources from '../../routes/saint-signer-resources.js';
+import * as saintAccountSecurity from '../../routes/saint-account-security.js';
 import * as runtimeConfig from '../../routes/runtime-config.js';
 import * as stellarToml from '../../routes/stellar-toml.js';
 import * as treasuries from '../../routes/treasuries.js';
@@ -52,6 +53,7 @@ const routes: Record<string, RouteModule> = {
   'payment-prepare': paymentPrepare,
   request: requestRoute,
   'saint-signer-resources': saintSignerResources,
+  'saint-account-security': saintAccountSecurity,
   'runtime-config': runtimeConfig,
   'stellar-toml': stellarToml,
   treasuries,
