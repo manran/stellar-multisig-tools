@@ -13,6 +13,10 @@ import { isWalletUserRejected } from './stellar/walletKit';
 
 interface Props { network: StellarNetwork }
 
+function shortAddress(address: string): string {
+  return address.length > 22 ? `${address.slice(0, 10)}…${address.slice(-8)}` : address;
+}
+
 function assetName(assetKey: string): string {
   return assetKey === 'native' ? 'XLM' : assetKey.split(':')[1] || assetKey;
 }
@@ -113,7 +117,7 @@ export default function TemplateProposerComposer({ network }: Props) {
         <WorkflowProgress current={review ? 'review' : 'prepare'} />
         <a href={stellarHref('/new')} className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-ink-2)]"><ArrowLeft className="h-4 w-4" />New proposal</a>
         <div className="mt-5 flex items-center gap-3"><h1 className="text-3xl font-bold">Request a payment</h1><NetworkBadge network={network} /></div>
-        <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">You can prepare this payment with your wallet. Treasury signers still control approval and submission.</p>
+        <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">Prepare a payment for Treasury approval.</p>
         {!verified && <section className="mt-6 rounded-xl border border-[var(--color-rule)] p-5">
           <p className="text-sm">Confirm the wallet that was granted permission to use this Template.</p>
           <ActionButton className="mt-3" disabled={authBusy} onClick={() => void confirmWallet()}>
@@ -124,19 +128,38 @@ export default function TemplateProposerComposer({ network }: Props) {
         {loading && <p role="status" className="mt-5 text-sm"><LoaderCircle className="inline h-4 w-4 animate-spin" /> Loading authorized Template…</p>}
         {error && <div role="alert" className="mt-5 flex gap-2 rounded-lg border border-[var(--color-danger)] p-4 text-sm text-[var(--color-danger)]"><CircleAlert className="h-4 w-4 shrink-0" />{error}</div>}
         {template && <form onSubmit={(event) => void create(event)} className="mt-6 space-y-5 rounded-[var(--radius-panel)] border border-[var(--color-rule)] bg-[var(--color-paper-2)] p-5 sm:p-7">
-          <div><div className="text-sm text-[var(--color-muted)]">Authorized Template</div><h2 className="mt-1 text-xl font-semibold">{template.name}</h2></div>
-          <dl className="space-y-4 border-y border-[var(--color-rule)] py-4 text-sm">
-            <div><dt className="text-[var(--color-muted)]">From Treasury</dt><dd className="mt-1 break-all font-mono">{template.definition.source}</dd></div>
-            <div><dt className="text-[var(--color-muted)]">Recipient</dt><dd className="mt-1 break-all font-mono">{destination}</dd></div>
-            <div><dt className="text-[var(--color-muted)]">Asset</dt><dd className="mt-1 font-semibold">{assetName(asset)}</dd></div>
-          </dl>
-          <div>
+          <div><div className="text-sm text-[var(--color-muted)]">Payment Template</div><h2 className="mt-1 text-xl font-semibold">{template.name}</h2></div>
+          <div className="border-y border-[var(--color-rule)] py-5">
             <label htmlFor="proposer-amount" className="text-sm font-semibold">Payment amount</label>
-            {review ? <div className="mt-2 text-2xl font-semibold">{amount} {assetName(asset)}</div>
-              : <input id="proposer-amount" inputMode="decimal" autoComplete="off" required value={amount}
-                  onChange={(e) => { setAmount(e.target.value); setError(''); }} placeholder="0.0000000"
-                  className="mst-request-control mt-2 w-full" />}
+            {review ? <div className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{amount} <span className="text-[var(--color-ink-2)]">{assetName(asset)}</span></div>
+              : <div className="mt-2 flex items-center gap-3">
+                  <input id="proposer-amount" inputMode="decimal" autoComplete="off" required value={amount}
+                    onChange={(e) => { setAmount(e.target.value); setError(''); }} placeholder="0.0000000"
+                    className="mst-request-control min-w-0 flex-1" />
+                  <span className="shrink-0 text-sm font-semibold text-[var(--color-ink-2)]">{assetName(asset)}</span>
+                </div>}
           </div>
+          <dl className="grid min-w-0 gap-4 text-sm sm:grid-cols-2">
+            <div className="min-w-0">
+              <dt className="text-[var(--color-muted)]">Recipient</dt>
+              <dd className={`mt-1 font-mono text-xs leading-6 ${review ? 'break-all' : 'truncate'}`} title={destination}>
+                {review ? destination : shortAddress(destination)}
+              </dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-[var(--color-muted)]">From Treasury</dt>
+              <dd className={`mt-1 font-mono text-xs leading-6 ${review ? 'break-all' : 'truncate'}`} title={template.definition.source}>
+                {review ? template.definition.source : shortAddress(template.definition.source)}
+              </dd>
+            </div>
+          </dl>
+          {!review && <details className="text-xs text-[var(--color-ink-2)]">
+            <summary className="cursor-pointer font-semibold">View full addresses</summary>
+            <div className="mt-3 space-y-2 rounded-lg border border-[var(--color-rule)] p-3 font-mono">
+              <p className="break-all">Recipient: {destination}</p>
+              <p className="break-all">Treasury: {template.definition.source}</p>
+            </div>
+          </details>}
           <div>
             <label htmlFor="proposer-memo" className="text-sm font-semibold">On-chain memo (optional)</label>
             {review ? <p className="mt-2 text-sm">{memo || 'None'}</p>
@@ -144,7 +167,7 @@ export default function TemplateProposerComposer({ network }: Props) {
                   placeholder="Invoice number" className="mst-request-control mt-2 w-full" />}
             {!validMemo && <p role="alert" className="mt-1 text-sm text-[var(--color-danger)]">Memo must fit in 28 UTF-8 bytes.</p>}
           </div>
-          {review && <p className="text-sm leading-6 text-[var(--color-ink-2)]">This creates an exact Stellar transaction for the authorized source, recipient and asset. No payment is signed or submitted until Treasury signers review and authorize it.</p>}
+          {review && <p className="text-sm leading-6 text-[var(--color-ink-2)]">Treasury signers will authorize this payment after you create the request.</p>}
           <div className="flex justify-end gap-3 border-t border-[var(--color-rule)] pt-4">
             {review && <ActionButton variant="secondary" type="button" onClick={() => setReview(false)}>Edit</ActionButton>}
             <ActionButton type="submit" disabled={!validAmount || !validMemo || saving}>

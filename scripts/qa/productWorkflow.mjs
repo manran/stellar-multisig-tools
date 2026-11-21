@@ -699,9 +699,15 @@ try {
         await page.getByRole('textbox', { name: 'On-chain memo (optional)' }).fill('INV-401');
         await page.getByRole('button', { name: 'Review request' }).click();
         await visible(page, '12.5 XLM');
+        const reviewAmount = page.getByText('12.5 XLM');
+        const reviewTreasury = page.getByText('From Treasury', { exact: true });
+        const amountPosition = await reviewAmount.boundingBox();
+        const treasuryPosition = await reviewTreasury.boundingBox();
+        assert.ok(amountPosition && treasuryPosition && amountPosition.top < treasuryPosition.top,
+          'The payment amount must lead the review above technical Treasury identity');
         await snapshot(page, 'delegated-payment-review', width);
         await page.getByRole('button', { name: 'Create signing request' }).click();
-        await visible(page, 'You requested this payment');
+        await visible(page, 'Share with signers');
         await visible(page, 'Waiting for Treasury signatures', 'heading');
         await visible(page, 'Treasury signatures needed', 'heading');
         assert.equal(await page.getByRole('heading', { name: 'Your signature is needed' }).count(), 0);

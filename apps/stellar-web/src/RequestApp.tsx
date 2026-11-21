@@ -979,11 +979,13 @@ export default function RequestApp() {
               )}
 
               {isDelegatedProposer && (
-                <section className="rounded-xl border border-[var(--color-rule)] bg-[var(--color-paper-2)] p-4 text-sm">
-                  <div className="font-semibold">You requested this payment</div>
-                  <p className="mt-1 leading-6 text-[var(--color-ink-2)]">Treasury signers review and approve it. This wallet cannot sign or submit. You can invite eligible signers and follow progress.</p>
+                <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-rule)] bg-[var(--color-paper-2)] px-4 py-3 text-sm">
+                  <div>
+                    <div className="font-semibold">Share with signers</div>
+                    <p className="mt-1 text-xs text-[var(--color-ink-2)]">Authorized Treasury signers can open this Request with their own wallet.</p>
+                  </div>
                   <button type="button" onClick={() => void copySignerLink()}
-                    className="mt-3 min-h-11 font-semibold text-[var(--color-action)]">{copied === 'link' ? 'Signer link copied' : 'Copy link for authorized signers'}</button>
+                    className="min-h-11 shrink-0 font-semibold text-[var(--color-action)]">{copied === 'link' ? 'Signer link copied' : 'Copy link for authorized signers'}</button>
                 </section>
               )}
 
