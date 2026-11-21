@@ -59,7 +59,7 @@ function inboxFixture(owner = addresses.alice) {
     requests: [{
       ...requestFixture('awaiting_signatures', ['alice']), creatorAddress: owner, viewerAction: 'waiting_for_others',
       coordinationEvents: [
-        event('1', 'signer_requested', addresses.alice),
+        // The creator already signed; real assignment rules forbid asking yourself.
         event('2', 'signer_requested', addresses.bob),
         event('3', 'signer_requested', addresses.carol),
         event('4', 'notification_failed', addresses.carol, { notificationKind: 'signature_requested' }),
@@ -575,10 +575,68 @@ try {
         await visible(page, 'Signer follow-up', 'heading');
         await visible(page, 'Follow up with signers', 'button');
         await visible(page, 'Email failed');
-        await visible(page, ' · Signed');
       }
       await snapshot(page, 'inbox-progress', width);
     });
+
+    if (width === 375) {
+      await run('inbox-failed-email-needs-action', width, {}, async ({ page }) => {
+        await page.goto(origin + '/inbox');
+        await visible(page, 'November supplier payment');
+        await visible(page, 'Follow-up needed');
+        await page.getByRole('button', { name: 'Needs me 1' }).click();
+        await visible(page, 'November supplier payment');
+        await page.getByRole('button', { name: 'Waiting 0' }).click();
+        await visible(page, 'Nothing is waiting.');
+        await page.getByRole('button', { name: 'All 1' }).click();
+        await visible(page, 'Follow-up needed');
+        await snapshot(page, 'inbox-email-failure-needs-action', width);
+      });
+
+      await run('inbox-resolved-email-stays-waiting', width, {
+        state: { inbox: (() => {
+          const inbox = inboxFixture();
+          inbox.requests[0].coordinationEvents.push({
+            eventId: '99', type: 'notification_delivered', actorAddress: addresses.alice,
+            subjectAddress: addresses.carol, occurredAt: now,
+            notificationKind: 'signature_reminder',
+          });
+          return inbox;
+        })() },
+      }, async ({ page }) => {
+        await page.goto(origin + '/inbox');
+        await visible(page, 'November supplier payment');
+        assert.equal(await page.getByText('Follow-up needed', { exact: true }).count(), 0);
+        await page.getByRole('button', { name: 'Needs me 0' }).click();
+        await visible(page, 'Nothing needs your action.');
+        await page.getByRole('button', { name: 'Waiting 1' }).click();
+        await visible(page, 'November supplier payment');
+      });
+
+      await run('inbox-requester-failed-email-needs-action', width, {
+        wallet: walletState(addresses.bob),
+        state: {
+          inbox: {
+            ...inboxFixture(addresses.bob),
+            requests: [{
+              ...requestFixture('awaiting_signatures', ['bob']), creatorAddress: addresses.alice,
+              viewerAction: 'waiting_for_others',
+              coordinationEvents: [
+                { eventId: '1', type: 'signer_requested', actorAddress: addresses.bob, subjectAddress: addresses.carol, occurredAt: now },
+                { eventId: '2', type: 'notification_failed', actorAddress: addresses.bob, subjectAddress: addresses.carol, occurredAt: now, notificationKind: 'signature_requested' },
+              ],
+            }],
+          },
+        },
+      }, async ({ page }) => {
+        await page.goto(origin + '/inbox');
+        await visible(page, 'Follow-up needed');
+        await page.getByRole('button', { name: 'Needs me 1' }).click();
+        await visible(page, 'Signer follow-up');
+        assert.equal(await page.getByText('View status', { exact: true }).count(), 0);
+        await snapshot(page, 'inbox-requester-email-failure', width);
+      });
+    }
 
     if (width === 375 || width === 1280) {
       await run('inbox-follow-up-focus', width, {
