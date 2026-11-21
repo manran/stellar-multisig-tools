@@ -678,6 +678,9 @@ try {
           await visible(page, 'Invite signers', 'heading');
           await visible(page, 'Invite Bob', 'checkbox');
           assert.equal(state.contactSaveCount, 1);
+          await page.getByRole('button', { name: 'Edit contact Bob' }).click();
+          assert.equal(await page.getByRole('textbox', { name: 'Notification email' }).inputValue(), 'bob@example.org', 'Saved signer email remains editable');
+          await page.getByRole('button', { name: 'Cancel contact editing' }).click();
           await snapshot(page, 'proposal-contact-recovery', width);
         }
       });

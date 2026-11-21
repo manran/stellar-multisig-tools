@@ -285,19 +285,9 @@ export default function SigningGuidance({
       </span>
     ) : null;
 
-    if (!email) {
-      if (!privateUnlocked) return assigned
-        ? viewedBadge ?? <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">{statusLabel}</span>
-        : null;
-      return (
-        <div className="mst-signer-contact mt-2">
-          {statusLabel && <span className="shrink-0 rounded-full bg-neutral-500/10 px-2 py-0.5 text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">{statusLabel}</span>}
-          {viewedBadge}
-          <AddressAliasEditor address={signerAddress} subjectType="signer" allowNotificationEmail />
-          <span className="text-xs text-neutral-500 dark:text-neutral-400">Add a private name and email to notify this signer.</span>
-        </div>
-      );
-    }
+    if (!email && !privateUnlocked) return assigned
+      ? viewedBadge ?? <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">{statusLabel}</span>
+      : null;
 
     const canRepairInitialEmail = assignedByMe && !notification;
     const canSendFirstEmailAsCreator = canRemindAsCreator && !assignedByMe && !notification;
@@ -312,10 +302,10 @@ export default function SigningGuidance({
 
     return (
       <div className="mst-signer-contact mt-2">
-        <div className="flex min-w-0 items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+        {email && <div className="flex min-w-0 items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
           <Mail className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate" title={email}>{email}</span>
-        </div>
+        </div>}
         {statusLabel && (
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
             notification?.state === 'provider_accepted' || notification?.state === 'delivered'
@@ -328,7 +318,9 @@ export default function SigningGuidance({
           </span>
         )}
         {viewedBadge}
-        {onAsk && (canRepairInitialEmail || (!assigned && !inviteCandidates.includes(signerAddress))) && (
+        <AddressAliasEditor address={signerAddress} subjectType="signer" allowNotificationEmail showEmailPreview={false} />
+        {!email && <span className="text-xs text-neutral-500 dark:text-neutral-400">Add a private name and email to notify this signer.</span>}
+        {email && onAsk && (canRepairInitialEmail || (!assigned && !inviteCandidates.includes(signerAddress))) && (
           <ActionButton
             variant="secondary"
             size="sm"
@@ -341,7 +333,7 @@ export default function SigningGuidance({
               : assigned ? 'Notify by email' : askLabel}
           </ActionButton>
         )}
-        {onRemind && (canRemind || canRetryFailed || canSendFirstEmailAsCreator) && (
+        {email && onRemind && (canRemind || canRetryFailed || canSendFirstEmailAsCreator) && (
           <ActionButton
             variant="secondary"
             size="sm"
