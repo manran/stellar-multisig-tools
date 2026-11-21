@@ -344,6 +344,18 @@ Use a Playwright version that matches the installed Chromium revision. The first
 
 This evidence closes the real **Varial wallet + MST signing + Testnet submission** check. It does not verify email invitation delivery/reminder workflows or Mainnet.
 
+### Real email invitation and reminder E2E — 2026-11-21 (partial)
+
+A separate live Testnet run using the real Varial 5.53.0 extension and the Resend-controlled synthetic recipient `delivered@resend.dev` verified the **Human coordination and wallet-signing** path:
+
+- A fresh 2-of-2 Proposal was created and signed by the owner, then a private signer Contact email was saved. The `assignSigner` API returned an Assignment and `signature_requested: queued`; the `remindSigner` API separately returned `signature_reminder: queued`.
+- Neither notification progressed from `queued` to `provider_accepted` or `delivered` within the observed window. **No actual email delivery is proven.** Do not label the email delivery release check PASS. Resend's controlled recipient is not a mailbox that a human opened.
+- The second independently authenticated Varial wallet opened the non-secret `/s#<proposal-id>` locator (no bearer capability), completed Review -> Sign, and the authenticated `Viewed` fact was recorded. MST submitted and Horizon confirmed a payment on Testnet: ledger `5841807`, transaction `3cc62810f8440c38e27af36af17e32a0616dc079c174ca8ebdd93633ba610a06`. The temporary Contact was deleted afterward.
+
+**Reproduction:** use `scripts/qa/realVarialMultisig.mjs` with the existing Varial and Playwright environment variables plus `MST_VARIAL_EMAIL_E2E=1`. This extra flag is opt-in and uses only the Resend-owned delivery simulation address; the original 2-of-2 regression remains unchanged without it. The test must return a nonzero status when real provider acceptance/delivery evidence is missing, even if the on-chain transaction succeeds. Keep the signing outcome distinct from the delivery outcome.
+
+**Remaining operations check:** inspect the Testnet `human-notification-worker`, its PostgreSQL outbox lease/attempt history and its Resend send results on the authorized self-hosted backend. Verify that the worker is running and consuming queued events, then test a provider-accepted email and the signed Resend webhook transition. Do not modify secrets or attempt delivery against personal recipients to diagnose a queue stall. This host does not currently expose the self-hosted worker logs, so the cause of the queued state is not yet known.
+
 ## 10. Mainnet operational hardening — later gate
 
 Before enabling Mainnet managed Classic:
