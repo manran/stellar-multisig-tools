@@ -41,6 +41,7 @@ npm ci --no-audit --no-fund
 node scripts/qa/hostedTestnetLifecycle.mjs         # read-only Testnet runtime check
 node scripts/qa/hostedTestnetLifecycle.mjs --live          # 2-of-3 Human lifecycle
 node scripts/qa/hostedTestnetLifecycle.mjs --live --coordination # ID-only Ask/remind, no emails
+node scripts/qa/hostedTestnetLifecycle.mjs --live --proposer    # Delegated payment, revocation, signer E2E
 node scripts/qa/hostedTestnetLifecycle.mjs --live --agent  # scoped Agent signer lifecycle
 ```
 

@@ -26,18 +26,18 @@ async function discoveryCandidates(
   address: string,
   network: StellarNetwork | undefined,
 ): Promise<StoredSigningRequest[]> {
+  const proposer = network ? await store.listRequestsByProposer?.(network, address) ?? [] : [];
+  let signers: StoredSigningRequest[];
   if (!network || !store.listRequestsByDiscoverySubjects) {
-    return store.listRequests ? store.listRequests() : [];
+    signers = store.listRequests ? await store.listRequests() : [];
+  } else {
+    try {
+      signers = await store.listRequestsByDiscoverySubjects(network, [], address);
+    } catch {
+      signers = store.listRequests ? await store.listRequests() : [];
+    }
   }
-
-  try {
-    return await store.listRequestsByDiscoverySubjects(network, [], address);
-  } catch {
-    // Discovery is an optimization, not authorization or availability truth.
-    // Fall back to the legacy Request scan; live authorization below still
-    // prevents stale index data from exposing private Request content.
-    return store.listRequests ? store.listRequests() : [];
-  }
+  return [...new Map([...signers, ...proposer].map((item) => [item.id, item])).values()];
 }
 
 export async function listSignerInbox(
@@ -70,9 +70,9 @@ export async function listSignerInbox(
   for (let index = 0; index < requests.length && visible.length < limit; index += REQUEST_SCAN_BATCH_SIZE) {
     const batch = requests.slice(index, index + REQUEST_SCAN_BATCH_SIZE);
     const snapshots = await Promise.all(batch.map(async (request): Promise<SigningRequestSnapshot | null> => {
-      let authorized = false;
+      let authorized = request.proposerAddress === address;
       try {
-        authorized = await signerCanAccessTransaction(
+        if (!authorized) authorized = await signerCanAccessTransaction(
           address,
           request.baseXdr,
           request.network,
@@ -142,12 +142,17 @@ export async function projectHumanInboxRequests(
           event.type === 'approval_declined' && event.actorAddress === address,
         )
       : false;
-    const viewerAction = projectInboxViewerAction(snapshot.status, {
+    const viewerAction = snapshot.proposerAddress === address
+      ? snapshot.status === 'awaiting_signatures' ? 'proposer_waiting' as const
+        : snapshot.status === 'ready' ? 'proposer_ready' as const
+          : projectInboxViewerAction(snapshot.status, { hasSigned: true,
+              executionMode: projectedRequestExecutionMode(snapshot) })
+      : projectInboxViewerAction(snapshot.status, {
       hasSigned: signerHasSignedTransaction(address, snapshot.mergedXdr, snapshot.network),
       declined,
       executionMode: projectedRequestExecutionMode(snapshot),
     });
-    const coordinationEvents = viewerAction === 'waiting_for_others' && store.listRequestCoordinationEvents
+    const coordinationEvents = (viewerAction === 'waiting_for_others' || viewerAction === 'proposer_waiting') && store.listRequestCoordinationEvents
       ? outgoingCoordinationEvents(await store.listRequestCoordinationEvents(snapshot.id), address)
       : [];
     return {

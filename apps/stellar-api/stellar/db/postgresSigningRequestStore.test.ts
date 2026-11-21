@@ -12,6 +12,8 @@ import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/
 import { applyCoordinationMigrations } from './migrate.js';
 import { closeCoordinationPool, coordinationPool } from './postgres.js';
 import { createPostgresSigningRequestStore } from './postgresSigningRequestStore.js';
+import { createPostgresReusableTemplateStore } from './postgresReusableTemplateStore.js';
+import { createReusableTemplate, ReusableTemplateServiceError } from '../server/reusableTemplateService.js';
 import type {
   RequestPrivateDataStore,
   StoredRequestPrivateData,
@@ -384,4 +386,63 @@ test('Classic Activity projects Assignment, Proposal view, and Human delivery fa
   assert.equal(events[1]?.subjectAddress, f.signer.publicKey());
   assert.equal(events[3]?.notificationKind, 'signature_requested');
   assert.doesNotMatch(JSON.stringify(events), /private@example\.com|resend-message-private|svix-private/);
+});
+
+
+test('Postgres delegated Request is grant-locked, tracks proposer separately, and denies creation after revoke', {
+  skip: !TEST_URL || !RESET_ALLOWED,
+}, async () => {
+  const pool = coordinationPool();
+  const templates = createPostgresReusableTemplateStore(pool);
+  const store = createPostgresSigningRequestStore(pool, new MemoryPrivateStore());
+  const fixtureValue = fixture('PGTPLPROPOSE0001');
+  const proposer = Keypair.random().publicKey();
+  const template = await createReusableTemplate(templates, fixtureValue.creator.publicKey(), {
+    network: 'testnet', name: 'Vendor payment', kind: 'payment',
+    definition: {
+      version: 1, source: fixtureValue.source.publicKey(),
+      recipients: [{ destination: Keypair.random().publicKey(), assetKey: 'native' }],
+      signingWindowSeconds: 3600,
+    },
+  });
+  await templates.grantProposer!(template.id, proposer, fixtureValue.creator.publicKey());
+  await templates.grantProposer!(template.id, proposer, fixtureValue.creator.publicKey());
+  assert.deepEqual(await templates.listProposers!(template.id), [proposer]);
+
+  const request: StoredSigningRequest = {
+    version: 1,
+    id: fixtureValue.request.id, network: 'testnet',
+    baseXdr: fixtureValue.request.baseXdr,
+    transactionHash: fixtureValue.request.transactionHash,
+    createdAt: fixtureValue.request.createdAt,
+    expiresAt: fixtureValue.request.expiresAt,
+    proposerAddress: proposer,
+    templateRef: { id: template.id, version: 1, name: 'Vendor payment', kind: 'payment' },
+    discoverySignerKeys: [fixtureValue.source.publicKey()],
+  };
+  await store.createRequest(request);
+  const loaded = await store.getRequest(request.id);
+  assert.deepEqual(loaded, request);
+  assert.deepEqual((await store.listRequestsByProposer!('testnet', proposer)).map((item) => item.id), [request.id]);
+  assert.deepEqual(await store.listRequestsByProposer!('testnet', fixtureValue.creator.publicKey()), []);
+  assert.deepEqual((await store.listRequestsByActivitySubjects!('testnet', [], proposer)).map((item) => item.id), [request.id]);
+
+  await templates.revokeProposer!(template.id, proposer, fixtureValue.creator.publicKey());
+  assert.deepEqual(await templates.listProposers!(template.id), []);
+  assert.ok(await store.getRequest(request.id), 'Historical Request remains accessible after revoke');
+  await assert.rejects(
+    () => store.createRequest({ ...request, id: 'PGTPLPROPOSE0002' }),
+    (e: unknown) => e instanceof ReusableTemplateServiceError && e.code === 'template_proposer_not_authorized',
+  );
+  await templates.grantProposer!(template.id, proposer, fixtureValue.creator.publicKey());
+  assert.deepEqual(await templates.listProposers!(template.id), [proposer]);
+  const grants = await pool.query<{ revoked_at: Date | null; revoked_by_address: string | null }>(
+    `SELECT revoked_at, revoked_by_address FROM mst_stellar.reusable_template_proposer_grants
+      WHERE template_id = $1 AND proposer_address = $2 ORDER BY id`,
+    [template.id, proposer],
+  );
+  assert.equal(grants.rowCount, 2, 'Re-grant appends a new audit row');
+  assert.ok(grants.rows[0].revoked_at);
+  assert.equal(grants.rows[0].revoked_by_address, fixtureValue.creator.publicKey());
+  assert.equal(grants.rows[1].revoked_at, null);
 });

@@ -27,6 +27,10 @@ export interface ReusableTemplateRef {
 
 export interface ReusableTemplateSummary {
   id: string;
+  /** Verified wallet that owns the Template, not the Treasury's legal administrator. */
+  ownerAddress?: string;
+  /** Active grants are disclosed only when the owner opens their own templates. */
+  proposerAddresses?: string[];
   network: StellarNetwork;
   name: string;
   kind: ReusableTemplateKind;

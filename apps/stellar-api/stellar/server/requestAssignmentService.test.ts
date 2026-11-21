@@ -209,3 +209,51 @@ test('proposal creator may remind a signer invited by another authorized signer'
   assert.equal(reminder.assignedByAddress, inviter, 'Original Ask provenance is unchanged');
   assert.equal(reminder.signerAddress, target);
 });
+
+
+test('delegated proposer can ask and remind only eligible signers on their own Request', async () => {
+  const proposer = Keypair.random().publicKey();
+  const source = Keypair.random().publicKey();
+  const signer = Keypair.random().publicKey();
+  const outsider = Keypair.random().publicKey();
+  const destination = Keypair.random().publicKey();
+  const request: StoredSigningRequest = {
+    version: 1, id: '1234567890ABCDEF', network: 'testnet',
+    baseXdr: unsignedPayment(source, destination), transactionHash: 'a'.repeat(64),
+    createdAt: '2026-11-21T09:00:00.000Z', expiresAt: '2026-11-21T13:00:00.000Z',
+    proposerAddress: proposer,
+  };
+  const store = storeFor(request);
+  const validSigner = async (address: string) => address === source || address === signer;
+  const options = {
+    allowProposer: true,
+    signerAccess: validSigner,
+    snapshotLoader: async () => snapshot(request),
+  };
+  const ask = await assignSigningRequest(store, request.id, proposer, signer, options);
+  assert.equal(ask.created, true);
+  assert.equal(ask.assignment.assignedByAddress, proposer);
+  const reminded = await requireSigningRequestReminder(store, request.id, proposer, signer, options);
+  assert.equal(reminded.signerAddress, signer);
+
+  await assert.rejects(
+    () => assignSigningRequest(store, request.id, outsider, source, options),
+    (e: unknown) => e instanceof RequestAssignmentServiceError && e.code === 'request_assignment_not_authorized',
+  );
+  await assert.rejects(
+    () => assignSigningRequest(store, request.id, proposer, outsider, options),
+    (e: unknown) => e instanceof RequestAssignmentServiceError && e.code === 'request_assignment_signer_unavailable',
+  );
+  await assert.rejects(
+    () => assignSigningRequest(store, request.id, proposer, proposer, options),
+    (e: unknown) => e instanceof RequestAssignmentServiceError && e.code === 'request_assignment_self',
+  );
+  await assert.rejects(
+    () => assignSigningRequest(store, request.id, proposer, source, { ...options, allowProposer: false }),
+    (e: unknown) => e instanceof RequestAssignmentServiceError && e.code === 'request_assignment_not_authorized',
+  );
+  await assert.rejects(
+    () => requireSigningRequestReminder(store, request.id, outsider, signer, options),
+    (e: unknown) => e instanceof RequestAssignmentServiceError && e.code === 'request_reminder_not_owner',
+  );
+});

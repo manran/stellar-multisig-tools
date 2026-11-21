@@ -7,7 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { Account, Asset, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk/base';
+import { Account, Asset, Keypair, Memo, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk/base';
 import { createServer } from 'vite';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -169,6 +169,7 @@ async function fixturePage(width, options = {}) {
   });
   const state = {
     templateStatus: 200, templates: [], templateOwner: addresses.alice, templateDelay: null,
+    proposerGrants: [], proposerGrantCount: 0, proposerRequestCount: 0,
     inboxStatus: 200, inbox: inboxFixture(), request: requestFixture(), requestError: null,
     requestGetCount: 0, inboxGetCount: 0, contributionCount: 0, submitCount: 0, retentionCount: 0,
     requestAccess: { shareable: false, activityBound: true }, requestGetResponse: null, horizonAccount: null,
@@ -204,6 +205,19 @@ async function fixturePage(width, options = {}) {
     }
     if (!url.pathname.startsWith('/api/')) return route.continue();
     if (url.pathname === '/api/templates') {
+      if (request.method() === 'PATCH') {
+        const body = request.postDataJSON();
+        assert.equal(request.headers()['x-multisig-session-address'], state.templateOwner);
+        assert.equal(body.network, 'testnet');
+        assert.ok(['grant', 'revoke'].includes(body.action));
+        assert.equal(body.templateId, 'tpl_qa_monthly');
+        assert.equal(body.proposerAddress, addresses.carol);
+        state.proposerGrantCount++;
+        state.proposerGrants = body.action === 'grant'
+          ? [...new Set([...state.proposerGrants, body.proposerAddress])]
+          : state.proposerGrants.filter((item) => item !== body.proposerAddress);
+        return json({ proposerAddresses: state.proposerGrants });
+      }
       const response = { address: state.templateOwner, templates: state.templates };
       const status = state.templateStatus;
       if (state.templateDelay) await state.templateDelay;
@@ -254,6 +268,41 @@ async function fixturePage(width, options = {}) {
     if (url.pathname === '/api/treasury-box') return json({ metadataByAccount: {} });
     if (url.pathname === '/api/runtime-config') return json({ stellarNetwork: 'testnet', fixedNetwork: 'testnet', capabilities: { classicManagedExecution: { testnet: false, public: false } } });
     if (url.pathname === '/api/request') {
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON();
+        assert.equal(request.headers()['x-multisig-session-address'], addresses.carol);
+        assert.equal(request.headers()['x-multisig-request-id'], undefined);
+        assert.equal(body.network, 'testnet');
+        assert.equal(body.xdr, undefined, 'Non-signer never submits arbitrary XDR');
+        assert.equal(body.templatePayment?.amount, '12.5');
+        assert.equal(body.templatePayment?.memo, 'INV-401');
+        assert.deepEqual(body.templatePayment?.template, { id: 'tpl_qa_monthly', version: 1 });
+        assert.deepEqual(Object.keys(body.templatePayment).sort(), ['amount', 'memo', 'template']);
+        if (!state.proposerGrants.includes(addresses.carol)) {
+          return json({ code: 'template_proposer_not_authorized', error: 'This wallet is not authorized for this Template.' }, 403);
+        }
+        if (state.proposerPostDelay) await state.proposerPostDelay;
+        state.proposerRequestCount++;
+        const payment = new TransactionBuilder(new Account(addresses.source, '100'), {
+          fee: '100', networkPassphrase: Networks.TESTNET,
+        }).addOperation(Operation.payment({
+          destination: addresses.recipient, asset: Asset.native(), amount: body.templatePayment.amount,
+        })).addMemo(Memo.text(body.templatePayment.memo))
+          .setTimebounds(0, Math.floor(Date.now() / 1000) + 3600).build();
+        state.request = {
+          ...requestFixture('awaiting_signatures'), proposerAddress: addresses.carol,
+          baseXdr: payment.toXDR(), mergedXdr: payment.toXDR(),
+          transactionHash: Buffer.from(payment.hash()).toString('hex'),
+          template: { id: 'tpl_qa_monthly', version: 1, name: 'Monthly suppliers', kind: 'payment' },
+        };
+        state.requestAccess = { shareable: false, activityBound: true };
+        state.inbox = {
+          ...inboxFixture(addresses.carol), requests: [{
+            ...state.request, viewerAction: 'proposer_waiting', coordinationEvents: [],
+          }],
+        };
+        return json({ request: state.request, access: state.requestAccess, context: {} }, 201);
+      }
       assert.equal(request.headers()['x-multisig-request-id'], requestId);
       if (request.method() === 'GET') {
         state.requestGetCount++;
@@ -602,6 +651,129 @@ try {
       assert.equal(href.searchParams.get('template'), 'tpl_qa_monthly');
       assert.equal(href.searchParams.get('network'), 'testnet');
     });
+
+    if (width === 375 || width === 1280) {
+      await run('template-owner-grants-and-revokes-nonsigner-wallet', width, {
+        state: { templates: [{ ...templateFixture(), ownerAddress: addresses.alice, proposerAddresses: [] }] },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/new`);
+        await visible(page, 'Monthly suppliers', 'heading');
+        const grant = page.getByText('Allow another wallet to request payments');
+        await grant.click();
+        const address = page.getByRole('textbox', { name: 'Proposer G address' });
+        await address.fill(addresses.carol);
+        await page.getByRole('button', { name: 'Allow', exact: true }).click();
+        await page.getByRole('button', { name: 'Revoke', exact: true }).waitFor({ state: 'visible' });
+        assert.equal(state.proposerGrantCount, 1);
+        assert.deepEqual(state.proposerGrants, [addresses.carol]);
+        await snapshot(page, 'template-proposer-grant', width);
+        await page.getByRole('button', { name: 'Revoke', exact: true }).click();
+        await page.getByRole('button', { name: 'Revoke', exact: true }).waitFor({ state: 'hidden' });
+        assert.equal(state.proposerGrantCount, 2);
+        assert.deepEqual(state.proposerGrants, []);
+      });
+
+      await run('delegated-wallet-creates-payment-without-signing', width, {
+        wallet: walletState(addresses.carol),
+        state: {
+          templateOwner: addresses.carol,
+          templates: [{ ...templateFixture(), ownerAddress: addresses.alice }],
+          proposerGrants: [addresses.carol],
+          horizonAccount: {
+            account_id: addresses.source, sequence: '100', subentry_count: 2, num_sponsoring: 0, num_sponsored: 0,
+            balances: [{ asset_type: 'native', balance: '1000.0000000' }],
+            thresholds: { low_threshold: 1, med_threshold: 2, high_threshold: 2 },
+            signers: ['alice', 'bob'].map((name) => ({ key: addresses[name], type: 'ed25519_public_key', weight: 1 })),
+          },
+        },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/new`);
+        await visible(page, 'Monthly suppliers', 'heading');
+        await visible(page, 'You are authorized to initiate payments from this Template.');
+        const link = page.getByRole('link', { name: 'Request payment', exact: true });
+        await link.click();
+        await visible(page, 'Request a payment', 'heading');
+        assert.equal(await page.getByRole('textbox', { name: 'Recipient' }).count(), 0);
+        assert.equal(await page.getByRole('button', { name: 'Sign', exact: true }).count(), 0);
+        await page.getByRole('textbox', { name: 'Payment amount' }).fill('12.5');
+        await page.getByRole('textbox', { name: 'On-chain memo (optional)' }).fill('INV-401');
+        await page.getByRole('button', { name: 'Review request' }).click();
+        await visible(page, '12.5 XLM');
+        await snapshot(page, 'delegated-payment-review', width);
+        await page.getByRole('button', { name: 'Create signing request' }).click();
+        await visible(page, 'You requested this payment');
+        await visible(page, 'Waiting for Treasury signatures', 'heading');
+        await visible(page, 'Treasury signatures needed', 'heading');
+        assert.equal(await page.getByRole('heading', { name: 'Your signature is needed' }).count(), 0);
+        assert.equal(await page.getByText('YOU CAN SIGN').count(), 0, 'Proposer must not be classified as a Stellar signer');
+        assert.equal(await page.getByRole('heading', { name: 'Review this transaction' }).count(), 0,
+          'Reviewed proposer payment should continue straight to signer coordination');
+        await page.getByText('12.5000000 XLM').first().waitFor({ state: 'visible' });
+        assert.equal(state.proposerRequestCount, 1);
+        assert.equal(await page.getByRole('button', { name: 'Sign', exact: true }).count(), 0);
+        assert.equal(await page.getByRole('button', { name: 'Submit transaction' }).count(), 0);
+        await visible(page, 'Copy link for authorized signers');
+        await snapshot(page, 'delegated-payment-created', width);
+        await page.goto(`${origin}/inbox`);
+        await visible(page, 'Waiting for signatures');
+        await visible(page, 'Signer follow-up');
+        await snapshot(page, 'delegated-payment-inbox', width);
+      });
+
+      if (width === 375) {
+        await run('delegated-wallet-switch-clears-draft-and-ignores-old-request', width, {
+          wallet: walletState(addresses.carol),
+          state: {
+            templateOwner: addresses.carol,
+            templates: [{ ...templateFixture(), ownerAddress: addresses.alice }],
+            proposerGrants: [addresses.carol, addresses.bob],
+          },
+        }, async ({ page, state }) => {
+          let releaseOldRequest;
+          state.proposerPostDelay = new Promise((resolve) => { releaseOldRequest = resolve; });
+          await page.goto(`${origin}/new/proposer?template=tpl_qa_monthly&network=testnet`);
+          await visible(page, 'Request a payment', 'heading');
+          await page.getByRole('textbox', { name: 'Payment amount' }).fill('12.5');
+          await page.getByRole('textbox', { name: 'On-chain memo (optional)' }).fill('INV-401');
+          await page.getByRole('button', { name: 'Review request' }).click();
+          const oldPost = page.waitForRequest((request) => request.url().endsWith('/api/request')
+            && request.method() === 'POST');
+          await page.getByRole('button', { name: 'Create signing request' }).click();
+          await oldPost;
+          state.templateOwner = addresses.bob;
+          await page.evaluate((wallet) => window.__MST_QA_SET_WALLET__(wallet), walletState(addresses.bob));
+          const amount = page.getByRole('textbox', { name: 'Payment amount' });
+          await amount.waitFor({ state: 'visible' });
+          assert.equal(await amount.inputValue(), '', 'An old wallet amount must not carry to a new wallet');
+          assert.equal(await page.getByRole('textbox', { name: 'On-chain memo (optional)' }).inputValue(), '',
+            'An old wallet memo must not carry to a new wallet');
+          releaseOldRequest();
+          await page.waitForTimeout(150);
+          assert.equal(new URL(page.url()).pathname, '/new/proposer',
+            'A late Request created by the old wallet must not hijack new wallet navigation');
+          assert.equal(state.proposerRequestCount, 1);
+          await snapshot(page, 'proposer-wallet-change-isolation', width);
+        });
+      }
+
+      await run('delegated-wallet-revoked-cannot-create-payment', width, {
+        wallet: walletState(addresses.carol),
+        state: {
+          templateOwner: addresses.carol,
+          templates: [{ ...templateFixture(), ownerAddress: addresses.alice }],
+          proposerGrants: [],
+        },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/new/proposer?template=tpl_qa_monthly&network=testnet`);
+        await visible(page, 'Request a payment', 'heading');
+        await page.getByRole('textbox', { name: 'Payment amount' }).fill('12.5');
+        await page.getByRole('textbox', { name: 'On-chain memo (optional)' }).fill('INV-401');
+        await page.getByRole('button', { name: 'Review request' }).click();
+        await page.getByRole('button', { name: 'Create signing request' }).click();
+        await visible(page, 'This wallet is not authorized for this Template.');
+        assert.equal(state.proposerRequestCount, 0);
+      });
+    }
 
     await run('inbox-progress', width, {}, async ({ page }) => {
       await page.goto(`${origin}/inbox`);

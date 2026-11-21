@@ -125,6 +125,60 @@ export class PostgresReusableTemplateStore implements ReusableTemplateStore {
   getTemplateVersion(id: string, version: number): Promise<StoredReusableTemplateVersion | null> {
     return selectVersion(this.pool, id, version);
   }
+
+  async listGrantedTemplates(proposer: string, network: StellarNetwork): Promise<StoredReusableTemplateVersion[]> {
+    const result = await this.pool.query<TemplateRow>(
+      `SELECT t.id, t.owner_address, t.network, t.name, t.kind, t.current_version,
+              t.created_at, t.updated_at, t.archived_at,
+              v.version, v.definition, v.created_at AS version_created_at
+         FROM mst_stellar.reusable_template_proposer_grants g
+         JOIN mst_stellar.reusable_templates t ON t.id = g.template_id
+         JOIN mst_stellar.reusable_template_versions v
+           ON v.template_id = t.id AND v.version = t.current_version
+        WHERE g.proposer_address = $1 AND g.revoked_at IS NULL
+          AND t.network = $2 AND t.archived_at IS NULL
+        ORDER BY t.updated_at DESC, t.id`,
+      [proposer, network],
+    );
+    return result.rows.map(rowToVersion);
+  }
+
+  async listProposers(templateId: string): Promise<string[]> {
+    const result = await this.pool.query<{ proposer_address: string }>(
+      `SELECT proposer_address FROM mst_stellar.reusable_template_proposer_grants
+        WHERE template_id = $1 AND revoked_at IS NULL ORDER BY proposer_address`,
+      [templateId],
+    );
+    return result.rows.map((row) => row.proposer_address);
+  }
+
+  async hasActiveGrant(templateId: string, proposer: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `SELECT 1 FROM mst_stellar.reusable_template_proposer_grants
+        WHERE template_id = $1 AND proposer_address = $2 AND revoked_at IS NULL LIMIT 1`,
+      [templateId, proposer],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async grantProposer(templateId: string, proposer: string, by: string): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO mst_stellar.reusable_template_proposer_grants
+         (template_id, proposer_address, granted_by_address)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (template_id, proposer_address) WHERE revoked_at IS NULL DO NOTHING`,
+      [templateId, proposer, by],
+    );
+  }
+
+  async revokeProposer(templateId: string, proposer: string, by: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE mst_stellar.reusable_template_proposer_grants
+          SET revoked_at = now(), revoked_by_address = $3
+        WHERE template_id = $1 AND proposer_address = $2 AND revoked_at IS NULL`,
+      [templateId, proposer, by],
+    );
+  }
 }
 
 export function createPostgresReusableTemplateStore(

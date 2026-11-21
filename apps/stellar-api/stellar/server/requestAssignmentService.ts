@@ -23,6 +23,7 @@ export async function assignSigningRequest(
   options: {
     now?: Date;
     signerAccess?: typeof signerCanAccessTransaction;
+    allowProposer?: boolean;
     snapshotLoader?: (store: SigningRequestStore, requestId: string) => Promise<SigningRequestSnapshot>;
   } = {},
 ): Promise<{ assignment: SigningRequestAssignment; created: boolean }> {
@@ -63,7 +64,8 @@ export async function assignSigningRequest(
 
   const access = options.signerAccess ?? signerCanAccessTransaction;
   const [assignerAllowed, signerAllowed] = await Promise.all([
-    access(assignedByAddress, stored.baseXdr, stored.network),
+    options.allowProposer && stored.proposerAddress === assignedByAddress
+      ? Promise.resolve(true) : access(assignedByAddress, stored.baseXdr, stored.network),
     access(signerAddress, stored.baseXdr, stored.network),
   ]);
   if (!assignerAllowed) {
@@ -113,6 +115,7 @@ export async function requireSigningRequestReminder(
   signerAddressValue: unknown,
   options: {
     signerAccess?: typeof signerCanAccessTransaction;
+    allowProposer?: boolean;
     snapshotLoader?: (store: SigningRequestStore, requestId: string) => Promise<SigningRequestSnapshot>;
   } = {},
 ): Promise<SigningRequestAssignment> {
@@ -146,7 +149,8 @@ export async function requireSigningRequestReminder(
   }
   const stored = await store.getRequest(requestId);
   if (!stored) throw new RequestAssignmentServiceError('Signing request not found.', 404, 'request_not_found');
-  if (assignment.assignedByAddress !== remindedByAddress && stored.creatorAddress !== remindedByAddress) {
+  if (assignment.assignedByAddress !== remindedByAddress && stored.creatorAddress !== remindedByAddress
+    && (!options.allowProposer || stored.proposerAddress !== remindedByAddress)) {
     throw new RequestAssignmentServiceError(
       'Only the original requester or the signer who sent the Ask can send a reminder.',
       403,
@@ -155,7 +159,8 @@ export async function requireSigningRequestReminder(
   }
   const access = options.signerAccess ?? signerCanAccessTransaction;
   const [reminderActorAllowed, signerAllowed] = await Promise.all([
-    access(remindedByAddress, stored.baseXdr, stored.network),
+    options.allowProposer && stored.proposerAddress === remindedByAddress
+      ? Promise.resolve(true) : access(remindedByAddress, stored.baseXdr, stored.network),
     access(signerAddress, stored.baseXdr, stored.network),
   ]);
   if (!reminderActorAllowed || !signerAllowed) {

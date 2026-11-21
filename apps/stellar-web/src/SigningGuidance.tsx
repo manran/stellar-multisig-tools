@@ -24,6 +24,8 @@ interface Props {
   sourceAnalyses: SourceAnalysis[];
   walletAddress: string;
   creatorAddress?: string;
+  proposerAddress?: string;
+  readOnlyProposer?: boolean;
   walletBusy: boolean;
   walletError: string;
   onConnectWallet: () => void;
@@ -44,6 +46,8 @@ export default function SigningGuidance({
   sourceAnalyses,
   walletAddress,
   creatorAddress,
+  proposerAddress,
+  readOnlyProposer = false,
   walletBusy,
   walletError,
   onConnectWallet,
@@ -145,7 +149,7 @@ export default function SigningGuidance({
     Boolean(emailFor(key))
     && !assignments.some((assignment) => assignment.signerAddress === key));
   const inviteSelectedNow = inviteSelection.filter((key) => inviteCandidates.includes(key));
-  const isCreator = Boolean(sessionAddress && creatorAddress === sessionAddress);
+  const isCreator = Boolean(sessionAddress && (creatorAddress === sessionAddress || proposerAddress === sessionAddress));
   const unaskedTargets = shareTargets.filter((key) =>
     !assignments.some((assignment) => assignment.signerAddress === key));
 
@@ -395,7 +399,7 @@ export default function SigningGuidance({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] opacity-40">Signatures</div>
-          <h2 className="mt-2 text-2xl font-bold">{authorizationComplete ? 'All required signatures are present' : walletAlreadySigned ? 'Waiting for other signatures' : 'Who needs to sign?'}</h2>
+          <h2 className="mt-2 text-2xl font-bold">{authorizationComplete ? 'All required signatures are present' : readOnlyProposer ? 'Waiting for Treasury signatures' : walletAlreadySigned ? 'Waiting for other signatures' : 'Who needs to sign?'}</h2>
           {!authorizationComplete && !hasAuthorizationError && walletAlreadySigned && (
             <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">
               {remainingSignatureCopy}
@@ -593,7 +597,7 @@ export default function SigningGuidance({
         </div>
       )}
 
-      {!authorizationComplete && !hasAuthorizationError && (
+      {!authorizationComplete && !hasAuthorizationError && !readOnlyProposer && (
         <div className="mst-signing-action-strip mt-5">
           <div className="text-sm">
             <div className="font-semibold">Sign proposal</div>

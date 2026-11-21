@@ -36,4 +36,9 @@ export interface ReusableTemplateStore {
     id: string,
     version: number,
   ): Promise<StoredReusableTemplateVersion | null>;
+  listGrantedTemplates?(proposer: string, network: StellarNetwork): Promise<StoredReusableTemplateVersion[]>;
+  listProposers?(templateId: string): Promise<string[]>;
+  hasActiveGrant?(templateId: string, proposer: string): Promise<boolean>;
+  grantProposer?(templateId: string, proposer: string, by: string): Promise<void>;
+  revokeProposer?(templateId: string, proposer: string, by: string): Promise<void>;
 }
