@@ -67,7 +67,7 @@ function TemplateGrantControls({ template, sessionAddress, network }: { template
   return (
     <details className="mt-3 text-sm">
       <summary className="cursor-pointer font-semibold text-[var(--color-accent)]">Allow another wallet to request payments</summary>
-      <p className="mt-2 leading-6 text-[var(--color-ink-2)]">This grants permission to prepare payments from this Template. It does not grant any Stellar signing rights.</p>
+      <p className="mt-2 leading-6 text-[var(--color-ink-2)]">This wallet can prepare payments from the Template. Treasury signers still approve each transaction.</p>
       <div className="mt-3 flex flex-wrap gap-2">
         <input aria-label="Proposer G address" value={address} onChange={(event) => setAddress(event.target.value.trim())}
           placeholder="G... wallet address" className="mst-request-control min-w-0 flex-1 font-mono text-xs" />
@@ -75,10 +75,14 @@ function TemplateGrantControls({ template, sessionAddress, network }: { template
           onClick={() => void update('grant', address)}>Allow</ActionButton>
       </div>
       {proposers.length > 0 && <ul className="mt-3 space-y-2">
-        {proposers.map((proposer) => <li key={proposer} className="flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span className="break-all font-mono" title={proposer}>{proposer}</span>
+        {proposers.map((proposer) => <li key={proposer} className="flex min-w-0 items-center gap-3 rounded-lg border border-[var(--color-rule)] bg-[var(--color-paper-2)] px-3 py-1.5 text-xs">
+          <span className="min-w-0 flex-1 truncate font-mono" title={proposer}>
+            {`${proposer.slice(0, 10)}…${proposer.slice(-8)}`}
+          </span>
+          <button type="button" onClick={() => void navigator.clipboard.writeText(proposer).catch(() => setError('Could not copy this address.'))}
+            className="min-h-11 shrink-0 font-semibold text-[var(--color-action)]">Copy</button>
           <button type="button" disabled={busy} onClick={() => void update('revoke', proposer)}
-            className="min-h-11 font-semibold text-[var(--color-danger)] disabled:opacity-40">Revoke</button>
+            className="min-h-11 shrink-0 font-semibold text-[var(--color-danger)] disabled:opacity-40">Revoke</button>
         </li>)}
       </ul>}
       {error && <p role="alert" className="mt-2 text-xs text-[var(--color-danger)]">{error}</p>}
