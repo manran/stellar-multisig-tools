@@ -10,6 +10,7 @@ interface Props {
   compact?: boolean;
   semantics?: 'name' | 'note';
   allowNotificationEmail?: boolean;
+  showEmailPreview?: boolean;
 }
 
 export default function AddressAliasEditor({
@@ -18,6 +19,7 @@ export default function AddressAliasEditor({
   compact = false,
   semantics = 'name',
   allowNotificationEmail = false,
+  showEmailPreview = true,
 }: Props) {
   const { privateUnlocked } = useStellarWallet();
   const { labelFor, emailFor, saveAlias, removeAlias } = useAddressBook();
@@ -43,13 +45,13 @@ export default function AddressAliasEditor({
     if (!value || busy) return;
     setBusy(true);
     setError('');
-    setEditing(false);
     void saveAlias(
       address,
       subjectType,
       value,
       allowNotificationEmail ? (draftEmail.trim() || null) : undefined,
     )
+      .then(() => setEditing(false))
       .catch((cause) => {
         setError(cause instanceof Error ? cause.message : `Unable to save ${noun}.`);
       })
@@ -91,7 +93,7 @@ export default function AddressAliasEditor({
           <Pencil className="h-3.5 w-3.5" />
           {!compact && <span>{allowNotificationEmail ? (currentLabel || currentEmail ? 'Edit contact' : 'Add contact') : noteMode ? (currentLabel ? 'Edit note' : 'Add note') : (currentLabel ? 'Rename' : 'Name this')}</span>}
         </button>
-        {allowNotificationEmail && currentEmail && <div className="mt-1 max-w-[240px] break-all text-[11px] text-neutral-400">{currentEmail}</div>}
+        {allowNotificationEmail && showEmailPreview && currentEmail && <div className="mt-1 max-w-[240px] break-all text-[11px] text-neutral-400">{currentEmail}</div>}
         {error && <div className="mt-1 max-w-[240px] text-xs text-red-700 dark:text-red-300">{error}</div>}
       </div>
     );

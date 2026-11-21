@@ -218,7 +218,7 @@ async function fixturePage(width, options = {}) {
         const body = request.postDataJSON();
         if (state.contactSaveStatus !== 200) return json({ error: 'Contact could not be saved.' }, state.contactSaveStatus);
         state.contactSaveCount++;
-        const entry = { address: body.address, subject_type: body.subject_type, label: body.label, created_at: now, updated_at: now };
+        const entry = { address: body.address, subject_type: body.subject_type, label: body.label, ...(body.notification_email ? { notification_email: body.notification_email } : {}), created_at: now, updated_at: now };
         state.addressEntries = [...(state.addressEntries ?? []), entry];
         return json({ entry });
       }
@@ -662,6 +662,27 @@ try {
         await visible(page, 'Add a contact email to an eligible signer below, or share the private link.');
         assert.equal(state.assignments.length, 0, 'No automatic invitations without saved email and selection');
         await snapshot(page, 'proposal-owner-followup', width);
+        if (width === 375) {
+          await page.getByRole('button', { name: 'Edit contact Bob' }).click();
+          const name = page.getByPlaceholder('e.g. Bob');
+          const email = page.getByRole('textbox', { name: 'Notification email' });
+          await name.fill('Bob');
+          await email.fill('bob@example.org');
+          state.contactSaveStatus = 503;
+          await page.getByRole('button', { name: 'Save contact' }).click();
+          await visible(page, 'Contact could not be saved.');
+          assert.equal(await name.inputValue(), 'Bob', 'Contact name remains editable after a failed save');
+          assert.equal(await email.inputValue(), 'bob@example.org', 'Contact email remains editable after a failed save');
+          state.contactSaveStatus = 200;
+          await page.getByRole('button', { name: 'Save contact' }).click();
+          await visible(page, 'Invite signers', 'heading');
+          await visible(page, 'Invite Bob', 'checkbox');
+          assert.equal(state.contactSaveCount, 1);
+          await page.getByRole('button', { name: 'Edit contact Bob' }).click();
+          assert.equal(await page.getByRole('textbox', { name: 'Notification email' }).inputValue(), 'bob@example.org', 'Saved signer email remains editable');
+          await page.getByRole('button', { name: 'Cancel contact editing' }).click();
+          await snapshot(page, 'proposal-contact-recovery', width);
+        }
       });
       await run('proposal-creator-reminder', width, {
         state: {
@@ -690,6 +711,26 @@ try {
         assert.equal(state.remindCount, 1);
         assert.equal(state.assignments.length, 1);
         await snapshot(page, 'proposal-owner-reminder', width);
+      });
+      await run('proposal-creator-can-send-first-email-for-another-requester', width, {
+        state: {
+          request: { ...requestFixture('awaiting_signatures', ['alice']), creatorAddress: addresses.alice },
+          requestAccess: { shareable: false, activityBound: true },
+          inviteContacts: true,
+          assignments: [{ version: 1, signerAddress: addresses.carol, assignedByAddress: addresses.bob, assignedAt: now }],
+          notifications: [],
+        },
+      }, async ({ page, state }) => {
+        await page.goto(origin + '/s#' + requestId);
+        await visible(page, 'November supplier payment', 'heading');
+        await page.getByRole('button', { name: 'Invite or remind signers' }).click();
+        const notify = page.getByRole('button', { name: 'Send email', exact: true });
+        await notify.waitFor({ state: 'visible' });
+        await notify.click();
+        await visible(page, 'Reminder queued');
+        assert.equal(state.remindCount, 1, 'Creator can notify an eligible signer originally asked by someone else');
+        assert.equal(state.assignments.length, 1);
+        await snapshot(page, 'proposal-cross-requester-email', width);
       });
       await run('proposal-recipient-signed-waiting', width, {
         wallet: walletState(addresses.bob),
