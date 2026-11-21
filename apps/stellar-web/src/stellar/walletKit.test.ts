@@ -4,8 +4,21 @@ import {
   isWalletAuthEntrySigningUnsupported,
   isWalletMessageSigningUnsupported,
   isWalletSelectionCancelled,
+  nameVarialWallet,
   walletActionErrorMessage,
 } from './walletKit.js';
+
+test('displays Varial without changing the legacy wallet module identity', () => {
+  const modules = [
+    { productId: 'freighter', productName: 'Freighter' },
+    { productId: 'ledger', productName: 'Ledger' },
+  ];
+  assert.equal(nameVarialWallet(modules), modules);
+  assert.deepEqual(modules, [
+    { productId: 'freighter', productName: 'Varial' },
+    { productId: 'ledger', productName: 'Ledger' },
+  ]);
+});
 
 test('detects closing the wallet-selection modal as cancellation', () => {
   assert.equal(isWalletSelectionCancelled({ code: -1, message: 'The user closed the modal.' }), true);
