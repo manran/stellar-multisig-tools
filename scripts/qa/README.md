@@ -40,6 +40,7 @@ Stellar authorization or on-chain execution. Use the complementary
 npm ci --no-audit --no-fund
 node scripts/qa/hostedTestnetLifecycle.mjs         # read-only Testnet runtime check
 node scripts/qa/hostedTestnetLifecycle.mjs --live          # 2-of-3 Human lifecycle
+node scripts/qa/hostedTestnetLifecycle.mjs --live --coordination # ID-only Ask/remind, no emails
 node scripts/qa/hostedTestnetLifecycle.mjs --live --agent  # scoped Agent signer lifecycle
 ```
 
@@ -56,7 +57,10 @@ real Agent actor must appear in Activity, and revocation must block reuse.
 
 Only public transaction hashes, Testnet accounts, request IDs, and step
 timestamps appear in its output. It never saves private keys, JWT tokens or
-capability links. No emails or Mainnet transactions are sent. The funded
+capability links. With `--coordination`, the smoke also checks verified-session ID-only access,
+self-Ask denial, durable assignment, duplicate Ask, creator reminder ownership,
+and missing-email behavior using new empty address books. No email is sent.
+The funded
 ephemeral Testnet account remains on Testnet; this test does not delete it.
 Run it intentionally, not automatically on PR builds. It tests generated
 software keypairs, **not** the Freighter browser extension.

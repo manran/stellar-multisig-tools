@@ -11,6 +11,7 @@ const HORIZON = 'https://horizon-testnet.stellar.org';
 const FAUCET = 'https://friendbot.stellar.org';
 const LIVE = process.argv.includes('--live');
 const AGENT = process.argv.includes('--agent');
+const COORDINATION = process.argv.includes('--coordination');
 const now = () => new Date().toISOString();
 const trace = [];
 function record(step, extra = {}) {
@@ -155,6 +156,55 @@ async function main() {
   const before = await call('/request', 'GET', undefined, requestHeaders(requestId, capability));
   check(before.request?.signatureCount === 0, 'Stored proposal signature count changed');
   record('hosted-proposal-readback');
+
+  if (COORDINATION) {
+    // Exercise the real API from ID-only links. Fresh ephemeral wallet address
+    // books have no email contacts; this cannot deliver unwanted mail.
+    const aliceSessionHeaders = requestHeaders(requestId, '', {
+      ...cookieHeaders(token), 'x-multisig-session-address': source,
+    });
+    const creatorRead = await call('/request', 'GET', undefined, aliceSessionHeaders);
+    check(creatorRead.request?.id === requestId && creatorRead.coordination,
+      'Creator cannot open ID-only proposal with their verified session');
+    record('session-only-proposal-read');
+
+    const selfInvite = await call('/request', 'PATCH', { assignSigner: source }, aliceSessionHeaders, 400);
+    check(selfInvite.code === 'request_assignment_self', 'Self-invitation must be rejected');
+    record('self-invite-rejected');
+
+    const asked = await call('/request', 'PATCH', { assignSigner: bob.publicKey() }, aliceSessionHeaders);
+    check(asked.created === true && asked.assignment?.signerAddress === bob.publicKey()
+      && asked.notification?.status === 'no_contact_email',
+      'ID-only session invitation must persist without dispatching an email');
+    record('session-only-invite-without-email');
+
+    const askedAgain = await call('/request', 'PATCH', { assignSigner: bob.publicKey() }, aliceSessionHeaders);
+    check(askedAgain.created === false && askedAgain.notification?.status === 'no_contact_email',
+      'Repeated invitation should not duplicate assignment');
+    record('session-only-invite-idempotent');
+
+    const reminder = await call('/request', 'PATCH', { remindSigner: bob.publicKey() }, aliceSessionHeaders);
+    check(reminder.notification?.status === 'no_contact_email',
+      'Reminder without an address-book email should not be queued');
+    record('session-only-reminder-without-email');
+
+    const bobVerifiedToken = await unlock(bob);
+    const bobSessionHeaders = requestHeaders(requestId, '', {
+      ...cookieHeaders(bobVerifiedToken), 'x-multisig-session-address': bob.publicKey(),
+    });
+    const anotherAsk = await call('/request', 'PATCH', { assignSigner: carol.publicKey() }, bobSessionHeaders);
+    check(anotherAsk.created === true && anotherAsk.notification?.status === 'no_contact_email',
+      'A current signer must be able to ask another eligible signer from ID-only access');
+    const creatorReminder = await call('/request', 'PATCH', { remindSigner: carol.publicKey() }, aliceSessionHeaders);
+    check(creatorReminder.notification?.status === 'no_contact_email',
+      'Creator should be able to remind a signer originally asked by another authorized signer');
+    record('creator-can-remind-other-requester');
+
+    const after = await call('/request', 'GET', undefined, aliceSessionHeaders);
+    check(after.coordination?.assignments?.length === 2 && after.coordination?.notifications?.length === 0,
+      'Assignment facts must persist without creating phantom email notifications');
+    record('real-coordination-readback');
+  }
 
   // With --agent, the principal signs exact XDR locally while a scoped API
   // credential names the Agent actor. The API never holds the private key.

@@ -43,13 +43,13 @@ export default function AddressAliasEditor({
     if (!value || busy) return;
     setBusy(true);
     setError('');
-    setEditing(false);
     void saveAlias(
       address,
       subjectType,
       value,
       allowNotificationEmail ? (draftEmail.trim() || null) : undefined,
     )
+      .then(() => setEditing(false))
       .catch((cause) => {
         setError(cause instanceof Error ? cause.message : `Unable to save ${noun}.`);
       })

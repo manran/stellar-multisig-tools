@@ -300,6 +300,7 @@ export default function SigningGuidance({
     }
 
     const canRepairInitialEmail = assignedByMe && !notification;
+    const canSendFirstEmailAsCreator = canRemindAsCreator && !assignedByMe && !notification;
     const canRemind = (assignedByMe || canRemindAsCreator) && (
       notification?.state === 'provider_accepted'
       || notification?.state === 'delivered'
@@ -340,7 +341,7 @@ export default function SigningGuidance({
               : assigned ? 'Notify by email' : askLabel}
           </ActionButton>
         )}
-        {onRemind && (canRemind || canRetryFailed) && (
+        {onRemind && (canRemind || canRetryFailed || canSendFirstEmailAsCreator) && (
           <ActionButton
             variant="secondary"
             size="sm"
@@ -348,7 +349,7 @@ export default function SigningGuidance({
             onClick={() => void remindSigner(signerAddress)}
             className="min-h-11 shrink-0"
           >
-            {askBusy === signerAddress ? 'Sending…' : canRetryFailed ? 'Retry email' : 'Remind'}
+            {askBusy === signerAddress ? 'Sending…' : canRetryFailed ? 'Retry email' : canSendFirstEmailAsCreator ? 'Send email' : 'Remind'}
           </ActionButton>
         )}
         {askError?.address === signerAddress && <span className="basis-full text-xs text-red-600 dark:text-red-400">{askError.message}</span>}
