@@ -117,6 +117,7 @@ test('private Proposal context states the server-private and bearer-link boundar
   assert.match(payment, /not end-to-end encrypted/);
   assert.match(requestUi, /Anyone with this private link can view the active Proposal/);
   assert.match(requestUi, /submit the transaction once it is fully signed/);
+  assert.match(requestUi, /setCopied\('link'\);\s*setShareJustCreated\(true\)/);
   assert.match(requestUi, /cannot add signatures or change the transaction/);
   assert.match(signingGuidance, /submit the transaction once it is fully signed/);
 });
