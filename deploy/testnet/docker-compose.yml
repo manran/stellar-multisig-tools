@@ -54,6 +54,7 @@ services:
     environment:
       PORT: "3000"
       VITE_STELLAR_DEPLOYMENT_NETWORK: testnet
+      MST_IDENTITY_TRUSTED_PROXY: cloudflare
       SAINT_TESTNET_CONSUMER_URL: ${SAINT_TESTNET_CONSUMER_URL:-http://100.96.0.4:18510}
       DATABASE_URL: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}
       DATABASE_URL_UNPOOLED: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}
@@ -96,7 +97,6 @@ services:
         required: false
     environment:
       VITE_STELLAR_DEPLOYMENT_NETWORK: testnet
-      MST_IDENTITY_TRUSTED_PROXY: cloudflare
       DATABASE_URL: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}
       MULTISIG_COORDINATION_STORAGE: postgres
       MULTISIG_PRIVATE_OBJECT_STORAGE: filesystem
