@@ -54,7 +54,7 @@ Payment Request. Actual signing/submission remains governed by the current Stell
 
 ## Wallet linking product flow
 
-- **Passkey user, no wallet:** shows a Connect Stellar wallet action; Contacts and Smart Contracts already work.
+- **Passkey user, no wallet:** shows a Connect Stellar wallet action; Address Book and Smart Contracts already work.
 - **Wallet connected but not linked:** SEP-53 must verify ownership. Show the exact G-address and an explicit Link this wallet confirmation. No implicit account switching.
 - **Wallet linked to this MST User:** the verified wallet is another login method. Login may be Passkey or Stellar wallet; on-chain signing still requires the wallet to be an authorized signer.
 - **Wallet already owned by another MST User:** return `wallet_already_linked` (409) with an actionable choice. Do not transfer credentials, proposals, or personal data automatically. A user may sign into that wallet account and register a **new** Passkey there. Moving an existing Passkey between two accounts remains an explicit account-migration problem, not a wallet-link side effect.
@@ -63,9 +63,9 @@ Payment Request. Actual signing/submission remains governed by the current Stell
 
 ## User-owned workspace data
 
-- Contacts and saved Contracts belong to the stable **MST User ID** and deployment network, regardless of which linked login method opened the account. A Passkey-only user may view and edit these resources with no Stellar wallet.
+- Address Book entries and saved Smart Contracts belong to the stable **MST User ID** and deployment network, regardless of which linked login method opened the account. A Passkey-only user may view and edit these resources with no Stellar wallet.
 - Signer-bound Agent API credentials keep their existing, separate signer workspace. Treasury signer authority, Soroban AUTH and transaction execution remain governed by Stellar; no wallet capability is inferred from an MST session.
-- When a wallet is both **verified** and **linked to this User ID**, the API copies existing G-address-owned Contacts/Contracts once into the user's workspace. User-owned entries win on conflicts. The original records stay available, and a durable per-wallet marker prevents deleted entries being reimported.
+- When a wallet is both **verified** and **linked to this User ID**, the API copies existing G-address-owned address-book entries and saved contracts once into the user's workspace. User-owned entries win on conflicts. The original records stay available, and a durable per-wallet marker prevents deleted entries being reimported.
 - Old browser-local contract favorites are not automatically imported: they were not bound to a cryptographic wallet identity. The signed-in user can explicitly import valid, not-yet-saved C-addresses for the current network from this browser on the Smart Contracts page. A successful import removes that browser-local entry; a failed import leaves it available to retry.
 - Notifications initiated by a verified G signer use the linked MST user's Contact email if present, otherwise the existing signer-scoped email. An email address is a delivery destination, not a signer credential.
 

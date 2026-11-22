@@ -40,7 +40,7 @@ test('Testnet landing offers a workflow instead of runtime-boundary lessons', ()
 });
 
 test('tool labels are intentionally distinct and use one copy source', () => {
-  assert.equal(WORKSPACE_COPY.tools.contacts, 'Contacts');
+  assert.equal(WORKSPACE_COPY.tools.contacts, 'Address Book');
   assert.equal(WORKSPACE_COPY.tools.contracts, 'Smart Contracts');
   assert.notEqual(WORKSPACE_COPY.tools.contacts, WORKSPACE_COPY.tools.contracts);
   assert.equal(WORKSPACE_COPY.contracts.count(1), '1 saved contract');

@@ -5,7 +5,7 @@
  */
 export const WORKSPACE_COPY = {
   tools: {
-    contacts: 'Contacts',
+    contacts: 'Address Book',
     contracts: 'Smart Contracts',
     treasuries: 'Treasuries',
     agents: 'Agent access',
