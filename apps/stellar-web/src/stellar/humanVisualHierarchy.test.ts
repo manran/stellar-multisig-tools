@@ -190,7 +190,8 @@ test('Operational tools connect decisions to the existing secure workflow', () =
     && addressBook.indexOf('privateReady && visibleContacts.length > 0') < addressBook.indexOf('visibleTreasuries.length > 0'),
     'Contact order must be signers, saved contacts, then linked treasuries',
   );
-  assert.match(addressBook, /unlockedAddress === address && unlockedNetwork === network/);
+  assert.match(addressBook, /unlockedAddress === relatedAddress && unlockedNetwork === network/);
+  assert.match(addressBook, /const relatedAddress = identity\?\.address === address \? address : ''/);
   assert.match(addressBook, /await saveAlias\(target, 'account', name\)/);
   assert.match(addressBook, /id="contact-search" type="search"/);
   assert.match(agentAccess, /pendingRevokeId === credential\.credentialId/);

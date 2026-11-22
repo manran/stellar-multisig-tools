@@ -1122,6 +1122,18 @@ try {
     });
 
     if (width === 375) {
+      await run('passkey-unlinked-wallet-is-not-my-signer-directory', width, {
+        wallet: walletState(addresses.alice),
+        state: { passkeyLoggedIn: true, walletLinkCount: 0 },
+      }, async ({ page }) => {
+        await page.goto(origin + '/address-book');
+        await page.getByRole('heading', { name: /^Saved contacts/ }).waitFor();
+        assert.equal(await page.getByRole('heading', { name: /^Signers/ }).count(), 0,
+          'Unlinked selected wallet must not appear as account signer history');
+        assert.equal(await page.getByRole('heading', { name: /^Treasuries/ }).count(), 0,
+          'Unlinked selected wallet must not appear as account treasuries');
+        await snapshot(page, 'unlinked-wallet-contacts', width);
+      });
       await run('passkey-wallet-link-rejects-another-owner', width, {
         wallet: walletState(addresses.alice),
         state: { passkeyLoggedIn: true, walletLinkConflict: true },

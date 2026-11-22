@@ -58,7 +58,7 @@ Payment Request. Actual signing/submission remains governed by the current Stell
 - **Wallet connected but not linked:** SEP-53 must verify ownership. Show the exact G-address and an explicit Link this wallet confirmation. No implicit account switching.
 - **Wallet linked to this MST User:** the verified wallet is another login method. Login may be Passkey or Stellar wallet; on-chain signing still requires the wallet to be an authorized signer.
 - **Wallet already owned by another MST User:** return `wallet_already_linked` (409) with an actionable choice. Do not transfer credentials, proposals, or personal data automatically. A user may sign into that wallet account and register a **new** Passkey there. Moving an existing Passkey between two accounts remains an explicit account-migration problem, not a wallet-link side effect.
-- **Different selected wallet:** preserve the active Passkey user, show the new wallet as unlinked until verified and confirmed. Changing or locking a wallet does not sign out the Passkey session.
+- **Different selected wallet:** preserve the active Passkey user, show the new wallet as unlinked until verified and confirmed. Changing or locking a wallet does not sign out the Passkey session. Do not show that wallet's signer relationships or treasuries as belonging to the Passkey user until the wallet is linked.
 - **Soroban C-address:** a contract address is not a SEP-53 wallet credential. Passkey-based on-chain authority needs an independently verified smart-account policy; this login linking flow does not attach a C-address as a signer.
 
 ## User-owned workspace data

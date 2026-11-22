@@ -23,7 +23,7 @@ Shared authorization without shared custody.
 - Show **Contacts** as a name-first directory and **Smart Contracts** as a C-address/method workbench. Keep `/address-book` and `/contracts` routes.
 - Reuse `apps/stellar-web/src/workspaceCopy.ts` for shared tool, navigation, and login-method UI strings. No per-component copy forks.
 - A linked, verified wallet may copy older signer-scoped contacts and contracts into this user workspace once. Preserve originals and never merge an unlinked wallet.
-- For Passkey users, wallet pairing is **Connect -> Verify -> Review full G-address -> Confirm link -> Linked**. Wallet selection never binds automatically. An already-owned wallet stays with its original MST account until a separately reviewed migration flow exists.
+- For Passkey users, wallet pairing is **Connect -> Verify -> Review full G-address -> Confirm link -> Linked**. Wallet selection never binds automatically. An already-owned wallet stays with its original MST account until a separately reviewed migration flow exists. Unlinked wallets must not populate the signed-in user's Signers or Treasuries relationships.
 - Treasury authority and signer-Agent credentials remain wallet/chain scoped. An MST account login does not imply signing rights.
 
 The visual system should communicate:

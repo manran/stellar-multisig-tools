@@ -35,6 +35,7 @@ function relatedSigners(accounts: StellarAccountSnapshot[]): RelatedSigner[] {
 export default function AddressBookApp() {
   const { address, network, privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
   const { identity } = useUserIdentity();
+  const relatedAddress = identity?.address === address ? address : '';
   const { entries, labelFor, saveAlias, loading: aliasesLoading, error: aliasError } = useAddressBook();
   const [accounts, setAccounts] = useState<StellarAccountSnapshot[]>([]);
   const [loading, setLoading] = useState(false);
@@ -47,7 +48,7 @@ export default function AddressBookApp() {
   const [savingContact, setSavingContact] = useState(false);
   const [search, setSearch] = useState('');
   const privateReady = Boolean(identity);
-  const treasuryPrivateReady = Boolean(privateUnlocked && address && network && unlockedAddress === address && unlockedNetwork === network && identity);
+  const treasuryPrivateReady = Boolean(privateUnlocked && relatedAddress && network && unlockedAddress === relatedAddress && unlockedNetwork === network);
   const visibleLabelFor = (identity: string, type: 'account' | 'signer') => privateReady ? labelFor(identity, type) : '';
   const visibleTreasuryNames = privateReady ? treasuryNames : {};
 
@@ -60,7 +61,7 @@ export default function AddressBookApp() {
   }, [address, network, identity?.userId]);
 
   useEffect(() => {
-    if (!address || !network) {
+    if (!relatedAddress || !network) {
       setAccounts([]);
       setLoading(false);
       setError('');
@@ -68,7 +69,7 @@ export default function AddressBookApp() {
     }
     let cancelled = false;
     const controller = new AbortController();
-    const cached = peekAccountsForSigner(address, network);
+    const cached = peekAccountsForSigner(relatedAddress, network);
     if (cached) {
       setAccounts(cached);
       setLoading(false);
@@ -76,7 +77,7 @@ export default function AddressBookApp() {
       setLoading(true);
     }
     setError('');
-    void loadAccountsForSigner(address, network, controller.signal)
+    void loadAccountsForSigner(relatedAddress, network, controller.signal)
       .then((items) => { if (!cancelled) setAccounts(items); })
       .catch((cause) => {
         if (!cancelled && !controller.signal.aborted) {
@@ -86,7 +87,7 @@ export default function AddressBookApp() {
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; controller.abort(); };
-  }, [address, network]);
+  }, [relatedAddress, network]);
 
   const treasuryAccounts = useMemo(
     () => accounts.filter(hasSharedSigningControl).sort((left, right) => left.accountId.localeCompare(right.accountId)),
@@ -96,7 +97,7 @@ export default function AddressBookApp() {
   const treasuryIdSet = useMemo(() => new Set(treasuryIds), [treasuryIds]);
 
   useEffect(() => {
-    if (!treasuryPrivateReady || !network || !address) {
+    if (!treasuryPrivateReady || !network || !relatedAddress) {
       setTreasuryNames({});
       return;
     }
@@ -104,21 +105,21 @@ export default function AddressBookApp() {
     if (treasuryIds.length === 0) return;
     let cancelled = false;
     const controller = new AbortController();
-    void loadSharedTreasuryNames(treasuryIds, network, address, controller.signal)
+    void loadSharedTreasuryNames(treasuryIds, network, relatedAddress, controller.signal)
       .then((names) => { if (!cancelled) setTreasuryNames((current) => ({ ...current, ...names })); })
       .catch(() => undefined);
     return () => { cancelled = true; controller.abort(); };
-  }, [treasuryIds, treasuryPrivateReady, address, network]);
+  }, [treasuryIds, treasuryPrivateReady, relatedAddress, network]);
 
   const signers = useMemo(() => relatedSigners(accounts), [accounts]);
   const contacts = useMemo(() => {
     const signerAddressSet = new Set(signers.map((signer) => signer.address));
     const byAddress = new Map(entries
-      .filter((entry) => entry.address !== address && !treasuryIdSet.has(entry.address) && !signerAddressSet.has(entry.address))
+      .filter((entry) => entry.address !== relatedAddress && !treasuryIdSet.has(entry.address) && !signerAddressSet.has(entry.address))
       .map((entry) => [entry.address, entry]));
     return [...byAddress.values()]
       .sort((left, right) => (privateReady ? labelFor(left.address, 'account') : '').localeCompare((privateReady ? labelFor(right.address, 'account') : '')) || left.address.localeCompare(right.address));
-  }, [entries, address, treasuryIdSet, signers, labelFor, privateReady]);
+  }, [entries, relatedAddress, treasuryIdSet, signers, labelFor, privateReady]);
 
   async function addAddress(event: FormEvent) {
     event.preventDefault();
@@ -217,7 +218,7 @@ export default function AddressBookApp() {
                     <div key={signer.address} className="mst-address-row">
                       <span className="mst-contact-avatar" aria-hidden="true">{alias ? Array.from(alias)[0].toUpperCase() : 'G'}</span>
                       <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2"><div className="font-bold">{displayName}</div>{signer.address === address && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">Current wallet</span>}</div>
+                        <div className="flex flex-wrap items-center gap-2"><div className="font-bold">{displayName}</div>{signer.address === relatedAddress && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">Current wallet</span>}</div>
                         <div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{signer.address}</div>
                       </div>
                       {!treasuryMaster && <AddressAliasEditor address={signer.address} subjectType="signer" allowNotificationEmail />}
