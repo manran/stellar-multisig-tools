@@ -7,15 +7,15 @@ const accountPage = readFileSync(new URL('../IdentityApp.tsx', import.meta.url),
 
 test('header opens unified account entry instead of wallet-only sign-in', () => {
   assert.match(headerAccount, /href=\{stellarHref\('\/identity'\)\}/);
-  assert.match(headerAccount, /Sign in \/ Create account/);
-  assert.match(headerAccount, /sm:hidden[^>]*>\{identity \? 'Account' : 'Create account'\}/);
+  assert.match(headerAccount, /Sign in \/ Sign up/);
+  assert.match(headerAccount, /\{identity \? 'Your account' : 'Sign in \/ Sign up'\}/);
   assert.doesNotMatch(headerAccount, /onClick=\{\(\) => void signIn\(\)\}/);
   assert.match(headerAccount, /Account and login methods/);
 });
 
 test('one account entry offers Passkey creation and wallet login', () => {
-  assert.match(accountPage, /Create a new Passkey account/);
+  assert.match(accountPage, /Create Passkey account/);
   assert.match(accountPage, /Sign in with Passkey/);
-  assert.match(accountPage, /Continue with Stellar wallet/);
+  assert.match(accountPage, /Sign in with Stellar wallet/);
   assert.match(accountPage, /Add Passkey/);
 });

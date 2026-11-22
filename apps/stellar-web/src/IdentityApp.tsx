@@ -46,8 +46,6 @@ export default function IdentityApp() {
   const walletLinked = Boolean(walletVerified && credentials.some(
     (item) => item.kind === 'stellar_wallet' && item.address === unlockedAddress,
   ));
-  const passkeyCount = credentials.filter((item) => item.kind === 'passkey').length;
-  const walletCount = credentials.filter((item) => item.kind === 'stellar_wallet').length;
   const actionBusy = busy || authBusy || loading;
 
   useEffect(() => {
@@ -108,7 +106,7 @@ export default function IdentityApp() {
     await refresh();
     if (inviteToken) navigateWorkspace('/new');
     else if (!identity) navigateWorkspace('/');
-    else setInfo('Passkey added to your MST account.');
+    else setInfo('Passkey added.');
   }
 
   async function acceptInvitation() {
@@ -121,7 +119,7 @@ export default function IdentityApp() {
     await unlock(undefined, network);
     await refresh();
     if (!identity) navigateWorkspace('/inbox');
-    else setInfo('Wallet verified. Chain signing still follows the Treasury rules.');
+    else setInfo('Wallet verified.');
   }
 
   async function chooseWallet() {
@@ -136,7 +134,7 @@ export default function IdentityApp() {
     if (!walletVerified) throw new Error('First verify the wallet you want to link.');
     await api('link_wallet', {}, true);
     await refresh();
-    setInfo('Wallet linked. Both login methods now open the same MST account.');
+    setInfo('Wallet linked.');
   }
 
   async function signOutPasskey() {
@@ -155,19 +153,14 @@ export default function IdentityApp() {
   return <StellarWorkspaceShell active="new">
     <main className="mst-workbench-page">
       <div className="mx-auto max-w-2xl">
-        <a href={stellarHref('/new')} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[var(--color-ink-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]"><ArrowLeft className="h-4 w-4" />New proposal</a>
+        <a href={stellarHref('')} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[var(--color-ink-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]"><ArrowLeft className="h-4 w-4" />Back to home</a>
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl font-bold">{inviteToken ? 'Join a payment workflow' : 'Your MST account'}</h1>
+          <h1 className="text-3xl font-bold">{inviteToken ? 'Join payment workflow' : identity ? 'Your account' : 'Sign in or sign up'}</h1>
           <NetworkBadge network={network} />
         </div>
-        <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--color-ink-2)]">
-          Use a Passkey or Stellar wallet to access the same account. When signing, MST checks the authorization rules for that exact transaction.
-        </p>
-
         {inviteOpen && <section className="mt-6 border-l-2 border-[var(--color-accent)] bg-[var(--color-paper-2)] px-5 py-4">
-          <h2 className="font-semibold">Invitation to prepare payments</h2>
+          <h2 className="font-semibold">Payment invitation</h2>
           <p className="mt-1 text-sm">{invitation.templateName}</p>
-          <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">You can prepare payments under this Template. A Treasury signer must still authorize each Classic transaction.</p>
         </section>}
         {inviteError && <p role="alert" className="mt-5 text-sm text-[var(--color-danger)]">{inviteError}</p>}
         {loading && <p role="status" className="mt-4 text-sm text-[var(--color-ink-2)]"><LoaderCircle className="mr-2 inline h-4 w-4 animate-spin" />Checking your account…</p>}
@@ -175,28 +168,25 @@ export default function IdentityApp() {
         {info && <p role="status" className="mt-5 text-sm text-[var(--color-ink-2)]">{info}</p>}
 
         {!identity && <section className="mt-7 border-t border-[var(--color-rule)] pt-6" aria-label="Choose how to sign in">
-          <h2 className="text-xl font-semibold">Continue to MST</h2>
-          <p className="mt-1 text-sm text-[var(--color-ink-2)]">No wallet or email is needed to start with a Passkey.</p>
           <div className="mt-5 flex flex-col gap-3">
             {canPasskey && <ActionButton disabled={actionBusy} aria-busy={busy} onClick={() => void perform(inviteOpen ? registerPasskey : signInWithPasskey)} className="min-h-12 w-full justify-center">
               {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Fingerprint className="h-4 w-4" />}
               {inviteOpen ? 'Create account with Passkey' : 'Sign in with Passkey'}
             </ActionButton>}
             {canPasskey && <ActionButton variant="secondary" disabled={actionBusy} onClick={() => void perform(inviteOpen ? signInWithPasskey : registerPasskey)} className="min-h-12 w-full justify-center">
-              <Fingerprint className="h-4 w-4" />{inviteOpen ? 'Already have a Passkey' : 'Create a new Passkey account'}
+              <Fingerprint className="h-4 w-4" />{inviteOpen ? 'Already have a Passkey' : 'Create Passkey account'}
             </ActionButton>}
             <ActionButton variant="secondary" disabled={actionBusy} aria-busy={busy || authBusy} onClick={() => void perform(confirmWallet)} className="min-h-12 w-full justify-center">
-              <WalletCards className="h-4 w-4" />Continue with Stellar wallet
+              <WalletCards className="h-4 w-4" />Sign in with Stellar wallet
             </ActionButton>
           </div>
-          {!canPasskey && <p className="mt-3 text-sm text-[var(--color-muted)]">Passkeys are not available in this browser. You can still use a Stellar wallet.</p>}
+          {!canPasskey && <p className="mt-3 text-sm text-[var(--color-muted)]">Passkeys are unavailable in this browser.</p>}
         </section>}
 
         {identity && <section className="mt-7 border-t border-[var(--color-rule)] pt-6" aria-label="Your account and login methods">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-xl font-semibold">Account</h2>
-              <p className="mt-1 flex items-center gap-2 text-sm text-[var(--color-ink-2)]"><CheckCircle2 className="h-4 w-4 text-[var(--color-accent)]" />Signed in with {identity.method === 'passkey' ? 'Passkey' : 'Stellar wallet'}</p>
+              <p className="flex items-center gap-2 text-sm text-[var(--color-ink-2)]"><CheckCircle2 className="h-4 w-4 text-[var(--color-accent)]" />Signed in with {identity.method === 'passkey' ? 'Passkey' : 'Stellar wallet'}</p>
             </div>
             {inviteOpen && <ActionButton disabled={actionBusy} onClick={() => void perform(acceptInvitation)}><ArrowRight className="h-4 w-4" />Accept invitation</ActionButton>}
           </div>
@@ -207,21 +197,18 @@ export default function IdentityApp() {
 
           <div className="mt-5 border-t border-[var(--color-rule)] pt-5">
             <h3 className="font-semibold">Login methods</h3>
-            <p className="mt-1 text-sm text-[var(--color-ink-2)]">{passkeyCount} Passkey{passkeyCount === 1 ? '' : 's'} · {walletCount} wallet{walletCount === 1 ? '' : 's'} linked</p>
             <ul className="mt-4 divide-y divide-[var(--color-rule)] border-y border-[var(--color-rule)]">
               {credentials.map((method, index) => <li key={method.id ?? method.address ?? index} className="flex min-h-12 items-center gap-3 py-3 text-sm">
                 {method.kind === 'passkey' ? <Fingerprint className="h-4 w-4 shrink-0 text-[var(--color-ink-2)]" /> : <WalletCards className="h-4 w-4 shrink-0 text-[var(--color-ink-2)]" />}
                 <span className="min-w-0">{method.kind === 'passkey' ? `Passkey ${index + 1}` : `Stellar wallet · ${shortAddress(method.address ?? '')}`}</span>
-                <span className="ml-auto shrink-0 text-xs text-[var(--color-ink-2)]">Linked</span>
               </li>)}
             </ul>
             <div className="mt-5 flex flex-wrap gap-3">
               {canPasskey && <ActionButton disabled={actionBusy} onClick={() => void perform(registerPasskey)}><Fingerprint className="h-4 w-4" />Add Passkey</ActionButton>}
-              {!walletVerified && <ActionButton variant="secondary" disabled={actionBusy} onClick={() => void perform(confirmWallet)}><KeyRound className="h-4 w-4" />Verify a wallet</ActionButton>}
-              {identity.method === 'passkey' && walletVerified && !walletLinked && <ActionButton variant="secondary" disabled={actionBusy} onClick={() => void perform(linkWallet)}><ShieldCheck className="h-4 w-4" />Link verified wallet</ActionButton>}
-              {identity.method === 'passkey' && <ActionButton variant="secondary" disabled={actionBusy} onClick={() => void perform(chooseWallet)}><WalletCards className="h-4 w-4" />Choose wallet</ActionButton>}
+              {!walletVerified && <ActionButton variant="secondary" disabled={actionBusy} onClick={() => void perform(confirmWallet)}><KeyRound className="h-4 w-4" />Add Stellar wallet</ActionButton>}
+              {identity.method === 'passkey' && walletVerified && !walletLinked && <ActionButton variant="secondary" disabled={actionBusy} onClick={() => void perform(linkWallet)}><ShieldCheck className="h-4 w-4" />Link wallet</ActionButton>}
+              {identity.method === 'passkey' && <ActionButton variant="secondary" disabled={actionBusy} onClick={() => void perform(chooseWallet)}><WalletCards className="h-4 w-4" />Switch wallet</ActionButton>}
             </div>
-            {identity.method === 'passkey' && walletVerified && !walletLinked && <p className="mt-3 text-sm leading-6 text-[var(--color-ink-2)]">This wallet is not linked to the current MST account. Linking requires confirmation of both methods. A wallet owned by another MST account cannot be merged automatically.</p>}
             <div className="mt-4 flex flex-wrap gap-5 text-sm">
               {identity.method === 'passkey' && <button type="button" disabled={actionBusy} className="min-h-11 font-semibold text-[var(--color-ink-2)] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:opacity-50" onClick={() => void perform(signOutPasskey)}>Sign out Passkey</button>}
               {walletVerified && <button type="button" disabled={actionBusy} className="min-h-11 font-semibold text-[var(--color-ink-2)] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:opacity-50" onClick={() => void perform(lockWallet)}>Lock wallet session</button>}
@@ -229,15 +216,6 @@ export default function IdentityApp() {
           </div>
         </section>}
 
-        <section className="mt-8 border-t border-[var(--color-rule)] pt-6" aria-label="Signing authority">
-          <h2 className="text-xl font-semibold">Signing authority</h2>
-          <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">Login methods are not signing permissions. Every Proposal shows only methods authorized for that transaction.</p>
-          <div className="mt-4 space-y-3 text-sm">
-            <div className="flex gap-3"><WalletCards className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-ink-2)]" /><p><strong>Classic:</strong> sign with an authorized Stellar wallet.</p></div>
-            <div className="flex gap-3"><Fingerprint className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-ink-2)]" /><p><strong>Soroban:</strong> a Passkey can sign only after it is registered as a signer on a supported smart account. MST login alone does not authorize a contract.</p></div>
-          </div>
-          <p className="mt-5 text-xs leading-5 text-[var(--color-muted)]">Private keys stay with your wallet or Passkey provider. MST stores verified credentials for login; it does not hold your signing keys.</p>
-        </section>
       </div>
     </main>
   </StellarWorkspaceShell>;

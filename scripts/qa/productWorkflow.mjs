@@ -483,15 +483,30 @@ async function run(name, width, options, check) {
 
 try {
   for (const width of widths) {
+    await run('unified-header-account-entry', width, {
+      wallet: walletState('', false),
+      state: { passkeyLoggedIn: false },
+    }, async ({ page }) => {
+      await page.goto(`${origin}/`);
+      const entry = page.getByRole('link', { name: 'Sign in or sign up' });
+      await entry.waitFor();
+      assert.equal((await entry.innerText()).trim(), 'Sign in / Sign up');
+      await entry.click();
+      await visible(page, 'Sign in or sign up', 'heading');
+      await visible(page, 'Create Passkey account', 'button');
+      assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), [], 'Account entry must not open a wallet');
+      await snapshot(page, 'header-account-entry', width);
+    });
+
     await run('walletless-account-offers-both-login-methods', width, {
       wallet: walletState('', false),
       state: { passkeyLoggedIn: false },
     }, async ({ page }) => {
       await page.goto(`${origin}/identity`);
-      await visible(page, 'Continue to MST', 'heading');
+      await visible(page, 'Sign in or sign up', 'heading');
       await visible(page, 'Sign in with Passkey', 'button');
-      await visible(page, 'Create a new Passkey account', 'button');
-      await visible(page, 'Continue with Stellar wallet', 'button');
+      await visible(page, 'Create Passkey account', 'button');
+      await visible(page, 'Sign in with Stellar wallet', 'button');
       assert.equal(await page.getByRole('button', { name: 'Sign with Stellar wallet' }).count(), 0);
       await snapshot(page, 'walletless-login-options', width);
     });
@@ -902,8 +917,8 @@ try {
         },
       }, async ({ page, state }) => {
         await page.goto(`${origin}/invite#token=${state.inviteToken}`);
-        await visible(page, 'Join a payment workflow', 'heading');
-        await visible(page, 'Invitation to prepare payments', 'heading');
+        await visible(page, 'Join payment workflow', 'heading');
+        await visible(page, 'Payment invitation', 'heading');
         await page.getByRole('button', { name: 'Accept invitation' }).click();
         await visible(page, 'Monthly suppliers', 'heading');
         assert.equal(state.inviteAvailable, false);

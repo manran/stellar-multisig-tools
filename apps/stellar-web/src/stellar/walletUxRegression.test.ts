@@ -40,11 +40,11 @@ test('landing private entry continues to Inbox in the same confirmation action',
   assert.match(landing, /openPrivateDestination\(event, stellarHref\('\/inbox'\)\)/);
 });
 
-test('top-level Sign in selects a wallet and verifies workspace identity in one action', () => {
+test('top-level sign-in routes to the unified account while wallet verification remains available', () => {
   assert.match(walletContext, /const signIn = useCallback[\s\S]*if \(unlockedAddress && unlockedNetwork\) await lock\(\)[\s\S]*await connect\(\)[\s\S]*return unlock\(durationSeconds\)/);
   assert.match(walletContext, /if \(isWalletSelectionCancelled\(cause\)\) return ''/);
-  assert.match(accountControl, /onClick=\{\(\) => void signIn\(\)\}/);
-  assert.match(accountControl, /'Sign in'/);
+  assert.match(accountControl, /href=\{stellarHref\('\/identity'\)\}/);
+  assert.match(accountControl, /Sign in \/ Sign up/);
   assert.match(accountControl, /Sign in to workspace/);
 });
 

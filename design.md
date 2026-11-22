@@ -10,6 +10,15 @@ Modern-minimal with editorial authority. Functional pages are restrained workben
 
 Shared authorization without shared custody.
 
+## Product writing
+
+- Name the user's next action. Use the same meaning on desktop and mobile.
+- One screen, one job. Do not explain login credentials and chain signing policy together.
+- Use short labels for normal states; explain only when an action is blocked.
+- Show security consequences where the action occurs: share-link visibility before sharing, and irreversible ledger submission at confirmation.
+- Keep technical evidence in Advanced details and documentation. Do not paste architecture rules into account or landing screens.
+- Keep the words Passkey, wallet, Proposal, Sign, Inbox, and Activity consistent.
+
 The visual system should communicate:
 
 - independent authority;

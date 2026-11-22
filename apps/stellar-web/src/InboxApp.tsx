@@ -92,7 +92,7 @@ function OutgoingProgress({
   const progress = useMemo(() => inboxSenderProgress(request, inboxOutgoingSignerProgress(request, viewerAddress)), [request, viewerAddress]);
   if (progress.length === 0) return (
     <p className="mt-2 text-xs leading-5 text-[var(--color-muted)]">
-      No invitations yet. Open the proposal to choose an eligible signer.
+      No invitations sent.
     </p>
   );
   const visible = compact ? progress.slice(0, 2) : progress;
@@ -174,11 +174,11 @@ function DetailPane({
         <div className="mst-inbox-next-action__label">Your next step</div>
         <div className="mt-2"><StatusBadge tone={urgentEmailFailure ? 'danger' : viewerAction.tone}>{urgentEmailFailure ? 'Follow-up needed' : viewerAction.label}</StatusBadge></div>
         <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">{passkeyProposer
-          ? 'Your payment request is waiting for Treasury signatures. Open it to share the Request link and follow progress.'
-          : needsEmailFollowUp ? 'An email to a signer needs attention. Check the contact and follow up.'
+          ? 'Waiting for Treasury signatures.'
+          : needsEmailFollowUp ? 'Signer email failed. Check the contact.'
             : followUp ? (request.proposerAddress === viewerAddress
-              ? 'Your payment request is waiting for Treasury signatures. Share the Request link with eligible signers.'
-              : 'Your signature is recorded. Check who is waiting and follow up when needed.') : viewerAction.detail}</p>
+              ? 'Waiting for signatures. Share the request with signers.'
+              : 'Signed. Waiting for others.') : viewerAction.detail}</p>
         <ActionButton onClick={() => openRequestDetails(request, followUp || passkeyProposer)} className="mt-4 w-full">
           {passkeyProposer ? 'View signing progress' : followUp ? 'Follow up with signers' : viewerAction.cta} <ArrowRight className="h-4 w-4" />
         </ActionButton>
@@ -187,8 +187,8 @@ function DetailPane({
         <section className="mt-4 border-t border-[var(--color-rule)] pt-4" aria-label="Signer follow-up">
           <h3 className="text-sm font-semibold text-[var(--color-ink)]">Signer follow-up</h3>
           <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">{passkeyProposer
-            ? 'Open this payment to share its Request ID with eligible Treasury signers.'
-            : 'People you asked. Open the proposal to see all eligible signers.'}</p>
+            ? 'Open the proposal to share it with signers.'
+            : 'People asked to sign.'}</p>
           <OutgoingProgress request={request} viewerAddress={viewerAddress} signerLabel={signerLabel} />
         </section>
       )}
@@ -361,8 +361,7 @@ export default function InboxApp() {
             <div className="mst-inbox-page-header">
             <PageHeader
               title="Inbox"
-              description="Act on what needs you. Follow the rest without opening each proposal."
-              meta={data ? <><NetworkBadge network={identity.network} /><span>{data.pending_count} open {data.pending_count === 1 ? 'work item' : 'work items'}</span></> : <NetworkBadge network={identity.network} />}
+                            meta={data ? <><NetworkBadge network={identity.network} /><span>{data.pending_count} open {data.pending_count === 1 ? 'work item' : 'work items'}</span></> : <NetworkBadge network={identity.network} />}
               actions={<ActionButton variant="secondary" disabled={loading || authBusy || walletBusy} onClick={() => void loadInbox()} aria-label="Refresh inbox" aria-busy={loading}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">{loading ? 'Refreshing…' : 'Refresh'}</span></ActionButton>}
             />
             </div>
@@ -386,7 +385,7 @@ export default function InboxApp() {
               <section className="mx-auto max-w-xl py-16 text-center sm:py-24">
                 <Inbox className="mx-auto h-8 w-8 text-neutral-400" />
                 <h2 className="mt-4 text-2xl font-bold">You're all caught up.</h2>
-                <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">No open proposals for this wallet. Completed proposals are in Activity.</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">No open proposals. Completed work is in Activity.</p>
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                   <a href={stellarHref('/new')} className="mst-action-primary">New proposal <ArrowRight className="h-4 w-4" /></a>
                   <a href={stellarHref('/activity')} className="inline-flex min-h-11 items-center px-3 text-sm font-semibold text-[var(--color-ink-2)]">View Activity</a>
@@ -398,7 +397,6 @@ export default function InboxApp() {
               <section className="mx-auto max-w-xl py-16 text-center sm:py-24">
                 <Inbox className="mx-auto h-8 w-8 text-neutral-400" />
                 <h2 className="mt-4 text-2xl font-bold">{view === 'needs' ? 'Nothing needs your action.' : 'Nothing is waiting.'}</h2>
-                <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">{view === 'needs' ? 'Waiting proposals can still need another signer or submission by an external service.' : 'Use Needs me to find proposals you can act on.'}</p>
                 <ActionButton variant="secondary" onClick={() => changeView('inbox')} className="mt-6">Show all proposals</ActionButton>
               </section>
             )}

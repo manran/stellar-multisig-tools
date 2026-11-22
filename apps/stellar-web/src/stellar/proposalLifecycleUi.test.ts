@@ -115,11 +115,10 @@ test('durable Proposal creation requires a verified current signer and has no sc
 test('private Proposal context states the server-private and bearer-link boundaries at the action surface', () => {
   assert.match(signingRoom, /not end-to-end encrypted/);
   assert.match(payment, /not end-to-end encrypted/);
-  assert.match(requestUi, /Anyone with this private link can view the active Proposal/);
-  assert.match(requestUi, /submit the transaction once it is fully signed/);
+  assert.match(requestUi, /Anyone with this link can view this proposal and submit it/);
+  assert.match(requestUi, /after all signatures are collected/);
   assert.match(requestUi, /setCopied\('link'\);\s*setShareJustCreated\(true\)/);
-  assert.match(requestUi, /cannot add signatures or change the transaction/);
-  assert.match(signingGuidance, /submit the transaction once it is fully signed/);
+  assert.match(signingGuidance, /Anyone with this link can view the proposal and submit it/);
 });
 
 test('private proposal context freezes when the Signing Request is created', () => {
@@ -167,7 +166,7 @@ test('human signing turns a connected wrong wallet into an actionable identity c
   assert.match(signingGuidance, /Share private link/);
   assert.doesNotMatch(signingGuidance, /Signing as/);
   assert.match(signingGuidance, /Choose signer wallet/);
-  assert.match(signingGuidance, /This wallet is not an authorized signer for this Proposal/);
+  assert.match(signingGuidance, /This wallet can't sign this proposal/);
   assert.match(signingGuidance, /onClick=\{onConnectWallet\}/);
 });
 
@@ -185,7 +184,7 @@ test('signer coordination uses private Contacts before email Ask and keeps capab
   assert.match(requestUi, /onAsk=\{snapshot\.status === 'awaiting_signatures' && canCoordinateSigners/);
   assert.match(requestUi, /onRemind=\{snapshot\.status === 'awaiting_signatures' && canCoordinateSigners/);
   assert.doesNotMatch(askHandler, /!shareable/);
-  assert.match(signingGuidance, /Add a contact email to an eligible signer below to send an invitation/);
+  assert.match(signingGuidance, /Add a signer email to send an invitation/);
   assert.match(inbox, /isCreatorWaitingForSigners/);
   assert.match(inbox, /Follow up with signers/);
   assert.match(askHandler, /return body\.notification/);
@@ -606,7 +605,7 @@ test('private destinations confirm the wallet inside the user action instead of 
   assert.match(inbox, /buttonLabel="Open Inbox"/);
   assert.doesNotMatch(inbox, /Unlock Inbox/);
   assert.match(workspaceShell, /openPrivateWorkspace/);
-  assert.match(workspaceShell, /await unlock\(\)/);
+  assert.match(workspaceShell, /navigateWorkspace\('\/identity'\)/);
   assert.match(activityRetention, /Save to Activity/);
   assert.match(activityRetention, /Confirm a current signer wallet/);
   assert.doesNotMatch(activityRetention, /Unlock for Activity|Unlock once|Unlocking/);
@@ -646,7 +645,7 @@ test('Human collaboration surfaces use Proposal while Request stays technical', 
   assert.match(signingGuidance, /Sign this Classic transaction/);
   assert.match(signingRoom, /Starting proposal/);
   assert.match(requestUi, /proposal ID/);
-  assert.match(requestUi, /Anyone with this private link can view the active Proposal/);
+  assert.match(requestUi, /Anyone with this link can view this proposal and submit it/);
   assert.match(inbox, /buttonLabel="Open Inbox"/);
   assert.doesNotMatch(inbox, /Unlock Inbox|Unlock to view proposals/);
   assert.match(workspaceOnboarding, /review proposals waiting for you/);

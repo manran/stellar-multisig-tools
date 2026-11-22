@@ -4,10 +4,10 @@ import { BookUser, Bot, Braces, Ellipsis, History, Home, Inbox, Plus, Vault } fr
 import StellarFooter from './StellarFooter';
 import StellarHeader from './StellarHeader';
 import { useStellarWallet } from './StellarWalletContext';
+import { useUserIdentity } from './UserIdentityContext';
 import { resolveStellarNetwork } from './stellar/networkPreference';
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
-import { stellarHref } from './workspaceNavigation';
-import { isWalletUserRejected } from './stellar/walletKit';
+import { navigateWorkspace, stellarHref } from './workspaceNavigation';
 
 export type WorkspaceView = 'dashboard' | 'inbox' | 'waiting' | 'ready' | 'activity' | 'new' | 'contracts' | 'treasury' | 'address-book' | 'agent-access' | 'detail';
 type InboxWorkspaceView = 'inbox' | 'waiting' | 'ready';
@@ -24,7 +24,8 @@ interface Props {
 }
 
 export default function StellarWorkspaceShell({ active, children, networkContext = null }: Props) {
-  const { sessionNetwork, networkSource, alignNetworkContext, privateUnlocked, authBusy, unlock } = useStellarWallet();
+  const { sessionNetwork, networkSource, alignNetworkContext, privateUnlocked } = useStellarWallet();
+  const { identity } = useUserIdentity();
   const pathname = window.location.pathname;
   const treasuryActive = active === 'treasury' || pathname.endsWith('/treasury') || pathname.includes('/treasury/');
   const addressBookActive = active === 'address-book' || pathname.endsWith('/address-book');
@@ -55,16 +56,10 @@ export default function StellarWorkspaceShell({ active, children, networkContext
     };
   }, [mobileMoreOpen]);
 
-  async function openPrivateWorkspace(event: MouseEvent<HTMLAnchorElement>, href: string) {
-    if (privateUnlocked) return;
+  function openPrivateWorkspace(event: MouseEvent<HTMLAnchorElement>) {
+    if (identity || privateUnlocked) return;
     event.preventDefault();
-    if (authBusy) return;
-    try {
-      await unlock();
-      window.location.assign(href);
-    } catch (cause) {
-      if (!isWalletUserRejected(cause)) window.location.assign(href);
-    }
+    navigateWorkspace('/identity');
   }
 
   return (
@@ -76,7 +71,7 @@ export default function StellarWorkspaceShell({ active, children, networkContext
             <a href={stellarHref('')} aria-current={active === 'dashboard' ? 'page' : undefined} className={navClass(active === 'dashboard')}>
               <Home className="h-4 w-4 shrink-0" /><span>Overview</span>
             </a>
-            <a href={stellarHref('/inbox')} onClick={(event) => void openPrivateWorkspace(event, stellarHref('/inbox'))} aria-current={inboxActive ? 'page' : undefined} className={navClass(inboxActive)}>
+            <a href={stellarHref('/inbox')} onClick={(event) => openPrivateWorkspace(event)} aria-current={inboxActive ? 'page' : undefined} className={navClass(inboxActive)}>
               <Inbox className="h-4 w-4 shrink-0" /><span>Inbox</span>
             </a>
             <a href={stellarHref('/new')} aria-current={active === 'new' ? 'page' : undefined} className={'mst-rail-link mst-rail-link--create' + (active === 'new' ? ' mst-rail-link--create-active' : '')}>
@@ -89,7 +84,7 @@ export default function StellarWorkspaceShell({ active, children, networkContext
               </button>
               {mobileMoreOpen && (
                 <div role="menu" className="mst-workspace-mobile-menu">
-                  <a role="menuitem" href={stellarHref('/activity')} onClick={(event) => { setMobileMoreOpen(false); void openPrivateWorkspace(event, stellarHref('/activity')); }} className="mst-workspace-menu-item"><History className="h-4 w-4" />Activity</a>
+                  <a role="menuitem" href={stellarHref('/activity')} onClick={(event) => { setMobileMoreOpen(false); openPrivateWorkspace(event); }} className="mst-workspace-menu-item"><History className="h-4 w-4" />Activity</a>
                   <a role="menuitem" href={stellarHref('/contracts')} onClick={() => setMobileMoreOpen(false)} className="mst-workspace-menu-item"><Braces className="h-4 w-4" />Contracts</a>
                   <a role="menuitem" href={stellarHref('/treasury')} onClick={() => setMobileMoreOpen(false)} className="mst-workspace-menu-item"><Vault className="h-4 w-4" />Treasuries</a>
                   <a role="menuitem" href={stellarHref('/address-book')} onClick={() => setMobileMoreOpen(false)} className="mst-workspace-menu-item"><BookUser className="h-4 w-4" />Contacts</a>
@@ -98,7 +93,7 @@ export default function StellarWorkspaceShell({ active, children, networkContext
               )}
             </div>
 
-            <a href={stellarHref('/activity')} onClick={(event) => void openPrivateWorkspace(event, stellarHref('/activity'))} aria-current={active === 'activity' ? 'page' : undefined} className={navClass(active === 'activity') + ' mst-rail-desktop'}>
+            <a href={stellarHref('/activity')} onClick={(event) => openPrivateWorkspace(event)} aria-current={active === 'activity' ? 'page' : undefined} className={navClass(active === 'activity') + ' mst-rail-desktop'}>
               <History className="h-4 w-4 shrink-0" /><span>Activity</span>
             </a>
           </nav>

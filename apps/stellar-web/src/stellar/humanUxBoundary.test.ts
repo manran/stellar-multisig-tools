@@ -36,7 +36,7 @@ test('primary wallet menu does not expose workspace philosophy or unlock duratio
   assert.doesNotMatch(account, /Private data/);
   assert.doesNotMatch(account, />Manage</);
   assert.match(account, /Sign in to workspace/);
-  assert.match(account, /onClick=\{\(\) => void signIn\(\)\}/);
+  assert.match(account, /href=\{stellarHref\('\/identity'\)\}/);
   assert.match(account, /Lock private workspace/);
 });
 
@@ -248,9 +248,9 @@ test('Testnet is a network-bound runtime while public Docs live on the dedicated
   assert.match(main, /isCanonicalStellarContentPath\(window\.location\.pathname\)/);
   assert.match(main, /window\.location\.replace\(canonicalContentRedirect\)/);
   assert.doesNotMatch(main, /DocsApp/);
-  assert.match(testnetLanding, /Testnet runtime/);
-  assert.match(testnetLanding, /Network stays fixed/);
-  assert.match(testnetLanding, /Product content stays canonical/);
+  assert.match(testnetLanding, /Try multisig on Testnet/);
+  assert.match(testnetLanding, /TESTNET_STEPS/);
+  assert.doesNotMatch(testnetLanding, /Network stays fixed|Product content stays canonical/);
   assert.match(testnetLanding, /href=\{STELLAR_PUBLIC_DOCS_BASE\}/);
   assert.match(testnetLanding, /STELLAR_PUBLIC_DOCS_BASE}\/developers/);
   assert.match(footer, /href=\{STELLAR_PUBLIC_DOCS_BASE\}/);

@@ -405,7 +405,6 @@ export default function SigningGuidance({
           {!authorizationComplete && !hasAuthorizationError && walletAlreadySigned && (
             <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">
               {remainingSignatureCopy}
-              {shareTargets.length > 0 && ' ' + shareTargets.length + ' eligible unsigned signer' + (shareTargets.length === 1 ? ' is' : 's are') + ' listed below.'}
             </p>
           )}
         </div>
@@ -433,7 +432,7 @@ export default function SigningGuidance({
       {hasAuthorizationError && (
         <div className="mt-4 flex gap-3 rounded-xl border border-red-500/25 bg-red-500/10 p-4 text-sm">
           <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
-          <div><span className="font-semibold">The signatures need technical attention.</span> Open Advanced details below to see which signature Stellar cannot use.</div>
+          <div><span className="font-semibold">A signature needs review.</span> Open Advanced details below to see which signature Stellar cannot use.</div>
         </div>
       )}
 
@@ -445,12 +444,12 @@ export default function SigningGuidance({
           </div>
           <p className="mt-1 text-sm leading-6 text-[var(--color-ink-2)]">
             {inviteCandidates.length > 0
-              ? 'Choose who to ask. Invitations do not reserve signing slots or change Stellar authorization.'
+              ? 'Select signers to notify.'
               : unaskedTargets.length > 0
                 ? onShare
-                  ? 'Add a contact email to an eligible signer below, or share the private link.'
-                  : 'Add a contact email to an eligible signer below to send an invitation.'
-                : 'Invitations are recorded. Check delivery and viewing status below; reminders are available when permitted.'}
+                  ? 'Add an email or share the link.'
+                  : 'Add a signer email to send an invitation.'
+                : 'Track invitations below.'}
           </p>
           {inviteCandidates.length > 0 && <div className="mt-3 divide-y divide-[var(--color-rule)] border-y border-[var(--color-rule)]">
             {inviteCandidates.map((address) => (
@@ -603,8 +602,7 @@ export default function SigningGuidance({
         <div className="mst-signing-action-strip mt-5">
           <div className="text-sm">
             <div className="font-semibold">Sign this Classic transaction</div>
-            <p className="mt-1 text-sm leading-6 text-[var(--color-ink-2)]">Signing method: Stellar wallet. Only a current authorized signer can contribute a transaction signature.</p>
-            {passkeySignedIn && !walletCanSign && !walletAlreadySigned && <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">Your Passkey signs you in to MST, but it cannot sign this Classic transaction. Use an authorized Stellar wallet to sign.</p>}
+            {passkeySignedIn && !walletAddress && <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">Classic signatures use Stellar wallets.</p>}
             <div className="mt-3">
               {walletAddress
                 ? <AddressIdentity address={walletAddress} subjectType="signer" />
@@ -637,7 +635,7 @@ export default function SigningGuidance({
             </div>
 
             {walletAddress && walletAlreadySigned && <div className="mt-3 text-sm text-emerald-700 dark:text-emerald-300">{signedStateCopy}</div>}
-            {walletAddress && !walletCanSign && !walletAlreadySigned && <div className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">This wallet is not an authorized signer for this Proposal. Choose another signer wallet, ask a saved Contact, or share the private link.</div>}
+            {walletAddress && !walletCanSign && !walletAlreadySigned && <div className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">This wallet can't sign this proposal. Choose a signer wallet.</div>}
             {walletError && <div className="mt-3 flex gap-2 text-sm text-red-600 dark:text-red-400"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{walletError}</div>}
             {shareError && <div className="mt-3 flex gap-2 text-sm text-red-600 dark:text-red-400"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{shareError}</div>}
           </div>
@@ -650,10 +648,8 @@ export default function SigningGuidance({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-xl font-bold">{shareBusy ? 'Preparing private link' : shareError ? 'Could not prepare link' : 'Private link ready'}</h3>
-                {!shareBusy && !shareError && <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Anyone with this link can view the active Proposal and submit the transaction once it is fully signed. The link cannot add signatures or change the transaction.</p>}
-                <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">
-                  {shareBusy ? 'You can stay on this transaction while we prepare the link.' : shareError ? shareError : 'Share this link only with people you trust to review or submit the transaction.'}
-                </p>
+                {!shareBusy && !shareError && <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Anyone with this link can view the proposal and submit it after all signatures are collected.</p>}
+                {shareError && <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{shareError}</p>}
               </div>
               {!shareBusy && <button type="button" onClick={() => setShareModalOpen(false)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-paper-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]" aria-label="Close"><X className="h-5 w-5" /></button>}
             </div>

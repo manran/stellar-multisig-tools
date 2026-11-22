@@ -6,7 +6,6 @@ import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
 import { useUserIdentity } from './UserIdentityContext';
 import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
-import { isWalletUserRejected } from './stellar/walletKit';
 import { inboxActionCountPresentations, inboxViewerActionNeedsAction, inboxViewerActionPresentation } from '../../../packages/stellar-core/src/inboxPresentation';
 import type { InboxActionCounts, InboxRequestSnapshot } from '../../../packages/stellar-core/src/inboxPresentation';
 import { describeInboxRequest, inboxDeadlineLabel } from './stellar/inboxRequestPresentation';
@@ -34,12 +33,12 @@ interface DashboardInboxSummary {
   intents: InboxSorobanIntentSnapshot[];
 }
 
-function inboxAttentionCopy(summary: DashboardInboxSummary | null, emailAttentionCount = 0) {
-  if (!summary) return 'See proposals that need your signature, submission, or review.';
+function inboxAttentionCopy(summary: DashboardInboxSummary | null, emailAttentionCount = 0, signedIn = false) {
+  if (!summary) return signedIn ? 'Open Inbox to see your proposals.' : 'Sign in to see your proposals.';
   const { pendingCount, actionCounts } = summary;
   if (actionCounts.actionRequired === 0 && emailAttentionCount === 0) {
-    if (pendingCount === 0) return 'No open proposals need your action right now.';
-    return `${pendingCount} open ${pendingCount === 1 ? 'proposal is' : 'proposals are'} waiting on other signers or ledger conditions.`;
+    if (pendingCount === 0) return 'Nothing needs your action.';
+    return `${pendingCount} open ${pendingCount === 1 ? 'proposal' : 'proposals'} waiting.`;
   }
   const parts: string[] = [];
   if (emailAttentionCount > 0) parts.push(`${emailAttentionCount} signer email${emailAttentionCount === 1 ? '' : 's'} need${emailAttentionCount === 1 ? 's' : ''} follow-up`);
@@ -60,8 +59,6 @@ export default function StellarDashboardApp() {
     privateUnlocked,
     unlockedAddress,
     unlockedNetwork,
-    authBusy,
-    unlock,
   } = useStellarWallet();
   const { identity } = useUserIdentity();
   const viewerAddress = identity?.address && privateUnlocked
@@ -116,16 +113,10 @@ export default function StellarDashboardApp() {
     (inboxSummary?.requests ?? []).filter((request) =>
       failedEmails.has(request.id) && !inboxViewerActionNeedsAction(request.viewerAction)).length;
 
-  async function openPrivateDestination(event: MouseEvent<HTMLAnchorElement>, href: string) {
+  function openPrivateDestination(event: MouseEvent<HTMLAnchorElement>) {
     if (identity || privateUnlocked) return;
     event.preventDefault();
-    if (authBusy) return;
-    try {
-      await unlock();
-      window.location.assign(href);
-    } catch (cause) {
-      if (!isWalletUserRejected(cause)) window.location.assign(href);
-    }
+    navigateWorkspace('/identity');
   }
 
   function openRequestDetails(request: InboxRequestSnapshot, focusSignerFollowup = false) {
@@ -166,14 +157,13 @@ export default function StellarDashboardApp() {
           <PageHeader
             eyebrow={<span className={accentText}>{testnet ? 'Testnet workspace' : 'Your workspace'}</span>}
             title="Overview"
-            description="Your current work, in one place."
           />
 
           <section className="mt-8" aria-labelledby="dashboard-attention">
             <div className="flex items-end justify-between gap-4">
               <div>
                 <div id="dashboard-attention" className="text-sm font-bold">Needs your attention</div>
-                <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{inboxAttentionCopy(inboxSummary, failedEmails.size)}</p>
+                <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{inboxAttentionCopy(inboxSummary, failedEmails.size, Boolean(identity || privateUnlocked))}</p>
               </div>
               {inboxSummary && inboxSummary.pendingCount > 0 && (
                 <a href={stellarHref('/inbox')} className={'shrink-0 text-sm font-bold ' + accentText}>Open Inbox</a>
@@ -184,15 +174,14 @@ export default function StellarDashboardApp() {
               <div className="mst-work-list mt-4">
                 <a
                   href={stellarHref('/inbox')}
-                  onClick={(event) => void openPrivateDestination(event, stellarHref('/inbox'))}
+                  onClick={(event) => openPrivateDestination(event)}
                   className="mst-work-row"
                 >
                   <div>
                     <div className="mst-work-row__meta"><Inbox className="h-4 w-4" />Private workspace</div>
                     <div className="mst-work-row__title">Open your Inbox</div>
-                    <p className="mst-work-row__copy">Use Passkey or a verified Stellar wallet to see your proposals and approvals.</p>
                   </div>
-                  <span className={'mst-work-row__action ' + accentText}>{authBusy ? 'Confirm in wallet…' : 'Open Inbox'} <ArrowRight className="h-4 w-4" /></span>
+                  <span className={'mst-work-row__action ' + accentText}>{identity || privateUnlocked ? 'Open Inbox' : 'Sign in / Sign up'} <ArrowRight className="h-4 w-4" /></span>
                 </a>
               </div>
             )}
@@ -202,7 +191,7 @@ export default function StellarDashboardApp() {
                 <div className="mst-work-row">
                   <div>
                     <div className="mst-work-row__title">{inboxSummary.pendingCount > 0 ? 'Waiting on others' : "You're all caught up."}</div>
-                    <p className="mst-work-row__copy">{inboxSummary.pendingCount > 0 ? 'Nothing needs your action right now. Review the signing progress in Inbox.' : 'Start a new proposal or review completed activity.'}</p>
+                    <p className="mst-work-row__copy">{inboxSummary.pendingCount > 0 ? 'Waiting for others.' : 'Start a proposal or view Activity.'}</p>
                     {inboxSummary.actionCounts.waiting > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2" aria-label="Inbox action summary">
                         {inboxActionCountPresentations(inboxSummary.actionCounts).map((item) => (
@@ -270,7 +259,7 @@ export default function StellarDashboardApp() {
             <div className="mst-dashboard-shortcuts mt-3">
               <a href={stellarHref('/new')}><Plus className="h-4 w-4" />New proposal</a>
               <a href={stellarHref('/treasury')}><Vault className="h-4 w-4" />Treasuries</a>
-              <a href={stellarHref('/activity')} onClick={(event) => void openPrivateDestination(event, stellarHref('/activity'))}><History className="h-4 w-4" />Activity</a>
+              <a href={stellarHref('/activity')} onClick={(event) => openPrivateDestination(event)}><History className="h-4 w-4" />Activity</a>
               <a href={stellarHref('/identity')}><Fingerprint className="h-4 w-4" />Your account</a>
             </div>
           </section>

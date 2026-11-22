@@ -176,12 +176,11 @@ export default function StellarAccountControl() {
   return (
     <a
       href={stellarHref('/identity')}
-      aria-label={identity ? 'Your MST account' : 'Sign in or create an MST account'}
-      className="flex min-h-11 items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-semibold shadow-sm transition hover:border-emerald-500/30 hover:bg-emerald-500/[0.04] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] dark:border-white/15 dark:bg-white/5 dark:hover:border-emerald-400/30 sm:px-3.5"
+      aria-label={identity ? 'Your MST account' : 'Sign in or sign up'}
+      className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-xl border border-black/10 bg-white px-2 py-2.5 text-xs font-semibold shadow-sm transition hover:border-emerald-500/30 hover:bg-emerald-500/[0.04] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] dark:border-white/15 dark:bg-white/5 dark:hover:border-emerald-400/30 sm:px-3.5 sm:text-sm"
     >
-      <Fingerprint className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
-      <span className="hidden sm:inline">{identity ? 'Your account' : 'Sign in / Create account'}</span>
-      <span className="sm:hidden">{identity ? 'Account' : 'Create account'}</span>
+      <Fingerprint className="hidden h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300 sm:inline" />
+      <span>{identity ? 'Your account' : 'Sign in / Sign up'}</span>
     </a>
   );
 }

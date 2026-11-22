@@ -36,15 +36,15 @@ export default function InboxEntryApp() {
     <StellarWorkspaceShell active="inbox">
       <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
         <section className="mx-auto max-w-xl py-12 sm:py-20">
-          <div className="mst-kicker"><Inbox className="mr-2 inline h-4 w-4" />Private workspace</div>
-          <h1 className="mt-5 text-4xl font-bold tracking-tight">Open your Inbox</h1>
-          <p className="mt-3 text-lg leading-8 text-neutral-600 dark:text-neutral-300">Use Passkey or confirm a Stellar wallet to see your requests and signing tasks.</p>
-          <a href={stellarHref('/identity')} className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-[var(--color-action)]">Use Passkey to open Inbox</a>
-          <p className="mt-2 text-sm leading-6 text-neutral-500 dark:text-neutral-400">Your wallet may ask you to sign a verification message. This does not send a Stellar transaction.</p>
-          <button type="button" disabled={opening || wallet.busy || wallet.authBusy || identityLoading} onClick={() => void openInbox()} className="mst-action-primary mt-7">
-            {opening || wallet.busy || wallet.authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <WalletCards className="h-4 w-4" />}
-            {opening || wallet.authBusy ? 'Verifying wallet…' : wallet.busy ? 'Opening wallets…' : 'Connect wallet'}
-          </button>
+          <div className="mst-kicker"><Inbox className="mr-2 inline h-4 w-4" />Inbox</div>
+          <h1 className="mt-5 text-4xl font-bold tracking-tight">Sign in to Inbox</h1>
+          <div className="mt-7 flex flex-wrap gap-3">
+            <a href={stellarHref('/identity')} className="mst-action-primary">Sign in / Sign up</a>
+            <button type="button" disabled={opening || wallet.busy || wallet.authBusy || identityLoading} onClick={() => void openInbox()} className="mst-action-secondary">
+              {opening || wallet.busy || wallet.authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <WalletCards className="h-4 w-4" />}
+              {opening || wallet.authBusy ? 'Verifying wallet…' : wallet.busy ? 'Opening wallets…' : 'Use Stellar wallet'}
+            </button>
+          </div>
           {(openError || wallet.error) && <p className="mt-4 text-sm text-red-700 dark:text-red-300">{openError || wallet.error}</p>}
         </section>
       </main>

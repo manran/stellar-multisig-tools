@@ -993,7 +993,7 @@ export default function RequestApp() {
                     <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
                     <div>
                       <div className="font-semibold">Wallet and proposal are on different networks</div>
-                      <div className="mt-1 leading-6 text-neutral-600 dark:text-neutral-300">Your connected wallet is on {walletNetwork === 'public' ? 'Mainnet' : 'Testnet'}, while this proposal is on {snapshot.network === 'public' ? 'Mainnet' : 'Testnet'}. The proposal network is authoritative here; confirm the network shown by your wallet before signing.</div>
+                      <div className="mt-1 leading-6 text-neutral-600 dark:text-neutral-300">Wallet: {walletNetwork === 'public' ? 'Mainnet' : 'Testnet'} · Proposal: {snapshot.network === 'public' ? 'Mainnet' : 'Testnet'}. Switch your wallet to the proposal network before signing.</div>
                     </div>
                   </div>
                 </section>
@@ -1003,10 +1003,9 @@ export default function RequestApp() {
                 <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-rule)] bg-[var(--color-paper-2)] px-4 py-3 text-sm">
                   <div>
                     <div className="font-semibold">Share with signers</div>
-                    <p className="mt-1 text-xs text-[var(--color-ink-2)]">Authorized Treasury signers can open this Request with their own wallets. Your MST login cannot approve or submit it.</p>
                   </div>
                   <button type="button" onClick={() => void copySignerLink()}
-                    className="min-h-11 shrink-0 font-semibold text-[var(--color-action)]">{copied === 'link' ? 'Signer link copied' : 'Copy link for authorized signers'}</button>
+                    className="min-h-11 shrink-0 font-semibold text-[var(--color-action)]">{copied === 'link' ? 'Signer link copied' : 'Copy signer link'}</button>
                 </section>
               )}
 
@@ -1016,7 +1015,7 @@ export default function RequestApp() {
                     <Share2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" />
                     <div>
                       <div className="text-sm font-semibold text-[var(--color-success)]">Private link ready</div>
-                      <p className="mt-0.5 text-xs leading-5 text-[var(--color-ink-2)]">Anyone with this private link can view the active Proposal and submit the transaction once it is fully signed. The link cannot add signatures or change the transaction.</p>
+                      <p className="mt-1 text-xs leading-5 text-[var(--color-ink-2)]">Anyone with this link can view this proposal and submit it after all signatures are collected.</p>
                     </div>
                   </div>
                   <button type="button" onClick={() => setShareJustCreated(false)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--color-muted)] hover:bg-[var(--color-paper-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]" aria-label="Dismiss private link reminder"><X className="h-4 w-4" /></button>
