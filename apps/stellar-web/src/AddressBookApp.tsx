@@ -5,6 +5,7 @@ import AddressAliasEditor from './AddressAliasEditor';
 import { PageHeader } from './MultiSigUi';
 import { useAddressBook } from './AddressBookContext';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
+import { WORKSPACE_COPY } from './workspaceCopy';
 import ToolAccessEntry from './ToolAccessEntry';
 import { useStellarWallet } from './StellarWalletContext';
 import { useUserIdentity } from './UserIdentityContext';
@@ -56,7 +57,7 @@ export default function AddressBookApp() {
     setNewName('');
     setAddError('');
     setSearch('');
-  }, [address, network]);
+  }, [address, network, identity?.userId]);
 
   useEffect(() => {
     if (!address || !network) {
@@ -163,11 +164,11 @@ export default function AddressBookApp() {
       <main className="mst-workbench-page">
         <div className="mx-auto max-w-6xl">
           <PageHeader
-            title="Contacts"
-            description="Save signer names and invitation emails."
+            title={WORKSPACE_COPY.tools.contacts}
+            description={WORKSPACE_COPY.contacts.description}
             actions={privateReady ? (
               <button type="button" aria-expanded={adding} onClick={() => { setAdding((value) => !value); setAddError(''); }} className="mst-action-secondary">
-                <Plus className="h-4 w-4" />Add contact
+                <Plus className="h-4 w-4" />{WORKSPACE_COPY.contacts.add}
               </button>
             ) : undefined}
           />
@@ -188,12 +189,12 @@ export default function AddressBookApp() {
 
           {(error || aliasError) && <div className="mt-5 flex gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{error || aliasError}</div>}
 
-          {privateReady && (loading || aliasesLoading) && !hasContent && <div className="flex items-center gap-2 py-10 text-sm text-neutral-500 dark:text-neutral-400"><LoaderCircle className="h-4 w-4 animate-spin" />{address ? 'Loading relationships…' : 'Loading contacts…'}</div>}
+          {privateReady && (loading || aliasesLoading) && !hasContent && <div className="flex items-center gap-2 py-10 text-sm text-neutral-500 dark:text-neutral-400"><LoaderCircle className="h-4 w-4 animate-spin" />{address ? 'Loading relationships…' : WORKSPACE_COPY.contacts.loading}</div>}
 
           {privateReady && hasContent && (
             <div className="mst-contacts-search">
-              <label htmlFor="contact-search">Find a contact</label>
-              <input id="contact-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name or Stellar address" className="mst-address-control" />
+              <label htmlFor="contact-search">{WORKSPACE_COPY.contacts.search}</label>
+              <input id="contact-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={WORKSPACE_COPY.contacts.searchPlaceholder} className="mst-address-control" />
               <span aria-live="polite">{visibleCount} shown</span>
             </div>
           )}
@@ -203,7 +204,7 @@ export default function AddressBookApp() {
 
           {visibleSigners.length > 0 && (
             <section className="mst-contacts-section">
-              <div className="mst-operations-section-head"><h2>Signers <span className="mst-operations-count">{visibleSigners.length}</span></h2><p>People and accounts authorized to sign. Add names and email addresses for invitations.</p></div>
+              <div className="mst-operations-section-head"><h2>{WORKSPACE_COPY.contacts.signerGroup} <span className="mst-operations-count">{visibleSigners.length}</span></h2><p>{WORKSPACE_COPY.contacts.signerDescription}</p></div>
               <div className="mst-address-list">
                 {visibleSigners.map((signer) => {
                   const treasuryMaster = treasuryIdSet.has(signer.address);
@@ -214,6 +215,7 @@ export default function AddressBookApp() {
                   const displayName = treasuryMaster ? `${treasuryLabel || 'Treasury'} · account key` : alias || 'Unnamed signer';
                   return (
                     <div key={signer.address} className="mst-address-row">
+                      <span className="mst-contact-avatar" aria-hidden="true">{alias ? Array.from(alias)[0].toUpperCase() : 'G'}</span>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2"><div className="font-bold">{displayName}</div>{signer.address === address && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">Current wallet</span>}</div>
                         <div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{signer.address}</div>
@@ -228,10 +230,10 @@ export default function AddressBookApp() {
 
           {privateReady && visibleContacts.length > 0 && (
             <section className="mst-contacts-section">
-              <div className="mst-operations-section-head"><h2>Saved contacts <span className="mst-operations-count">{visibleContacts.length}</span></h2><p>Other addresses saved for future payments and proposals.</p></div>
+              <div className="mst-operations-section-head"><h2>{WORKSPACE_COPY.contacts.title} <span className="mst-operations-count">{visibleContacts.length}</span></h2><p>{WORKSPACE_COPY.contacts.savedDescription}</p></div>
               <div className="mst-address-list">
                 {visibleContacts.map((entry) => (
-                  <div key={entry.address} className="mst-address-row"><div className="min-w-0 flex-1"><div className="font-bold">{visibleLabelFor(entry.address, 'account')}</div><div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{entry.address}</div></div><AddressAliasEditor address={entry.address} subjectType="account" /></div>
+                  <div key={entry.address} className="mst-address-row"><span className="mst-contact-avatar" aria-hidden="true">{Array.from(visibleLabelFor(entry.address, 'account'))[0]?.toUpperCase() || 'G'}</span><div className="min-w-0 flex-1"><div className="font-bold">{visibleLabelFor(entry.address, 'account')}</div><div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{entry.address}</div></div><AddressAliasEditor address={entry.address} subjectType="account" /></div>
                 ))}
               </div>
             </section>
@@ -239,7 +241,7 @@ export default function AddressBookApp() {
 
           {visibleTreasuries.length > 0 && (
             <section className="mst-contacts-section">
-              <div className="mst-operations-section-head"><h2>Treasuries <span className="mst-operations-count">{visibleTreasuries.length}</span></h2><p>Accounts linked to your signers.</p></div>
+              <div className="mst-operations-section-head"><h2>Treasuries <span className="mst-operations-count">{visibleTreasuries.length}</span></h2><p>{WORKSPACE_COPY.contacts.treasuryDescription}</p></div>
               <div className="mst-address-list">
                 {visibleTreasuries.map((account) => {
                   const sharedName = visibleTreasuryNames[account.accountId] || '';
@@ -261,7 +263,7 @@ export default function AddressBookApp() {
 
           {privateReady && !loading && !aliasesLoading && !hasContent && !error && (
             <section className="py-12 text-sm text-neutral-500 dark:text-neutral-400">
-              No contacts yet. Add one above.
+              {WORKSPACE_COPY.contacts.empty}
             </section>
           )}
         </div>

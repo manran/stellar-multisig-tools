@@ -6,6 +6,7 @@ import { fixedClientStellarDeploymentNetwork } from '../../../packages/stellar-c
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
 import type { WalletNetworkSource } from './stellar/walletKit';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
+import { WORKSPACE_COPY } from './workspaceCopy';
 
 function shortAddress(address: string) {
   return address.length <= 12 ? address : `${address.slice(0, 4)}…${address.slice(-3)}`;
@@ -51,6 +52,8 @@ export default function StellarAccountControl() {
 
   if (address) {
     const alias = labelFor(address, 'signer');
+    const accountLabel = identity?.method === 'passkey'
+      ? WORKSPACE_COPY.identity.account : alias || shortAddress(address);
     const networkMismatch = fixedDeploymentNetwork && networkSource === 'wallet' && network !== fixedDeploymentNetwork;
     const networkLabel = fixedDeploymentNetwork
       ? networkMismatch
@@ -66,10 +69,10 @@ export default function StellarAccountControl() {
         className="group relative"
       >
         <summary
-          title={`${alias ? `${alias} · ` : ''}${address}${networkLabel ? ` · ${networkLabel}` : ''}`}
+          title={`${identity?.method === 'passkey' ? 'Your MST account · ' : ''}${address}${networkLabel ? ` · ${networkLabel}` : ''}`}
           className="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-semibold shadow-sm transition hover:bg-black/[0.03] dark:border-white/15 dark:bg-white/5 dark:hover:bg-white/10 sm:px-3.5"
         >
-          <span className="max-w-[7rem] truncate sm:max-w-[11rem]">{alias || shortAddress(address)}</span>
+          <span className="max-w-[7rem] truncate sm:max-w-[11rem]">{accountLabel}</span>
           {networkLabel && <span className={`hidden text-xs font-semibold sm:inline ${networkTextClass}`}>{networkLabel}</span>}
           <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" />
         </summary>
@@ -114,7 +117,7 @@ export default function StellarAccountControl() {
               className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-black/5 dark:hover:bg-white/10"
             >
               <Fingerprint className="h-4 w-4" />
-              Account and login methods
+              {WORKSPACE_COPY.identity.accountMethods}
             </a>
             {!privateUnlocked && (
               <button
@@ -124,7 +127,7 @@ export default function StellarAccountControl() {
                 className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-emerald-700 hover:bg-emerald-500/5 disabled:opacity-50 dark:text-emerald-300"
               >
                 {authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                {authBusy ? 'Confirming wallet…' : 'Sign in to workspace'}
+                {authBusy ? 'Confirming wallet…' : identity?.method === 'passkey' ? WORKSPACE_COPY.identity.verify : 'Sign in to workspace'}
               </button>
             )}
             <button
@@ -143,7 +146,7 @@ export default function StellarAccountControl() {
                 className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-neutral-600 hover:bg-black/5 disabled:opacity-50 dark:text-neutral-300 dark:hover:bg-white/10"
               >
                 <Lock className="h-4 w-4" />
-                Lock private workspace
+                {identity?.method === 'passkey' ? WORKSPACE_COPY.identity.lockWallet : 'Lock private workspace'}
               </button>
             )}
             <button
@@ -164,7 +167,7 @@ export default function StellarAccountControl() {
             className="mt-1 flex w-full items-center gap-2 rounded-xl border-t border-black/10 px-3 py-2.5 text-left text-sm font-semibold text-neutral-600 hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/10"
           >
             <LogOut className="h-4 w-4" />
-            Sign out
+            {identity?.method === 'passkey' ? WORKSPACE_COPY.identity.disconnectWallet : 'Sign out'}
           </button>
 
           {error && <div className="mx-2 mt-1 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</div>}

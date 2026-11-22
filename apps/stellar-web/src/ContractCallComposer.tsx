@@ -12,6 +12,7 @@ import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src
 import type { SorobanIntentResponse } from '../../../packages/stellar-core/src/sorobanIntentApiTypes';
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
 import { navigateWorkspace, stellarHref, stellarHrefWithSearch } from './workspaceNavigation';
+import { WORKSPACE_COPY } from './workspaceCopy';
 
 interface Props {
   network: StellarNetwork;
@@ -207,12 +208,12 @@ export default function ContractCallComposer({ network }: Props) {
         {loaded && !fromWorkspace && (
           <div className="mst-contract-context mt-4">
             <div className="font-semibold text-neutral-900 dark:text-white">{workspaceSaved ? 'Saved contract' : 'Save contract workspace'}</div>
-            <p className="mt-1">{workspaceSaved ? 'This reusable contract is already available from Contracts.' : 'Save this contract only if you expect to use or manage it again. One-time calls need no workspace.'}</p>
+            <p className="mt-1">{workspaceSaved ? WORKSPACE_COPY.contracts.alreadySaved : 'Save this contract only if you expect to use or manage it again. One-time calls need no workspace.'}</p>
             <div className="mt-3 flex flex-wrap gap-3">
               <a href="#contract-method" className="font-semibold text-neutral-700 dark:text-neutral-200">Continue call</a>
               {workspaceSaved
                 ? <a href={workspaceHref} className="mst-contract-link">Open Contract Workspace</a>
-                : <button type="button" disabled={savingContract || authBusy} onClick={() => void saveContract()} className="mst-contract-link disabled:opacity-40">{savingContract || authBusy ? 'Saving…' : 'Save to Contracts'}</button>}
+                : <button type="button" disabled={savingContract || authBusy} onClick={() => void saveContract()} className="mst-contract-link disabled:opacity-40">{savingContract || authBusy ? 'Saving…' : WORKSPACE_COPY.contracts.save}</button>}
             </div>
           </div>
         )}

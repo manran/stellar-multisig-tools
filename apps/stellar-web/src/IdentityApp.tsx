@@ -7,6 +7,7 @@ import { useStellarWallet } from './StellarWalletContext';
 import { useUserIdentity } from './UserIdentityContext';
 import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
 import { toolReturnPath } from './stellar/toolAccessRouting';
+import { WORKSPACE_COPY } from './workspaceCopy';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 
@@ -41,7 +42,10 @@ export default function IdentityApp() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+  const [confirmLink, setConfirmLink] = useState(false);
+  const [blockedWallet, setBlockedWallet] = useState('');
   const walletVerified = Boolean(privateUnlocked && unlockedAddress && unlockedNetwork === network);
+  const walletBlocked = walletVerified && blockedWallet === unlockedAddress;
   const walletHeaders = walletVerified ? privateSessionAddressHeaders(unlockedAddress) : {};
   const canPasskey = typeof PublicKeyCredential !== 'undefined';
   const inviteOpen = Boolean(inviteToken && invitation && !inviteError);
@@ -49,6 +53,9 @@ export default function IdentityApp() {
     (item) => item.kind === 'stellar_wallet' && item.address === unlockedAddress,
   ));
   const actionBusy = busy || authBusy || loading;
+  const hasLinkedWallet = credentials.some((item) => item.kind === 'stellar_wallet');
+
+  useEffect(() => { setConfirmLink(false); setBlockedWallet(''); }, [unlockedAddress, identity?.userId]);
 
   useEffect(() => {
     if (!inviteToken) return;
@@ -74,7 +81,9 @@ export default function IdentityApp() {
       body: JSON.stringify({ network, action, ...data }),
     });
     const body = await response.json() as ResponseBody;
-    if (!response.ok) throw new Error(body.error || `Identity request failed (${response.status}).`);
+    if (!response.ok) throw new Error(body.code === 'wallet_already_linked'
+      ? WORKSPACE_COPY.identity.conflict
+      : body.error || `Identity request failed (${response.status}).`);
     return body;
   }
 
@@ -122,21 +131,32 @@ export default function IdentityApp() {
     // UserIdentityProvider refreshes on wallet verification; a refresh from
     // this render would race with the new selected-wallet scope.
     if (!identity) navigateWorkspace(returnToTool ?? '/inbox');
-    else setInfo('Wallet verified.');
+    else setInfo(WORKSPACE_COPY.identity.verifiedSuccess);
   }
 
   async function chooseWallet() {
+    setConfirmLink(false);
     const address = await connect();
     if (!address) return;
     await unlock(undefined, network);
-    setInfo('Wallet verified. You can link it to your MST account.');
+    setInfo(WORKSPACE_COPY.identity.verifiedSuccess);
   }
 
   async function linkWallet() {
     if (!walletVerified) throw new Error('First verify the wallet you want to link.');
-    await api('link_wallet', {}, true);
+    try {
+      await api('link_wallet', {}, true);
+    } catch (cause) {
+      if (cause instanceof Error && cause.message === WORKSPACE_COPY.identity.conflict) {
+        setBlockedWallet(unlockedAddress);
+        setConfirmLink(false);
+        return;
+      }
+      throw cause;
+    }
+    setConfirmLink(false);
     await refresh();
-    setInfo('Wallet linked.');
+    setInfo(WORKSPACE_COPY.identity.linkedSuccess);
   }
 
   async function signOutPasskey() {
@@ -154,12 +174,12 @@ export default function IdentityApp() {
   return <StellarWorkspaceShell active="new">
     <main className="mst-workbench-page">
       <div className="mx-auto max-w-2xl">
-        <a href={stellarHref('')} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[var(--color-ink-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]"><ArrowLeft className="h-4 w-4" />Back to home</a>
+        <a href={stellarHref('')} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[var(--color-ink-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]"><ArrowLeft className="h-4 w-4" />{WORKSPACE_COPY.identity.back}</a>
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-bold sm:text-3xl">{inviteToken ? 'Join payment workflow' : identity ? 'Your account' : 'Sign in or sign up'}</h1>
+          <h1 className="text-2xl font-bold sm:text-3xl">{inviteToken ? WORKSPACE_COPY.identity.inviteTitle : identity ? WORKSPACE_COPY.identity.account : WORKSPACE_COPY.identity.signIn}</h1>
         </div>
         {inviteOpen && <section className="mt-6 border-l-2 border-[var(--color-accent)] bg-[var(--color-paper-2)] px-5 py-4">
-          <h2 className="font-semibold">Payment invitation</h2>
+          <h2 className="font-semibold">{WORKSPACE_COPY.identity.inviteSubheading}</h2>
           <p className="mt-1 text-sm">{invitation.templateName}</p>
         </section>}
         {inviteError && <p role="alert" className="mt-5 text-sm text-[var(--color-danger)]">{inviteError}</p>}
@@ -171,13 +191,13 @@ export default function IdentityApp() {
           <div className="mt-5 flex flex-col gap-3">
             {canPasskey && <ActionButton disabled={actionBusy} aria-busy={busy} onClick={() => void perform(inviteOpen ? registerPasskey : signInWithPasskey)} className="min-h-12 w-full justify-center">
               {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Fingerprint className="h-4 w-4" />}
-              {inviteOpen ? 'Create account with Passkey' : 'Sign in with Passkey'}
+              {inviteOpen ? WORKSPACE_COPY.identity.createWithPasskey : WORKSPACE_COPY.identity.signInPasskey}
             </ActionButton>}
             {canPasskey && <ActionButton variant="secondary" disabled={actionBusy} onClick={() => void perform(inviteOpen ? signInWithPasskey : registerPasskey)} className="min-h-12 w-full justify-center">
-              <Fingerprint className="h-4 w-4" />{inviteOpen ? 'Already have a Passkey' : 'Create Passkey account'}
+              <Fingerprint className="h-4 w-4" />{inviteOpen ? WORKSPACE_COPY.identity.returningPasskey : WORKSPACE_COPY.identity.createPasskey}
             </ActionButton>}
             <ActionButton variant="secondary" disabled={actionBusy} aria-busy={busy || authBusy} onClick={() => void perform(confirmWallet)} className="min-h-12 w-full justify-center">
-              <WalletCards className="h-4 w-4" />Sign in with Stellar wallet
+              <WalletCards className="h-4 w-4" />{WORKSPACE_COPY.identity.signInWallet}
             </ActionButton>
           </div>
           {!canPasskey && <p className="mt-3 text-sm text-[var(--color-muted)]">Passkeys are unavailable in this browser.</p>}
@@ -186,32 +206,92 @@ export default function IdentityApp() {
         {identity && <section className="mt-7 border-t border-[var(--color-rule)] pt-6" aria-label="Your account and login methods">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="flex items-center gap-2 text-sm text-[var(--color-ink-2)]"><CheckCircle2 className="h-4 w-4 text-[var(--color-accent)]" />Signed in with {identity.method === 'passkey' ? 'Passkey' : 'Stellar wallet'}</p>
+              <p className="flex items-center gap-2 text-sm text-[var(--color-ink-2)]"><CheckCircle2 className="h-4 w-4 text-[var(--color-accent)]" />{WORKSPACE_COPY.identity.signedInWith(identity.method)}</p>
             </div>
-            {inviteOpen && <ActionButton disabled={actionBusy} onClick={() => void perform(acceptInvitation)}><ArrowRight className="h-4 w-4" />Accept invitation</ActionButton>}
+            {inviteOpen && <ActionButton disabled={actionBusy} onClick={() => void perform(acceptInvitation)}><ArrowRight className="h-4 w-4" />{WORKSPACE_COPY.identity.inviteAccept}</ActionButton>}
           </div>
           <details className="mt-4 text-xs text-[var(--color-ink-2)]">
-            <summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]">Account details</summary>
+            <summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]">{WORKSPACE_COPY.identity.accountDetails}</summary>
             <p className="break-all font-mono">MST User ID: {identity.userId}</p>
           </details>
 
           <div className="mt-5 border-t border-[var(--color-rule)] pt-5">
-            <h3 className="font-semibold">Login methods</h3>
+            <h3 className="font-semibold">{WORKSPACE_COPY.identity.methods}</h3>
             <ul className="mt-4 divide-y divide-[var(--color-rule)] border-y border-[var(--color-rule)]">
               {credentials.map((method, index) => <li key={method.id ?? method.address ?? index} className="flex min-h-12 items-center gap-3 py-3 text-sm">
                 {method.kind === 'passkey' ? <Fingerprint className="h-4 w-4 shrink-0 text-[var(--color-ink-2)]" /> : <WalletCards className="h-4 w-4 shrink-0 text-[var(--color-ink-2)]" />}
                 <span className="min-w-0">{method.kind === 'passkey' ? `Passkey ${index + 1}` : `Stellar wallet · ${shortAddress(method.address ?? '')}`}</span>
               </li>)}
             </ul>
-            <div className="mt-5 flex flex-wrap gap-3">
-              {canPasskey && <ActionButton disabled={actionBusy} onClick={() => void perform(registerPasskey)}><Fingerprint className="h-4 w-4" />Add Passkey</ActionButton>}
-              {!walletVerified && <ActionButton variant="secondary" disabled={actionBusy} onClick={() => void perform(confirmWallet)}><KeyRound className="h-4 w-4" />Add Stellar wallet</ActionButton>}
-              {identity.method === 'passkey' && walletVerified && !walletLinked && <ActionButton variant="secondary" disabled={actionBusy} onClick={() => void perform(linkWallet)}><ShieldCheck className="h-4 w-4" />Link wallet</ActionButton>}
-              {identity.method === 'passkey' && <ActionButton variant="secondary" disabled={actionBusy} onClick={() => void perform(chooseWallet)}><WalletCards className="h-4 w-4" />Switch wallet</ActionButton>}
-            </div>
+            {canPasskey && (
+              <div className="mt-5">
+                <ActionButton disabled={actionBusy} onClick={() => void perform(registerPasskey)}>
+                  <Fingerprint className="h-4 w-4" />{WORKSPACE_COPY.identity.addPasskey}
+                </ActionButton>
+              </div>
+            )}
+
+            <section className="mt-7 border-t border-[var(--color-rule)] pt-5" aria-label={WORKSPACE_COPY.identity.walletTitle}>
+              <h3 className="font-semibold">{WORKSPACE_COPY.identity.walletTitle}</h3>
+              {walletVerified ? (
+                <div className="mst-account-wallet mt-4">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <ShieldCheck className="h-4 w-4 text-[var(--color-accent)]" />
+                    <span className="font-semibold">{WORKSPACE_COPY.identity.verified}</span>
+                    <span className="ml-auto text-xs text-[var(--color-ink-2)]">
+                      {walletLinked ? WORKSPACE_COPY.identity.linked : WORKSPACE_COPY.identity.notLinked}
+                    </span>
+                  </div>
+                  <p className="mt-2 break-all font-mono text-xs text-[var(--color-ink-2)]">{unlockedAddress}</p>
+                  {identity.method === 'passkey' && walletBlocked && (
+                    <p role="alert" className="mt-4 border-l-2 border-[var(--color-danger)] pl-3 text-sm leading-6 text-[var(--color-danger)]">
+                      {WORKSPACE_COPY.identity.conflict}
+                    </p>
+                  )}
+                  {identity.method === 'passkey' && !walletLinked && !walletBlocked && (
+                    confirmLink ? (
+                      <div className="mt-5 border-t border-[var(--color-rule)] pt-4">
+                        <h4 className="font-semibold">{WORKSPACE_COPY.identity.confirmTitle}</h4>
+                        <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">{WORKSPACE_COPY.identity.confirmDescription}</p>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <ActionButton disabled={actionBusy} onClick={() => void perform(linkWallet)}>
+                            {WORKSPACE_COPY.identity.confirm}
+                          </ActionButton>
+                          <ActionButton variant="secondary" disabled={actionBusy} onClick={() => setConfirmLink(false)}>
+                            {WORKSPACE_COPY.identity.cancel}
+                          </ActionButton>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-4">
+                        <ActionButton disabled={actionBusy} onClick={() => setConfirmLink(true)}>
+                          <WalletCards className="h-4 w-4" />{WORKSPACE_COPY.identity.link}
+                        </ActionButton>
+                      </div>
+                    )
+                  )}
+                  {identity.method === 'passkey' && (
+                    <button type="button" disabled={actionBusy}
+                      className="mt-4 block min-h-11 text-sm font-semibold text-[var(--color-ink-2)] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:opacity-50"
+                      onClick={() => void perform(chooseWallet)}>{WORKSPACE_COPY.identity.switch}</button>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-4">
+                  <p className="text-sm text-[var(--color-ink-2)]">
+                    {hasLinkedWallet ? WORKSPACE_COPY.identity.linkedWalletInactive : WORKSPACE_COPY.identity.walletReadyToLink}
+                  </p>
+                  <ActionButton className="mt-4" variant="secondary" disabled={actionBusy}
+                    onClick={() => void perform(confirmWallet)}>
+                    <KeyRound className="h-4 w-4" />
+                    {hasLinkedWallet ? WORKSPACE_COPY.identity.verify : WORKSPACE_COPY.identity.connect}
+                  </ActionButton>
+                </div>
+              )}
+            </section>
             <div className="mt-4 flex flex-wrap gap-5 text-sm">
-              {identity.method === 'passkey' && <button type="button" disabled={actionBusy} className="min-h-11 font-semibold text-[var(--color-ink-2)] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:opacity-50" onClick={() => void perform(signOutPasskey)}>Sign out Passkey</button>}
-              {walletVerified && <button type="button" disabled={actionBusy} className="min-h-11 font-semibold text-[var(--color-ink-2)] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:opacity-50" onClick={() => void perform(lockWallet)}>Lock wallet session</button>}
+              {identity.method === 'passkey' && <button type="button" disabled={actionBusy} className="min-h-11 font-semibold text-[var(--color-ink-2)] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:opacity-50" onClick={() => void perform(signOutPasskey)}>{WORKSPACE_COPY.identity.signOutPasskey}</button>}
+              {walletVerified && <button type="button" disabled={actionBusy} className="min-h-11 font-semibold text-[var(--color-ink-2)] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] disabled:opacity-50" onClick={() => void perform(lockWallet)}>{WORKSPACE_COPY.identity.lockWallet}</button>}
             </div>
           </div>
         </section>}

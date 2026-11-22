@@ -227,11 +227,11 @@ test('default evidence export structurally excludes private plaintext', () => {
 
 test('Address Book presents signer workspace relationships plus secondary Contacts', () => {
   assert.match(addressBook, /<h2>Treasuries <span/);
-  assert.match(addressBook, /<h2>Signers <span/);
-  assert.match(addressBook, /title="Contacts"/);
+  assert.match(addressBook, /<h2>\{WORKSPACE_COPY.contacts.signerGroup\} <span/);
+  assert.match(addressBook, /title=\{WORKSPACE_COPY.tools.contacts\}/);
   assert.match(addressBook, /loadAccountsForSigner/);
   assert.match(addressBook, /loadSharedTreasuryNames/);
-  assert.match(addressBook, /Add contact/);
+  assert.match(addressBook, /WORKSPACE_COPY.contacts.add/);
   assert.match(addressBook, /New proposal/);
   assert.match(addressBook, /treasuryDisplayLabel/);
   assert.doesNotMatch(addressBook, /entry\.subjectType === 'account'/);
@@ -241,7 +241,7 @@ test('Address Book presents signer workspace relationships plus secondary Contac
   assert.match(addressBook, /!treasuryMaster && <AddressAliasEditor/);
   assert.doesNotMatch(addressBook, /Saved addresses|Open Treasury|treasur(?:y|ies)\.length/);
   assert.match(addressBook, /const privateReady = Boolean\(identity\)/);
-  assert.match(addressBook, /Add contact/);
+  assert.match(addressBook, /WORKSPACE_COPY.contacts.add/);
   assert.match(addressBook, /allowNotificationEmail/);
   assert.doesNotMatch(addressBook, /Unlock saved names|Unlock names|stay locked/);
   assert.match(signerIdentityList, /Show saved signers/);

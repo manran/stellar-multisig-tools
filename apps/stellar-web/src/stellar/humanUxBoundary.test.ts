@@ -16,7 +16,7 @@ test('workspace navigation prioritizes user work and keeps tools accessible', ()
   assert.match(shell, />Activity</);
   assert.match(shell, /mst-rail-tools/);
   assert.match(shell, />Treasuries</);
-  assert.match(shell, />Contacts</);
+  assert.match(shell, /WORKSPACE_COPY.tools.contacts/);
   assert.match(shell, /aria-label="Main"/);
   assert.match(shell, /aria-label="Tools"/);
   assert.match(shell, /aria-expanded={mobileMoreOpen}/);

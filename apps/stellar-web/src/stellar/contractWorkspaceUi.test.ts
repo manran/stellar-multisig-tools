@@ -46,10 +46,10 @@ test('Contracts is a first-class workspace route and navigation destination', ()
   const routes = CANONICAL_STELLAR_ROUTES.map((route) => route.path);
 
   assert.ok(routes.includes('/contracts'));
-  assert.match(shell, />Contracts</);
-  assert.match(contracts, /title="Contracts"/);
+  assert.match(shell, /WORKSPACE_COPY.tools.contracts/);
+  assert.match(contracts, /title=\{WORKSPACE_COPY.tools.contracts\}/);
   assert.match(contracts, /ToolAccessEntry returnTo="\/contracts"/);
-  assert.match(contracts, /Add or call contract/);
+  assert.match(contracts, /WORKSPACE_COPY.contracts.add/);
   assert.match(contracts, /useUserIdentity/);
   assert.doesNotMatch(contracts, /PrivateWorkspaceUnlock/);
 });

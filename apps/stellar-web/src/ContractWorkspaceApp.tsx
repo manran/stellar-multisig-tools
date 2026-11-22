@@ -10,6 +10,7 @@ import { resolveStellarNetwork } from './stellar/networkPreference';
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
 import { useStellarWallet } from './StellarWalletContext';
 import { navigateWorkspace, stellarHref, stellarHrefWithSearch } from './workspaceNavigation';
+import { WORKSPACE_COPY } from './workspaceCopy';
 
 function routeObject(): { contractId: string; network: StellarNetwork } | null {
   const params = new URLSearchParams(window.location.search);
@@ -98,7 +99,7 @@ export default function ContractWorkspaceApp() {
     <StellarWorkspaceShell active="contracts" networkContext={network}>
       <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto max-w-5xl">
-          <a href={stellarHref('/contracts')} className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black dark:text-neutral-300 dark:hover:text-white"><ArrowLeft className="h-4 w-4" />Contracts</a>
+          <a href={stellarHref('/contracts')} className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black dark:text-neutral-300 dark:hover:text-white"><ArrowLeft className="h-4 w-4" />{WORKSPACE_COPY.tools.contracts}</a>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Braces className="mst-contract-accent h-6 w-6" />
             <h1 className="text-3xl font-bold tracking-tight">Contract Workspace</h1>
@@ -144,7 +145,7 @@ export default function ContractWorkspaceApp() {
                 ) : (
                   <>
                     <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Save this contract to your account.</p>
-                    <button type="button" disabled={saving || authBusy} onClick={() => void keepContract()} className="mst-action-secondary mt-4 disabled:opacity-40">{saving || authBusy ? 'Saving…' : 'Save to Contracts'}</button>
+                    <button type="button" disabled={saving || authBusy} onClick={() => void keepContract()} className="mst-action-secondary mt-4 disabled:opacity-40">{saving || authBusy ? 'Saving…' : WORKSPACE_COPY.contracts.save}</button>
                   </>
                 )}
               </section>

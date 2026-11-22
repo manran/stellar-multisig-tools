@@ -1,5 +1,6 @@
 import { ArrowRight, Braces, CircleAlert, LoaderCircle, Plus } from 'lucide-react';
-import { NetworkBadge, PageHeader } from './MultiSigUi';
+import { PageHeader } from './MultiSigUi';
+import { WORKSPACE_COPY } from './workspaceCopy';
 import { useUserIdentity } from './UserIdentityContext';
 import ToolAccessEntry from './ToolAccessEntry';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
@@ -22,8 +23,8 @@ export default function ContractsApp() {
       <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto max-w-5xl">
           <PageHeader
-            title="Contracts"
-            description="Save and revisit contracts."
+            title={WORKSPACE_COPY.tools.contracts}
+            description={WORKSPACE_COPY.contracts.description}
           />
 
           {!identity && <ToolAccessEntry returnTo="/contracts" />}
@@ -32,9 +33,9 @@ export default function ContractsApp() {
             <div className="mt-6 space-y-4">
               <div className="mst-contract-toolbar">
                 <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
-                  <span>{contracts.length} saved {contracts.length === 1 ? 'contract' : 'contracts'}</span>
+                  <span>{WORKSPACE_COPY.contracts.count(contracts.length)}</span>
                 </div>
-                <a href={stellarHrefWithSearch('/new/contract', { network: network ?? 'public' })} className="mst-action-primary"><Plus className="h-4 w-4" />Add or call contract</a>
+                <a href={stellarHrefWithSearch('/new/contract', { network: network ?? 'public' })} className="mst-action-primary"><Plus className="h-4 w-4" />{WORKSPACE_COPY.contracts.add}</a>
               </div>
 
               {error && (
@@ -43,26 +44,25 @@ export default function ContractsApp() {
                   <button type="button" onClick={() => void refresh()} className="shrink-0 font-semibold underline">Retry</button>
                 </div>
               )}
-              {loading && <div className="flex items-center gap-2 py-8 text-sm text-neutral-500"><LoaderCircle className="h-4 w-4 animate-spin" />Loading contracts…</div>}
+              {loading && <div className="flex items-center gap-2 py-8 text-sm text-neutral-500"><LoaderCircle className="h-4 w-4 animate-spin" />{WORKSPACE_COPY.contracts.loading}</div>}
 
               {!loading && !error && contracts.length === 0 && (
                 <section className="mst-contract-empty">
-                  <h2 className="text-xl font-bold">No saved contracts yet</h2>
-                  <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Load any C-address, inspect its callable methods, then save it here for later.</p>
+                  <h2 className="text-xl font-bold">{WORKSPACE_COPY.contracts.emptyTitle}</h2>
+                  <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{WORKSPACE_COPY.contracts.emptyDescription}</p>
                 </section>
               )}
 
               {!loading && contracts.length > 0 && (
                 <div className="mst-contract-list">
+                  <div className="mst-contract-list__head"><span>{WORKSPACE_COPY.contracts.address}</span></div>
                   {contracts.map((contract) => (
                     <a key={contract.contractId} href={stellarHrefWithSearch('/contract', { contract: contract.contractId, network: contract.network })} className="mst-contract-row">
-                      <span className="mst-contract-row__icon"><Braces className="h-5 w-5" /></span>
                       <span className="min-w-0">
-                        <span className="block font-mono text-sm font-semibold" title={contract.contractId}>{shortContract(contract.contractId)}</span>
-                        <span className="mt-1 block text-xs text-neutral-500 dark:text-neutral-400">Saved contract</span>
+                        <span className="mst-contract-row__type"><Braces className="h-3.5 w-3.5" />{WORKSPACE_COPY.contracts.type}</span>
+                        <span className="mst-contract-row__address" title={contract.contractId}>{shortContract(contract.contractId)}</span>
                       </span>
-                      <NetworkBadge network={contract.network} />
-                      <span className="mst-contract-row__action">Open contract <ArrowRight className="h-4 w-4" /></span>
+                      <span className="mst-contract-row__action">{WORKSPACE_COPY.contracts.inspect} <ArrowRight className="h-4 w-4" /></span>
                     </a>
                   ))}
                 </div>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
 import { BookUser, Bot, Braces, Ellipsis, History, Home, Inbox, Plus, Vault } from 'lucide-react';
 import StellarFooter from './StellarFooter';
+import { WORKSPACE_COPY } from './workspaceCopy';
 import StellarHeader from './StellarHeader';
 import { useStellarWallet } from './StellarWalletContext';
 import { useUserIdentity } from './UserIdentityContext';
@@ -85,9 +86,9 @@ export default function StellarWorkspaceShell({ active, children, networkContext
               {mobileMoreOpen && (
                 <div role="menu" className="mst-workspace-mobile-menu">
                   <a role="menuitem" href={stellarHref('/activity')} onClick={(event) => { setMobileMoreOpen(false); openPrivateWorkspace(event); }} className="mst-workspace-menu-item"><History className="h-4 w-4" />Activity</a>
-                  <a role="menuitem" href={stellarHref('/contracts')} onClick={() => setMobileMoreOpen(false)} className="mst-workspace-menu-item"><Braces className="h-4 w-4" />Contracts</a>
+                  <a role="menuitem" href={stellarHref('/contracts')} onClick={() => setMobileMoreOpen(false)} className="mst-workspace-menu-item"><Braces className="h-4 w-4" />{WORKSPACE_COPY.tools.contracts}</a>
                   <a role="menuitem" href={stellarHref('/treasury')} onClick={() => setMobileMoreOpen(false)} className="mst-workspace-menu-item"><Vault className="h-4 w-4" />Treasuries</a>
-                  <a role="menuitem" href={stellarHref('/address-book')} onClick={() => setMobileMoreOpen(false)} className="mst-workspace-menu-item"><BookUser className="h-4 w-4" />Contacts</a>
+                  <a role="menuitem" href={stellarHref('/address-book')} onClick={() => setMobileMoreOpen(false)} className="mst-workspace-menu-item"><BookUser className="h-4 w-4" />{WORKSPACE_COPY.tools.contacts}</a>
                   <a role="menuitem" href={stellarHref('/agent-access')} onClick={() => setMobileMoreOpen(false)} className="mst-workspace-menu-item"><Bot className="h-4 w-4" />Agent access</a>
                 </div>
               )}
@@ -100,9 +101,9 @@ export default function StellarWorkspaceShell({ active, children, networkContext
 
           <nav className="mst-rail-tools" aria-label="Tools">
             <div className="mst-rail-tools__label">Tools</div>
-            <a href={stellarHref('/contracts')} className={navClass(active === 'contracts')} aria-current={active === 'contracts' ? 'page' : undefined}><Braces className="h-4 w-4 shrink-0" />Contracts</a>
+            <a href={stellarHref('/contracts')} className={navClass(active === 'contracts')} aria-current={active === 'contracts' ? 'page' : undefined}><Braces className="h-4 w-4 shrink-0" />{WORKSPACE_COPY.tools.contracts}</a>
             <a href={stellarHref('/treasury')} className={navClass(treasuryActive)} aria-current={treasuryActive ? 'page' : undefined}><Vault className="h-4 w-4 shrink-0" />Treasuries</a>
-            <a href={stellarHref('/address-book')} className={navClass(addressBookActive)} aria-current={addressBookActive ? 'page' : undefined}><BookUser className="h-4 w-4 shrink-0" />Contacts</a>
+            <a href={stellarHref('/address-book')} className={navClass(addressBookActive)} aria-current={addressBookActive ? 'page' : undefined}><BookUser className="h-4 w-4 shrink-0" />{WORKSPACE_COPY.tools.contacts}</a>
             <a href={stellarHref('/agent-access')} className={navClass(active === 'agent-access')} aria-current={active === 'agent-access' ? 'page' : undefined}><Bot className="h-4 w-4 shrink-0" />Agent access</a>
           </nav>
           <div className="mst-rail-note">Shared authorization, one workspace.</div>

@@ -265,6 +265,10 @@ async function fixturePage(width, options = {}) {
       if (body.action === 'link_wallet') {
         assert.equal(selected, addresses.alice, 'Wallet must be verified and selected before binding');
         assert.equal(state.passkeyLoggedIn, true);
+        if (state.walletLinkConflict) {
+          return json({ code: 'wallet_already_linked',
+            error: 'This wallet is already linked to a different MST user.' }, 409);
+        }
         state.walletLinkCount = (state.walletLinkCount ?? 0) + 1;
         return json({ linked: true, walletAddress: selected, userId: state.passkeyUserId });
       }
@@ -581,7 +585,7 @@ try {
       }, async ({ page, state }) => {
         const contract = 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4';
         await page.goto(origin + '/contract?contract=' + contract + '&network=testnet');
-        await page.getByRole('button', { name: 'Save to Contracts' }).click();
+        await page.getByRole('button', { name: 'Save contract' }).click();
         await page.getByRole('button', { name: 'Forget contract' }).waitFor();
         assert.equal(state.savedContracts?.length, 1);
         await page.getByRole('button', { name: 'Forget contract' }).click();
@@ -662,7 +666,7 @@ try {
           const more = page.getByRole('button', { name: 'More workspace tools' });
           await more.click();
           await visible(page, 'Activity', 'menuitem');
-          await visible(page, 'Contracts', 'menuitem');
+          await visible(page, 'Smart Contracts', 'menuitem');
           await visible(page, 'Treasuries', 'menuitem');
           await visible(page, 'Contacts', 'menuitem');
           await visible(page, 'Agent access', 'menuitem');
@@ -1085,7 +1089,55 @@ try {
       });
     }
 
+    await run('smart-contracts-address-workbench', width, {
+      wallet: walletState('', false),
+      state: { passkeyLoggedIn: true, savedContracts: [{
+        contractId: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+        network: 'testnet', createdAt: now, updatedAt: now,
+      }] },
+    }, async ({ page }) => {
+      await page.goto(origin + '/contracts');
+      await visible(page, 'Smart Contracts', 'heading');
+      await visible(page, 'Soroban contract');
+      await page.getByRole('link', { name: /Inspect/ }).waitFor();
+      const destination = await page.locator('.mst-contract-row').first().getAttribute('href');
+      assert.match(destination, /contract=/);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      assert.ok(overflow <= 1, 'Smart Contracts must not overflow mobile width');
+      await snapshot(page, 'smart-contracts-list', width);
+    });
+
+    await run('passkey-wallet-link-review', width, {
+      wallet: walletState(addresses.alice), state: { passkeyLoggedIn: true },
+    }, async ({ page, state }) => {
+      await page.goto(origin + '/identity');
+      await visible(page, 'Your account', 'heading');
+      await page.getByRole('button', { name: 'Link this wallet' }).click();
+      await visible(page, 'Link this wallet?', 'heading');
+      await page.getByText(addresses.alice, { exact: true }).last().waitFor();
+      assert.equal(state.walletLinkCount ?? 0, 0);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      assert.ok(overflow <= 1, 'Wallet link confirmation must not overflow mobile width');
+      await snapshot(page, 'passkey-wallet-link-review', width);
+    });
+
     if (width === 375) {
+      await run('passkey-wallet-link-rejects-another-owner', width, {
+        wallet: walletState(addresses.alice),
+        state: { passkeyLoggedIn: true, walletLinkConflict: true },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/identity`);
+        await visible(page, 'Your account', 'heading');
+        await page.getByRole('button', { name: 'Link this wallet' }).click();
+        await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+        assert.equal(state.walletLinkCount ?? 0, 0);
+        await page.getByRole('button', { name: 'Link this wallet' }).click();
+        await page.getByRole('button', { name: 'Confirm link' }).click();
+        await visible(page, 'This wallet belongs to another MST account. Choose another wallet, or sign in to that account and add a new Passkey.');
+        assert.equal(await page.getByRole('button', { name: 'Confirm link' }).count(), 0);
+        assert.equal(state.walletLinkCount ?? 0, 0);
+        await snapshot(page, 'wallet-link-conflict', width);
+      });
       await run('passkey-wallet-link-requires-explicit-both-proofs', width, {
         wallet: walletState(addresses.alice),
         state: { passkeyLoggedIn: true,
@@ -1095,8 +1147,12 @@ try {
         await page.goto(`${origin}/identity`);
         await visible(page, 'Your account', 'heading');
         assert.equal(state.walletLinkCount ?? 0, 0, 'Wallet must not auto-link to a Passkey user');
-        await page.getByRole('button', { name: 'Link wallet' }).click();
-        await visible(page, 'Wallet linked.');
+        await visible(page, 'Not linked yet');
+        await page.getByRole('button', { name: 'Link this wallet' }).click();
+        await visible(page, 'Link this wallet?', 'heading');
+        assert.equal(state.walletLinkCount ?? 0, 0, 'Preview must not bind the wallet');
+        await page.getByRole('button', { name: 'Confirm link' }).click();
+        await visible(page, 'Wallet linked to your account.');
         assert.equal(state.walletLinkCount, 1);
         await snapshot(page, 'passkey-wallet-link', width);
         await page.goto(`${origin}/new`);

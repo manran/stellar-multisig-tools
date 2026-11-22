@@ -58,6 +58,6 @@ test('Contacts and Contracts use MST User ID while signing tools retain wallet g
   assert.doesNotMatch(editor, /if \(!privateUnlocked/);
   assert.match(toolAccess, /Connect Stellar wallet/);
   assert.match(source('AddressBookApp.tsx'), /!identity && <ToolAccessEntry/);
-  assert.match(source('AddressBookApp.tsx'), /Loading contacts…/);
+  assert.match(source('AddressBookApp.tsx'), /WORKSPACE_COPY.contacts.loading/);
   assert.match(source('ContractsApp.tsx'), /!identity && <ToolAccessEntry/);
 });

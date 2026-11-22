@@ -7,6 +7,7 @@ import AddressBookApp from './AddressBookApp';
 import { AddressBookProvider } from './AddressBookContext';
 import AccountSigningEntryApp from './AccountSigningEntryApp';
 import ContractsApp from './ContractsApp';
+import { WORKSPACE_COPY } from './workspaceCopy';
 import ContractWorkspaceApp from './ContractWorkspaceApp';
 import { ContractWorkspaceProvider } from './ContractWorkspaceContext';
 import DemoTreasuryApp from './DemoTreasuryApp';
@@ -50,7 +51,7 @@ function titleFor(kind: StellarWorkspaceRouteKind) {
     case 'demo': return 'Interactive Demo | MultiSig Tools';
     case 'inbox': return 'Inbox | MultiSig Tools';
     case 'new': return 'New transaction | MultiSig Tools';
-    case 'contracts': return 'Contracts | MultiSig Tools';
+    case 'contracts': return `${WORKSPACE_COPY.tools.contracts} | MultiSig Tools`;
     case 'contract-workspace': return 'Contract Workspace | MultiSig Tools';
     case 'account-signing': return 'Set up multisig | MultiSig Tools';
     case 'treasury': return 'Treasury | MultiSig Tools';

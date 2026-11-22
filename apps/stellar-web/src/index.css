@@ -2054,19 +2054,31 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
     border-top: var(--rule-hairline) solid var(--color-rule);
   }
 
+  .mst-contract-list__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding-block: var(--space-xs);
+    border-bottom: var(--rule-hairline) solid var(--color-rule);
+    color: var(--color-ink-2);
+    font-size: var(--text-xs);
+    font-weight: 700;
+  }
+
   .mst-contract-row {
     display: grid;
-    grid-template-columns: 2.5rem minmax(0, 1fr) auto auto;
-    gap: var(--space-md);
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-lg);
     align-items: center;
-    padding-block: var(--space-lg);
+    padding: var(--space-md) var(--space-xs);
     border-bottom: var(--rule-hairline) solid var(--color-rule);
     color: var(--color-ink);
     text-decoration: none;
   }
 
   .mst-contract-row:hover {
-    color: var(--color-accent);
+    background: var(--color-paper-2);
   }
 
   .mst-contract-row:focus-visible {
@@ -2074,8 +2086,21 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
     outline-offset: 3px;
   }
 
-  .mst-contract-row__icon {
-    color: var(--color-accent);
+  .mst-contract-row__type {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2xs);
+    color: var(--color-muted);
+    font-size: var(--text-xs);
+    margin-bottom: var(--space-2xs);
+  }
+
+  .mst-contract-row__address {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    overflow-wrap: anywhere;
   }
 
   .mst-contract-row__action {
@@ -2181,13 +2206,8 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
   }
 
   .mst-contract-row {
-    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--space-sm);
-  }
-
-  .mst-contract-row__action {
-    grid-column: 2 / -1;
-    justify-self: start;
   }
 
   .mst-contract-method-row {
@@ -2675,6 +2695,21 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
 
   .mst-address-row:last-child {
     border-bottom: 0;
+  }
+
+  .mst-contact-avatar {
+    display: inline-flex;
+    flex: 0 0 2.5rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    align-items: center;
+    justify-content: center;
+    border: var(--rule-hairline) solid var(--color-rule);
+    border-radius: var(--radius-pill);
+    background: var(--color-paper-2);
+    color: var(--color-ink);
+    font-size: var(--text-sm);
+    font-weight: 700;
   }
 }
 
@@ -4095,4 +4130,12 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
 
 @media (prefers-reduced-motion: reduce) {
   .mst-agent-danger-action { transition-duration: 100ms; }
+}
+
+/* Hallmark · account method linkage · reuse locked Workbench tokens */
+@layer components {
+  .mst-account-wallet {
+    border-top: var(--rule-hairline) solid var(--color-rule);
+    padding-top: var(--space-sm);
+  }
 }
