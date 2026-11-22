@@ -819,7 +819,7 @@ try {
         assert.equal(state.proposerRequestCount, 1);
         assert.equal(await page.getByRole('button', { name: 'Sign', exact: true }).count(), 0);
         assert.equal(await page.getByRole('button', { name: 'Submit transaction' }).count(), 0);
-        await visible(page, 'Copy link for authorized signers');
+        await visible(page, 'Copy signer link');
         await snapshot(page, 'delegated-payment-created', width);
         await page.goto(`${origin}/inbox`);
         await visible(page, 'Waiting for signatures');
@@ -965,11 +965,11 @@ try {
         },
       }, async ({ page, state }) => {
         await page.goto(`${origin}/identity`);
-        await visible(page, 'Your MST account', 'heading');
+        await visible(page, 'Your account', 'heading');
         await visible(page, 'Account', 'heading');
         assert.equal(state.walletLinkCount ?? 0, 0, 'Wallet must not auto-link to a Passkey user');
-        await page.getByRole('button', { name: 'Link verified wallet' }).click();
-        await visible(page, 'Wallet linked. Both login methods now open the same MST account.');
+        await page.getByRole('button', { name: 'Link wallet' }).click();
+        await visible(page, 'Wallet linked.');
         assert.equal(state.walletLinkCount, 1);
         await snapshot(page, 'passkey-wallet-link', width);
         await page.goto(`${origin}/new`);
@@ -1203,7 +1203,7 @@ try {
         await page.getByRole('button', { name: 'Invite or remind signers' }).click();
         assert.equal(await page.evaluate(() => document.activeElement?.id), 'proposal-signatures');
         await visible(page, 'Waiting for other signatures', 'heading');
-        await visible(page, '1 more signer needs to sign. 2 eligible unsigned signers are listed below.');
+        await visible(page, '1 more signer needs to sign.');
         await visible(page, 'Follow up with signers', 'heading');
         await visible(page, 'Add a contact email to an eligible signer below, or share the private link.');
         assert.equal(state.assignments.length, 0, 'No automatic invitations without saved email and selection');

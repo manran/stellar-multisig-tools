@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
 import { ArrowLeft, ArrowRight, CheckCircle2, Fingerprint, KeyRound, LoaderCircle, ShieldCheck, WalletCards } from 'lucide-react';
-import { ActionButton, NetworkBadge } from './MultiSigUi';
+import { ActionButton } from './MultiSigUi';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
 import { useUserIdentity } from './UserIdentityContext';
@@ -155,8 +155,7 @@ export default function IdentityApp() {
       <div className="mx-auto max-w-2xl">
         <a href={stellarHref('')} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[var(--color-ink-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]"><ArrowLeft className="h-4 w-4" />Back to home</a>
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl font-bold">{inviteToken ? 'Join payment workflow' : identity ? 'Your account' : 'Sign in or sign up'}</h1>
-          <NetworkBadge network={network} />
+          <h1 className="text-2xl font-bold sm:text-3xl">{inviteToken ? 'Join payment workflow' : identity ? 'Your account' : 'Sign in or sign up'}</h1>
         </div>
         {inviteOpen && <section className="mt-6 border-l-2 border-[var(--color-accent)] bg-[var(--color-paper-2)] px-5 py-4">
           <h2 className="font-semibold">Payment invitation</h2>

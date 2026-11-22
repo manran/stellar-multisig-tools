@@ -361,7 +361,7 @@ export default function InboxApp() {
             <div className="mst-inbox-page-header">
             <PageHeader
               title="Inbox"
-                            meta={data ? <><NetworkBadge network={identity.network} /><span>{data.pending_count} open {data.pending_count === 1 ? 'work item' : 'work items'}</span></> : <NetworkBadge network={identity.network} />}
+              meta={data ? <span>{data.pending_count} open {data.pending_count === 1 ? 'work item' : 'work items'}</span> : undefined}
               actions={<ActionButton variant="secondary" disabled={loading || authBusy || walletBusy} onClick={() => void loadInbox()} aria-label="Refresh inbox" aria-busy={loading}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">{loading ? 'Refreshing…' : 'Refresh'}</span></ActionButton>}
             />
             </div>
