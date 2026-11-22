@@ -39,6 +39,18 @@ test('identity quota reads only normalized edge-controlled client addresses', ()
     if (originalVercel === undefined) delete process.env.VERCEL;
     else process.env.VERCEL = originalVercel;
   }
+  const originalProvider = process.env.MST_IDENTITY_TRUSTED_PROXY;
+  process.env.MST_IDENTITY_TRUSTED_PROXY = 'cloudflare';
+  process.env.VERCEL = '1';
+  try {
+    assert.equal(identityClientAddress(request('198.51.100.7')), '198.51.100.7');
+    assert.equal(identityClientAddress(request('203.0.113.4', 'x-vercel-forwarded-for')), null);
+  } finally {
+    if (originalProvider === undefined) delete process.env.MST_IDENTITY_TRUSTED_PROXY;
+    else process.env.MST_IDENTITY_TRUSTED_PROXY = originalProvider;
+    if (originalVercel === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = originalVercel;
+  }
   assert.equal(identityClientAddress(request('198.51.100.1, 203.0.113.4')), null);
   assert.equal(identityClientAddress(request('203.0.113.4', 'x-forwarded-for')), null);
   assert.equal(identityClientAddress(request()), null);
