@@ -76,6 +76,14 @@ export class PostgresIdentityStore {
     return result.rows[0] ? credentialFromRow(result.rows[0]) : null;
   }
 
+  async userExists(userId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      'SELECT 1 FROM mst_stellar.mst_users WHERE id = $1',
+      [userId],
+    );
+    return Boolean(result.rowCount);
+  }
+
   async listCredentials(userId: string): Promise<IdentityCredential[]> {
     const result = await this.pool.query<CredentialRow>(
       `SELECT id, user_id, kind, subject, public_key, sign_count, transports, device_type, backed_up

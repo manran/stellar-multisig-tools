@@ -64,3 +64,40 @@ test('Passkey cookie becomes unusable when credential is revoked', async () => {
   await assert.rejects(() => passkeyIdentityFromRequest(request(token), store, signer),
     (cause: unknown) => cause instanceof IdentityError && cause.code === 'identity_session_revoked');
 });
+
+test('walletless visitor may create an MST Passkey without a Template invitation', async () => {
+  const { startPasskeyRegistration } = await import('./identityService.js');
+  let saved: { userId: string | null; invitationId: string | null; network: string } | undefined;
+  const store = {
+    async createChallenge(value: { challenge: string; purpose: string; userId: string | null; invitationId: string | null; network: string }) {
+      saved = value;
+      return { id: randomUUID(), ...value };
+    },
+  } as unknown as PostgresIdentityStore;
+  const options = await startPasskeyRegistration(
+    new Request('https://stellar-testnet.multisig.tools/api/identity'), store, 'testnet',
+  );
+  assert.ok(options.challengeId);
+  assert.ok(options.options.challenge);
+  assert.ok(saved?.userId);
+  assert.equal(saved?.invitationId, null);
+  assert.equal(saved?.network, 'testnet');
+  assert.equal(options.options.authenticatorSelection?.userVerification, 'required');
+});
+
+test('expired login cannot turn a registration challenge into an extra Passkey on an existing user', async () => {
+  const { finishPasskeyRegistration } = await import('./identityService.js');
+  const userId = randomUUID();
+  const request = new Request('https://stellar-testnet.multisig.tools/api/identity');
+  const expiredSessionStore = {
+    async consumeChallenge() {
+      return { id: randomUUID(), challenge: 'test-challenge', purpose: 'register', userId,
+        invitationId: null, network: 'testnet' };
+    },
+    async userExists(value: string) { return value === userId; },
+  } as unknown as PostgresIdentityStore;
+  await assert.rejects(
+    () => finishPasskeyRegistration(request, expiredSessionStore, 'test-challenge-id', {} as Parameters<typeof finishPasskeyRegistration>[3]),
+    (cause: unknown) => cause instanceof IdentityError && cause.code === 'registration_not_authorized',
+  );
+});

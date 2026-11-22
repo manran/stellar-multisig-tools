@@ -27,8 +27,8 @@ export default function TemplateProposerComposer({ network }: Props) {
   const { identity } = useUserIdentity();
   const id = new URLSearchParams(window.location.search).get('template') ?? '';
   const verified = Boolean(identity?.userId && identity.network === network);
-  const scope = verified ? `${network}:${identity?.userId}:${identity?.method}:${id}` : '';
-  const walletAddress = identity?.method === 'stellar_wallet' ? identity.address ?? '' : '';
+  const scope = verified ? `${network}:${identity?.userId}:${identity?.method}:${identity?.address ?? ''}:${id}` : '';
+  const walletAddress = identity?.address ?? '';
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
   const [loaded, setLoaded] = useState<{ scope: string; template: ReusableTemplateSummary | null } | null>(null);

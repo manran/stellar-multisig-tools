@@ -26,6 +26,7 @@ interface Props {
   creatorAddress?: string;
   proposerAddress?: string;
   readOnlyProposer?: boolean;
+  passkeySignedIn?: boolean;
   walletBusy: boolean;
   walletError: string;
   onConnectWallet: () => void;
@@ -48,6 +49,7 @@ export default function SigningGuidance({
   creatorAddress,
   proposerAddress,
   readOnlyProposer = false,
+  passkeySignedIn = false,
   walletBusy,
   walletError,
   onConnectWallet,
@@ -600,8 +602,10 @@ export default function SigningGuidance({
       {!authorizationComplete && !hasAuthorizationError && !readOnlyProposer && (
         <div className="mst-signing-action-strip mt-5">
           <div className="text-sm">
-            <div className="font-semibold">Sign proposal</div>
-            <div className="mt-2">
+            <div className="font-semibold">Sign this Classic transaction</div>
+            <p className="mt-1 text-sm leading-6 text-[var(--color-ink-2)]">Signing method: Stellar wallet. Only a current authorized signer can contribute a transaction signature.</p>
+            {passkeySignedIn && !walletCanSign && !walletAlreadySigned && <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">Your Passkey signs you in to MST, but it cannot sign this Classic transaction. Use an authorized Stellar wallet to sign.</p>}
+            <div className="mt-3">
               {walletAddress
                 ? <AddressIdentity address={walletAddress} subjectType="signer" />
                 : <div className="text-neutral-500 dark:text-neutral-400">No signer connected.</div>}
@@ -611,16 +615,16 @@ export default function SigningGuidance({
               {walletAddress ? (
                 walletCanSign || walletAlreadySigned ? (
                   <ActionButton variant={walletAlreadySigned ? 'secondary' : 'primary'} disabled={!walletCanSign || walletBusy} aria-busy={walletBusy} onClick={onSignWithWallet} className="min-h-12 w-full px-4">
-                    {walletAlreadySigned ? <CheckCircle2 className="h-4 w-4" /> : <WalletCards className="h-4 w-4" />}{walletBusy ? 'Signing…' : walletAlreadySigned ? 'Signed' : 'Sign'}
+                    {walletAlreadySigned ? <CheckCircle2 className="h-4 w-4" /> : <WalletCards className="h-4 w-4" />}{walletBusy ? 'Signing…' : walletAlreadySigned ? 'Signed' : 'Sign with Stellar wallet'}
                   </ActionButton>
                 ) : (
                   <ActionButton variant="secondary" disabled={walletBusy} aria-busy={walletBusy} onClick={onConnectWallet} className="min-h-12 w-full px-4">
-                    <WalletCards className="h-4 w-4" />{walletBusy ? 'Opening wallets…' : 'Choose an authorized signer'}
+                    <WalletCards className="h-4 w-4" />{walletBusy ? 'Opening wallets…' : 'Choose signer wallet'}
                   </ActionButton>
                 )
               ) : (
                 <ActionButton disabled={walletBusy} aria-busy={walletBusy} onClick={onConnectWallet} className="min-h-12 w-full px-4">
-                  <WalletCards className="h-4 w-4" />{walletBusy ? 'Opening wallets…' : 'Connect signer'}
+                  <WalletCards className="h-4 w-4" />{walletBusy ? 'Opening wallets…' : 'Connect signer wallet'}
                 </ActionButton>
               )}
 

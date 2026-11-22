@@ -162,7 +162,7 @@ function NewTransactionChoices() {
   const paymentHref = stellarHrefWithSearch('/new/payment', { fresh: '1', account: proposalAccount, network: proposalNetwork });
   const createAccountHref = stellarHrefWithSearch('/new/create-account', { fresh: '1', account: proposalAccount, network: proposalNetwork });
   const verifiedIdentity = identity?.network === proposalNetwork ? identity : null;
-  const templateScope = verifiedIdentity ? `${verifiedIdentity.userId}:${proposalNetwork}` : '';
+  const templateScope = verifiedIdentity ? `${verifiedIdentity.userId}:${proposalNetwork}:${verifiedIdentity.address ?? ''}` : '';
   // A previous wallet's response must not appear while the new scope is loading.
   const currentTemplates = templateScope && templateLoad?.scope === templateScope ? templateLoad : null;
   const templateLoading = Boolean(templateScope && (!currentTemplates || currentTemplates.status === 'loading'));
@@ -180,7 +180,7 @@ function NewTransactionChoices() {
     const controller = new AbortController();
     setTemplateLoad({ scope: templateScope, status: 'loading', items: [] });
     void fetch(`/api/templates?network=${proposalNetwork}`, {
-      headers: verifiedIdentity?.method === 'stellar_wallet' && verifiedIdentity.address
+      headers: verifiedIdentity?.address
         ? privateSessionAddressHeaders(verifiedIdentity.address) : {},
       cache: 'no-store',
       signal: controller.signal,
@@ -194,8 +194,7 @@ function NewTransactionChoices() {
         if (!response.ok || !Array.isArray(body.templates)) throw new Error('Unable to load templates.');
         if (controller.signal.aborted) return;
         if (body.userId !== verifiedIdentity?.userId
-          || (verifiedIdentity?.method === 'stellar_wallet' && body.address !== verifiedIdentity.address)
-          || (verifiedIdentity?.method === 'passkey' && body.address !== null)
+          || (body.address ?? null) !== (verifiedIdentity?.address ?? null)
           || body.templates.some((item) => item.network !== proposalNetwork)) {
           setTemplateLoad({ scope: templateScope, status: 'unlock_required', items: [] });
           return;
@@ -301,7 +300,7 @@ function NewTransactionChoices() {
                     <p className="mst-work-row__copy">{template.definition.recipients.length} recipient{template.definition.recipients.length === 1 ? '' : 's'} · Source <span className="font-mono" title={template.definition.source}>{template.definition.source.slice(0, 8)}…{template.definition.source.slice(-8)}</span></p>
                     {template.definition.autoRemind && <p className="mt-1 text-xs font-medium text-[var(--color-ink-2)]">Automatic email reminders enabled</p>}
                     {template.ownerAddress && template.ownerAddress !== verifiedIdentity?.address && <p className="mt-1 text-xs font-semibold text-[var(--color-accent)]">You are authorized to initiate payments from this Template.</p>}
-                    <TemplateGrantControls template={template} sessionAddress={verifiedIdentity?.method === 'stellar_wallet' ? verifiedIdentity.address ?? '' : ''} network={proposalNetwork} />
+                    <TemplateGrantControls template={template} sessionAddress={verifiedIdentity?.address ?? ''} network={proposalNetwork} />
                     {proposalAccount && template.definition.source !== proposalAccount && <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">This template uses a different source account.</p>}
                   </div>
                   <a

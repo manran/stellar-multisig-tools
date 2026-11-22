@@ -1063,6 +1063,7 @@ export default function RequestApp() {
                     creatorAddress={snapshot.creatorAddress}
                     proposerAddress={snapshot.proposerAddress}
                     readOnlyProposer={isDelegatedProposer}
+                    passkeySignedIn={passkeyReadyForRequest}
                     walletBusy={walletBusy || contributing}
                     walletError={walletError}
                     onConnectWallet={() => void chooseSignerWallet()}

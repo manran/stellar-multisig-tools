@@ -118,23 +118,24 @@ export async function currentUserIdentity(
   network: StellarNetwork,
 ): Promise<UserIdentity | null> {
   const wallet = await verifiedSignerSessionFromRequest(blobAuthStore, request, network);
-  if (wallet) {
-    const linked = await store.findCredential('stellar_wallet', wallet.address);
-    if (linked) return { userId: linked.userId,
-      network, method: 'stellar_wallet', address: wallet.address, expiresAt: wallet.expiresAt };
-    // A verified but unlinked wallet must not silently create a second account
-    // while a valid Passkey user is signed in. Linking requires both proofs.
-    let passkey: UserIdentity | null = null;
-    try { passkey = await passkeyIdentityFromRequest(request, store); }
-    catch (cause) {
-      if (!(cause instanceof IdentityError) || cause.status !== 401) throw cause;
-    }
-    if (passkey?.network === network) return passkey;
-    return { userId: await store.walletUser(wallet.address),
-      network, method: 'stellar_wallet', address: wallet.address, expiresAt: wallet.expiresAt };
+  // Passkey is the active MST account when both sessions exist. A different
+  // wallet must not silently switch the user's Inbox and private Activity.
+  let passkey: UserIdentity | null = null;
+  try { passkey = await passkeyIdentityFromRequest(request, store); }
+  catch (cause) {
+    if (!(cause instanceof IdentityError) || cause.status !== 401) throw cause;
   }
-  const passkey = await passkeyIdentityFromRequest(request, store);
-  return passkey?.network === network ? passkey : null;
+  if (passkey?.network === network) {
+    if (!wallet) return passkey;
+    const linked = await store.findCredential('stellar_wallet', wallet.address);
+    return linked?.userId === passkey.userId
+      ? { ...passkey, address: wallet.address }
+      : passkey;
+  }
+  if (!wallet) return null;
+  const linked = await store.findCredential('stellar_wallet', wallet.address);
+  return { userId: linked?.userId ?? await store.walletUser(wallet.address),
+    network, method: 'stellar_wallet', address: wallet.address, expiresAt: wallet.expiresAt };
 }
 
 export async function requireUserIdentity(request: Request, store: PostgresIdentityStore, network: StellarNetwork): Promise<UserIdentity> {
@@ -184,12 +185,11 @@ export async function availableInvitation(store: PostgresIdentityStore, token: s
   return value;
 }
 
-/** Passkey registration needs either an existing authenticated user or an invitation. */
+/** A new MST user can register a Passkey without a wallet or invitation. */
 export async function startPasskeyRegistration(request: Request, store: PostgresIdentityStore, network: StellarNetwork, inviteToken?: string) {
   const identity = await currentUserIdentity(request, store, network);
   const invitation = inviteToken ? await availableInvitation(store, inviteToken) : null;
   if (invitation && invitation.network !== network) throw new IdentityError('This invitation is for another network.', 403, 'invitation_network_mismatch');
-  if (!identity && !invitation) throw new IdentityError('An invitation or current login is needed to add a Passkey.', 401, 'passkey_registration_not_authorized');
   const userId = identity?.userId ?? randomUUID();
   const current = identity ? await store.listCredentials(userId) : [];
   const options = await generateRegistrationOptions({
@@ -213,8 +213,13 @@ export async function finishPasskeyRegistration(request: Request, store: Postgre
   if (identity && identity.userId !== challenge.userId) {
     throw new IdentityError('This registration belongs to another user.', 403, 'registration_user_mismatch');
   }
-  // A new account may only come from a single-use invitation.
-  if (!identity && !challenge.invitationId) throw new IdentityError('Registration needs a verified account.', 401, 'registration_not_authorized');
+  // A self-registration challenge may create a new account. A challenge for an
+  // existing account may never add credentials after that user's session expires.
+  if (!identity && await store.userExists(challenge.userId)) {
+    throw new IdentityError('Sign in again to add a Passkey to this account.', 401, 'registration_not_authorized');
+  }
+  // Verified WebAuthn registration creates a new user in the same transaction.
+  // An invitation adds a Template grant; it is not required for a personal account.
   let verified;
   try {
     verified = await verifyRegistrationResponse({ response,

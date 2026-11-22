@@ -221,17 +221,21 @@ async function fixturePage(width, options = {}) {
         if (url.searchParams.get('view') === 'activity') {
           return json({ userId: state.passkeyUserId, network: 'testnet', requests: state.identityHistory ?? [] });
         }
-        if (selected && !(state.passkeyLoggedIn && !(state.walletLinkCount > 0))) {
-          const userId = state.passkeyLoggedIn ? state.passkeyUserId : userForAddress(selected);
+        if (state.passkeyLoggedIn) {
+          const linkedWallet = Boolean(selected && state.walletLinkCount > 0);
           return json({ authenticated: true,
-            identity: { network: 'testnet', method: 'stellar_wallet', userId, address: selected },
+            identity: { network: 'testnet', method: 'passkey', userId: state.passkeyUserId,
+              ...(linkedWallet ? { address: selected } : {}) },
+            credentials: [{ kind: 'passkey', id: 'passkey-qa' },
+              ...(linkedWallet ? [{ kind: 'stellar_wallet', address: selected }] : [])],
+          });
+        }
+        if (selected) {
+          return json({ authenticated: true,
+            identity: { network: 'testnet', method: 'stellar_wallet', userId: userForAddress(selected), address: selected },
             credentials: [{ kind: 'stellar_wallet', address: selected }],
           });
         }
-        if (state.passkeyLoggedIn) return json({ authenticated: true,
-          identity: { network: 'testnet', method: 'passkey', userId: state.passkeyUserId },
-          credentials: [{ kind: 'passkey', id: 'passkey-qa' }],
-        });
         return json({ authenticated: false });
       }
       const body = request.postDataJSON();
@@ -292,8 +296,8 @@ async function fixturePage(width, options = {}) {
     if (url.pathname === '/api/inbox') {
       state.inboxGetCount++;
       const selected = request.headers()['x-multisig-session-address'];
-      const inbox = state.passkeyLoggedIn && !selected
-        ? { ...state.inbox, address: null, userId: state.passkeyUserId }
+      const inbox = state.passkeyLoggedIn
+        ? { ...state.inbox, address: selected && state.walletLinkCount > 0 ? selected : null, userId: state.passkeyUserId }
         : { ...state.inbox, userId: userForAddress(selected) };
       return json(state.inboxStatus === 200 ? inbox : { error: 'Fixture inbox load failure.' }, state.inboxStatus);
     }
@@ -479,6 +483,19 @@ async function run(name, width, options, check) {
 
 try {
   for (const width of widths) {
+    await run('walletless-account-offers-both-login-methods', width, {
+      wallet: walletState('', false),
+      state: { passkeyLoggedIn: false },
+    }, async ({ page }) => {
+      await page.goto(`${origin}/identity`);
+      await visible(page, 'Continue to MST', 'heading');
+      await visible(page, 'Sign in with Passkey', 'button');
+      await visible(page, 'Create a new Passkey account', 'button');
+      await visible(page, 'Continue with Stellar wallet', 'button');
+      assert.equal(await page.getByRole('button', { name: 'Sign with Stellar wallet' }).count(), 0);
+      await snapshot(page, 'walletless-login-options', width);
+    });
+
     await run('templates-locked-and-cancel', width, { wallet: walletState('', false) }, async ({ page }) => {
       await page.goto(`${origin}/new`);
       await visible(page, 'Your templates', 'heading');
@@ -872,6 +889,7 @@ try {
         assert.equal(state.invitationCreated, 1);
         await snapshot(page, 'passkey-invitation-issued', width);
         await page.getByRole('button', { name: 'Revoke invitation' }).click();
+        await page.getByRole('button', { name: 'Revoke invitation' }).waitFor({ state: 'hidden' });
         assert.equal(state.invitationsRevoked, 1);
         await page.getByRole('button', { name: 'Revoke access' }).click();
         await page.getByRole('button', { name: 'Revoke access' }).waitFor({ state: 'hidden' });
@@ -885,7 +903,7 @@ try {
       }, async ({ page, state }) => {
         await page.goto(`${origin}/invite#token=${state.inviteToken}`);
         await visible(page, 'Join a payment workflow', 'heading');
-        await visible(page, 'You are invited to prepare payments', 'heading');
+        await visible(page, 'Invitation to prepare payments', 'heading');
         await page.getByRole('button', { name: 'Accept invitation' }).click();
         await visible(page, 'Monthly suppliers', 'heading');
         assert.equal(state.inviteAvailable, false);
@@ -933,10 +951,10 @@ try {
       }, async ({ page, state }) => {
         await page.goto(`${origin}/identity`);
         await visible(page, 'Your MST account', 'heading');
-        await visible(page, 'Signed in', 'heading');
+        await visible(page, 'Account', 'heading');
         assert.equal(state.walletLinkCount ?? 0, 0, 'Wallet must not auto-link to a Passkey user');
-        await page.getByRole('button', { name: 'Link verified wallet to this user' }).click();
-        await visible(page, 'Wallet linked to this MST user. Both login methods now open the same account.');
+        await page.getByRole('button', { name: 'Link verified wallet' }).click();
+        await visible(page, 'Wallet linked. Both login methods now open the same MST account.');
         assert.equal(state.walletLinkCount, 1);
         await snapshot(page, 'passkey-wallet-link', width);
         await page.goto(`${origin}/new`);
@@ -1084,7 +1102,7 @@ try {
       assert.equal(await page.evaluate(() => document.activeElement?.id), 'proposal-review');
       await snapshot(page, 'proposal-review', width);
       await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
-      await page.getByRole('button', { name: 'Sign', exact: true }).click();
+      await page.getByRole('button', { name: 'Sign with Stellar wallet', exact: true }).click();
       await visible(page, 'Your signature is recorded', 'heading');
       assert.equal(state.contributionCount, 1);
       assert.equal(state.submitCount, 0);
@@ -1519,7 +1537,7 @@ try {
       navigateWorkspace('/s', { hash: preview.id, state: { requestPreview: preview, requestJustCreated: true, requestReviewedByAddress: reviewedBy } });
     }, { preview: state.request, reviewedBy: addresses.alice });
     await visible(page, 'Your signature is needed', 'heading');
-    await visible(page, 'Sign', 'button');
+    await visible(page, 'Sign with Stellar wallet', 'button');
     assert.ok(state.requestGetCount > 0, 'Creator handoff still checks current private access');
     assert.equal(await page.getByRole('button', { name: 'Continue to signatures', exact: true }).count(), 0);
   });

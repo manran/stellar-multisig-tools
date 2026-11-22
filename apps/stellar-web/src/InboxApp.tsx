@@ -223,15 +223,15 @@ export default function InboxApp() {
   const activeLoad = useRef<AbortController | null>(null);
   const [selectedId, setSelectedId] = useState('');
   const [view, setView] = useState<InboxView>(() => viewFromUrl());
-  const viewerAddress = identity?.method === 'stellar_wallet' && privateUnlocked && unlockedNetwork === identity.network
-    ? unlockedAddress : '';
+  const viewerAddress = identity?.address && privateUnlocked && unlockedNetwork === identity.network
+    && unlockedAddress === identity.address ? identity.address : '';
   const viewerUserId = identity?.userId ?? '';
   const session = identity ? `${identity.network}:${identity.userId}:${identity.method}:${viewerAddress}` : '';
   const currentSession = useRef(session);
   currentSession.current = session;
   const data = session && loadedData?.userId === viewerUserId
     && loadedData.network === identity?.network
-    && (identity?.method === 'passkey' ? loadedData.address === null : loadedData.address === viewerAddress)
+    && loadedData.address === (viewerAddress || null)
     ? loadedData : null;
   const loading = Boolean(session && loadingFor === session);
   const error = loadError.session === session ? loadError.message : '';
@@ -253,7 +253,7 @@ export default function InboxApp() {
       const body = await response.json() as InboxResponse & { error?: string };
       if (!response.ok) throw new Error(body.error || 'Unable to load your inbox.');
       if (body.userId !== viewerUserId || body.network !== identity.network
-        || (identity.method === 'passkey' ? body.address !== null : body.address !== viewerAddress)) {
+        || body.address !== (viewerAddress || null)) {
         needsVerification = true;
         if (!controller.signal.aborted) setData(null);
         throw new Error('The wallet session changed. Confirm your wallet and try again.');

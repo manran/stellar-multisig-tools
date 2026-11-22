@@ -64,8 +64,8 @@ export default function StellarDashboardApp() {
     unlock,
   } = useStellarWallet();
   const { identity } = useUserIdentity();
-  const viewerAddress = identity?.method === 'stellar_wallet' && privateUnlocked
-    && unlockedNetwork === identity.network ? unlockedAddress : '';
+  const viewerAddress = identity?.address && privateUnlocked
+    && unlockedNetwork === identity.network && unlockedAddress === identity.address ? identity.address : '';
   const owner = identity ? `${identity.network}:${identity.userId}:${identity.method}:${viewerAddress}` : '';
   const [loadedInbox, setLoadedInbox] = useState<{ owner: string; summary: DashboardInboxSummary } | null>(null);
   // Never render a previous wallet's private Inbox summary, even briefly.
@@ -87,7 +87,7 @@ export default function StellarDashboardApp() {
         if (controller.signal.aborted) return;
         if (
           body?.userId === identity.userId && body.network === identity.network
-          && (identity.method === 'passkey' ? body.address === null : body.address === viewerAddress)
+          && body.address === (viewerAddress || null)
           && typeof body.pending_count === 'number'
           && body.action_counts
           && typeof body.action_counts.actionRequired === 'number'

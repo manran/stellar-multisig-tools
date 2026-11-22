@@ -163,10 +163,10 @@ test('signature feedback clears once authorization is ready or the transaction i
 
 test('human signing turns a connected wrong wallet into an actionable identity choice', () => {
   assert.doesNotMatch(signingGuidance, />Change<\/button>/);
-  assert.match(signingGuidance, /Sign proposal/);
+  assert.match(signingGuidance, /Sign this Classic transaction/);
   assert.match(signingGuidance, /Share private link/);
   assert.doesNotMatch(signingGuidance, /Signing as/);
-  assert.match(signingGuidance, /Choose an authorized signer/);
+  assert.match(signingGuidance, /Choose signer wallet/);
   assert.match(signingGuidance, /This wallet is not an authorized signer for this Proposal/);
   assert.match(signingGuidance, /onClick=\{onConnectWallet\}/);
 });
@@ -643,7 +643,7 @@ test('PDF History keeps timestamps in a dedicated right column', () => {
 });
 
 test('Human collaboration surfaces use Proposal while Request stays technical', () => {
-  assert.match(signingGuidance, /Sign proposal/);
+  assert.match(signingGuidance, /Sign this Classic transaction/);
   assert.match(signingRoom, /Starting proposal/);
   assert.match(requestUi, /proposal ID/);
   assert.match(requestUi, /Anyone with this private link can view the active Proposal/);
