@@ -219,7 +219,11 @@ async function fixturePage(width, options = {}) {
       }
       if (request.method() === 'GET') {
         if (url.searchParams.get('view') === 'activity') {
-          return json({ userId: state.passkeyUserId, network: 'testnet', requests: state.identityHistory ?? [] });
+          const userId = state.passkeyLoggedIn ? state.passkeyUserId : selected ? userForAddress(selected) : '';
+          state.paymentHistoryCalls = [...(state.paymentHistoryCalls ?? []), { userId, wallet: selected ?? '' }];
+          return userId
+            ? json({ userId, network: 'testnet', requests: state.identityHistory ?? [] })
+            : json({ error: 'Sign in to view payment history.' }, 401);
         }
         if (state.passkeyLoggedIn) {
           const linkedWallet = Boolean(selected && state.walletLinkCount > 0);
@@ -296,6 +300,9 @@ async function fixturePage(width, options = {}) {
       const status = state.templateStatus;
       if (state.templateDelay) await state.templateDelay;
       return json(status === 200 ? response : { error: 'Fixture template load failure.' }, status);
+    }
+    if (url.pathname === '/api/activity') {
+      return json({ address: options.wallet?.address ?? addresses.alice, network: 'testnet', workItems: [], items: [] });
     }
     if (url.pathname === '/api/inbox') {
       state.inboxGetCount++;
@@ -641,6 +648,52 @@ try {
       assert.equal(await page.getByRole('button', { name: 'Sign with Stellar wallet' }).count(), 0);
       await snapshot(page, 'walletless-login-options', width);
     });
+
+    if (width === 375 || width === 1280) {
+      await run('passkey-only-payment-history', width, {
+        wallet: walletState('', false), state: { passkeyLoggedIn: true },
+      }, async ({ page }) => {
+        await page.goto(`${origin}/activity`);
+        await visible(page, 'My payments', 'heading');
+        assert.equal(await page.getByRole('navigation', { name: 'Activity views' }).count(), 0);
+        await snapshot(page, 'passkey-only-payment-history', width);
+        await page.goto(`${origin}/treasury/activity`);
+        await visible(page, 'Confirm your wallet', 'heading');
+        assert.equal(await page.getByRole('heading', { name: 'My payments' }).count(), 0);
+      });
+      await run('wallet-account-can-open-payment-history', width, {
+        wallet: walletState(addresses.alice), state: { passkeyLoggedIn: false },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/activity`);
+        await visible(page, 'Activity', 'heading');
+        const tabs = page.getByRole('navigation', { name: 'Activity views' });
+        const request = page.waitForResponse((response) => response.url().includes('/api/identity?network=testnet&view=activity'));
+        await tabs.getByRole('link', { name: 'My payments' }).click();
+        await request;
+        await visible(page, 'My payments', 'heading');
+        assert.deepEqual(state.paymentHistoryCalls?.at(-1), {
+          userId: userForAddress(addresses.alice), wallet: addresses.alice,
+        });
+        await snapshot(page, 'wallet-account-payment-history', width);
+        await tabs.getByRole('link', { name: 'Wallet activity' }).click();
+        await visible(page, 'Activity', 'heading');
+      });
+      await run('linked-passkey-account-has-both-activity-views', width, {
+        wallet: walletState(addresses.alice), state: { passkeyLoggedIn: true, walletLinkCount: 1 },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/activity`);
+        await visible(page, 'Activity', 'heading');
+        const tabs = page.getByRole('navigation', { name: 'Activity views' });
+        const request = page.waitForResponse((response) => response.url().includes('/api/identity?network=testnet&view=activity'));
+        await tabs.getByRole('link', { name: 'My payments' }).click();
+        await request;
+        await visible(page, 'My payments', 'heading');
+        assert.deepEqual(state.paymentHistoryCalls?.at(-1), {
+          userId: state.passkeyUserId, wallet: addresses.alice,
+        });
+        await snapshot(page, 'linked-passkey-activity', width);
+      });
+    }
 
     await run('templates-locked-and-cancel', width, { wallet: walletState('', false) }, async ({ page }) => {
       await page.goto(`${origin}/new`);
@@ -998,3 +1051,771 @@ try {
       await run('delegated-wallet-revoked-cannot-create-payment', width, {
         wallet: walletState(addresses.carol),
         state: {
+          templateOwner: addresses.carol,
+          templates: [{ ...templateFixture(), ownerAddress: addresses.alice }],
+          proposerGrants: [],
+        },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/new/proposer?template=tpl_qa_monthly&network=testnet`);
+        await visible(page, 'Request a payment', 'heading');
+        await page.getByRole('textbox', { name: 'Payment amount' }).fill('12.5');
+        await page.getByRole('textbox', { name: 'On-chain memo (optional)' }).fill('INV-401');
+        await page.getByRole('button', { name: 'Review request' }).click();
+        await page.getByRole('button', { name: 'Create signing request' }).click();
+        await visible(page, 'This wallet is not authorized for this Template.');
+        assert.equal(state.proposerRequestCount, 0);
+      });
+    }
+
+    if (width === 375 || width === 1280) {
+      await run('owner-creates-single-use-passkey-invitation', width, {
+        state: {
+          templates: [{ ...templateFixture(), ownerAddress: addresses.alice,
+            proposerAddresses: [], pendingInvitations: [{ id: 'qa-invite-1', expiresAt: expiry }],
+            proposerUserIds: ['00000000-0000-4000-8000-000000000042'] }],
+        },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/new`);
+        await visible(page, 'Monthly suppliers', 'heading');
+        await page.getByText('Payment request access').click();
+        await visible(page, 'Invite someone without a Stellar wallet. They can sign in with Passkey and prepare a payment. Treasury signers retain approval rights.');
+        await page.getByRole('button', { name: 'Create invitation link' }).click();
+        const link = page.getByRole('textbox', { name: 'Invitation link' });
+        await link.waitFor({ state: 'visible' });
+        const url = new URL(await link.inputValue());
+        assert.equal(url.pathname, '/invite');
+        assert.equal(url.searchParams.has('token'), false, 'Invite token must not enter the HTTP request URL');
+        assert.equal(new URLSearchParams(url.hash.slice(1)).get('token'), state.inviteToken);
+        assert.equal(state.invitationCreated, 1);
+        await snapshot(page, 'passkey-invitation-issued', width);
+        await page.getByRole('button', { name: 'Revoke invitation' }).click();
+        await page.getByRole('button', { name: 'Revoke invitation' }).waitFor({ state: 'hidden' });
+        assert.equal(state.invitationsRevoked, 1);
+        await page.getByRole('button', { name: 'Revoke access' }).click();
+        await page.getByRole('button', { name: 'Revoke access' }).waitFor({ state: 'hidden' });
+      });
+
+      await run('passkey-invited-user-prepares-payment-without-wallet', width, {
+        wallet: walletState('', false),
+        state: { passkeyLoggedIn: true,
+          templates: [{ ...templateFixture(), ownerAddress: addresses.alice }],
+        },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/invite#token=${state.inviteToken}`);
+        await visible(page, 'Join payment workflow', 'heading');
+        await visible(page, 'Payment invitation', 'heading');
+        await page.getByRole('button', { name: 'Accept invitation' }).click();
+        await visible(page, 'Monthly suppliers', 'heading');
+        assert.equal(state.inviteAvailable, false);
+        assert.equal(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__.length), 0);
+        await page.getByRole('link', { name: 'Request payment', exact: true }).click();
+        await visible(page, 'Request a payment', 'heading');
+        await page.getByRole('textbox', { name: 'Payment amount' }).fill('12.5');
+        await page.getByRole('textbox', { name: 'On-chain memo (optional)' }).fill('INV-401');
+        await page.getByRole('button', { name: 'Review request' }).click();
+        await snapshot(page, 'passkey-payment-review', width);
+        await page.getByRole('button', { name: 'Create signing request' }).click();
+        await visible(page, 'Share with signers');
+        await visible(page, 'Treasury signatures needed', 'heading');
+        assert.equal(state.proposerRequestCount, 1);
+        assert.equal(state.request.proposerUserId, state.passkeyUserId);
+        assert.equal(state.request.proposerAddress, undefined);
+        assert.equal(state.submitCount, 0);
+        assert.equal(state.contributionCount, 0);
+        assert.equal(await page.getByRole('button', { name: 'Sign with wallet' }).count(), 0);
+        assert.equal(await page.getByRole('button', { name: 'Submit transaction' }).count(), 0);
+        await snapshot(page, 'passkey-payment-proposal', width);
+        await page.goto(`${origin}/inbox`);
+        await visible(page, 'Waiting for signatures');
+        await page.getByRole('button', { name: 'View signing progress' }).first().waitFor({ state: 'visible' });
+        await snapshot(page, 'passkey-payment-inbox', width);
+
+        state.identityHistory = [{ ...state.request,
+          status: 'submitted', submission: { ledger: 5850011,
+            submittedAt: now, transactionHash: state.request.transactionHash } }];
+        await page.goto(`${origin}/activity`);
+        await visible(page, 'My payments', 'heading');
+        await visible(page, 'Confirmed in ledger 5850011');
+        await snapshot(page, 'passkey-payment-history', width);
+        assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), [],
+          'Entire Passkey workflow must not request any Stellar wallet operations');
+      });
+    }
+
+    await run('smart-contracts-address-workbench', width, {
+      wallet: walletState('', false),
+      state: { passkeyLoggedIn: true, savedContracts: [{
+        contractId: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+        network: 'testnet', createdAt: now, updatedAt: now,
+      }] },
+    }, async ({ page }) => {
+      await page.goto(origin + '/contracts');
+      await visible(page, 'Smart Contracts', 'heading');
+      await visible(page, 'Soroban contract');
+      await page.getByRole('link', { name: /Inspect/ }).waitFor();
+      const destination = await page.locator('.mst-contract-row').first().getAttribute('href');
+      assert.match(destination, /contract=/);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      assert.ok(overflow <= 1, 'Smart Contracts must not overflow mobile width');
+      await snapshot(page, 'smart-contracts-list', width);
+    });
+
+    await run('passkey-wallet-link-review', width, {
+      wallet: walletState(addresses.alice), state: { passkeyLoggedIn: true },
+    }, async ({ page, state }) => {
+      await page.goto(origin + '/identity');
+      await visible(page, 'Your account', 'heading');
+      await page.getByRole('button', { name: 'Link this wallet' }).click();
+      await visible(page, 'Link this wallet?', 'heading');
+      await page.getByText(addresses.alice, { exact: true }).last().waitFor();
+      assert.equal(state.walletLinkCount ?? 0, 0);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      assert.ok(overflow <= 1, 'Wallet link confirmation must not overflow mobile width');
+      await snapshot(page, 'passkey-wallet-link-review', width);
+    });
+
+    if (width === 375) {
+      await run('passkey-unlinked-wallet-is-not-my-signer-directory', width, {
+        wallet: walletState(addresses.alice),
+        state: { passkeyLoggedIn: true, walletLinkCount: 0 },
+      }, async ({ page }) => {
+        await page.goto(origin + '/address-book');
+        await page.getByRole('heading', { name: /^Saved contacts/ }).waitFor();
+        assert.equal(await page.getByRole('heading', { name: /^Signers/ }).count(), 0,
+          'Unlinked selected wallet must not appear as account signer history');
+        assert.equal(await page.getByRole('heading', { name: /^Treasuries/ }).count(), 0,
+          'Unlinked selected wallet must not appear as account treasuries');
+        await snapshot(page, 'unlinked-wallet-contacts', width);
+      });
+      await run('passkey-wallet-link-rejects-another-owner', width, {
+        wallet: walletState(addresses.alice),
+        state: { passkeyLoggedIn: true, walletLinkConflict: true },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/identity`);
+        await visible(page, 'Your account', 'heading');
+        await page.getByRole('button', { name: 'Link this wallet' }).click();
+        await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+        assert.equal(state.walletLinkCount ?? 0, 0);
+        await page.getByRole('button', { name: 'Link this wallet' }).click();
+        await page.getByRole('button', { name: 'Confirm link' }).click();
+        await visible(page, 'This wallet belongs to another MST account. Choose another wallet, or sign in to that account and add a new Passkey.');
+        assert.equal(await page.getByRole('button', { name: 'Confirm link' }).count(), 0);
+        assert.equal(state.walletLinkCount ?? 0, 0);
+        await snapshot(page, 'wallet-link-conflict', width);
+      });
+      await run('passkey-wallet-link-requires-explicit-both-proofs', width, {
+        wallet: walletState(addresses.alice),
+        state: { passkeyLoggedIn: true,
+          templates: [{ ...templateFixture(), ownerAddress: addresses.alice }],
+        },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/identity`);
+        await visible(page, 'Your account', 'heading');
+        assert.equal(state.walletLinkCount ?? 0, 0, 'Wallet must not auto-link to a Passkey user');
+        await visible(page, 'Not linked yet');
+        await page.getByRole('button', { name: 'Link this wallet' }).click();
+        await visible(page, 'Link this wallet?', 'heading');
+        assert.equal(state.walletLinkCount ?? 0, 0, 'Preview must not bind the wallet');
+        await page.getByRole('button', { name: 'Confirm link' }).click();
+        await visible(page, 'Wallet linked to your account.');
+        assert.equal(state.walletLinkCount, 1);
+        await snapshot(page, 'passkey-wallet-link', width);
+        await page.goto(`${origin}/new`);
+        await visible(page, 'Monthly suppliers', 'heading');
+        await page.getByText('Payment request access').waitFor({ state: 'visible' });
+        assert.equal(state.walletLinkCount, 1, 'Template management never silently changes wallet binding');
+        await snapshot(page, 'linked-passkey-treasury-owner-controls', width);
+      });
+    }
+
+    await run('inbox-progress', width, {}, async ({ page }) => {
+      await page.goto(`${origin}/inbox`);
+      await visible(page, 'November supplier payment');
+      const card = page.locator('.mst-inbox-list .mst-inbox-item').first();
+      await card.getByText('Signer follow-up', { exact: true }).waitFor({ state: 'visible' });
+      await card.getByText('Awaiting signature').waitFor({ state: 'visible' });
+      await card.getByText('Email needs attention').waitFor({ state: 'visible' });
+      await card.getByText('Follow up', { exact: true }).waitFor({ state: 'visible' });
+      if (width >= 1280) {
+        await visible(page, 'Signer follow-up', 'heading');
+        await visible(page, 'Follow up with signers', 'button');
+        await visible(page, 'Email failed');
+      }
+      await snapshot(page, 'inbox-progress', width);
+    });
+
+    if (width === 375) {
+      await run('inbox-failed-email-needs-action', width, {}, async ({ page }) => {
+        await page.goto(origin + '/inbox');
+        await visible(page, 'November supplier payment');
+        await visible(page, 'Follow-up needed');
+        await page.getByRole('button', { name: 'Needs me 1' }).click();
+        await visible(page, 'November supplier payment');
+        await page.getByRole('button', { name: 'Waiting 0' }).click();
+        await visible(page, 'Nothing is waiting.');
+        await page.getByRole('button', { name: 'All 1' }).click();
+        await visible(page, 'Follow-up needed');
+        await snapshot(page, 'inbox-email-failure-needs-action', width);
+      });
+
+      await run('inbox-resolved-email-stays-waiting', width, {
+        state: { inbox: (() => {
+          const inbox = inboxFixture();
+          inbox.requests[0].coordinationEvents.push({
+            eventId: '99', type: 'notification_delivered', actorAddress: addresses.alice,
+            subjectAddress: addresses.carol, occurredAt: now,
+            notificationKind: 'signature_reminder',
+          });
+          return inbox;
+        })() },
+      }, async ({ page }) => {
+        await page.goto(origin + '/inbox');
+        await visible(page, 'November supplier payment');
+        assert.equal(await page.getByText('Follow-up needed', { exact: true }).count(), 0);
+        await page.getByRole('button', { name: 'Needs me 0' }).click();
+        await visible(page, 'Nothing needs your action.');
+        await page.getByRole('button', { name: 'Waiting 1' }).click();
+        await visible(page, 'November supplier payment');
+      });
+
+      await run('inbox-requester-failed-email-needs-action', width, {
+        wallet: walletState(addresses.bob),
+        state: {
+          inbox: {
+            ...inboxFixture(addresses.bob),
+            requests: [{
+              ...requestFixture('awaiting_signatures', ['bob']), creatorAddress: addresses.alice,
+              viewerAction: 'waiting_for_others',
+              coordinationEvents: [
+                { eventId: '1', type: 'signer_requested', actorAddress: addresses.bob, subjectAddress: addresses.carol, occurredAt: now },
+                { eventId: '2', type: 'notification_failed', actorAddress: addresses.bob, subjectAddress: addresses.carol, occurredAt: now, notificationKind: 'signature_requested' },
+              ],
+            }],
+          },
+        },
+      }, async ({ page }) => {
+        await page.goto(origin + '/inbox');
+        await visible(page, 'Follow-up needed');
+        await page.getByRole('button', { name: 'Needs me 1' }).click();
+        await visible(page, 'Signer follow-up');
+        assert.equal(await page.getByText('View status', { exact: true }).count(), 0);
+        await snapshot(page, 'inbox-requester-email-failure', width);
+      });
+    }
+
+    if (width === 375 || width === 1280) {
+      await run('inbox-follow-up-focus', width, {
+        state: { request: { ...requestFixture('awaiting_signatures', ['alice']), creatorAddress: addresses.alice } },
+      }, async ({ page }) => {
+        await page.goto(origin + '/inbox');
+        if (width >= 1280) await page.getByRole('button', { name: 'Follow up with signers' }).click();
+        else await page.locator('.mst-inbox-list .mst-inbox-item').first().click();
+        await visible(page, 'Your signature is recorded', 'heading');
+        await page.locator('#proposal-signatures').waitFor({ state: 'visible' });
+        await page.waitForFunction(() => document.activeElement?.id === 'proposal-signatures');
+        await snapshot(page, 'inbox-follow-up-focus', width);
+      });
+    }
+
+    if (width === 375) {
+      await run('inbox-recipient-has-no-creator-follow-up', width, {
+        wallet: walletState(addresses.bob),
+        state: {
+          inbox: {
+            ...inboxFixture(addresses.bob),
+            requests: [{ ...requestFixture('awaiting_signatures', ['bob']), creatorAddress: addresses.alice, viewerAction: 'waiting_for_others', coordinationEvents: [] }],
+          },
+        },
+      }, async ({ page }) => {
+        await page.goto(origin + '/inbox');
+        await visible(page, 'November supplier payment');
+        assert.equal(await page.getByText('Signer follow-up', { exact: true }).count(), 0);
+        await visible(page, 'View status');
+        await snapshot(page, 'inbox-recipient-waiting', width);
+      });
+
+      await run('inbox-creator-can-invite-without-bearer-link', width, {
+        state: {
+          request: { ...requestFixture('awaiting_signatures', ['alice']), creatorAddress: addresses.alice },
+          requestAccess: { shareable: false, activityBound: true },
+          inviteContacts: true,
+        },
+      }, async ({ page, state }) => {
+        await page.goto(origin + '/inbox');
+        await page.locator('.mst-inbox-list .mst-inbox-item').first().click();
+        await visible(page, 'Your signature is recorded', 'heading');
+        await visible(page, 'Invite or remind signers', 'button');
+        await page.getByRole('button', { name: 'Invite or remind signers' }).click();
+        await visible(page, 'Invite signers', 'heading');
+        await page.getByRole('checkbox', { name: 'Invite Bob' }).check();
+        await page.getByRole('button', { name: 'Send 1 invitation' }).click();
+        await visible(page, '1 signer invited. Follow their progress below.');
+        assert.equal(state.assignments.length, 1);
+        assert.equal(state.assignments[0].signerAddress, addresses.bob);
+        assert.equal(state.submitCount, 0);
+        await snapshot(page, 'inbox-creator-session-invite', width);
+      });
+    }
+
+    await run('proposal-review-sign', width, {}, async ({ page, state }) => {
+      await page.goto(`${origin}/s#${requestId}`);
+      await visible(page, 'November supplier payment', 'heading');
+      await page.getByRole('button', { name: 'Review transaction', exact: true }).click();
+      assert.equal(new URL(page.url()).hash, `#${requestId}`);
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'proposal-review');
+      await snapshot(page, 'proposal-review', width);
+      await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
+      await page.getByRole('button', { name: 'Sign with Stellar wallet', exact: true }).click();
+      await visible(page, 'Your signature is recorded', 'heading');
+      assert.equal(state.contributionCount, 1);
+      assert.equal(state.submitCount, 0);
+      await page.getByRole('button', { name: 'View signing progress', exact: true }).click();
+      assert.equal(new URL(page.url()).hash, `#${requestId}`);
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'proposal-signatures');
+      await snapshot(page, 'proposal-signed', width);
+    });
+
+    await run('proposal-weighted-approval', width, {
+      wallet: walletState(addresses.bob),
+      state: {
+        request: requestFixture('awaiting_signatures', ['alice']),
+        horizonAccount: {
+          account_id: addresses.source, sequence: '100', subentry_count: 2,
+          num_sponsoring: 0, num_sponsored: 0,
+          balances: [{ asset_type: 'native', balance: '1000.0000000' }],
+          thresholds: { low_threshold: 1, med_threshold: 3, high_threshold: 3 },
+          signers: [
+            { key: addresses.alice, type: 'ed25519_public_key', weight: 2 },
+            { key: addresses.bob, type: 'ed25519_public_key', weight: 1 },
+            { key: addresses.carol, type: 'ed25519_public_key', weight: 1 },
+          ],
+        },
+      },
+    }, async ({ page }) => {
+      await page.goto(origin + '/s#' + requestId);
+      await visible(page, 'November supplier payment', 'heading');
+      await page.getByRole('button', { name: 'Review transaction', exact: true }).click();
+      await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
+      await visible(page, 'Your signature is needed', 'heading');
+      await visible(page, 'Approval power required');
+      await visible(page, '2 / 3');
+      await visible(page, 'Needs 1 more approval power');
+      await snapshot(page, 'proposal-weighted', width);
+    });
+
+    if (width === 375 || width === 1280) {
+      await run('proposal-bulk-invites', width, {
+        state: { inviteContacts: true, requestAccess: { shareable: true, activityBound: true } },
+      }, async ({ page, state }) => {
+        await page.goto(origin + '/s#' + requestId);
+        await visible(page, 'November supplier payment', 'heading');
+        await page.getByRole('button', { name: 'Review transaction', exact: true }).click();
+        await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
+        await visible(page, 'Invite signers', 'heading');
+        const button = page.getByRole('button', { name: 'Select signers above' });
+        assert.equal(await button.isDisabled(), true, 'No signer is preselected');
+        await page.getByRole('checkbox', { name: 'Invite Bob' }).check();
+        if (width === 1280) await page.getByRole('checkbox', { name: 'Invite Carol' }).check();
+        const expected = width === 1280 ? 2 : 1;
+        const sendLabel = 'Send ' + expected + ' invitation' + (expected === 1 ? '' : 's');
+        await visible(page, sendLabel, 'button');
+        await snapshot(page, 'proposal-invite-selection', width);
+        await page.getByRole('button', { name: sendLabel }).click();
+        try {
+          await visible(page, expected + ' signer' + (expected === 1 ? '' : 's') + ' invited. Follow their progress below.');
+        } catch {
+          throw Error('Bulk invite result: ' + JSON.stringify({
+            assignments: state.assignments.map((item) => item.signerAddress),
+            feedback: await page.getByRole('status').allTextContents(),
+            error: await page.getByRole('alert').allTextContents(),
+          }));
+        }
+        assert.equal(state.assignments.length, expected);
+        assert.equal(state.notifications.length, expected);
+        await snapshot(page, 'proposal-invite-sent', width);
+      });
+    }
+
+    if (width === 375 || width === 1280) {
+      await run('proposal-creator-followup-no-email', width, {
+        state: {
+          request: { ...requestFixture('awaiting_signatures', ['alice']), creatorAddress: addresses.alice },
+          requestAccess: { shareable: true, activityBound: true },
+        },
+      }, async ({ page, state }) => {
+        await page.goto(origin + '/s#' + requestId);
+        await visible(page, 'November supplier payment', 'heading');
+        // An already-signed proposal opens at the signature status by default.
+        await visible(page, 'Your signature is recorded', 'heading');
+        await visible(page, 'Invite or remind signers', 'button');
+        await page.getByRole('button', { name: 'Invite or remind signers' }).click();
+        assert.equal(await page.evaluate(() => document.activeElement?.id), 'proposal-signatures');
+        await visible(page, 'Waiting for other signatures', 'heading');
+        await visible(page, '1 more signer needs to sign.');
+        await visible(page, 'Follow up with signers', 'heading');
+        await visible(page, 'Add an email or share the link.');
+        assert.equal(state.assignments.length, 0, 'No automatic invitations without saved email and selection');
+        await snapshot(page, 'proposal-owner-followup', width);
+        if (width === 375) {
+          await page.getByRole('button', { name: 'Edit contact Bob' }).click();
+          const name = page.getByPlaceholder('e.g. Bob');
+          const email = page.getByRole('textbox', { name: 'Notification email' });
+          await name.fill('Bob');
+          await email.fill('bob@example.org');
+          state.contactSaveStatus = 503;
+          await page.getByRole('button', { name: 'Save contact' }).click();
+          await visible(page, 'Contact could not be saved.');
+          assert.equal(await name.inputValue(), 'Bob', 'Contact name remains editable after a failed save');
+          assert.equal(await email.inputValue(), 'bob@example.org', 'Contact email remains editable after a failed save');
+          state.contactSaveStatus = 200;
+          await page.getByRole('button', { name: 'Save contact' }).click();
+          await visible(page, 'Invite signers', 'heading');
+          await visible(page, 'Invite Bob', 'checkbox');
+          assert.equal(state.contactSaveCount, 1);
+          await page.getByRole('button', { name: 'Edit contact Bob' }).click();
+          assert.equal(await page.getByRole('textbox', { name: 'Notification email' }).inputValue(), 'bob@example.org', 'Saved signer email remains editable');
+          await page.getByRole('button', { name: 'Cancel contact editing' }).click();
+          await snapshot(page, 'proposal-contact-recovery', width);
+        }
+      });
+      await run('proposal-creator-reminder', width, {
+        state: {
+          request: { ...requestFixture('awaiting_signatures', ['alice']), creatorAddress: addresses.alice },
+          requestAccess: { shareable: true, activityBound: true },
+          inviteContacts: true,
+          assignments: [{
+            version: 1, signerAddress: addresses.bob, assignedByAddress: addresses.alice,
+            assignedAt: now,
+          }],
+          notifications: [{
+            channel: 'email', eventType: 'signature_requested', signerAddress: addresses.bob,
+            actorAddress: addresses.alice, state: 'delivered', createdAt: now,
+          }],
+        },
+      }, async ({ page, state }) => {
+        await page.goto(origin + '/s#' + requestId);
+        await visible(page, 'November supplier payment', 'heading');
+        // An already-signed proposal opens at the signature status by default.
+        await page.getByRole('button', { name: 'Invite or remind signers' }).click();
+        await visible(page, 'Email delivered');
+        assert.equal(await page.getByRole('button', { name: 'Ask Carol to sign' }).count(), 0, 'Invitation is offered only once, in the invitation chooser');
+        const remind = page.getByRole('button', { name: 'Remind', exact: true });
+        await remind.click();
+        await visible(page, 'Reminder queued');
+        assert.equal(state.remindCount, 1);
+        assert.equal(state.assignments.length, 1);
+        await snapshot(page, 'proposal-owner-reminder', width);
+      });
+      await run('proposal-creator-can-send-first-email-for-another-requester', width, {
+        state: {
+          request: { ...requestFixture('awaiting_signatures', ['alice']), creatorAddress: addresses.alice },
+          requestAccess: { shareable: false, activityBound: true },
+          inviteContacts: true,
+          assignments: [{ version: 1, signerAddress: addresses.carol, assignedByAddress: addresses.bob, assignedAt: now }],
+          notifications: [],
+        },
+      }, async ({ page, state }) => {
+        await page.goto(origin + '/s#' + requestId);
+        await visible(page, 'November supplier payment', 'heading');
+        await page.getByRole('button', { name: 'Invite or remind signers' }).click();
+        const notify = page.getByRole('button', { name: 'Send email', exact: true });
+        await notify.waitFor({ state: 'visible' });
+        await notify.click();
+        await visible(page, 'Reminder queued');
+        assert.equal(state.remindCount, 1, 'Creator can notify an eligible signer originally asked by someone else');
+        assert.equal(state.assignments.length, 1);
+        await snapshot(page, 'proposal-cross-requester-email', width);
+      });
+      await run('proposal-recipient-signed-waiting', width, {
+        wallet: walletState(addresses.bob),
+        state: {
+          request: { ...requestFixture('awaiting_signatures', ['bob']), creatorAddress: addresses.alice },
+          requestAccess: { shareable: true, activityBound: true },
+        },
+      }, async ({ page }) => {
+        await page.goto(origin + '/s#' + requestId);
+        await visible(page, 'November supplier payment', 'heading');
+        // An already-signed proposal opens at the signature status by default.
+        await visible(page, 'Your signature is recorded', 'heading');
+        await visible(page, 'Your part is done for now. Other authorized signers must approve before this transaction can be submitted.');
+        await visible(page, 'View signing progress', 'button');
+        assert.equal(await page.getByRole('button', { name: 'Invite or remind signers' }).count(), 0);
+        await visible(page, 'Back to Inbox', 'link');
+        await snapshot(page, 'proposal-recipient-signed', width);
+      });
+    }
+
+    await run('proposal-managed-submit', width, { state: { request: requestFixture('ready', ['alice', 'bob'], { mode: 'multisigtools' }) } }, async ({ page, state }) => {
+      await page.goto(`${origin}/s#${requestId}`);
+      await visible(page, 'Submit transaction', 'button');
+      await visible(page, 'Submit this transaction to Stellar Testnet?');
+      assert.equal(await page.getByRole('heading', { name: 'All required signatures are present' }).count(), 0, 'Ready Proposal must not repeat the authorization heading');
+      assert.equal(await page.getByText('Authorization complete', { exact: true }).count(), 1, 'Ready Proposal must show authorization status only once');
+      await page.getByRole('button', { name: 'Review details', exact: true }).click();
+      await visible(page, 'Back to submission', 'button');
+      await page.getByRole('button', { name: 'Back to submission', exact: true }).click();
+      await visible(page, 'Submit transaction', 'button');
+      await snapshot(page, 'proposal-ready', width);
+      await page.getByRole('button', { name: 'Submit transaction', exact: true }).click();
+      await visible(page, 'Confirmed on Stellar', 'heading');
+      assert.equal(state.submitCount, 1, 'Final Submit issues exactly one PUT');
+      await snapshot(page, 'proposal-confirmed', width);
+    });
+  }
+
+  await run('templates-loading-and-owner-switch', 375, {}, async ({ page, state }) => {
+    let release;
+    state.templateDelay = new Promise((resolve) => { release = resolve; });
+    state.templates = [templateFixture('Alice private template')];
+    await page.goto(`${origin}/new`);
+    await visible(page, 'Loading templates…');
+    state.templateDelay = null;
+    state.templates = [templateFixture('Bob private template')];
+    state.templateOwner = addresses.bob;
+    await page.evaluate((wallet) => window.__MST_QA_SET_WALLET__(wallet), walletState(addresses.bob));
+    await visible(page, 'Bob private template', 'heading');
+    release();
+    assert.equal(await page.getByText('Alice private template', { exact: true }).count(), 0);
+    await snapshot(page, 'templates-owner-switch', 375);
+  });
+
+  for (const status of [401, 403, 'wrong-owner']) {
+    await run(`templates-${status}`, 375, { state: status === 'wrong-owner' ? { templateOwner: addresses.bob, templates: [templateFixture('Wrong owner secret')] } : { templateStatus: status } }, async ({ page, state }) => {
+      await page.goto(`${origin}/new`);
+      await visible(page, 'Confirm wallet', 'button');
+      assert.equal(await page.getByText('Wrong owner secret', { exact: true }).count(), 0);
+      state.templateStatus = 200;
+      state.templateOwner = addresses.alice;
+      state.templates = [];
+      await page.getByRole('button', { name: 'Confirm wallet', exact: true }).click();
+      await visible(page, 'No saved templates on Testnet yet.');
+    });
+  }
+
+  for (const status of [500, 401, 403, 'wrong-owner', 'wrong-network']) {
+    await run(`inbox-refresh-${status}`, 375, {}, async ({ page, state }) => {
+      await page.goto(`${origin}/inbox`);
+      await visible(page, 'November supplier payment');
+      if (status === 'wrong-owner') state.inbox = { ...state.inbox, address: addresses.bob };
+      else if (status === 'wrong-network') state.inbox = { ...state.inbox, network: 'public' };
+      else state.inboxStatus = status;
+      await page.getByRole('button', { name: 'Refresh inbox', exact: true }).click();
+      await page.getByRole('alert').waitFor({ state: 'visible' });
+      if (status === 500) {
+        await visible(page, 'November supplier payment');
+        await visible(page, 'Showing the last loaded proposals. Refresh to check their current status.');
+      } else {
+        assert.equal(await page.getByText('November supplier payment', { exact: true }).count(), 0);
+        await visible(page, 'Confirm wallet', 'button');
+        const requestsBeforeCancellation = state.inboxGetCount;
+        await page.evaluate(() => { window.__MST_QA_CANCEL_UNLOCK__ = true; });
+        await page.getByRole('button', { name: 'Confirm wallet', exact: true }).click();
+        assert.equal(state.inboxGetCount, requestsBeforeCancellation, 'Cancelling wallet proof must not retry private data');
+        await page.evaluate(() => { window.__MST_QA_CANCEL_UNLOCK__ = false; });
+        state.inboxStatus = 200;
+        state.inbox = inboxFixture();
+        await page.getByRole('button', { name: 'Confirm wallet', exact: true }).click();
+        await visible(page, 'November supplier payment');
+      }
+      assert.equal(await page.getByText("You're all caught up.", { exact: true }).count(), 0);
+    });
+  }
+
+  await run('inbox-empty-filters', 375, { state: { inbox: { ...inboxFixture(), pending_count: 0, requests: [],
+    action_counts: { actionRequired: 0, signatureNeeded: 0, readyToSubmit: 0, needsAttention: 0, waiting: 0, readyForExecutionRouting: 0 } } } }, async ({ page }) => {
+    await page.goto(`${origin}/inbox?view=needs`);
+    await visible(page, 'Nothing needs your action.', 'heading');
+    await page.getByRole('button', { name: /^Waiting\s*0$/ }).click();
+    await visible(page, 'Nothing is waiting.', 'heading');
+    await page.getByRole('button', { name: /^All\s*0$/ }).click();
+    await visible(page, "You're all caught up.", 'heading');
+    await snapshot(page, 'inbox-empty', 375);
+  });
+
+  await run('proposal-private-entry', 375, { wallet: walletState('', false) }, async ({ page, state }) => {
+    await page.goto(`${origin}/s#${requestId}`);
+    await visible(page, 'Open your proposal', 'heading');
+    await visible(page, 'Proposal QA00-0000-0000-0001');
+    assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), []);
+    assert.equal(state.requestGetCount, 0);
+    assert.equal(new URL(page.url()).hash, `#${requestId}`);
+    await snapshot(page, 'proposal-private-entry', 375);
+    await page.getByRole('button', { name: 'Open proposal', exact: true }).click();
+    await visible(page, 'November supplier payment', 'heading');
+  });
+
+  await run('proposal-choose-submission', 375, { state: { request: requestFixture('ready', ['alice', 'bob']) } }, async ({ page, state }) => {
+    await page.goto(`${origin}/s#${requestId}`);
+    await visible(page, 'Choose how to submit', 'heading');
+    assert.equal(await page.getByRole('button', { name: 'Submit transaction', exact: true }).count(), 0);
+    await page.getByRole('button', { name: /MultiSigTools submits/ }).click();
+    await visible(page, 'Submit transaction', 'button');
+    assert.equal(state.submitCount, 0);
+    await page.getByRole('button', { name: 'Submit transaction', exact: true }).click();
+    await visible(page, 'Confirmed on Stellar', 'heading');
+    assert.equal(state.submitCount, 1);
+  });
+
+  await run('proposal-external-submission', 375, { state: { request: requestFixture('ready', ['alice', 'bob'], { mode: 'external', executor: { id: 'fixture-service', label: 'Fixture service' } }) } }, async ({ page, state }) => {
+    await page.goto(`${origin}/s#${requestId}`);
+    await visible(page, 'Waiting for the originating service', 'heading');
+    await visible(page, 'Fixture service will re-check its business state and submit when its execution conditions are satisfied. MultiSigTools will not broadcast this transaction.');
+    assert.equal(await page.getByRole('button', { name: 'Submit transaction', exact: true }).count(), 0);
+    assert.equal(state.submitCount, 0);
+    await snapshot(page, 'proposal-external', 375);
+  });
+
+  for (const status of ['expired', 'blocked', 'stale']) {
+    await run(`proposal-${status}`, 375, { state: { request: requestFixture(status) } }, async ({ page, state }) => {
+      await page.goto(`${origin}/s#${requestId}`);
+      await visible(page, 'This proposal cannot continue in MultiSigTools.');
+      await page.getByRole('button', { name: 'Review the issue', exact: true }).click();
+      assert.equal(new URL(page.url()).hash, `#${requestId}`);
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'proposal-issue');
+      await page.getByText('Advanced', { exact: true }).click();
+      assert.equal(await page.getByText('Sign proposal', { exact: true }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Add signed XDR', exact: true }).count(), 0);
+      assert.equal(state.contributionCount + state.submitCount, 0);
+      await snapshot(page, `proposal-${status}`, 375);
+    });
+  }
+
+  await run('proposal-closed-without-ledger-result', 375, { state: { requestError: { error: 'The capability is closed.', code: 'request_capability_closed', network: 'testnet' } } }, async ({ page }) => {
+    await page.goto(`${origin}/s#${requestId}${capability}`);
+    await visible(page, 'This private link is closed', 'heading');
+    assert.equal(await page.getByText('Transaction confirmed', { exact: true }).count(), 0);
+    await snapshot(page, 'proposal-closed-unknown', 375);
+  });
+
+  await run('proposal-retain-after-proof', 375, { wallet: walletState('', false), state: { requestAccess: { shareable: true, activityBound: false } } }, async ({ page, state }) => {
+    await page.goto(`${origin}/s#${requestId}${capability}`);
+    await visible(page, 'Keep this transaction in Activity');
+    assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), []);
+    const saved = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/request'
+      && response.request().method() === 'PATCH' && response.request().postDataJSON()?.retainActivity === true);
+    await page.getByRole('button', { name: 'Save to Activity', exact: true }).click();
+    await saved;
+    await page.getByRole('button', { name: 'Save to Activity', exact: true }).waitFor({ state: 'detached' });
+    await visible(page, 'November supplier payment', 'heading');
+    assert.equal(state.retentionCount, 1, 'One explicit proof saves Activity once');
+    assert.equal(state.requestAccess.activityBound, true);
+    assert.equal(await page.getByText(/Not saved to Activity/).count(), 0);
+    assert.equal(state.contributionCount + state.submitCount, 0);
+    await snapshot(page, 'proposal-retained', 375);
+  });
+
+  for (const status of [403, 500]) {
+    await run(`proposal-history-preview-${status}`, 375, { wallet: walletState(addresses.bob) }, async ({ page, state }) => {
+      const delayed = Promise.withResolvers();
+      const preview = { ...requestFixture(), template: { id: 'tpl_qa_private', version: 1, name: 'Alice private history proposal' } };
+      state.requestGetResponse = () => ({ status, delay: delayed.promise, body: { error: 'Fixture access failed.', code: status === 403 ? 'request_access_denied' : 'request_failed' } });
+      await page.goto(`${origin}/new`);
+      await visible(page, 'New proposal', 'heading');
+      await page.evaluate(() => {
+        window.__MST_QA_PRIVATE_LEAKS__ = [];
+        new MutationObserver(() => {
+          if (document.body.textContent.includes('Alice private history proposal')) window.__MST_QA_PRIVATE_LEAKS__.push('preview');
+        }).observe(document.body, { childList: true, characterData: true, subtree: true });
+      });
+      const requested = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/request');
+      await page.evaluate(async ({ preview, reviewedBy }) => {
+        const { navigateWorkspace } = await import('/src/workspaceNavigation.ts');
+        navigateWorkspace('/s', { hash: preview.id, state: { requestPreview: preview, requestJustCreated: true, requestReviewedByAddress: reviewedBy } });
+      }, { preview, reviewedBy: addresses.alice });
+      await requested;
+      assert.equal(await page.getByText('Alice private history proposal', { exact: true }).count(), 0);
+      delayed.resolve();
+      if (status === 403) await visible(page, 'This wallet cannot open this proposal', 'heading');
+      else await page.getByRole('alert').waitFor({ state: 'visible' });
+      assert.deepEqual(await page.evaluate(() => window.__MST_QA_PRIVATE_LEAKS__), []);
+      assert.equal(await page.getByText('Alice private history proposal', { exact: true }).count(), 0);
+      await snapshot(page, `proposal-preview-denied-${status}`, 375);
+    });
+  }
+
+  await run('proposal-late-other-wallet-response', 375, {}, async ({ page, state }) => {
+    const delayed = Promise.withResolvers();
+    const completed = Promise.withResolvers();
+    const privateRequest = { ...requestFixture(), template: { id: 'tpl_qa_private', version: 1, name: 'Alice delayed private proposal' } };
+    state.requestGetResponse = (request) => request.headers()['x-multisig-session-address'] === addresses.alice
+      ? { delay: delayed.promise, onDone: completed.resolve, body: { request: privateRequest, access: state.requestAccess } }
+      : { status: 403, body: { error: 'Fixture signer denied.', code: 'request_access_denied' } };
+    const requested = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/request');
+    await page.goto(`${origin}/s#${requestId}`);
+    await requested;
+    await page.evaluate((wallet) => window.__MST_QA_SET_WALLET__(wallet), walletState(addresses.bob));
+    await visible(page, 'This wallet cannot open this proposal', 'heading');
+    delayed.resolve();
+    // A cancelled request may never call route.fulfill(), so onDone is not
+    // guaranteed. A bounded settle still lets the UI reject stale data.
+    await Promise.race([
+      completed.promise,
+      new Promise((resolve) => setTimeout(resolve, 750)),
+    ]);
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await page.getByText('Alice delayed private proposal', { exact: true }).count(), 0);
+    await visible(page, 'This wallet cannot open this proposal', 'heading');
+    await snapshot(page, 'proposal-late-other-wallet', 375);
+  });
+
+  await run('proposal-denial-invalidates-same-wallet-poll', 375, {}, async ({ page, state }) => {
+    const delayed = Promise.withResolvers();
+    const completed = Promise.withResolvers();
+    const pollSelected = Promise.withResolvers();
+    let phase = 'initial';
+    state.requestGetResponse = () => {
+      if (phase === 'poll') {
+        pollSelected.resolve();
+        return { delay: delayed.promise, onDone: completed.resolve, body: { request: state.request, access: state.requestAccess } };
+      }
+      if (phase === 'denied') return { status: 403, body: { error: 'Fixture signer revoked.', code: 'request_access_denied' } };
+      return { body: { request: state.request, access: state.requestAccess } };
+    };
+    await page.clock.install();
+    await page.goto(`${origin}/s#${requestId}`);
+    await visible(page, 'November supplier payment', 'heading');
+    phase = 'poll';
+    const poll = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/request');
+    await page.clock.fastForward(30_100);
+    await poll;
+    // A request event can precede its route handler. Wait until the old poll's
+    // response is actually captured before making the explicit refresh fail.
+    await pollSelected.promise;
+    phase = 'denied';
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await visible(page, 'This wallet cannot open this proposal', 'heading');
+    delayed.resolve();
+    await completed.promise;
+    await page.clock.runFor(50);
+    assert.equal(await page.getByText('November supplier payment', { exact: true }).count(), 0);
+    await visible(page, 'This wallet cannot open this proposal', 'heading');
+    await snapshot(page, 'proposal-same-wallet-denied', 375);
+  });
+
+  await run('proposal-creator-review-handoff', 375, {}, async ({ page, state }) => {
+    await page.goto(`${origin}/new`);
+    await visible(page, 'New proposal', 'heading');
+    await page.evaluate(async ({ preview, reviewedBy }) => {
+      const { navigateWorkspace } = await import('/src/workspaceNavigation.ts');
+      navigateWorkspace('/s', { hash: preview.id, state: { requestPreview: preview, requestJustCreated: true, requestReviewedByAddress: reviewedBy } });
+    }, { preview: state.request, reviewedBy: addresses.alice });
+    await visible(page, 'Your signature is needed', 'heading');
+    await visible(page, 'Sign with Stellar wallet', 'button');
+    assert.ok(state.requestGetCount > 0, 'Creator handoff still checks current private access');
+    assert.equal(await page.getByRole('button', { name: 'Continue to signatures', exact: true }).count(), 0);
+  });
+} finally {
+  await browser.close();
+  await server.close();
+  let commit = process.env.MST_QA_COMMIT;
+  if (!commit) {
+    try { commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+    catch { commit = 'unavailable; set MST_QA_COMMIT for a mounted worktree'; }
+  }
+  const report = { commit,
+    generatedAt: new Date().toISOString(), method: 'Actual React UI in Chromium; fixture wallet, API, and Horizon; no broadcast or email.', widths,
+    passed: results.filter((item) => item.passed).length, failed: results.filter((item) => !item.passed).length, unexpectedRequests, pageErrors, results };
+  await writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+  console.log(JSON.stringify({ passed: report.passed, failed: report.failed, unexpectedRequests, pageErrors, output }));
+  if (report.failed || unexpectedRequests.length) process.exitCode = 1;
+}

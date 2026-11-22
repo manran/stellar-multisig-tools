@@ -63,6 +63,7 @@ Payment Request. Actual signing/submission remains governed by the current Stell
 
 ## User-owned workspace data
 
+- Activity uses verified capabilities rather than the login method: **My payments** belongs to the MST User ID; **Wallet activity** belongs to the currently verified Stellar wallet. Both views are available when a linked wallet is verified. A Passkey-only user sees only My payments, and a wallet-only login can open My payments with its existing User ID.
 - Address Book entries and saved Smart Contracts belong to the stable **MST User ID** and deployment network, regardless of which linked login method opened the account. A Passkey-only user may view and edit these resources with no Stellar wallet.
 - Signer-bound Agent API credentials keep their existing, separate signer workspace. Treasury signer authority, Soroban AUTH and transaction execution remain governed by Stellar; no wallet capability is inferred from an MST session.
 - When a wallet is both **verified** and **linked to this User ID**, the API copies existing G-address-owned address-book entries and saved contracts once into the user's workspace. User-owned entries win on conflicts. The original records stay available, and a durable per-wallet marker prevents deleted entries being reimported.

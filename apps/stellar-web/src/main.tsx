@@ -29,9 +29,9 @@ import UserActivityApp from './UserActivityApp';
 import TreasuryApp from './TreasuryApp';
 import TreasuryBoxSettingsApp from './TreasuryBoxSettingsApp';
 import TransactionReceiptApp from './TransactionReceiptApp';
-import { canonicalStellarContentLocationForLocation, canonicalStellarRuntimeLocationForLocation, navigateWorkspace, WORKSPACE_NAVIGATION_EVENT } from './workspaceNavigation';
+import { canonicalStellarContentLocationForLocation, canonicalStellarRuntimeLocationForLocation, navigateWorkspace, stellarHrefWithSearch, WORKSPACE_NAVIGATION_EVENT } from './workspaceNavigation';
 import { fixedClientStellarDeploymentNetwork } from '../../../packages/stellar-core/src/deploymentNetwork';
-import { isCanonicalStellarContentPath, stellarWorkspaceRouteForPath } from './workspaceRoutes';
+import { isCanonicalStellarContentPath, stellarActivityScopeForPath, stellarWorkspaceRouteForPath } from './workspaceRoutes';
 import type { StellarWorkspaceRouteKind } from './workspaceRoutes';
 
 interface RouteMatch {
@@ -78,7 +78,20 @@ function currentLocationKey() {
 
 function ActivitySwitch() {
   const { identity } = useUserIdentity();
-  return identity?.method === 'passkey' ? <UserActivityApp /> : <ActivityApp />;
+  if (stellarActivityScopeForPath(window.location.pathname) === 'treasury') return <ActivityApp />;
+  const hasWallet = Boolean(identity?.address);
+  // Choose by verified capability, never by the login method.
+  const view = identity && (!hasWallet || new URLSearchParams(window.location.search).get('view') === 'payments')
+    ? 'payments' : 'wallet';
+  const navigation = hasWallet && <nav className="mb-5 flex flex-wrap gap-2" aria-label="Activity views">
+    <a href={stellarHrefWithSearch('/activity', { view: 'wallet' })}
+      aria-current={view === 'wallet' ? 'page' : undefined}
+      className="mst-inbox-filter" data-active={view === 'wallet' ? 'true' : 'false'}>Wallet activity</a>
+    <a href={stellarHrefWithSearch('/activity', { view: 'payments' })}
+      aria-current={view === 'payments' ? 'page' : undefined}
+      className="mst-inbox-filter" data-active={view === 'payments' ? 'true' : 'false'}>My payments</a>
+  </nav>;
+  return view === 'payments' ? <UserActivityApp navigation={navigation} /> : <ActivityApp navigation={navigation} />;
 }
 
 function RoutedApp() {

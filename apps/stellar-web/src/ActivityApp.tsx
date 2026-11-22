@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -263,7 +264,7 @@ function ActivityCard({
   );
 }
 
-export default function ActivityApp() {
+export default function ActivityApp({ navigation }: { navigation?: ReactNode } = {}) {
   const {
     address,
     network: connectedNetwork,
@@ -441,6 +442,7 @@ export default function ActivityApp() {
     <StellarWorkspaceShell active="activity" networkContext={network}>
       <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto max-w-5xl">
+          {!isTreasuryActivity && navigation}
           {isTreasuryActivity && accountId && network && !routeNetworkMismatch && <a href={treasuryOverviewHref(accountId, network)} className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black dark:text-neutral-300 dark:hover:text-white"><ArrowLeft className="h-4 w-4" />Treasury</a>}
           <div className="flex flex-wrap items-end justify-between gap-4 border-b border-black/10 pb-5 dark:border-white/10">
             <div>

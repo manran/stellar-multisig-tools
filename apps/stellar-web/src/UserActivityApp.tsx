@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { ArrowRight, Clock3, LoaderCircle } from 'lucide-react';
 import { NetworkBadge, RequestStatusBadge } from './MultiSigUi';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useUserIdentity } from './UserIdentityContext';
+import { useStellarWallet } from './StellarWalletContext';
+import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
 import { describeInboxRequest } from './stellar/inboxRequestPresentation';
 import { stellarHref } from './workspaceNavigation';
 import type { SigningRequestSnapshot } from '../../../packages/stellar-core/src/requestTypes';
@@ -12,8 +15,11 @@ interface UserHistoryRecord extends Pick<SigningRequestSnapshot,
   submission: SigningRequestSnapshot['submission'] | null;
 }
 
-export default function UserActivityApp() {
+export default function UserActivityApp({ navigation }: { navigation?: ReactNode } = {}) {
   const { identity } = useUserIdentity();
+  const { privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
+  const verifiedWallet = identity?.address && privateUnlocked && unlockedAddress === identity.address
+    && unlockedNetwork === identity.network ? identity.address : '';
   const [data, setData] = useState<{ scope: string; requests: UserHistoryRecord[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -21,10 +27,11 @@ export default function UserActivityApp() {
   const requests = data?.scope === scope ? data.requests : [];
 
   useEffect(() => {
-    if (!identity || identity.method !== 'passkey') return;
+    if (!identity) return;
     const controller = new AbortController();
     setLoading(true); setError('');
-    void fetch(`/api/identity?network=${identity.network}&view=activity`, { cache: 'no-store', signal: controller.signal })
+    void fetch(`/api/identity?network=${identity.network}&view=activity`, { cache: 'no-store', signal: controller.signal,
+      headers: verifiedWallet ? privateSessionAddressHeaders(verifiedWallet) : {} })
       .then(async (response) => {
         const body = await response.json() as { userId?: string; requests?: UserHistoryRecord[]; error?: string };
         if (!response.ok || body.userId !== identity.userId || !Array.isArray(body.requests)) {
@@ -35,13 +42,14 @@ export default function UserActivityApp() {
         if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Unable to load history.');
       }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [identity, scope]);
+  }, [identity, scope, verifiedWallet]);
 
   return <StellarWorkspaceShell active="activity">
     <main className="mst-workbench-page"><div className="mx-auto max-w-5xl">
-      <div className="mt-4 flex items-center gap-3"><h1 className="text-3xl font-bold">My payment history</h1>
+      {navigation}
+      <div className="mt-4 flex items-center gap-3"><h1 className="text-3xl font-bold">My payments</h1>
         {identity && <NetworkBadge network={identity.network} />}</div>
-      <p className="mt-2 text-sm text-[var(--color-ink-2)]">Payments you prepared with your MST account. Treasury signing rights remain separate.</p>
+      <p className="mt-2 text-sm text-[var(--color-ink-2)]">Payments you prepared and their latest results.</p>
       {loading && <p role="status" className="mt-6 text-sm"><LoaderCircle className="mr-2 inline h-4 w-4 animate-spin" />Loading history…</p>}
       {error && <p role="alert" className="mt-5 text-sm text-[var(--color-danger)]">{error}</p>}
       {!loading && !error && requests.length === 0 && <section className="mt-10 text-center"><Clock3 className="mx-auto h-7 w-7 text-[var(--color-muted)]" />

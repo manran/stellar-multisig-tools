@@ -13,6 +13,19 @@ test('header opens unified account entry instead of wallet-only sign-in', () => 
   assert.match(headerAccount, /WORKSPACE_COPY.identity.accountMethods/);
 });
 
+test('Activity switches by verified wallet capability, not the login method', () => {
+  const route = readFileSync(new URL('../main.tsx', import.meta.url), 'utf8');
+  const accountActivity = readFileSync(new URL('../UserActivityApp.tsx', import.meta.url), 'utf8');
+  const walletActivity = readFileSync(new URL('../ActivityApp.tsx', import.meta.url), 'utf8');
+  const switcher = route.slice(route.indexOf('function ActivitySwitch()'), route.indexOf('function RoutedApp()'));
+  assert.match(switcher, /const hasWallet = Boolean\(identity\?\.address\)/);
+  assert.match(switcher, /stellarActivityScopeForPath\(window\.location\.pathname\) === 'treasury'/);
+  assert.doesNotMatch(switcher, /identity\?\.method/);
+  assert.match(switcher, /Activity views/);
+  assert.match(accountActivity, /verifiedWallet \? privateSessionAddressHeaders\(verifiedWallet\) : \{\}/);
+  assert.match(walletActivity, /\{!isTreasuryActivity && navigation\}/);
+});
+
 test('one account entry offers Passkey creation and wallet login', () => {
   assert.match(accountPage, /WORKSPACE_COPY.identity.createPasskey/);
   assert.match(accountPage, /WORKSPACE_COPY.identity.signInPasskey/);
