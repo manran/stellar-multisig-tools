@@ -1,3 +1,5 @@
+import { isValidContractId } from '../../../packages/stellar-core/src/contractSpec';
+
 export interface ContractWorkspaceRef {
   contractId: string;
   network: 'public' | 'testnet';
@@ -25,6 +27,18 @@ export function loadContractWorkspaces(storage: ContractWorkspaceStorage = local
   } catch {
     return [];
   }
+}
+
+/** Browser-only legacy favorites are never imported without user confirmation. */
+export function legacyContractsToImport(
+  network: ContractWorkspaceRef['network'],
+  saved: ReadonlyArray<{ contractId: string }>,
+  storage?: ContractWorkspaceStorage,
+): ContractWorkspaceRef[] {
+  const existing = new Set(saved.map((item) => item.contractId));
+  return loadContractWorkspaces(storage).filter((item) =>
+    item.network === network && isValidContractId(item.contractId) && !existing.has(item.contractId),
+  );
 }
 
 export function removeContractWorkspace(

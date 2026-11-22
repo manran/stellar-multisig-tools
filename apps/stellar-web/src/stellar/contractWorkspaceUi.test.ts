@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   loadContractWorkspaces,
+  legacyContractsToImport,
   removeContractWorkspace,
   saveContractWorkspace,
 } from '../contractWorkspace.js';
@@ -40,6 +41,19 @@ test('legacy browser references remain readable for one-time server migration', 
   ]);
 });
 
+test('legacy browser contracts require opt-in and exclude saved, wrong-network, invalid entries', () => {
+  const storage = memoryStorage();
+  saveContractWorkspace({ contractId: CONTRACT_A, network: 'testnet', importedAt: 10 }, storage);
+  saveContractWorkspace({ contractId: CONTRACT_B, network: 'public', importedAt: 20 }, storage);
+  saveContractWorkspace({ contractId: 'not-a-contract', network: 'testnet', importedAt: 30 }, storage);
+  assert.deepEqual(legacyContractsToImport('testnet', [], storage), [
+    { contractId: CONTRACT_A, network: 'testnet', importedAt: 10 },
+  ]);
+  assert.deepEqual(legacyContractsToImport('testnet', [{ contractId: CONTRACT_A }], storage), []);
+  removeContractWorkspace(CONTRACT_A, 'testnet', storage);
+  assert.deepEqual(legacyContractsToImport('testnet', [], storage), []);
+});
+
 test('Contracts is a first-class workspace route and navigation destination', () => {
   const shell = source('../StellarWorkspaceShell.tsx');
   const contracts = source('../ContractsApp.tsx');
@@ -50,6 +64,9 @@ test('Contracts is a first-class workspace route and navigation destination', ()
   assert.match(contracts, /title=\{WORKSPACE_COPY.tools.contracts\}/);
   assert.match(contracts, /ToolAccessEntry returnTo="\/contracts"/);
   assert.match(contracts, /WORKSPACE_COPY.contracts.add/);
+  assert.match(contracts, /legacyContractsToImport/);
+  assert.match(contracts, /removeContractWorkspace/);
+  assert.match(contracts, /WORKSPACE_COPY.contracts.importAction/);
   assert.match(contracts, /useUserIdentity/);
   assert.doesNotMatch(contracts, /PrivateWorkspaceUnlock/);
 });

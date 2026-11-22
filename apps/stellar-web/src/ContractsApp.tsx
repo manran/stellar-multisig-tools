@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react';
 import { ArrowRight, Braces, CircleAlert, LoaderCircle, Plus } from 'lucide-react';
+import { legacyContractsToImport, removeContractWorkspace } from './contractWorkspace';
+import type { ContractWorkspaceRef as LegacyContractRef } from './contractWorkspace';
 import { PageHeader } from './MultiSigUi';
 import { WORKSPACE_COPY } from './workspaceCopy';
 import { useUserIdentity } from './UserIdentityContext';
@@ -16,7 +19,32 @@ export default function ContractsApp() {
   const { network: walletNetwork } = useStellarWallet();
   const { identity } = useUserIdentity();
   const network = identity?.network ?? walletNetwork;
-  const { contracts, loading, error, ready: privateReady, refresh } = useContractWorkspaces();
+  const { contracts, loading, error, ready: privateReady, refresh, keep } = useContractWorkspaces();
+  const [legacy, setLegacy] = useState<LegacyContractRef[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState('');
+
+  useEffect(() => {
+    setLegacy(!loading && privateReady && network ? legacyContractsToImport(network, contracts) : []);
+  }, [loading, privateReady, network, identity?.userId, contracts]);
+
+  async function importLegacy() {
+    if (!network || importing) return;
+    setImporting(true);
+    setImportError('');
+    try {
+      for (const entry of legacy) {
+        await keep(entry.contractId);
+        removeContractWorkspace(entry.contractId, network);
+      }
+      setLegacy([]);
+    } catch (cause) {
+      setImportError(cause instanceof Error ? cause.message : 'Unable to import contracts.');
+      setLegacy(legacyContractsToImport(network, contracts));
+    } finally {
+      setImporting(false);
+    }
+  }
 
   return (
     <StellarWorkspaceShell active="contracts" networkContext={network}>
@@ -31,6 +59,15 @@ export default function ContractsApp() {
 
           {privateReady && (
             <div className="mt-6 space-y-4">
+              {!loading && legacy.length > 0 && <section className="border-l-2 border-[var(--color-accent)] bg-[var(--color-paper-2)] px-4 py-4" aria-label="Import saved contracts">
+                <h2 className="font-semibold">{WORKSPACE_COPY.contracts.importTitle}</h2>
+                <p className="mt-1 text-sm text-[var(--color-ink-2)]">{WORKSPACE_COPY.contracts.importCount(legacy.length)}</p>
+                <button type="button" disabled={importing} onClick={() => void importLegacy()} className="mst-action-secondary mt-3 disabled:opacity-50">
+                  {importing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  {importing ? WORKSPACE_COPY.contracts.importing : WORKSPACE_COPY.contracts.importAction}
+                </button>
+                {importError && <p role="alert" className="mt-2 text-sm text-[var(--color-danger)]">{importError}</p>}
+              </section>}
               <div className="mst-contract-toolbar">
                 <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
                   <span>{WORKSPACE_COPY.contracts.count(contracts.length)}</span>
