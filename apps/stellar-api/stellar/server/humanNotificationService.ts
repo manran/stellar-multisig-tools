@@ -1,5 +1,8 @@
 import type { AddressBookStore } from './addressBookStore.js';
 import { blobAddressBookStore } from './blobAddressBookStore.js';
+import { PostgresIdentityStore } from './identityStore.js';
+import { userWorkspaceOwner } from './userWorkspaceOwner.js';
+import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import {
   enqueueSignatureReminderNotification,
   enqueueSignatureRequestedNotification,
@@ -15,12 +18,24 @@ async function notificationEmail(
   addressBook: AddressBookStore,
   ownerAddress: string,
   signerAddress: string,
+  network?: StellarNetwork,
+  identityStore?: Pick<PostgresIdentityStore, 'findCredential'>,
 ): Promise<string | undefined> {
-  const signerEntry = await addressBook.get(ownerAddress, 'signer', signerAddress);
-  const accountEntry = signerEntry?.notificationEmail
-    ? null
-    : await addressBook.get(ownerAddress, 'account', signerAddress);
-  return signerEntry?.notificationEmail ?? accountEntry?.notificationEmail;
+  async function emailFor(owner: string) {
+    const signer = await addressBook.get(owner, 'signer', signerAddress);
+    const account = signer?.notificationEmail ? null : await addressBook.get(owner, 'account', signerAddress);
+    return signer?.notificationEmail ?? account?.notificationEmail;
+  }
+  // A verified wallet can belong to an MST user. Prefer the latest user-level
+  // contact, then fall back to the original signer-scoped Contact data.
+  if (network) {
+    const credential = await (identityStore ?? new PostgresIdentityStore()).findCredential('stellar_wallet', ownerAddress);
+    if (credential) {
+      const email = await emailFor(userWorkspaceOwner(network, credential.userId));
+      if (email) return email;
+    }
+  }
+  return emailFor(ownerAddress);
 }
 
 export async function queueSignatureRequestedEmail(
@@ -29,17 +44,19 @@ export async function queueSignatureRequestedEmail(
     assignedByAddress: string;
     signerAddress: string;
     assignedAt: string;
+    network?: StellarNetwork;
   },
   dependencies: {
     addressBook?: AddressBookStore;
     enqueue?: typeof enqueueSignatureRequestedNotification;
     enqueueAuto?: typeof enqueueTemplateRemindersFromAsk;
     automationEnabled?: boolean;
+    identityStore?: Pick<PostgresIdentityStore, 'findCredential'>;
   } = {},
 ): Promise<HumanNotificationQueueResult> {
   const addressBook = dependencies.addressBook ?? blobAddressBookStore;
   const enqueue = dependencies.enqueue ?? enqueueSignatureRequestedNotification;
-  const destinationEmail = await notificationEmail(addressBook, input.assignedByAddress, input.signerAddress);
+  const destinationEmail = await notificationEmail(addressBook, input.assignedByAddress, input.signerAddress, input.network, dependencies.identityStore);
   if (!destinationEmail) return { status: 'no_contact_email' };
 
   const queued = await enqueue({
@@ -78,15 +95,17 @@ export async function queueSignatureReminderEmail(
     remindedByAddress: string;
     signerAddress: string;
     eventId?: string;
+    network?: StellarNetwork;
   },
   dependencies: {
     addressBook?: AddressBookStore;
     enqueue?: typeof enqueueSignatureReminderNotification;
+    identityStore?: Pick<PostgresIdentityStore, 'findCredential'>;
   } = {},
 ): Promise<Exclude<HumanNotificationQueueResult, { status: 'duplicate' }>> {
   const addressBook = dependencies.addressBook ?? blobAddressBookStore;
   const enqueue = dependencies.enqueue ?? enqueueSignatureReminderNotification;
-  const destinationEmail = await notificationEmail(addressBook, input.remindedByAddress, input.signerAddress);
+  const destinationEmail = await notificationEmail(addressBook, input.remindedByAddress, input.signerAddress, input.network, dependencies.identityStore);
   if (!destinationEmail) return { status: 'no_contact_email' };
 
   const queued = await enqueue({

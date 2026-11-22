@@ -119,7 +119,8 @@ export default function IdentityApp() {
 
   async function confirmWallet() {
     await unlock(undefined, network);
-    await refresh();
+    // UserIdentityProvider refreshes on wallet verification; a refresh from
+    // this render would race with the new selected-wallet scope.
     if (!identity) navigateWorkspace(returnToTool ?? '/inbox');
     else setInfo('Wallet verified.');
   }
@@ -128,7 +129,6 @@ export default function IdentityApp() {
     const address = await connect();
     if (!address) return;
     await unlock(undefined, network);
-    await refresh();
     setInfo('Wallet verified. You can link it to your MST account.');
   }
 
@@ -148,7 +148,6 @@ export default function IdentityApp() {
 
   async function lockWallet() {
     await lock();
-    await refresh();
     setInfo('Wallet session locked.');
   }
 

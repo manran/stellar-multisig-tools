@@ -172,3 +172,40 @@ test('manual invite never schedules automatic reminders when the deployment swit
   });
   assert.equal(autoCalls, 0);
 });
+
+test('signature emails prefer MST user contacts over old wallet data, with safe fallback', async () => {
+  const userId = '911fa3cf-4c02-4d97-89b8-4ed7d98c2ca5';
+  const { userWorkspaceOwner } = await import('./userWorkspaceOwner.js');
+  const owner = userWorkspaceOwner('testnet', userId);
+  const byOwner = new Map([
+    [owner, { version: 1, address: SIGNER, subjectType: 'signer', label: 'New label',
+      notificationEmail: 'new@example.org', createdAt: '', updatedAt: '' } as StoredAddressAlias],
+    [OWNER, { version: 1, address: SIGNER, subjectType: 'signer', label: 'Old label',
+      notificationEmail: 'old@example.org', createdAt: '', updatedAt: '' } as StoredAddressAlias],
+  ]);
+  const store: AddressBookStore = {
+    async list() { return []; },
+    async get(o, _kind, address) { return address === SIGNER ? byOwner.get(o) ?? null : null; },
+    async put() {},
+    async delete() {},
+  };
+  const identityStore = { async findCredential() { return { userId }; } } as unknown as
+    import('./identityStore.js').PostgresIdentityStore;
+  let email = '';
+  await queueSignatureRequestedEmail({
+    requestId: '0123456789ABCDEF', assignedByAddress: OWNER, signerAddress: SIGNER,
+    assignedAt: '2026-11-22T00:00:00Z', network: 'testnet',
+  }, {
+    addressBook: store, identityStore,
+    enqueue: async ({ destinationEmail }) => { email = destinationEmail; return { eventId: 'new', created: true }; },
+  });
+  assert.equal(email, 'new@example.org');
+  byOwner.delete(owner);
+  await queueSignatureReminderEmail({
+    requestId: '0123456789ABCDEF', remindedByAddress: OWNER, signerAddress: SIGNER, network: 'testnet',
+  }, {
+    addressBook: store, identityStore,
+    enqueue: async ({ destinationEmail }) => { email = destinationEmail; return { eventId: 'old', created: true }; },
+  });
+  assert.equal(email, 'old@example.org');
+});

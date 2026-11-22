@@ -1225,6 +1225,7 @@ export async function PATCH(request: Request): Promise<Response> {
           requestId: access.id,
           remindedByAddress: access.actorAddress,
           signerAddress: assignment.signerAddress,
+          network: access.network,
         });
         notification = { channel: 'email', status: queued.status };
       } catch (cause) {
@@ -1267,6 +1268,7 @@ export async function PATCH(request: Request): Promise<Response> {
           assignedByAddress: assigned.assignment.assignedByAddress,
           signerAddress: assigned.assignment.signerAddress,
           assignedAt: assigned.assignment.assignedAt,
+          network: access.network,
         });
         notification = {
           channel: 'email',

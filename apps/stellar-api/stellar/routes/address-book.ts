@@ -1,9 +1,10 @@
 import { blobAddressBookStore } from '../server/blobAddressBookStore.js';
+import { requireUserIdentity } from '../server/identityService.js';
+import { PostgresIdentityStore, IdentityError } from '../server/identityStore.js';
+import { userWorkspaceOwner, requestedUserNetwork, assertUserWorkspaceWriteOrigin, UserWorkspaceError } from '../server/userWorkspaceOwner.js';
+import { DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
-import { blobAuthStore } from '../server/blobAuthStore.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
-import { authConfigForRequest } from '../server/authConfig.js';
-import { AuthServiceError, requirePrivateWorkspaceSession } from '../server/authService.js';
 import {
   AgentCredentialServiceError,
   authenticateAgentCredential,
@@ -12,6 +13,7 @@ import {
 import {
   AddressBookServiceError,
   deleteAddressAlias,
+  importLegacyAddressBook,
   listAddressAliases,
   upsertAddressAlias,
 } from '../server/addressBookService.js';
@@ -40,15 +42,15 @@ function publicEntry(entry: StoredAddressAlias) {
 
 function errorResponse(cause: unknown): Response {
   if (cause instanceof RequestBodyError) return json({ error: cause.message, code: cause.code }, cause.status);
-  if (cause instanceof AuthServiceError) return json({ error: cause.message, code: cause.code }, cause.status);
   if (cause instanceof AgentCredentialServiceError) return json({ error: cause.message, code: cause.code }, cause.status);
+  if (cause instanceof IdentityError || cause instanceof UserWorkspaceError || cause instanceof DeploymentNetworkPolicyError) return json({ error: cause.message, code: cause.code }, cause.status);
   if (cause instanceof AddressBookServiceError) return json({ error: cause.message, code: cause.code }, cause.status);
   if (cause instanceof RequestStorageUnavailableError) return json({ error: cause.message, code: 'storage_not_configured' }, 503);
   console.error('Address book API error', cause);
   return json({ error: 'Address book is temporarily unavailable.', code: 'internal_error' }, 500);
 }
 
-async function ownerAddress(request: Request, requiredAccess: AgentAccessLevel): Promise<string> {
+async function ownerAddress(request: Request, requiredAccess: AgentAccessLevel, body?: Record<string, unknown>): Promise<string> {
   const authorization = request.headers.get('authorization') ?? '';
   const bearer = /^Bearer\s+(.+)$/i.exec(authorization);
   if (bearer) {
@@ -57,13 +59,11 @@ async function ownerAddress(request: Request, requiredAccess: AgentAccessLevel):
     await blobAgentCredentialStore.touchCredential(credential.credentialId, new Date().toISOString());
     return credential.principal.address;
   }
-  const session = await requirePrivateWorkspaceSession(
-    blobAuthStore,
-    request,
-    authConfigForRequest(request),
-    'Sign in to use your private address book.',
-  );
-  return session.address;
+  const network = requestedUserNetwork(request, body);
+  const identity = await requireUserIdentity(request, new PostgresIdentityStore(), network);
+  const owner = userWorkspaceOwner(network, identity.userId);
+  if (identity.address) await importLegacyAddressBook(blobAddressBookStore, owner, identity.address);
+  return owner;
 }
 
 export async function OPTIONS(): Promise<Response> {
@@ -82,9 +82,9 @@ export async function GET(request: Request): Promise<Response> {
 
 export async function PUT(request: Request): Promise<Response> {
   try {
-    const ownerPromise = ownerAddress(request, 'write');
-    const bodyPromise = readJsonObjectBody(request, MAX_BODY_BYTES);
-    const [owner, body] = await Promise.all([ownerPromise, bodyPromise]);
+    assertUserWorkspaceWriteOrigin(request);
+    const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    const owner = await ownerAddress(request, 'write', body);
     const entry = await upsertAddressAlias(blobAddressBookStore, owner, {
       address: typeof body.address === 'string' ? body.address : '',
       subjectType: typeof body.subject_type === 'string' ? body.subject_type : '',
@@ -99,9 +99,9 @@ export async function PUT(request: Request): Promise<Response> {
 
 export async function DELETE(request: Request): Promise<Response> {
   try {
-    const ownerPromise = ownerAddress(request, 'write');
-    const bodyPromise = readJsonObjectBody(request, MAX_BODY_BYTES);
-    const [owner, body] = await Promise.all([ownerPromise, bodyPromise]);
+    assertUserWorkspaceWriteOrigin(request);
+    const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    const owner = await ownerAddress(request, 'write', body);
     await deleteAddressAlias(blobAddressBookStore, owner, {
       address: typeof body.address === 'string' ? body.address : '',
       subjectType: typeof body.subject_type === 'string' ? body.subject_type : '',

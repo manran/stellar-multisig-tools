@@ -302,6 +302,12 @@ async function fixturePage(width, options = {}) {
       return json(state.inboxStatus === 200 ? inbox : { error: 'Fixture inbox load failure.' }, state.inboxStatus);
     }
     if (url.pathname === '/api/address-book') {
+      if (request.method() === 'DELETE') {
+        const body = request.postDataJSON();
+        state.addressEntries = (state.addressEntries ?? []).filter((entry) =>
+          entry.address !== body.address || (entry.subject_type ?? entry.subjectType) !== body.subject_type);
+        return json({ deleted: true });
+      }
       if (request.method() === 'PUT') {
         const body = request.postDataJSON();
         if (state.contactSaveDelays?.[body.address]) await state.contactSaveDelays[body.address];
@@ -338,7 +344,25 @@ async function fixturePage(width, options = {}) {
         return json({ revoked: true });
       }
     }
-    if (url.pathname === '/api/contracts') return json({ contracts: [] });
+    if (url.pathname === '/api/contract-interface') return json({
+      contractId: url.searchParams.get('contract'), network: 'testnet', methods: [],
+      abi: { schema: 'fresnica-soroban-abi-v1' },
+    });
+    if (url.pathname === '/api/contracts') {
+      if (request.method() === 'PUT') {
+        const body = request.postDataJSON();
+        assert.equal(body.network, 'testnet');
+        const contract = { contractId: body.contractId, network: 'testnet', createdAt: now, updatedAt: now };
+        state.savedContracts = [...(state.savedContracts ?? []), contract];
+        return json({ contract });
+      }
+      if (request.method() === 'DELETE') {
+        const body = request.postDataJSON();
+        state.savedContracts = (state.savedContracts ?? []).filter(c => c.contractId !== body.contractId);
+        return json({ deleted: true });
+      }
+      return json({ contracts: state.savedContracts ?? [] });
+    }
     if (url.pathname === '/api/treasury-box') return json({ metadataByAccount: {} });
     if (url.pathname === '/api/runtime-config') return json({ stellarNetwork: 'testnet', fixedNetwork: 'testnet', capabilities: { classicManagedExecution: { testnet: false, public: false } } });
     if (url.pathname === '/api/request') {
@@ -519,18 +543,60 @@ try {
           wallet: walletState('', false), state: { passkeyLoggedIn: true },
         }, async ({ page }) => {
           await page.goto(origin + route);
-          await visible(page, 'Connect Stellar wallet', 'heading');
-          await visible(page, 'Connect Stellar wallet', 'button');
+          if (tool === 'contracts') {
+            await visible(page, 'No saved contracts yet', 'heading');
+            assert.equal(await page.getByRole('button', { name: 'Connect Stellar wallet' }).count(), 0);
+          } else if (tool === 'contacts') {
+            await visible(page, 'Add contact', 'button');
+            assert.equal(await page.getByRole('button', { name: 'Connect Stellar wallet' }).count(), 0);
+          } else {
+            await visible(page, 'Connect Stellar wallet', 'heading');
+            await visible(page, 'Connect Stellar wallet', 'button');
+          }
           assert.equal(await page.getByRole('link', { name: 'Sign in / Sign up' }).count(), 0);
           await snapshot(page, 'tool-needs-wallet-' + tool, width);
         });
       }
+      await run('passkey-only-contact-create-edit-delete', width, {
+        wallet: walletState('', false), state: { passkeyLoggedIn: true, addressEntries: [] },
+      }, async ({ page, state }) => {
+        await page.goto(origin + '/address-book');
+        await page.getByRole('button', { name: 'Add contact' }).click();
+        await page.getByRole('textbox', { name: 'Contact address' }).fill(addresses.recipient);
+        await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Passkey Vendor');
+        await page.getByRole('button', { name: 'Save contact' }).click();
+        await page.getByRole('button', { name: 'Rename Passkey Vendor' }).waitFor();
+        assert.equal(state.contactSaveCount, 1);
+        assert.equal(state.addressEntries?.[0]?.label, 'Passkey Vendor');
+        const row = page.locator('.mst-address-row').filter({ hasText: addresses.recipient });
+        await row.getByRole('button', { name: 'Rename Passkey Vendor' }).click();
+        await row.getByRole('button', { name: 'Remove name' }).click();
+        await row.getByRole('button', { name: 'Rename Passkey Vendor' }).waitFor({ state: 'detached' });
+        assert.equal(state.addressEntries?.length, 0);
+        assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), []);
+        await snapshot(page, 'passkey-only-contacts', width);
+      });
+      await run('passkey-only-contract-save-and-forget', width, {
+        wallet: walletState('', false), state: { passkeyLoggedIn: true, savedContracts: [] },
+      }, async ({ page, state }) => {
+        const contract = 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4';
+        await page.goto(origin + '/contract?contract=' + contract + '&network=testnet');
+        await page.getByRole('button', { name: 'Save to Contracts' }).click();
+        await page.getByRole('button', { name: 'Forget contract' }).waitFor();
+        assert.equal(state.savedContracts?.length, 1);
+        await page.getByRole('button', { name: 'Forget contract' }).click();
+        await page.waitForURL(url => url.pathname === '/contracts');
+        await visible(page, 'No saved contracts yet', 'heading');
+        assert.equal(state.savedContracts?.length, 0);
+        assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), []);
+        await snapshot(page, 'passkey-only-contracts', width);
+      });
       await run('tool-passkey-can-verify-wallet', width, {
         wallet: walletState('', false), state: { passkeyLoggedIn: true },
       }, async ({ page }) => {
-        await page.goto(origin + '/contracts');
+        await page.goto(origin + '/treasury');
         await page.getByRole('button', { name: 'Connect Stellar wallet' }).click();
-        await visible(page, 'No saved contracts yet', 'heading');
+        await visible(page, 'Treasuries', 'heading');
         assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), ['unlock']);
       });
       await run('tool-login-returns-to-selected-tool', width, {
@@ -670,13 +736,14 @@ try {
       });
 
       if (width === 375) {
-        await run('contacts-wallet-scope', width, {}, async ({ page }) => {
+        await run('contacts-identity-scope', width, {}, async ({ page }) => {
           await page.goto(origin + '/address-book');
           await visible(page, 'Contacts', 'heading');
           await page.evaluate((wallet) => window.__MST_QA_SET_WALLET__(wallet),
             { ...walletState(addresses.bob), unlockedAddress: addresses.alice });
-          await visible(page, 'Saved contact details are private');
+          await visible(page, 'Sign in to continue', 'heading');
           assert.equal(await page.getByRole('button', { name: 'Add contact' }).count(), 0);
+          assert.equal(await page.getByText('Saved contact details are private').count(), 0);
         });
       }
 
@@ -718,7 +785,7 @@ try {
           await bob.getByRole('button', { name: 'Edit contact Bob' }).click();
           await bob.getByPlaceholder('e.g. Bob').fill('Bob operations');
           await bob.getByRole('textbox', { name: 'Notification email' }).fill('bob.ops@example.org');
-          const bobSaved = page.waitForResponse((response) => response.url().endsWith('/api/address-book')
+          const bobSaved = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/address-book'
             && response.request().method() === 'PUT' && response.request().postDataJSON().address === addresses.bob);
           await bob.getByRole('button', { name: 'Save contact' }).click();
 
@@ -741,7 +808,7 @@ try {
           await snapshot(page, 'contacts-concurrent-saves', width);
         });
 
-        await run('contacts-inflight-save-does-not-leak-across-wallets', width, {}, async ({ page, state }) => {
+        await run('contacts-inflight-save-does-not-leak-across-users', width, {}, async ({ page, state }) => {
           let releaseAlice;
           state.contactSaveDelays = {
             [addresses.carol]: new Promise((resolve) => { releaseAlice = resolve; }),
@@ -752,13 +819,13 @@ try {
           await carol.getByRole('button', { name: 'Edit contact Carol' }).click();
           await carol.getByPlaceholder('e.g. Bob').fill('Alice private draft');
           await carol.getByRole('textbox', { name: 'Notification email' }).fill('alice-only@example.org');
-          const aliceSaved = page.waitForResponse((response) => response.url().endsWith('/api/address-book')
+          const aliceSaved = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/address-book'
             && response.request().method() === 'PUT' && response.request().postDataJSON().address === addresses.carol);
           await carol.getByRole('button', { name: 'Save contact' }).click();
 
           // Bob's contact store is empty. Alice's pending response must stay in Alice's scope.
           state.addressEntries = [];
-          const bobLoaded = page.waitForResponse((response) => response.url().endsWith('/api/address-book')
+          const bobLoaded = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/address-book'
             && response.request().method() === 'GET');
           await page.evaluate((wallet) => window.__MST_QA_SET_WALLET__(wallet), walletState(addresses.bob));
           await bobLoaded;

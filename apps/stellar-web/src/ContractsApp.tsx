@@ -1,6 +1,6 @@
 import { ArrowRight, Braces, CircleAlert, LoaderCircle, Plus } from 'lucide-react';
 import { NetworkBadge, PageHeader } from './MultiSigUi';
-import PrivateWorkspaceUnlock from './PrivateWorkspaceUnlock';
+import { useUserIdentity } from './UserIdentityContext';
 import ToolAccessEntry from './ToolAccessEntry';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useContractWorkspaces } from './ContractWorkspaceContext';
@@ -12,21 +12,10 @@ function shortContract(value: string) {
 }
 
 export default function ContractsApp() {
-  const {
-    address,
-    network,
-    privateUnlocked,
-    unlockedAddress,
-    unlockedNetwork,
-  } = useStellarWallet();
-  const { contracts, loading, error, refresh } = useContractWorkspaces();
-  const privateReady = Boolean(
-    privateUnlocked
-    && address
-    && network
-    && unlockedAddress === address
-    && unlockedNetwork === network,
-  );
+  const { network: walletNetwork } = useStellarWallet();
+  const { identity } = useUserIdentity();
+  const network = identity?.network ?? walletNetwork;
+  const { contracts, loading, error, ready: privateReady, refresh } = useContractWorkspaces();
 
   return (
     <StellarWorkspaceShell active="contracts" networkContext={network}>
@@ -37,21 +26,12 @@ export default function ContractsApp() {
             description="Save and revisit contracts."
           />
 
-          {!address && <ToolAccessEntry returnTo="/contracts" />}
-
-          {address && !privateReady && (
-            <PrivateWorkspaceUnlock
-              title="Open saved contracts"
-              description="Confirm this wallet to load its private contract workspace. This does not authorize a contract call."
-              buttonLabel="Open Contracts"
-            />
-          )}
+          {!identity && <ToolAccessEntry returnTo="/contracts" />}
 
           {privateReady && (
             <div className="mt-6 space-y-4">
               <div className="mst-contract-toolbar">
                 <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
-                  {network && <NetworkBadge network={network} />}
                   <span>{contracts.length} saved {contracts.length === 1 ? 'contract' : 'contracts'}</span>
                 </div>
                 <a href={stellarHrefWithSearch('/new/contract', { network: network ?? 'public' })} className="mst-action-primary"><Plus className="h-4 w-4" />Add or call contract</a>

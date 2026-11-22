@@ -240,8 +240,8 @@ test('Address Book presents signer workspace relationships plus secondary Contac
   assert.match(addressBook, /treasuryMaster \? `\$\{treasuryLabel \|\| 'Treasury'\} · account key`/);
   assert.match(addressBook, /!treasuryMaster && <AddressAliasEditor/);
   assert.doesNotMatch(addressBook, /Saved addresses|Open Treasury|treasur(?:y|ies)\.length/);
-  assert.match(addressBook, /Saved contact details are private/);
-  assert.match(addressBook, /Show contact details/);
+  assert.match(addressBook, /const privateReady = Boolean\(identity\)/);
+  assert.match(addressBook, /Add contact/);
   assert.match(addressBook, /allowNotificationEmail/);
   assert.doesNotMatch(addressBook, /Unlock saved names|Unlock names|stay locked/);
   assert.match(signerIdentityList, /Show saved signers/);

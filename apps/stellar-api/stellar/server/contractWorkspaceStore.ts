@@ -1,6 +1,8 @@
 import type { SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
+export type ContractWorkspacePrincipal = SignerPrincipalRef | { type: 'user'; network: StellarNetwork; userId: string };
+
 export interface StoredContractWorkspace {
   version: 1;
   contractId: string;
@@ -10,8 +12,10 @@ export interface StoredContractWorkspace {
 }
 
 export interface ContractWorkspaceStore {
-  list(principal: SignerPrincipalRef): Promise<StoredContractWorkspace[]>;
-  get(principal: SignerPrincipalRef, contractId: string): Promise<StoredContractWorkspace | null>;
-  put(principal: SignerPrincipalRef, workspace: StoredContractWorkspace): Promise<void>;
-  delete(principal: SignerPrincipalRef, contractId: string): Promise<void>;
+  list(principal: ContractWorkspacePrincipal): Promise<StoredContractWorkspace[]>;
+  get(principal: ContractWorkspacePrincipal, contractId: string): Promise<StoredContractWorkspace | null>;
+  put(principal: ContractWorkspacePrincipal, workspace: StoredContractWorkspace): Promise<void>;
+  delete(principal: ContractWorkspacePrincipal, contractId: string): Promise<void>;
+  hasImportedWallet?(principal: ContractWorkspacePrincipal, wallet: string): Promise<boolean>;
+  markImportedWallet?(principal: ContractWorkspacePrincipal, wallet: string): Promise<void>;
 }

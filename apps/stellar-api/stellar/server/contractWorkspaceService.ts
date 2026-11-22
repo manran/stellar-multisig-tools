@@ -1,6 +1,7 @@
 import { StrKey } from '@stellar/stellar-sdk/base';
 import type { SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
-import type { ContractWorkspaceStore, StoredContractWorkspace } from './contractWorkspaceStore.js';
+import type { ContractWorkspacePrincipal, ContractWorkspaceStore, StoredContractWorkspace } from './contractWorkspaceStore.js';
+import { userWorkspaceOwner } from './userWorkspaceOwner.js';
 
 export class ContractWorkspaceServiceError extends Error {
   readonly status: number;
@@ -14,7 +15,11 @@ export class ContractWorkspaceServiceError extends Error {
   }
 }
 
-function normalizedPrincipal(principal: SignerPrincipalRef): SignerPrincipalRef {
+function normalizedPrincipal(principal: ContractWorkspacePrincipal): ContractWorkspacePrincipal {
+  if (principal.type === 'user') {
+    userWorkspaceOwner(principal.network, principal.userId);
+    return { type: 'user', network: principal.network, userId: principal.userId.toLowerCase() };
+  }
   if (principal.type !== 'signer' || !StrKey.isValidEd25519PublicKey(principal.address)) {
     throw new ContractWorkspaceServiceError('A valid signer Principal is required.', 400, 'invalid_principal');
   }
@@ -22,6 +27,23 @@ function normalizedPrincipal(principal: SignerPrincipalRef): SignerPrincipalRef 
     throw new ContractWorkspaceServiceError('Principal network must be Mainnet or Testnet.', 400, 'invalid_network');
   }
   return { type: 'signer', network: principal.network, address: principal.address.trim() };
+}
+
+export async function importLegacyContractWorkspaces(
+  store: ContractWorkspaceStore,
+  user: Extract<ContractWorkspacePrincipal, { type: 'user' }>,
+  walletAddress: string,
+): Promise<void> {
+  const userPrincipal = normalizedPrincipal(user);
+  const signer = normalizedPrincipal({ type: 'signer', network: user.network, address: walletAddress });
+  if (!store.hasImportedWallet || !store.markImportedWallet) {
+    throw new ContractWorkspaceServiceError('Workspace import is unavailable.', 503, 'workspace_import_unavailable');
+  }
+  if (await store.hasImportedWallet(userPrincipal, walletAddress)) return;
+  for (const entry of await store.list(signer)) {
+    if (!await store.get(userPrincipal, entry.contractId)) await store.put(userPrincipal, entry);
+  }
+  await store.markImportedWallet(userPrincipal, walletAddress);
 }
 
 function normalizedContractId(value: string): string {
@@ -34,7 +56,7 @@ function normalizedContractId(value: string): string {
 
 export async function listContractWorkspaces(
   store: ContractWorkspaceStore,
-  principalValue: SignerPrincipalRef,
+  principalValue: ContractWorkspacePrincipal,
 ): Promise<StoredContractWorkspace[]> {
   const principal = normalizedPrincipal(principalValue);
   const entries = await store.list(principal);
@@ -45,7 +67,7 @@ export async function listContractWorkspaces(
 
 export async function keepContractWorkspace(
   store: ContractWorkspaceStore,
-  principalValue: SignerPrincipalRef,
+  principalValue: ContractWorkspacePrincipal,
   contractIdValue: string,
   now = new Date(),
 ): Promise<StoredContractWorkspace> {
@@ -66,7 +88,7 @@ export async function keepContractWorkspace(
 
 export async function forgetContractWorkspace(
   store: ContractWorkspaceStore,
-  principalValue: SignerPrincipalRef,
+  principalValue: ContractWorkspacePrincipal,
   contractIdValue: string,
 ): Promise<void> {
   const principal = normalizedPrincipal(principalValue);

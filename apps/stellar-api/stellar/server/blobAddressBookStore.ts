@@ -11,6 +11,10 @@ function ownerPrefix(ownerAddress: string): string {
   return `address-book/${digest(ownerAddress)}/`;
 }
 
+function importMarker(owner: string, wallet: string): string {
+  return `${ownerPrefix(owner)}imported/${digest(wallet)}.done`;
+}
+
 function entryPath(ownerAddress: string, subjectType: AddressAliasSubjectType, address: string): string {
   return `${ownerPrefix(ownerAddress)}${subjectType}/${digest(address)}.json`;
 }
@@ -24,6 +28,16 @@ async function readJson<T>(pathname: string): Promise<T | null> {
 }
 
 export const blobAddressBookStore: AddressBookStore = {
+  async hasImportedWallet(owner, wallet) {
+    return withBlobStorage(async () => Boolean(await get(importMarker(owner, wallet), { access: 'private', useCache: false })));
+  },
+  async markImportedWallet(owner, wallet) {
+    await withBlobStorage(async () => {
+      await put(importMarker(owner, wallet), 'imported', {
+        access: 'private', addRandomSuffix: false, allowOverwrite: true, contentType: 'text/plain',
+      });
+    });
+  },
   async list(ownerAddress) {
     return withBlobStorage(async () => {
       const entries: StoredAddressAlias[] = [];

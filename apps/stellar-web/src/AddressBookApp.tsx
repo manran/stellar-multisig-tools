@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { CircleAlert, LoaderCircle, Plus, ShieldCheck } from 'lucide-react';
+import { CircleAlert, LoaderCircle, Plus } from 'lucide-react';
 import AddressAliasEditor from './AddressAliasEditor';
 import { PageHeader } from './MultiSigUi';
 import { useAddressBook } from './AddressBookContext';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import ToolAccessEntry from './ToolAccessEntry';
 import { useStellarWallet } from './StellarWalletContext';
+import { useUserIdentity } from './UserIdentityContext';
 import { isValidStellarAccountId } from '../../../packages/stellar-core/src/horizon';
 import { loadAccountsForSigner, peekAccountsForSigner } from '../../../packages/stellar-core/src/signerAccounts';
 import { hasSharedSigningControl } from '../../../packages/stellar-core/src/treasuryModel';
@@ -31,7 +32,8 @@ function relatedSigners(accounts: StellarAccountSnapshot[]): RelatedSigner[] {
 }
 
 export default function AddressBookApp() {
-  const { address, network, privateUnlocked, authBusy, unlock, unlockedAddress, unlockedNetwork } = useStellarWallet();
+  const { address, network, privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
+  const { identity } = useUserIdentity();
   const { entries, labelFor, saveAlias, loading: aliasesLoading, error: aliasError } = useAddressBook();
   const [accounts, setAccounts] = useState<StellarAccountSnapshot[]>([]);
   const [loading, setLoading] = useState(false);
@@ -43,7 +45,8 @@ export default function AddressBookApp() {
   const [addError, setAddError] = useState('');
   const [savingContact, setSavingContact] = useState(false);
   const [search, setSearch] = useState('');
-  const privateReady = Boolean(privateUnlocked && address && network && unlockedAddress === address && unlockedNetwork === network);
+  const privateReady = Boolean(identity);
+  const treasuryPrivateReady = Boolean(privateUnlocked && address && network && unlockedAddress === address && unlockedNetwork === network && identity);
   const visibleLabelFor = (identity: string, type: 'account' | 'signer') => privateReady ? labelFor(identity, type) : '';
   const visibleTreasuryNames = privateReady ? treasuryNames : {};
 
@@ -92,7 +95,7 @@ export default function AddressBookApp() {
   const treasuryIdSet = useMemo(() => new Set(treasuryIds), [treasuryIds]);
 
   useEffect(() => {
-    if (!privateReady || !network || !address) {
+    if (!treasuryPrivateReady || !network || !address) {
       setTreasuryNames({});
       return;
     }
@@ -104,7 +107,7 @@ export default function AddressBookApp() {
       .then((names) => { if (!cancelled) setTreasuryNames((current) => ({ ...current, ...names })); })
       .catch(() => undefined);
     return () => { cancelled = true; controller.abort(); };
-  }, [treasuryIds, privateReady, address, network]);
+  }, [treasuryIds, treasuryPrivateReady, address, network]);
 
   const signers = useMemo(() => relatedSigners(accounts), [accounts]);
   const contacts = useMemo(() => {
@@ -169,14 +172,7 @@ export default function AddressBookApp() {
             ) : undefined}
           />
 
-          {!address && <ToolAccessEntry returnTo="/address-book" />}
-
-          {address && !privateReady && (
-            <section className="mst-address-action-row mt-5">
-              <div><div className="font-semibold">Saved contact details are private</div><p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Public account relationships are available now. Confirm this wallet when you want to load private names and signer notification emails.</p></div>
-              <button type="button" disabled={authBusy} onClick={() => void unlock()} className="mst-action-secondary shrink-0 disabled:opacity-50">{authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Show contact details</button>
-            </section>
-          )}
+          {!identity && <ToolAccessEntry returnTo="/address-book" />}
 
           {privateReady && adding && (
             <form onSubmit={addAddress} className="mst-address-add-form mt-5">
@@ -192,16 +188,16 @@ export default function AddressBookApp() {
 
           {(error || aliasError) && <div className="mt-5 flex gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{error || aliasError}</div>}
 
-          {address && (loading || aliasesLoading) && !hasContent && <div className="flex items-center gap-2 py-10 text-sm text-neutral-500 dark:text-neutral-400"><LoaderCircle className="h-4 w-4 animate-spin" />Loading relationships…</div>}
+          {privateReady && (loading || aliasesLoading) && !hasContent && <div className="flex items-center gap-2 py-10 text-sm text-neutral-500 dark:text-neutral-400"><LoaderCircle className="h-4 w-4 animate-spin" />Loading relationships…</div>}
 
-          {address && hasContent && (
+          {privateReady && hasContent && (
             <div className="mst-contacts-search">
               <label htmlFor="contact-search">Find a contact</label>
               <input id="contact-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name or Stellar address" className="mst-address-control" />
               <span aria-live="polite">{visibleCount} shown</span>
             </div>
           )}
-          {address && query && visibleCount === 0 && hasContent && (
+          {privateReady && query && visibleCount === 0 && hasContent && (
             <p role="status" className="mt-6 text-sm text-[var(--color-ink-2)]">No matching contacts. Try another name or address.</p>
           )}
 
@@ -263,9 +259,9 @@ export default function AddressBookApp() {
             </section>
           )}
 
-          {address && !loading && !aliasesLoading && !hasContent && !error && (
+          {privateReady && !loading && !aliasesLoading && !hasContent && !error && (
             <section className="py-12 text-sm text-neutral-500 dark:text-neutral-400">
-              Nothing here yet. {privateReady ? 'Add a contact above, or names will appear here as you use them in payments and signing.' : 'Show saved names to add a contact.'}
+              No contacts yet. Add one above.
             </section>
           )}
         </div>

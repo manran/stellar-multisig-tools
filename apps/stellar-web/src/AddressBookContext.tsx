@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useStellarWallet } from './StellarWalletContext';
+import { useUserIdentity } from './UserIdentityContext';
+import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
 import { preferredAddressEntry, preferredAddressLabel } from './stellar/addressIdentity';
 
 export type AddressAliasSubjectType = 'account' | 'signer';
@@ -32,8 +34,8 @@ interface AddressBookContextValue {
 const AddressBookContext = createContext<AddressBookContextValue | null>(null);
 const ADDRESS_BOOK_CACHE_PREFIX = 'multisig-tools.address-book.v1';
 
-function cacheKey(address: string, network: string) {
-  return `${ADDRESS_BOOK_CACHE_PREFIX}:${network}:${address}`;
+function cacheKey(owner: string) {
+  return `${ADDRESS_BOOK_CACHE_PREFIX}:${owner}`;
 }
 
 function parseEntry(value: unknown): AddressAliasEntry | null {
@@ -57,9 +59,9 @@ function parseEntry(value: unknown): AddressAliasEntry | null {
   };
 }
 
-function readCache(address: string, network: string): AddressAliasEntry[] {
+function readCache(owner: string): AddressAliasEntry[] {
   try {
-    const raw = sessionStorage.getItem(cacheKey(address, network));
+    const raw = sessionStorage.getItem(cacheKey(owner));
     if (!raw) return [];
     const values = JSON.parse(raw) as unknown;
     if (!Array.isArray(values)) return [];
@@ -69,9 +71,9 @@ function readCache(address: string, network: string): AddressAliasEntry[] {
   }
 }
 
-function writeCache(address: string, network: string, entries: AddressAliasEntry[]) {
+function writeCache(owner: string, entries: AddressAliasEntry[]) {
   try {
-    sessionStorage.setItem(cacheKey(address, network), JSON.stringify(entries));
+    sessionStorage.setItem(cacheKey(owner), JSON.stringify(entries));
   } catch {
     // Private display cache is best-effort. The API remains the source of truth.
   }
@@ -83,7 +85,11 @@ function newestEntry(entries: AddressAliasEntry[]): AddressAliasEntry | null {
 
 export function AddressBookProvider({ children }: { children: ReactNode }) {
   const { privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
-  const owner = privateUnlocked && unlockedAddress && unlockedNetwork ? `${unlockedNetwork}:${unlockedAddress}` : '';
+  const { identity, network } = useUserIdentity();
+  const owner = identity ? `${network}:user:${identity.userId}` : '';
+  const verifiedWallet = identity?.address && privateUnlocked && unlockedAddress === identity.address && unlockedNetwork === network
+    ? identity.address : '';
+  const walletHeaders = verifiedWallet ? privateSessionAddressHeaders(verifiedWallet) : {};
   const scopeRef = useRef({ owner, revision: 0 });
   if (scopeRef.current.owner !== owner) scopeRef.current = { owner, revision: 0 };
   const scope = scopeRef.current;
@@ -103,20 +109,18 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
   }, [scope]);
 
   useEffect(() => {
-    if (book.owner === owner && owner && unlockedAddress && unlockedNetwork) {
-      writeCache(unlockedAddress, unlockedNetwork, book.entries);
-    }
-  }, [book, owner, unlockedAddress, unlockedNetwork]);
+    if (book.owner === owner && owner) writeCache(owner, book.entries);
+  }, [book, owner]);
 
   useEffect(() => {
-    if (!scope.owner || !unlockedAddress || !unlockedNetwork) {
+    if (!scope.owner || !identity) {
       setBook({ owner: '', entries: [] });
       setError('');
       setLoading(false);
       return;
     }
 
-    const cached = readCache(unlockedAddress, unlockedNetwork);
+    const cached = readCache(owner);
     setBook({ owner: scope.owner, entries: cached });
     const revisionAtLoad = scope.revision;
     setLoading(cached.length === 0);
@@ -124,9 +128,9 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
     const controller = new AbortController();
-    void fetch('/api/address-book', {
+    void fetch(`/api/address-book?network=${network}`, {
       signal: controller.signal,
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json', ...walletHeaders },
     })
       .then(async (response) => {
         const body = await response.json().catch(() => ({})) as { entries?: unknown[]; error?: string };
@@ -150,7 +154,7 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       controller.abort();
     };
-  }, [scope, unlockedAddress, unlockedNetwork]);
+  }, [scope, identity?.userId, verifiedWallet, network]);
 
   const labels = useMemo(() => {
     const map = new Map<string, string>();
@@ -183,9 +187,7 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
     label: string,
     notificationEmail?: string | null,
   ) => {
-    if (!privateUnlocked || !unlockedAddress || !unlockedNetwork) {
-      throw new Error('Unlock your private workspace to save private names.');
-    }
+    if (!identity) throw new Error('Sign in to save contacts.');
     const value = label.trim();
     if (!value) throw new Error('Name cannot be empty.');
 
@@ -207,8 +209,9 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
     try {
       const response = await fetch('/api/address-book', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...walletHeaders },
         body: JSON.stringify({
+          network,
           address,
           subject_type: subjectType,
           label: value,
@@ -227,8 +230,8 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
       if (previousForAddress.some((item) => item.subjectType === opposite)) {
         void fetch('/api/address-book', {
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ address, subject_type: opposite }),
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...walletHeaders },
+          body: JSON.stringify({ network, address, subject_type: opposite }),
         }).catch(() => undefined);
       }
     } catch (cause) {
@@ -237,12 +240,10 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
       if (scopeRef.current === scope) setError(message);
       throw new Error(message);
     }
-  }, [privateUnlocked, unlockedAddress, unlockedNetwork, entries, replaceEntries, emailFor, scope]);
+  }, [identity?.userId, network, verifiedWallet, entries, replaceEntries, emailFor, scope]);
 
   const removeAlias = useCallback(async (address: string, subjectType: AddressAliasSubjectType) => {
-    if (!privateUnlocked || !unlockedAddress || !unlockedNetwork) {
-      throw new Error('Unlock your private workspace to change private names.');
-    }
+    if (!identity) throw new Error('Sign in to change contacts.');
     const previousForAddress = entries.filter((item) => item.address === address);
     const storedTypes = [...new Set(previousForAddress.map((item) => item.subjectType))];
     const types = storedTypes.length > 0 ? storedTypes : [subjectType];
@@ -253,8 +254,8 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
       await Promise.all(types.map(async (type) => {
         const response = await fetch('/api/address-book', {
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify({ address, subject_type: type }),
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...walletHeaders },
+          body: JSON.stringify({ network, address, subject_type: type }),
         });
         const body = await response.json().catch(() => ({})) as { error?: string };
         if (!response.ok) throw new Error(body.error || `Unable to remove name (${response.status}).`);
@@ -265,7 +266,7 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
       if (scopeRef.current === scope) setError(message);
       throw new Error(message);
     }
-  }, [privateUnlocked, unlockedAddress, unlockedNetwork, entries, replaceEntries, scope]);
+  }, [identity?.userId, network, verifiedWallet, entries, replaceEntries, scope]);
 
   const value = useMemo<AddressBookContextValue>(() => ({
     entries,

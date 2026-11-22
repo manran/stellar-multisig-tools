@@ -1,5 +1,6 @@
 import { Keypair } from '@stellar/stellar-sdk/base';
 import type { AddressAliasSubjectType, AddressBookStore, StoredAddressAlias } from './addressBookStore.js';
+import { isUserWorkspaceOwner } from './userWorkspaceOwner.js';
 
 const MAX_LABEL_LENGTH = 64;
 const MAX_NOTIFICATION_EMAIL_LENGTH = 254;
@@ -24,6 +25,28 @@ function normalizeAddress(value: string): string {
     throw new AddressBookServiceError('A valid Stellar G address is required.', 400, 'invalid_address');
   }
   return address;
+}
+
+function normalizeOwner(value: string): string {
+  return isUserWorkspaceOwner(value) ? value : normalizeAddress(value);
+}
+
+export async function importLegacyAddressBook(
+  store: AddressBookStore,
+  owner: string,
+  walletAddress: string,
+): Promise<void> {
+  const wallet = normalizeAddress(walletAddress);
+  const user = normalizeOwner(owner);
+  if (user === wallet || !isUserWorkspaceOwner(user)) return;
+  if (!store.hasImportedWallet || !store.markImportedWallet) {
+    throw new AddressBookServiceError('Workspace import is unavailable.', 503, 'workspace_import_unavailable');
+  }
+  if (await store.hasImportedWallet(user, wallet)) return;
+  for (const entry of await store.list(wallet)) {
+    if (!await store.get(user, entry.subjectType, entry.address)) await store.put(user, entry);
+  }
+  await store.markImportedWallet(user, wallet);
 }
 
 function normalizeSubjectType(value: string): AddressAliasSubjectType {
@@ -70,7 +93,7 @@ export async function listAddressAliases(
   store: AddressBookStore,
   ownerAddressValue: string,
 ): Promise<StoredAddressAlias[]> {
-  const ownerAddress = normalizeAddress(ownerAddressValue);
+  const ownerAddress = normalizeOwner(ownerAddressValue);
   const entries = await store.list(ownerAddress);
   return [...entries].sort((left, right) =>
     left.label.localeCompare(right.label)
@@ -85,7 +108,7 @@ export async function upsertAddressAlias(
   input: { address: string; subjectType: string; label: string; notificationEmail?: unknown },
   now = new Date(),
 ): Promise<StoredAddressAlias> {
-  const ownerAddress = normalizeAddress(ownerAddressValue);
+  const ownerAddress = normalizeOwner(ownerAddressValue);
   const address = normalizeAddress(input.address);
   const subjectType = normalizeSubjectType(input.subjectType);
   const label = normalizeLabel(input.label);
@@ -113,7 +136,7 @@ export async function deleteAddressAlias(
   ownerAddressValue: string,
   input: { address: string; subjectType: string },
 ): Promise<void> {
-  const ownerAddress = normalizeAddress(ownerAddressValue);
+  const ownerAddress = normalizeOwner(ownerAddressValue);
   const address = normalizeAddress(input.address);
   const subjectType = normalizeSubjectType(input.subjectType);
   await store.delete(ownerAddress, subjectType, address);

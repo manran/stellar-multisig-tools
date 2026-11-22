@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   forgetContractOperation,
@@ -6,8 +6,8 @@ import {
   listContractWorkspaceOperation,
 } from './contractOperationsClient';
 import type { ContractWorkspaceRef } from './contractOperationsClient';
-import { loadContractWorkspaces, removeContractWorkspace } from './contractWorkspace';
 import { useStellarWallet } from './StellarWalletContext';
+import { useUserIdentity } from './UserIdentityContext';
 
 interface ContractWorkspaceContextValue {
   contracts: ContractWorkspaceRef[];
@@ -21,41 +21,40 @@ interface ContractWorkspaceContextValue {
 
 const ContractWorkspaceContext = createContext<ContractWorkspaceContextValue | null>(null);
 
-async function migrateAndList(network: 'public' | 'testnet'): Promise<ContractWorkspaceRef[]> {
-  const legacy = loadContractWorkspaces().filter((item) => item.network === network);
-  for (const item of legacy) {
-    await keepContractOperation(item.contractId, network);
-    removeContractWorkspace(item.contractId, network);
-  }
-  return listContractWorkspaceOperation();
-}
-
 export function ContractWorkspaceProvider({ children }: { children: ReactNode }) {
   const { privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
-  const [contracts, setContracts] = useState<ContractWorkspaceRef[]>([]);
+  const { identity, network } = useUserIdentity();
+  const owner = identity ? `${network}:user:${identity.userId}` : '';
+  const selectedWallet = identity?.address && privateUnlocked
+    && unlockedAddress === identity.address && unlockedNetwork === network ? identity.address : '';
+  const scopeRef = useRef(owner);
+  scopeRef.current = owner;
+  const [state, setState] = useState<{ owner: string; contracts: ContractWorkspaceRef[] }>({ owner: '', contracts: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const ready = Boolean(privateUnlocked && unlockedAddress && unlockedNetwork);
+  const contracts = owner && state.owner === owner ? state.contracts : [];
+  const ready = Boolean(identity);
 
   const refresh = useCallback(async () => {
-    if (!privateUnlocked || !unlockedAddress || !unlockedNetwork) {
-      setContracts([]);
+    if (!owner) {
+      setState({ owner: '', contracts: [] });
       return;
     }
     setLoading(true);
     setError('');
     try {
-      setContracts(await migrateAndList(unlockedNetwork));
+      const items = await listContractWorkspaceOperation(network, selectedWallet);
+      if (scopeRef.current === owner) setState({ owner, contracts: items });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to load contract workspaces.');
+      if (scopeRef.current === owner) setError(cause instanceof Error ? cause.message : 'Unable to load contracts.');
     } finally {
-      setLoading(false);
+      if (scopeRef.current === owner) setLoading(false);
     }
-  }, [privateUnlocked, unlockedAddress, unlockedNetwork]);
+  }, [owner, network, selectedWallet]);
 
   useEffect(() => {
-    if (!privateUnlocked || !unlockedAddress || !unlockedNetwork) {
-      setContracts([]);
+    if (!owner) {
+      setState({ owner: '', contracts: [] });
       setLoading(false);
       setError('');
       return;
@@ -63,34 +62,41 @@ export function ContractWorkspaceProvider({ children }: { children: ReactNode })
     let cancelled = false;
     setLoading(true);
     setError('');
-    void migrateAndList(unlockedNetwork)
-      .then((items) => { if (!cancelled) setContracts(items); })
+    void listContractWorkspaceOperation(network, selectedWallet)
+      .then((items) => { if (!cancelled && scopeRef.current === owner) setState({ owner, contracts: items }); })
       .catch((cause) => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : 'Unable to load contract workspaces.');
+        if (!cancelled && scopeRef.current === owner) {
+          setError(cause instanceof Error ? cause.message : 'Unable to load contracts.');
+        }
       })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .finally(() => { if (!cancelled && scopeRef.current === owner) setLoading(false); });
     return () => { cancelled = true; };
-  }, [privateUnlocked, unlockedAddress, unlockedNetwork]);
+  }, [owner, network, selectedWallet]);
 
   const keep = useCallback(async (contractId: string) => {
-    if (!privateUnlocked || !unlockedNetwork) throw new Error('Unlock the signer workspace to save contracts.');
-    const contract = await keepContractOperation(contractId, unlockedNetwork);
-    setContracts((current) => [contract, ...current.filter((item) => item.contractId !== contract.contractId)]);
-  }, [privateUnlocked, unlockedNetwork]);
+    if (!owner) throw new Error('Sign in to save contracts.');
+    const contract = await keepContractOperation(contractId, network, selectedWallet);
+    if (scopeRef.current === owner) {
+      setState((current) => ({
+        owner,
+        contracts: [contract, ...(current.owner === owner ? current.contracts : []).filter((item) => item.contractId !== contract.contractId)],
+      }));
+    }
+  }, [owner, network, selectedWallet]);
+
   const forget = useCallback(async (contractId: string) => {
-    if (!privateUnlocked || !unlockedNetwork) throw new Error('Unlock the signer workspace to remove contracts.');
-    await forgetContractOperation(contractId, unlockedNetwork);
-    setContracts((current) => current.filter((item) => item.contractId !== contractId));
-  }, [privateUnlocked, unlockedNetwork]);
+    if (!owner) throw new Error('Sign in to remove contracts.');
+    await forgetContractOperation(contractId, network, selectedWallet);
+    if (scopeRef.current === owner) {
+      setState((current) => ({
+        owner,
+        contracts: (current.owner === owner ? current.contracts : []).filter((item) => item.contractId !== contractId),
+      }));
+    }
+  }, [owner, network, selectedWallet]);
 
   const value = useMemo<ContractWorkspaceContextValue>(() => ({
-    contracts,
-    loading,
-    error,
-    ready,
-    refresh,
-    keep,
-    forget,
+    contracts, loading, error, ready, refresh, keep, forget,
   }), [contracts, loading, error, ready, refresh, keep, forget]);
 
   return <ContractWorkspaceContext.Provider value={value}>{children}</ContractWorkspaceContext.Provider>;

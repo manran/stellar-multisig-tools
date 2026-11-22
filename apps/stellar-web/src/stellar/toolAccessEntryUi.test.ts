@@ -46,3 +46,17 @@ test('Passkey, registration and Stellar wallet login honor the safe return targe
   assert.match(page, /navigateWorkspace\(returnToTool \?\? '\/'\)/);
   assert.match(page, /if \(inviteToken\) navigateWorkspace\('\/new'\)/);
 });
+
+test('Contacts and Contracts use MST User ID while signing tools retain wallet gates', () => {
+  const contacts = source('AddressBookContext.tsx');
+  const contracts = source('ContractWorkspaceContext.tsx');
+  const editor = source('AddressAliasEditor.tsx');
+  const toolAccess = source('ToolAccessEntry.tsx');
+  assert.match(contacts, /useUserIdentity/);
+  assert.match(contracts, /useUserIdentity/);
+  assert.match(editor, /ScopedAddressAliasEditor key=\{`\$\{network\}:user:\$\{identity.userId\}`\}/);
+  assert.doesNotMatch(editor, /if \(!privateUnlocked/);
+  assert.match(toolAccess, /Connect Stellar wallet/);
+  assert.match(source('AddressBookApp.tsx'), /!identity && <ToolAccessEntry/);
+  assert.match(source('ContractsApp.tsx'), /!identity && <ToolAccessEntry/);
+});

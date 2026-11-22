@@ -155,7 +155,7 @@ test('Treasury settings separates public facts from private disclosures without 
 });
 
 test('Address Book uses shared relationship rows instead of repeated list cards', () => {
-  assert.match(addressBook, /mst-address-action-row/);
+  assert.match(addressBook, /const privateReady = Boolean\(identity\)/);
   assert.match(addressBook, /mst-address-add-form/);
   assert.match(addressBook, /mst-address-control/);
   assert.match(addressBook, /mst-address-list/);

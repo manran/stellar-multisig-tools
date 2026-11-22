@@ -3,6 +3,7 @@ import { SorobanSimulationError } from '../../../packages/stellar-core/src/sorob
 import type { SorobanSimulationSummary } from '../../../packages/stellar-core/src/sorobanRpc';
 import type { SorobanEffectsSnapshot } from '../../../packages/stellar-core/src/sorobanEffects';
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
+import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
 
 export interface ContractWorkspaceRef {
   contractId: string;
@@ -106,8 +107,10 @@ export async function verifyPreparedContractCallOperation(input: {
   return body.verification;
 }
 
-export async function listContractWorkspaceOperation(): Promise<ContractWorkspaceRef[]> {
-  const response = await fetch('/api/contracts', { cache: 'no-store', headers: { Accept: 'application/json' } });
+export async function listContractWorkspaceOperation(network?: StellarNetwork, walletAddress?: string): Promise<ContractWorkspaceRef[]> {
+  const endpoint = network ? `/api/contracts?network=${network}` : '/api/contracts';
+  const response = await fetch(endpoint, { cache: 'no-store',
+    headers: { Accept: 'application/json', ...(walletAddress ? privateSessionAddressHeaders(walletAddress) : {}) } });
   const body = await responseJson<{ contracts?: ContractWorkspaceRef[] }>(response, 'Unable to load contracts');
   if (!Array.isArray(body.contracts)) throw new Error('Contract workspace response is invalid.');
   return body.contracts;
@@ -116,10 +119,12 @@ export async function listContractWorkspaceOperation(): Promise<ContractWorkspac
 export async function keepContractOperation(
   contractId: string,
   network: StellarNetwork,
+  walletAddress?: string,
 ): Promise<ContractWorkspaceRef> {
   const response = await fetch('/api/contracts', {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json',
+      ...(walletAddress ? privateSessionAddressHeaders(walletAddress) : {}) },
     body: JSON.stringify({ contractId, network }),
   });
   const body = await responseJson<{ contract?: ContractWorkspaceRef }>(response, 'Unable to save contract');
@@ -127,10 +132,11 @@ export async function keepContractOperation(
   return body.contract;
 }
 
-export async function forgetContractOperation(contractId: string, network: StellarNetwork): Promise<void> {
+export async function forgetContractOperation(contractId: string, network: StellarNetwork, walletAddress?: string): Promise<void> {
   const response = await fetch('/api/contracts', {
     method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json',
+      ...(walletAddress ? privateSessionAddressHeaders(walletAddress) : {}) },
     body: JSON.stringify({ contractId, network }),
   });
   await responseJson(response, 'Unable to remove contract');

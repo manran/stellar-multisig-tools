@@ -4,7 +4,7 @@ import { StrKey } from '@stellar/stellar-sdk/base';
 import { NetworkBadge } from './MultiSigUi';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useContractWorkspaces } from './ContractWorkspaceContext';
-import { inspectContractOperation, keepContractOperation } from './contractOperationsClient';
+import { inspectContractOperation } from './contractOperationsClient';
 import type { ContractMethodDescriptor } from '../../../packages/stellar-core/src/contractSpec';
 import { resolveStellarNetwork } from './stellar/networkPreference';
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
@@ -22,8 +22,8 @@ export default function ContractWorkspaceApp() {
   const route = useMemo(routeObject, []);
   const contractId = route?.contractId ?? '';
   const network = route?.network ?? 'public';
-  const { contracts, ready, forget } = useContractWorkspaces();
-  const { unlock, authBusy } = useStellarWallet();
+  const { contracts, ready, keep, forget } = useContractWorkspaces();
+  const { authBusy } = useStellarWallet();
   const [methods, setMethods] = useState<ContractMethodDescriptor[]>([]);
   const [loading, setLoading] = useState(Boolean(route));
   const [saving, setSaving] = useState(false);
@@ -68,8 +68,11 @@ export default function ContractWorkspaceApp() {
     setSaving(true);
     setError('');
     try {
-      if (!ready) await unlock(undefined, network);
-      await keepContractOperation(contractId, network);
+      if (!ready) {
+        navigateWorkspace('/identity', { search: '?next=/contracts' });
+        return;
+      }
+      await keep(contractId);
       setSavedOverride(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to save this contract.');
@@ -128,19 +131,19 @@ export default function ContractWorkspaceApp() {
               <section className="mst-contract-fact">
                 <h2 className="text-sm font-bold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Authorization</h2>
                 <div className="mt-3 text-lg font-bold">Resolved at action time</div>
-                <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Saving this contract grants no permission. Current Stellar and contract authorization is checked before signing or submission.</p>
+                <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Signing rights are checked when you authorize an action.</p>
               </section>
 
               <section className="mst-contract-fact">
                 <h2 className="font-bold">Workspace</h2>
                 {saved ? (
                   <>
-                    <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Saved for this signer workspace.</p>
+                    <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Saved to your account.</p>
                     <button type="button" disabled={!ready || saving} onClick={() => void forgetContract()} className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-red-700 hover:underline disabled:opacity-40 dark:text-red-300"><Trash2 className="h-4 w-4" />Forget contract</button>
                   </>
                 ) : (
                   <>
-                    <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Save this reusable work object to your signer workspace.</p>
+                    <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Save this contract to your account.</p>
                     <button type="button" disabled={saving || authBusy} onClick={() => void keepContract()} className="mst-action-secondary mt-4 disabled:opacity-40">{saving || authBusy ? 'Saving…' : 'Save to Contracts'}</button>
                   </>
                 )}

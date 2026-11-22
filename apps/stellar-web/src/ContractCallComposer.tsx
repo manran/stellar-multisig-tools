@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, Braces, CircleAlert, LoaderCircle } from 'lucide-react';
 import { NetworkBadge, WorkflowProgress } from './MultiSigUi';
 import { useContractWorkspaces } from './ContractWorkspaceContext';
-import { inspectContractOperation, keepContractOperation } from './contractOperationsClient';
+import { inspectContractOperation } from './contractOperationsClient';
 import { useStellarWallet } from './StellarWalletContext';
 import { isValidContractId } from '../../../packages/stellar-core/src/contractSpec';
 import type { ContractInputDescriptor, ContractMethodDescriptor } from '../../../packages/stellar-core/src/contractSpec';
@@ -55,7 +55,7 @@ function MethodFact({ method }: { method: ContractMethodDescriptor }) {
 
 export default function ContractCallComposer({ network }: Props) {
   const { unlock, authBusy, privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
-  const { contracts, ready: workspaceReady } = useContractWorkspaces();
+  const { contracts, ready: workspaceReady, keep } = useContractWorkspaces();
   const params = new URLSearchParams(window.location.search);
   const routeContractId = (params.get('contract') ?? '').trim();
   const routeMethod = (params.get('method') ?? '').trim();
@@ -174,8 +174,11 @@ export default function ContractCallComposer({ network }: Props) {
     setSavingContract(true);
     setError('');
     try {
-      if (!workspaceReady) await unlock(undefined, network);
-      await keepContractOperation(contractId, network);
+      if (!workspaceReady) {
+        navigateWorkspace('/identity', { search: '?next=/contracts' });
+        return;
+      }
+      await keep(contractId);
       setSavedOverride(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to save this contract.');

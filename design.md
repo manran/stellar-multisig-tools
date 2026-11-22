@@ -19,6 +19,9 @@ Shared authorization without shared custody.
 - Keep technical evidence in Advanced details and documentation. Do not paste architecture rules into account or landing screens.
 - Keep the words Passkey, wallet, Proposal, Sign, Inbox, and Activity consistent.
 - The four Tools share one access entry: show `Sign in / Sign up` when signed out; request a verified Stellar wallet only after sign-in, and return users to the tool they opened.
+- Contacts and saved Contracts belong to the stable MST User ID, separately by Stellar network; Passkey sign-in can use them without a wallet.
+- A linked, verified wallet may copy older signer-scoped contacts and contracts into this user workspace once. Preserve originals and never merge an unlinked wallet.
+- Treasury authority and signer-Agent credentials remain wallet/chain scoped. An MST account login does not imply signing rights.
 
 The visual system should communicate:
 

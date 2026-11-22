@@ -16,4 +16,6 @@ export interface AddressBookStore {
   get(ownerAddress: string, subjectType: AddressAliasSubjectType, address: string): Promise<StoredAddressAlias | null>;
   put(ownerAddress: string, entry: StoredAddressAlias): Promise<void>;
   delete(ownerAddress: string, subjectType: AddressAliasSubjectType, address: string): Promise<void>;
+  hasImportedWallet?(owner: string, wallet: string): Promise<boolean>;
+  markImportedWallet?(owner: string, wallet: string): Promise<void>;
 }

@@ -7,7 +7,7 @@ import {
   keepContractWorkspace,
   listContractWorkspaces,
 } from './contractWorkspaceService.js';
-import type { ContractWorkspaceStore, StoredContractWorkspace } from './contractWorkspaceStore.js';
+import type { ContractWorkspacePrincipal, ContractWorkspaceStore, StoredContractWorkspace } from './contractWorkspaceStore.js';
 import type { SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 
 const CONTRACT_A = 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4';
@@ -15,11 +15,11 @@ const CONTRACT_B = 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM';
 
 function memoryStore(): ContractWorkspaceStore {
   const values = new Map<string, StoredContractWorkspace>();
-  const key = (principal: SignerPrincipalRef, contractId: string) =>
-    `${principal.network}:${principal.address}:${contractId}`;
+  const key = (principal: ContractWorkspacePrincipal, contractId: string) =>
+    `${principal.network}:${principal.type}:${principal.type === 'user' ? principal.userId : principal.address}:${contractId}`;
   return {
     async list(principal) {
-      const prefix = `${principal.network}:${principal.address}:`;
+      const prefix = key(principal, '');
       return [...values.entries()].filter(([entryKey]) => entryKey.startsWith(prefix)).map(([, entry]) => entry);
     },
     async get(principal, contractId) {

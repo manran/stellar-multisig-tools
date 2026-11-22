@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check, Pencil, Trash2, X } from 'lucide-react';
 import { useAddressBook } from './AddressBookContext';
 import type { AddressAliasSubjectType } from './AddressBookContext';
-import { useStellarWallet } from './StellarWalletContext';
+import { useUserIdentity } from './UserIdentityContext';
 
 interface Props {
   address: string;
@@ -14,9 +14,9 @@ interface Props {
 }
 
 export default function AddressAliasEditor(props: Props) {
-  const { privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
-  if (!privateUnlocked || !unlockedAddress || !unlockedNetwork) return null;
-  return <ScopedAddressAliasEditor key={`${unlockedNetwork}:${unlockedAddress}`} {...props} />;
+  const { identity, network } = useUserIdentity();
+  if (!identity) return null;
+  return <ScopedAddressAliasEditor key={`${network}:user:${identity.userId}`} {...props} />;
 }
 
 function ScopedAddressAliasEditor({
@@ -90,7 +90,7 @@ function ScopedAddressAliasEditor({
             ? (currentLabel || currentEmail ? `Edit contact ${currentLabel || address}` : 'Add this signer as a contact')
             : noteMode ? (currentLabel ? 'Edit personal note' : 'Add personal note') : (currentLabel ? `Rename ${currentLabel}` : `Name this ${subjectType}`)}
           title={allowNotificationEmail
-            ? (currentLabel || currentEmail ? 'Edit private signer contact details' : 'Add private signer contact details')
+            ? (currentLabel || currentEmail ? 'Edit contact details' : 'Add private signer contact details')
             : noteMode ? 'Personal note visible only to you' : (currentLabel ? 'Rename' : `Give this ${subjectType} a private name`)}
         >
           <Pencil className="h-3.5 w-3.5" />
@@ -142,7 +142,7 @@ function ScopedAddressAliasEditor({
       </div>
       {error && <div className="mt-1.5 text-xs text-red-700 dark:text-red-300">{error}</div>}
       <div className="mt-1 text-[11px] text-neutral-400">{allowNotificationEmail
-        ? 'Private contact metadata only. Email never proves identity or signing authority.'
+        ? 'Email for signing requests and reminders.'
         : noteMode ? 'Personal note · private to you. It never changes the shared Treasury name.' : 'Private to your MultiSig Tools address book.'}</div>
     </div>
   );

@@ -50,7 +50,8 @@ test('Contracts is a first-class workspace route and navigation destination', ()
   assert.match(contracts, /title="Contracts"/);
   assert.match(contracts, /ToolAccessEntry returnTo="\/contracts"/);
   assert.match(contracts, /Add or call contract/);
-  assert.match(contracts, /PrivateWorkspaceUnlock/);
+  assert.match(contracts, /useUserIdentity/);
+  assert.doesNotMatch(contracts, /PrivateWorkspaceUnlock/);
 });
 
 test('Contracts and Contract Workspace use one continuous workbench instead of card grids', () => {

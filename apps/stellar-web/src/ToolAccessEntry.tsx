@@ -40,7 +40,6 @@ export default function ToolAccessEntry({ returnTo }: { returnTo: ToolPath }) {
         <>
           <Fingerprint className="h-8 w-8 text-[var(--color-action)]" />
           <h2 className="mt-5 text-3xl font-bold">Sign in to continue</h2>
-          <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">This tool needs a Stellar wallet.</p>
           <a href={stellarHrefWithSearch('/identity', { next: returnTo })} className="mst-action-primary mt-6">Sign in / Sign up</a>
         </>
       )}
