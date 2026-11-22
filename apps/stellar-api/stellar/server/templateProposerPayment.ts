@@ -24,6 +24,7 @@ export async function prepareTemplateProposerPayment(
   options: {
     accountLoader?: typeof loadAccount;
     networkParametersLoader?: Parameters<typeof prepareClassicPayment>[1]['networkParametersLoader'];
+    alternateGrant?: (templateId: string) => Promise<boolean>;
   } = {},
 ) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
@@ -34,7 +35,8 @@ export async function prepareTemplateProposerPayment(
     throw new ReusableTemplateServiceError('Only Template, amount and memo can be supplied.', 400, 'invalid_template_payment');
   }
   const template = await authorizeTemplateProposer(
-    templates, proposerAddress, network, record.template, options.accountLoader,
+    templates, proposerAddress, network, record.template, options.accountLoader ?? loadAccount,
+    options.alternateGrant,
   );
   const definition = template.definition;
   if (definition.recipients.length !== 1) {

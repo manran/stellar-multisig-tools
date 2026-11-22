@@ -21,6 +21,7 @@ import SorobanEffectsDiffView from './SorobanEffectsDiffView';
 import SigningGuidance from './SigningGuidance';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
+import { useUserIdentity } from './UserIdentityContext';
 import TransactionAuthorizationResults from './TransactionAuthorizationResults';
 import TransactionInspectorSummary from './TransactionInspectorSummary';
 import XdrQrCode from './XdrQrCode';
@@ -272,14 +273,20 @@ export default function RequestApp() {
     unlock,
     lock,
   } = useStellarWallet();
+  const { identity } = useUserIdentity();
+  const passkeyReady = identity?.method === 'passkey';
+  const identityScope = passkeyReady ? `${identity.network}:${identity.userId}` : '';
 
-  const viewerRef = useRef({ address: walletAddress, network: walletNetwork, unlocked: privateUnlocked });
-  if (viewerRef.current.address !== walletAddress || viewerRef.current.network !== walletNetwork || viewerRef.current.unlocked !== privateUnlocked) {
-    viewerRef.current = { address: walletAddress, network: walletNetwork, unlocked: privateUnlocked };
+  const viewerRef = useRef({ address: walletAddress, network: walletNetwork,
+    unlocked: privateUnlocked, identityScope });
+  if (viewerRef.current.address !== walletAddress || viewerRef.current.network !== walletNetwork
+    || viewerRef.current.unlocked !== privateUnlocked || viewerRef.current.identityScope !== identityScope) {
+    viewerRef.current = { address: walletAddress, network: walletNetwork,
+      unlocked: privateUnlocked, identityScope };
   }
   const viewer = viewerRef.current;
   const [loadedViewer, setLoadedViewer] = useState<typeof viewer | null>(null);
-  const snapshot = loadedViewer === viewer && (capability || privateUnlocked) ? storedSnapshot : null;
+  const snapshot = loadedViewer === viewer && (capability || privateUnlocked || passkeyReady) ? storedSnapshot : null;
 
   function isCurrentView() {
     return viewerRef.current === viewer && accessScopeRef.current === accessScope;
@@ -306,15 +313,20 @@ export default function RequestApp() {
     : 'sign';
   const requestNetwork = snapshot?.network ?? closedCapability?.network ?? null;
   const privateReadyForRequest = Boolean(privateUnlocked && requestNetwork && walletNetwork === requestNetwork);
-  const isDelegatedProposer = Boolean(snapshot?.proposerAddress && walletAddress === snapshot.proposerAddress
-    && privateReadyForRequest && walletSigningState !== 'can_sign' && walletSigningState !== 'signed');
+  const passkeyReadyForRequest = Boolean(passkeyReady && identity.network === requestNetwork);
+  const userIsProposer = Boolean(snapshot?.proposerUserId && identity?.userId === snapshot.proposerUserId);
+  const isDelegatedProposer = Boolean((userIsProposer && (passkeyReadyForRequest || privateReadyForRequest))
+    || (snapshot?.proposerAddress && walletAddress === snapshot.proposerAddress && privateReadyForRequest))
+    && walletSigningState !== 'can_sign' && walletSigningState !== 'signed';
   const canCoordinateSigners = Boolean(privateReadyForRequest && walletAddress && assignmentApiAvailable);
   const nextStep = isDelegatedProposer && reviewComplete && snapshot?.status === 'awaiting_signatures'
     ? {
         heading: 'Next step',
         title: 'Treasury signatures needed',
-        detail: 'You requested this payment. Invite eligible Treasury signers or follow up with people you already asked.',
-        action: { label: 'Invite or remind signers', target: 'signatures' as const },
+        detail: passkeyReadyForRequest
+          ? 'Share the Request link with Treasury signers. They approve the transaction with their own wallets.'
+          : 'You requested this payment. Invite eligible Treasury signers or follow up with people you already asked.',
+        action: { label: passkeyReadyForRequest ? 'View signing progress' : 'Invite or remind signers', target: 'signatures' as const },
       }
     : isDelegatedProposer && reviewComplete && snapshot?.status === 'ready'
       ? {
@@ -366,11 +378,16 @@ export default function RequestApp() {
     const revision = ++snapshotRevision.current;
     const parsed = inspectTransactionXdr(next.mergedXdr, next.network);
     const sameRequest = snapshot?.id === next.id;
-    const reviewedAtCreation = navigation.justCreated && viewer.unlocked
-      && navigation.reviewedByAddress === viewer.address
-      && viewer.network === next.network
+    const reviewedByWallet = viewer.unlocked
+      && navigation.reviewedByAddress === viewer.address && viewer.network === next.network;
+    const reviewedByPasskey = Boolean(passkeyReady && identity?.userId
+      && initialPreview?.proposerUserId === identity.userId
+      && identity.network === next.network
+      && viewer.identityScope === `${identity.network}:${identity.userId}`);
+    const reviewedAtCreation = Boolean(navigation.justCreated
+      && (reviewedByWallet || reviewedByPasskey)
       && initialPreview?.transactionHash === next.transactionHash
-      && initialPreview.network === next.network;
+      && initialPreview.network === next.network);
     if (next.status !== 'awaiting_signatures') setReviewComplete(true);
     else if (!sameRequest) setReviewComplete(reviewedAtCreation);
     if (next.status !== 'awaiting_signatures' || !sameRequest) setContributionMessage('');
@@ -423,7 +440,7 @@ export default function RequestApp() {
     const locator = parseRequestLocator(locatorValue);
     if (!locator.id) return;
     if (snapshot?.id && snapshot.id !== locator.id) setContributionGrantExpiresAt(null);
-    if (!locator.capability && !privateUnlocked) {
+    if (!locator.capability && !privateUnlocked && !passkeyReady) {
       setRequestLocator(locator.id);
       setCapability('');
       setShareable(false);
@@ -555,7 +572,7 @@ export default function RequestApp() {
   }, [copied]);
 
   useEffect(() => {
-    if (!snapshot || (!capability && !privateUnlocked) || (
+    if (!snapshot || (!capability && !privateUnlocked && !passkeyReady) || (
       snapshot.status !== 'awaiting_signatures'
       && snapshot.status !== 'waiting_preconditions'
     )) return;
@@ -877,22 +894,26 @@ export default function RequestApp() {
             )
           )}
 
-          {!snapshot && (requestNeedsUnlock || requestAccessDenied) && !privateUnlocked && (
+          {!snapshot && (requestNeedsUnlock || requestAccessDenied) && !privateUnlocked && !passkeyReady && (
             <PrivateWorkspaceUnlock
               title="Open your proposal"
-              description="Use a current signer wallet to open this private proposal. You can review the transaction before deciding whether to sign."
+              description="Use an authorized wallet or your Passkey account to review this private proposal."
               buttonLabel="Open proposal"
               network={requestNetwork ?? undefined}
               context={<span className="break-all font-mono">Proposal {displayRequestId(parseRequestLocator(requestLocator).id)}</span>}
             />
           )}
 
-          {!snapshot && requestAccessDenied && privateUnlocked && (
+          {!snapshot && requestAccessDenied && (privateUnlocked || passkeyReady) && (
             <section className="mx-auto max-w-xl py-12 sm:py-20">
               <CircleAlert className="h-8 w-8 text-amber-600 dark:text-amber-300" />
-              <h1 className="mt-5 text-4xl font-bold tracking-tight">This wallet cannot open this proposal</h1>
-              <p className="mt-3 text-lg leading-8 text-neutral-600 dark:text-neutral-300">The current wallet session could not open this proposal. Confirm a current signer wallet again, or choose another signer.</p>
-              <ActionButton disabled={walletBusy} onClick={() => void chooseSignerWallet()} className="mt-7">{walletBusy ? 'Opening wallets…' : 'Choose another signer wallet'}</ActionButton>
+              <h1 className="mt-5 text-4xl font-bold tracking-tight">{passkeyReady ? 'This account cannot open this proposal' : 'This wallet cannot open this proposal'}</h1>
+              <p className="mt-3 text-lg leading-8 text-neutral-600 dark:text-neutral-300">{passkeyReady
+                ? 'This proposal belongs to another MST user or authorized signer.'
+                : 'The current wallet session could not open this proposal. Confirm a current signer wallet again, or choose another signer.'}</p>
+              {passkeyReady
+                ? <a href={stellarHref('/identity')} className="mt-7 inline-flex min-h-11 items-center font-semibold text-[var(--color-action)]">Change login method</a>
+                : <ActionButton disabled={walletBusy} onClick={() => void chooseSignerWallet()} className="mt-7">{walletBusy ? 'Opening wallets…' : 'Choose another signer wallet'}</ActionButton>}
             </section>
           )}
 
@@ -982,7 +1003,7 @@ export default function RequestApp() {
                 <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-rule)] bg-[var(--color-paper-2)] px-4 py-3 text-sm">
                   <div>
                     <div className="font-semibold">Share with signers</div>
-                    <p className="mt-1 text-xs text-[var(--color-ink-2)]">Authorized Treasury signers can open this Request with their own wallet.</p>
+                    <p className="mt-1 text-xs text-[var(--color-ink-2)]">Authorized Treasury signers can open this Request with their own wallets. Your MST login cannot approve or submit it.</p>
                   </div>
                   <button type="button" onClick={() => void copySignerLink()}
                     className="min-h-11 shrink-0 font-semibold text-[var(--color-action)]">{copied === 'link' ? 'Signer link copied' : 'Copy link for authorized signers'}</button>

@@ -30,6 +30,34 @@ Each scenario prints PASS or FAIL. The output directory receives screenshots
 and `report.json`, including the checked commit, viewport, failures, and
 unexpected API calls. A failed check or unexpected API call returns exit code 1.
 
+## Passkey and walletless payment QA
+
+`productWorkflow.mjs` also checks the invitation → Passkey user → fixed
+Template payment → own Inbox → Activity flow without any wallet calls at 375px
+and 1280px. These use an intercepted API/identity fixture; they do **not**
+validate the real WebAuthn, JWT cookie, or live database.
+
+`passkeyVirtualAuthenticator.mjs` uses Chromium's **virtual CTAP2 authenticator**
+and real SimpleWebAuthn verification. It checks a user-verified discoverable
+credential, Passkey sign-in, and rejection of a wrong/replayed challenge:
+
+```sh
+MST_QA_PLAYWRIGHT_MODULE=/tmp/mst-qa-tools/node_modules/playwright/index.mjs \
+  node scripts/qa/passkeyVirtualAuthenticator.mjs
+```
+
+Backend `postgresIdentityStore.test.ts` requires **only a disposable Postgres
+database** with `MST_POSTGRES_TEST_URL` and explicit
+`MST_POSTGRES_TEST_ALLOW_RESET=1`; the test drops/recreates `mst_stellar`.
+Never run it on the deployed Testnet or Mainnet database. It verifies all
+migrations, wallet identity uniqueness, the one-use invitation/grant flow,
+credential counter protection, wallet linking, revocation and Request history.
+
+Before any public beta, separately verify an **actual HTTPS WebAuthn flow**
+against the updated Testnet API and real Postgres, browser wallet handoff,
+email invitation delivery if configured, and abuse/rate-limit protections.
+A passing fixture is not that acceptance.
+
 ## Hosted Testnet transaction smoke
 
 The browser fixture above cannot prove the live API, durable PostgreSQL,

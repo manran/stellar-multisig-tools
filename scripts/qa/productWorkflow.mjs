@@ -20,6 +20,11 @@ const capability = 'QA'.repeat(13);
 const keys = Object.fromEntries(['alice', 'bob', 'carol', 'source', 'recipient'].map((name, index) =>
   [name, Keypair.fromRawEd25519Seed(Buffer.alloc(32, index + 1))]));
 const addresses = Object.fromEntries(Object.entries(keys).map(([name, key]) => [name, key.publicKey()]));
+const userForAddress = (address) => {
+  const n = Object.values(addresses).indexOf(address);
+  return `00000000-0000-4000-8000-${String(n < 0 ? 99 : n + 1).padStart(12, '0')}`;
+};
+const passkeyUserId = '00000000-0000-4000-8000-000000000042';
 const now = new Date().toISOString();
 const expiry = new Date(Date.now() + 3_600_000).toISOString();
 const unsigned = new TransactionBuilder(new Account(addresses.source, '100'), {
@@ -170,6 +175,8 @@ async function fixturePage(width, options = {}) {
   const state = {
     templateStatus: 200, templates: [], templateOwner: addresses.alice, templateDelay: null,
     proposerGrants: [], proposerGrantCount: 0, proposerRequestCount: 0,
+    passkeyLoggedIn: false, passkeyUserId, invitationCreated: 0, invitationsRevoked: 0,
+    inviteToken: 'A'.repeat(43), inviteAvailable: true,
     inboxStatus: 200, inbox: inboxFixture(), request: requestFixture(), requestError: null,
     requestGetCount: 0, inboxGetCount: 0, contributionCount: 0, submitCount: 0, retentionCount: 0,
     requestAccess: { shareable: false, activityBound: true }, requestGetResponse: null, horizonAccount: null,
@@ -204,6 +211,57 @@ async function fixturePage(width, options = {}) {
       return route.abort();
     }
     if (!url.pathname.startsWith('/api/')) return route.continue();
+    if (url.pathname === '/api/identity') {
+      const selected = request.headers()['x-multisig-session-address'];
+      if (request.method() === 'DELETE') {
+        state.passkeyLoggedIn = false;
+        return json({ authenticated: false });
+      }
+      if (request.method() === 'GET') {
+        if (url.searchParams.has('invite')) {
+          return state.inviteAvailable
+            ? json({ invitation: { network: 'testnet', templateId: 'tpl_qa_monthly', templateName: 'Monthly suppliers' } })
+            : json({ error: 'Invitation expired' }, 404);
+        }
+        if (url.searchParams.get('view') === 'activity') {
+          return json({ userId: state.passkeyUserId, network: 'testnet', requests: state.identityHistory ?? [] });
+        }
+        if (selected) return json({ authenticated: true,
+          identity: { network: 'testnet', method: 'stellar_wallet', userId: userForAddress(selected), address: selected },
+          credentials: [{ kind: 'stellar_wallet', address: selected }],
+        });
+        if (state.passkeyLoggedIn) return json({ authenticated: true,
+          identity: { network: 'testnet', method: 'passkey', userId: state.passkeyUserId },
+          credentials: [{ kind: 'passkey', id: 'passkey-qa' }],
+        });
+        return json({ authenticated: false });
+      }
+      const body = request.postDataJSON();
+      assert.equal(body.network, 'testnet');
+      if (body.action === 'create_invitation') {
+        assert.equal(selected, addresses.alice);
+        state.invitationCreated += 1;
+        return json({ token: state.inviteToken, expiresInSeconds: 86400 }, 201);
+      }
+      if (body.action === 'invitation_accept') {
+        assert.equal(body.token, state.inviteToken);
+        state.inviteAvailable = false;
+        return json({ accepted: true, userId: state.passkeyUserId });
+      }
+      if (body.action === 'revoke_user_grant') return json({ revoked: true });
+      if (body.action === 'revoke_invitation') {
+        state.inviteAvailable = false;
+        state.invitationsRevoked += 1;
+        return json({ revoked: true });
+      }
+      if (body.action === 'link_wallet') {
+        assert.equal(selected, addresses.alice, 'Wallet must be verified and selected before binding');
+        assert.equal(state.passkeyLoggedIn, true);
+        state.walletLinkCount = (state.walletLinkCount ?? 0) + 1;
+        return json({ linked: true, walletAddress: selected, userId: state.passkeyUserId });
+      }
+      return json({ error: 'Unsupported identity fixture' }, 400);
+    }
     if (url.pathname === '/api/templates') {
       if (request.method() === 'PATCH') {
         const body = request.postDataJSON();
@@ -218,14 +276,21 @@ async function fixturePage(width, options = {}) {
           : state.proposerGrants.filter((item) => item !== body.proposerAddress);
         return json({ proposerAddresses: state.proposerGrants });
       }
-      const response = { address: state.templateOwner, templates: state.templates };
+      const selected = request.headers()['x-multisig-session-address'];
+      const response = { address: state.passkeyLoggedIn && !selected ? null : state.templateOwner,
+        userId: state.passkeyLoggedIn && !selected ? state.passkeyUserId : userForAddress(selected),
+        templates: state.templates };
       const status = state.templateStatus;
       if (state.templateDelay) await state.templateDelay;
       return json(status === 200 ? response : { error: 'Fixture template load failure.' }, status);
     }
     if (url.pathname === '/api/inbox') {
       state.inboxGetCount++;
-      return json(state.inboxStatus === 200 ? state.inbox : { error: 'Fixture inbox load failure.' }, state.inboxStatus);
+      const selected = request.headers()['x-multisig-session-address'];
+      const inbox = state.passkeyLoggedIn && !selected
+        ? { ...state.inbox, address: null, userId: state.passkeyUserId }
+        : { ...state.inbox, userId: userForAddress(selected) };
+      return json(state.inboxStatus === 200 ? inbox : { error: 'Fixture inbox load failure.' }, state.inboxStatus);
     }
     if (url.pathname === '/api/address-book') {
       if (request.method() === 'PUT') {
@@ -270,7 +335,7 @@ async function fixturePage(width, options = {}) {
     if (url.pathname === '/api/request') {
       if (request.method() === 'POST') {
         const body = request.postDataJSON();
-        assert.equal(request.headers()['x-multisig-session-address'], addresses.carol);
+        assert.equal(request.headers()['x-multisig-session-address'], state.passkeyLoggedIn ? undefined : addresses.carol);
         assert.equal(request.headers()['x-multisig-request-id'], undefined);
         assert.equal(body.network, 'testnet');
         assert.equal(body.xdr, undefined, 'Non-signer never submits arbitrary XDR');
@@ -278,7 +343,7 @@ async function fixturePage(width, options = {}) {
         assert.equal(body.templatePayment?.memo, 'INV-401');
         assert.deepEqual(body.templatePayment?.template, { id: 'tpl_qa_monthly', version: 1 });
         assert.deepEqual(Object.keys(body.templatePayment).sort(), ['amount', 'memo', 'template']);
-        if (!state.proposerGrants.includes(addresses.carol)) {
+        if (!state.proposerGrants.includes(addresses.carol) && !state.passkeyLoggedIn) {
           return json({ code: 'template_proposer_not_authorized', error: 'This wallet is not authorized for this Template.' }, 403);
         }
         if (state.proposerPostDelay) await state.proposerPostDelay;
@@ -290,7 +355,8 @@ async function fixturePage(width, options = {}) {
         })).addMemo(Memo.text(body.templatePayment.memo))
           .setTimebounds(0, Math.floor(Date.now() / 1000) + 3600).build();
         state.request = {
-          ...requestFixture('awaiting_signatures'), proposerAddress: addresses.carol,
+          ...requestFixture('awaiting_signatures'),
+          ...(state.passkeyLoggedIn ? { proposerUserId: state.passkeyUserId } : { proposerAddress: addresses.carol }),
           baseXdr: payment.toXDR(), mergedXdr: payment.toXDR(),
           transactionHash: Buffer.from(payment.hash()).toString('hex'),
           template: { id: 'tpl_qa_monthly', version: 1, name: 'Monthly suppliers', kind: 'payment' },
@@ -658,7 +724,7 @@ try {
       }, async ({ page, state }) => {
         await page.goto(`${origin}/new`);
         await visible(page, 'Monthly suppliers', 'heading');
-        const grant = page.getByText('Allow another wallet to request payments');
+        const grant = page.getByText('Payment request access');
         await grant.click();
         const address = page.getByRole('textbox', { name: 'Proposer G address' });
         await address.fill(addresses.carol);
@@ -776,6 +842,95 @@ try {
         await page.getByRole('button', { name: 'Create signing request' }).click();
         await visible(page, 'This wallet is not authorized for this Template.');
         assert.equal(state.proposerRequestCount, 0);
+      });
+    }
+
+    if (width === 375 || width === 1280) {
+      await run('owner-creates-single-use-passkey-invitation', width, {
+        state: {
+          templates: [{ ...templateFixture(), ownerAddress: addresses.alice,
+            proposerAddresses: [], pendingInvitations: [{ id: 'qa-invite-1', expiresAt: expiry }],
+            proposerUserIds: ['00000000-0000-4000-8000-000000000042'] }],
+        },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/new`);
+        await visible(page, 'Monthly suppliers', 'heading');
+        await page.getByText('Payment request access').click();
+        await visible(page, 'Invite someone without a Stellar wallet. They can sign in with Passkey and prepare a payment. Treasury signers retain approval rights.');
+        await page.getByRole('button', { name: 'Create invitation link' }).click();
+        const link = page.getByRole('textbox', { name: 'Invitation link' });
+        await link.waitFor({ state: 'visible' });
+        const url = new URL(await link.inputValue());
+        assert.equal(url.pathname, '/invite');
+        assert.equal(url.searchParams.get('token'), state.inviteToken);
+        assert.equal(state.invitationCreated, 1);
+        await snapshot(page, 'passkey-invitation-issued', width);
+        await page.getByRole('button', { name: 'Revoke invitation' }).click();
+        assert.equal(state.invitationsRevoked, 1);
+        await page.getByRole('button', { name: 'Revoke access' }).click();
+        await page.getByRole('button', { name: 'Revoke access' }).waitFor({ state: 'hidden' });
+      });
+
+      await run('passkey-invited-user-prepares-payment-without-wallet', width, {
+        wallet: walletState('', false),
+        state: { passkeyLoggedIn: true,
+          templates: [{ ...templateFixture(), ownerAddress: addresses.alice }],
+        },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/invite?token=${state.inviteToken}`);
+        await visible(page, 'Join a payment workflow', 'heading');
+        await visible(page, 'You are invited to prepare payments', 'heading');
+        await page.getByRole('button', { name: 'Accept invitation' }).click();
+        await visible(page, 'Monthly suppliers', 'heading');
+        assert.equal(state.inviteAvailable, false);
+        assert.equal(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__.length), 0);
+        await page.getByRole('link', { name: 'Request payment', exact: true }).click();
+        await visible(page, 'Request a payment', 'heading');
+        await page.getByRole('textbox', { name: 'Payment amount' }).fill('12.5');
+        await page.getByRole('textbox', { name: 'On-chain memo (optional)' }).fill('INV-401');
+        await page.getByRole('button', { name: 'Review request' }).click();
+        await snapshot(page, 'passkey-payment-review', width);
+        await page.getByRole('button', { name: 'Create signing request' }).click();
+        await visible(page, 'Share with signers');
+        await visible(page, 'Treasury signatures needed', 'heading');
+        assert.equal(state.proposerRequestCount, 1);
+        assert.equal(state.request.proposerUserId, state.passkeyUserId);
+        assert.equal(state.request.proposerAddress, undefined);
+        assert.equal(state.submitCount, 0);
+        assert.equal(state.contributionCount, 0);
+        assert.equal(await page.getByRole('button', { name: 'Sign with wallet' }).count(), 0);
+        assert.equal(await page.getByRole('button', { name: 'Submit transaction' }).count(), 0);
+        await snapshot(page, 'passkey-payment-proposal', width);
+        await page.goto(`${origin}/inbox`);
+        await visible(page, 'Waiting for signatures');
+        await page.getByRole('button', { name: 'View signing progress' }).first().waitFor({ state: 'visible' });
+        await snapshot(page, 'passkey-payment-inbox', width);
+
+        state.identityHistory = [{ ...state.request,
+          status: 'submitted', submission: { ledger: 5850011,
+            submittedAt: now, transactionHash: state.request.transactionHash } }];
+        await page.goto(`${origin}/activity`);
+        await visible(page, 'My payment history', 'heading');
+        await visible(page, 'Confirmed in ledger 5850011');
+        await snapshot(page, 'passkey-payment-history', width);
+        assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), [],
+          'Entire Passkey workflow must not request any Stellar wallet operations');
+      });
+    }
+
+    if (width === 375) {
+      await run('passkey-wallet-link-requires-explicit-both-proofs', width, {
+        wallet: walletState(addresses.alice),
+        state: { passkeyLoggedIn: true },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/identity`);
+        await visible(page, 'Your MST account', 'heading');
+        await visible(page, 'Signed in', 'heading');
+        assert.equal(state.walletLinkCount ?? 0, 0, 'Wallet must not auto-link to a Passkey user');
+        await page.getByRole('button', { name: 'Link verified wallet to this user' }).click();
+        await visible(page, 'Wallet linked to this MST user. Both login methods now open the same account.');
+        assert.equal(state.walletLinkCount, 1);
+        await snapshot(page, 'passkey-wallet-link', width);
       });
     }
 

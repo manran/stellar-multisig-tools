@@ -13,6 +13,7 @@ export type StellarWorkspaceRouteKind =
   | 'treasury-settings'
   | 'bootstrap'
   | 'address-book'
+  | 'identity'
   | 'agent-access'
   | 'activity'
   | 'request'
@@ -49,6 +50,8 @@ export const CANONICAL_STELLAR_ROUTES = [
   { path: '/account/signing/edit', kind: 'designer', mode: 'setup' },
   { path: '/activity', kind: 'activity', mode: 'sign' },
   { path: '/address-book', kind: 'address-book', mode: 'sign' },
+  { path: '/identity', kind: 'identity', mode: null },
+  { path: '/invite', kind: 'identity', mode: null },
   { path: '/agent-access', kind: 'agent-access', mode: 'sign' },
   { path: '/treasury', kind: 'treasury', mode: 'setup' },
   { path: '/treasury/activity', kind: 'activity', mode: 'setup' },

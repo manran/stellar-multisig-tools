@@ -12,6 +12,7 @@
     "test:postgres": "tsx --test --test-concurrency=1 stellar/db/*.test.ts"
   },
   "dependencies": {
+    "@simplewebauthn/server": "^14.1.0",
     "@stellar/stellar-sdk": "^17.0.1",
     "@vercel/blob": "^2.8.0",
     "@vercel/firewall": "1.2.5",

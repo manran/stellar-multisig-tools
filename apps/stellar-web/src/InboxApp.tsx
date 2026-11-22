@@ -6,6 +6,8 @@ import { ActionButton, NetworkBadge, PageHeader, RequestStatusBadge, StatusBadge
 import ReviewTransactionSummary from './ReviewTransactionSummary';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
+import { useUserIdentity } from './UserIdentityContext';
+import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
 import {
   inboxViewerActionNeedsAction,
   inboxViewerActionPresentation,
@@ -25,7 +27,8 @@ import { navigateWorkspace, stellarHref } from './workspaceNavigation';
 import { isWalletUserRejected } from './stellar/walletKit';
 
 interface InboxResponse {
-  address: string;
+  address: string | null;
+  userId?: string;
   network: StellarNetwork;
   pending_count: number;
   action_count: number;
@@ -63,10 +66,10 @@ function shortAddress(address: string) {
 }
 
 function isCreatorWaitingForSigners(request: InboxRequestSnapshot, viewerAddress: string): boolean {
-  return Boolean(viewerAddress)
-    && request.status === 'awaiting_signatures'
-    && ((request.creatorAddress === viewerAddress && request.viewerAction === 'waiting_for_others')
-      || (request.proposerAddress === viewerAddress && request.viewerAction === 'proposer_waiting'));
+  return Boolean(viewerAddress) && request.status === 'awaiting_signatures' && (
+    (request.creatorAddress === viewerAddress && request.viewerAction === 'waiting_for_others')
+      || (request.proposerAddress === viewerAddress && request.viewerAction === 'proposer_waiting')
+  );
 }
 
 function viewFromUrl(): InboxView {
@@ -144,16 +147,19 @@ function DetailPane({
   request,
   description,
   viewerAddress,
+  viewerUserId,
   signerLabel,
   needsEmailFollowUp,
 }: {
   request: InboxRequestSnapshot;
   description: InboxRequestDescription;
   viewerAddress: string;
+  viewerUserId?: string;
   signerLabel: (address: string) => string;
   needsEmailFollowUp: boolean;
 }) {
   const viewerAction = inboxViewerActionPresentation(request.viewerAction);
+  const passkeyProposer = !viewerAddress && Boolean(viewerUserId && request.proposerUserId === viewerUserId);
   const followUp = isCreatorWaitingForSigners(request, viewerAddress) || needsEmailFollowUp;
   const urgentEmailFailure = needsEmailFollowUp && !inboxViewerActionNeedsAction(request.viewerAction);
   return (
@@ -167,17 +173,22 @@ function DetailPane({
       <div className="mst-inbox-next-action">
         <div className="mst-inbox-next-action__label">Your next step</div>
         <div className="mt-2"><StatusBadge tone={urgentEmailFailure ? 'danger' : viewerAction.tone}>{urgentEmailFailure ? 'Follow-up needed' : viewerAction.label}</StatusBadge></div>
-        <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">{needsEmailFollowUp ? 'An email to a signer needs attention. Check the contact and follow up.' : followUp ? (request.proposerAddress === viewerAddress
-          ? 'Your payment request is waiting for Treasury signatures. Invite or follow up with eligible signers.'
-          : 'Your signature is recorded. Check who is waiting and follow up when needed.') : viewerAction.detail}</p>
-        <ActionButton onClick={() => openRequestDetails(request, followUp)} className="mt-4 w-full">
-          {followUp ? 'Follow up with signers' : viewerAction.cta} <ArrowRight className="h-4 w-4" />
+        <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">{passkeyProposer
+          ? 'Your payment request is waiting for Treasury signatures. Open it to share the Request link and follow progress.'
+          : needsEmailFollowUp ? 'An email to a signer needs attention. Check the contact and follow up.'
+            : followUp ? (request.proposerAddress === viewerAddress
+              ? 'Your payment request is waiting for Treasury signatures. Share the Request link with eligible signers.'
+              : 'Your signature is recorded. Check who is waiting and follow up when needed.') : viewerAction.detail}</p>
+        <ActionButton onClick={() => openRequestDetails(request, followUp || passkeyProposer)} className="mt-4 w-full">
+          {passkeyProposer ? 'View signing progress' : followUp ? 'Follow up with signers' : viewerAction.cta} <ArrowRight className="h-4 w-4" />
         </ActionButton>
       </div>
       {followUp && (
         <section className="mt-4 border-t border-[var(--color-rule)] pt-4" aria-label="Signer follow-up">
           <h3 className="text-sm font-semibold text-[var(--color-ink)]">Signer follow-up</h3>
-          <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">People you asked. Open the proposal to see all eligible signers.</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">{passkeyProposer
+            ? 'Open this payment to share its Request ID with eligible Treasury signers.'
+            : 'People you asked. Open the proposal to see all eligible signers.'}</p>
           <OutgoingProgress request={request} viewerAddress={viewerAddress} signerLabel={signerLabel} />
         </section>
       )}
@@ -197,6 +208,7 @@ function DetailPane({
 
 export default function InboxApp() {
   const { labelFor } = useAddressBook();
+  const { identity, loading: identityLoading } = useUserIdentity();
   const {
     privateUnlocked,
     unlockedAddress,
@@ -211,16 +223,22 @@ export default function InboxApp() {
   const activeLoad = useRef<AbortController | null>(null);
   const [selectedId, setSelectedId] = useState('');
   const [view, setView] = useState<InboxView>(() => viewFromUrl());
-  const session = privateUnlocked && unlockedAddress && unlockedNetwork ? `${unlockedNetwork}:${unlockedAddress}` : '';
+  const viewerAddress = identity?.method === 'stellar_wallet' && privateUnlocked && unlockedNetwork === identity.network
+    ? unlockedAddress : '';
+  const viewerUserId = identity?.userId ?? '';
+  const session = identity ? `${identity.network}:${identity.userId}:${identity.method}:${viewerAddress}` : '';
   const currentSession = useRef(session);
   currentSession.current = session;
-  const data = session && loadedData?.address === unlockedAddress && loadedData.network === unlockedNetwork ? loadedData : null;
+  const data = session && loadedData?.userId === viewerUserId
+    && loadedData.network === identity?.network
+    && (identity?.method === 'passkey' ? loadedData.address === null : loadedData.address === viewerAddress)
+    ? loadedData : null;
   const loading = Boolean(session && loadingFor === session);
   const error = loadError.session === session ? loadError.message : '';
   const requiresVerification = loadError.session === session && loadError.requiresVerification;
 
   const loadInbox = useCallback(async () => {
-    if (!privateUnlocked || !unlockedAddress || !unlockedNetwork) return;
+    if (!identity || !session) return;
     activeLoad.current?.abort();
     const controller = new AbortController();
     activeLoad.current = controller;
@@ -228,12 +246,14 @@ export default function InboxApp() {
     setLoadError({ session, message: '', requiresVerification: false });
     let needsVerification = false;
     try {
-      const response = await fetch('/api/inbox', { cache: 'no-store', signal: controller.signal });
+      const response = await fetch('/api/inbox', { cache: 'no-store', signal: controller.signal,
+        headers: viewerAddress ? privateSessionAddressHeaders(viewerAddress) : {} });
       needsVerification = response.status === 401 || response.status === 403;
       if (!controller.signal.aborted && needsVerification) setData(null);
       const body = await response.json() as InboxResponse & { error?: string };
       if (!response.ok) throw new Error(body.error || 'Unable to load your inbox.');
-      if (body.address !== unlockedAddress || body.network !== unlockedNetwork) {
+      if (body.userId !== viewerUserId || body.network !== identity.network
+        || (identity.method === 'passkey' ? body.address !== null : body.address !== viewerAddress)) {
         needsVerification = true;
         if (!controller.signal.aborted) setData(null);
         throw new Error('The wallet session changed. Confirm your wallet and try again.');
@@ -247,7 +267,7 @@ export default function InboxApp() {
         activeLoad.current = null;
       }
     }
-  }, [privateUnlocked, unlockedAddress, unlockedNetwork, session]);
+  }, [identity, viewerAddress, viewerUserId, session]);
 
   async function confirmInboxWallet() {
     if (authBusy || walletBusy || loading || !unlockedNetwork) return;
@@ -274,9 +294,9 @@ export default function InboxApp() {
   useEffect(() => {
     setData(null);
     setSelectedId('');
-    if (privateUnlocked && unlockedAddress && unlockedNetwork) void loadInbox();
+    if (identity) void loadInbox();
     return () => activeLoad.current?.abort();
-  }, [privateUnlocked, unlockedAddress, unlockedNetwork, loadInbox]);
+  }, [identity, loadInbox]);
 
   const descriptions = useMemo(() => new Map(
     (data?.requests ?? []).map((request) => [request.id, describeInboxRequest(request)]),
@@ -284,9 +304,9 @@ export default function InboxApp() {
 
   const failedFollowups = useMemo(() => new Set(
     (data?.requests ?? [])
-      .filter((request) => inboxHasFailedSignerEmail(request, unlockedAddress))
+      .filter((request) => inboxHasFailedSignerEmail(request, viewerAddress))
       .map((request) => request.id),
-  ), [data, unlockedAddress]);
+  ), [data, viewerAddress]);
   const needsAction = (request: InboxRequestSnapshot) =>
     inboxViewerActionNeedsAction(request.viewerAction) || failedFollowups.has(request.id);
   const addedAttention = (data?.requests ?? []).filter((request) =>
@@ -328,21 +348,21 @@ export default function InboxApp() {
     <StellarWorkspaceShell active={view === 'needs' ? 'inbox' : view}>
       <main className="mst-workbench-page">
         <div className="mx-auto max-w-6xl">
-        {!privateUnlocked && (
+        {!identity && !identityLoading && (
           <PrivateWorkspaceUnlock
             title="Confirm your wallet"
-            description="Choose or confirm a Stellar wallet to open its private Inbox. This does not sign or submit a transaction."
+            description="Confirm your Stellar wallet, or sign in with a Passkey to open your private Inbox."
             buttonLabel="Open Inbox"
           />
         )}
 
-        {privateUnlocked && unlockedAddress && unlockedNetwork && (
+        {identity && (
           <>
             <div className="mst-inbox-page-header">
             <PageHeader
               title="Inbox"
               description="Act on what needs you. Follow the rest without opening each proposal."
-              meta={data ? <><NetworkBadge network={unlockedNetwork} /><span>{data.pending_count} open {data.pending_count === 1 ? 'work item' : 'work items'}</span></> : <NetworkBadge network={unlockedNetwork} />}
+              meta={data ? <><NetworkBadge network={identity.network} /><span>{data.pending_count} open {data.pending_count === 1 ? 'work item' : 'work items'}</span></> : <NetworkBadge network={identity.network} />}
               actions={<ActionButton variant="secondary" disabled={loading || authBusy || walletBusy} onClick={() => void loadInbox()} aria-label="Refresh inbox" aria-busy={loading}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">{loading ? 'Refreshing…' : 'Refresh'}</span></ActionButton>}
             />
             </div>
@@ -414,11 +434,12 @@ export default function InboxApp() {
                     const selected = request.id === selectedId;
                     const sourceAlias = labelFor(description.source, 'account');
                     const failedEmail = failedFollowups.has(request.id);
-                    const followUp = isCreatorWaitingForSigners(request, unlockedAddress) || failedEmail;
+                    const passkeyProposer = !viewerAddress && Boolean(viewerUserId && request.proposerUserId === viewerUserId);
+                    const followUp = isCreatorWaitingForSigners(request, viewerAddress) || failedEmail;
                     const viewerAction = inboxViewerActionPresentation(request.viewerAction);
                     const urgentEmailFailure = failedEmail && !inboxViewerActionNeedsAction(request.viewerAction);
                     return (
-                      <button key={request.id} type="button" data-selected={selected ? 'true' : 'false'} aria-current={selected ? 'true' : undefined} onClick={() => { if (window.matchMedia('(min-width: 1280px)').matches) setSelectedId(request.id); else openRequestDetails(request, followUp); }} className="mst-inbox-item">
+                      <button key={request.id} type="button" data-selected={selected ? 'true' : 'false'} aria-current={selected ? 'true' : undefined} onClick={() => { if (window.matchMedia('(min-width: 1280px)').matches) setSelectedId(request.id); else openRequestDetails(request, followUp || passkeyProposer); }} className="mst-inbox-item">
                         <div className="mst-inbox-item__head">
                           <StatusBadge tone={urgentEmailFailure ? 'danger' : viewerAction.tone}>{urgentEmailFailure ? 'Follow-up needed' : viewerAction.label}</StatusBadge>
                           <span className="mst-inbox-item__deadline">{inboxDeadlineLabel(description.inspection)}</span>
@@ -434,7 +455,7 @@ export default function InboxApp() {
                         {!followUp && <InboxAttentionCue request={request} viewerAddress={unlockedAddress} signerLabel={signerLabel} />}
                         <div className="mst-inbox-item__foot">
                           <span className="truncate" title={description.source}>{sourceAlias || shortAddress(description.source)}</span>
-                          <span className="mst-inbox-item__open">{followUp ? 'Follow up' : inboxViewerActionPresentation(request.viewerAction).cta}<ArrowRight className="h-4 w-4 shrink-0" /></span>
+                          <span className="mst-inbox-item__open">{passkeyProposer ? 'View signing progress' : followUp ? 'Follow up' : inboxViewerActionPresentation(request.viewerAction).cta}<ArrowRight className="h-4 w-4 shrink-0" /></span>
                         </div>
                       </button>
                     );
@@ -446,8 +467,9 @@ export default function InboxApp() {
                     <DetailPane
                       request={selectedRequest}
                       description={selectedDescription}
-                      viewerAddress={unlockedAddress}
+                      viewerAddress={viewerAddress}
                       signerLabel={signerLabel}
+                      viewerUserId={viewerUserId}
                       needsEmailFollowUp={failedFollowups.has(selectedRequest.id)}
                     />
                   </div>

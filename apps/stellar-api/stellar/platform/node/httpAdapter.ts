@@ -6,6 +6,7 @@ import * as activity from '../../routes/activity.js';
 import * as addressBook from '../../routes/address-book.js';
 import * as agentAccess from '../../routes/agent-access.js';
 import * as auth from '../../routes/auth.js';
+import * as identity from '../../routes/identity.js';
 import * as contractCall from '../../routes/contract-call.js';
 import * as contractInterface from '../../routes/contract-interface.js';
 import * as contractPrepare from '../../routes/contract-prepare.js';
@@ -38,6 +39,7 @@ const routes: Record<string, RouteModule> = {
   'address-book': addressBook,
   'agent-access': agentAccess,
   auth,
+  identity,
   'contract-call': contractCall,
   'contract-interface': contractInterface,
   'contract-prepare': contractPrepare,

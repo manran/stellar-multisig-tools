@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { MouseEvent } from 'react';
-import { ArrowRight, History, Inbox, Plus, Vault } from 'lucide-react';
+import { ArrowRight, Fingerprint, History, Inbox, Plus, Vault } from 'lucide-react';
 import { NetworkBadge, PageHeader, StatusBadge } from './MultiSigUi';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
+import { useUserIdentity } from './UserIdentityContext';
+import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
 import { isWalletUserRejected } from './stellar/walletKit';
 import { inboxActionCountPresentations, inboxViewerActionNeedsAction, inboxViewerActionPresentation } from '../../../packages/stellar-core/src/inboxPresentation';
 import type { InboxActionCounts, InboxRequestSnapshot } from '../../../packages/stellar-core/src/inboxPresentation';
@@ -15,7 +17,8 @@ import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
 import { navigateWorkspace, stellarHref, stellarHrefWithSearch } from './workspaceNavigation';
 
 interface InboxCountResponse {
-  address?: string;
+  address?: string | null;
+  userId?: string;
   network?: StellarNetwork;
   pending_count?: number;
   action_count?: number;
@@ -60,18 +63,22 @@ export default function StellarDashboardApp() {
     authBusy,
     unlock,
   } = useStellarWallet();
-  const owner = privateUnlocked && unlockedAddress && unlockedNetwork ? `${unlockedNetwork}:${unlockedAddress}` : '';
+  const { identity } = useUserIdentity();
+  const viewerAddress = identity?.method === 'stellar_wallet' && privateUnlocked
+    && unlockedNetwork === identity.network ? unlockedAddress : '';
+  const owner = identity ? `${identity.network}:${identity.userId}:${identity.method}:${viewerAddress}` : '';
   const [loadedInbox, setLoadedInbox] = useState<{ owner: string; summary: DashboardInboxSummary } | null>(null);
   // Never render a previous wallet's private Inbox summary, even briefly.
   const inboxSummary = owner && loadedInbox?.owner === owner ? loadedInbox.summary : null;
 
   useEffect(() => {
-    if (!owner || !unlockedAddress || !unlockedNetwork) {
+    if (!owner || !identity) {
       setLoadedInbox(null);
       return;
     }
     const controller = new AbortController();
-    void fetch('/api/inbox', { cache: 'no-store', signal: controller.signal })
+    void fetch('/api/inbox', { cache: 'no-store', signal: controller.signal,
+      headers: viewerAddress ? privateSessionAddressHeaders(viewerAddress) : {} })
       .then(async (response) => {
         if (!response.ok) return null;
         return await response.json() as InboxCountResponse;
@@ -79,7 +86,8 @@ export default function StellarDashboardApp() {
       .then((body) => {
         if (controller.signal.aborted) return;
         if (
-          body?.address === unlockedAddress && body.network === unlockedNetwork
+          body?.userId === identity.userId && body.network === identity.network
+          && (identity.method === 'passkey' ? body.address === null : body.address === viewerAddress)
           && typeof body.pending_count === 'number'
           && body.action_counts
           && typeof body.action_counts.actionRequired === 'number'
@@ -97,19 +105,19 @@ export default function StellarDashboardApp() {
         if (!controller.signal.aborted) setLoadedInbox(null);
       });
     return () => controller.abort();
-  }, [owner, unlockedAddress, unlockedNetwork]);
+  }, [owner, viewerAddress, identity]);
 
   const failedEmails = useMemo(() => new Set(
     (inboxSummary?.requests ?? [])
-      .filter((request) => inboxHasFailedSignerEmail(request, unlockedAddress))
+      .filter((request) => inboxHasFailedSignerEmail(request, viewerAddress))
       .map((request) => request.id),
-  ), [inboxSummary, unlockedAddress]);
+  ), [inboxSummary, viewerAddress]);
   const actionRequired = (inboxSummary?.actionCounts.actionRequired ?? 0) +
     (inboxSummary?.requests ?? []).filter((request) =>
       failedEmails.has(request.id) && !inboxViewerActionNeedsAction(request.viewerAction)).length;
 
   async function openPrivateDestination(event: MouseEvent<HTMLAnchorElement>, href: string) {
-    if (privateUnlocked) return;
+    if (identity || privateUnlocked) return;
     event.preventDefault();
     if (authBusy) return;
     try {
@@ -147,7 +155,7 @@ export default function StellarDashboardApp() {
     .slice(0, 3);
   const requestAttentionLimit = Math.max(0, 3 - intentAttention.length);
 
-  const testnet = sessionNetwork === 'testnet';
+  const testnet = identity?.network === 'testnet' || sessionNetwork === 'testnet';
   const accentText = testnet ? 'text-sky-700 dark:text-sky-300' : 'text-emerald-700 dark:text-emerald-300';
   const primaryBg = testnet ? 'bg-sky-700 hover:bg-sky-800' : 'bg-emerald-700 hover:bg-emerald-800';
 
@@ -182,7 +190,7 @@ export default function StellarDashboardApp() {
                   <div>
                     <div className="mst-work-row__meta"><Inbox className="h-4 w-4" />Private workspace</div>
                     <div className="mst-work-row__title">Open your Inbox</div>
-                    <p className="mst-work-row__copy">Confirm the current wallet to see proposals that need your signature, submission, or review.</p>
+                    <p className="mst-work-row__copy">Use Passkey or a verified Stellar wallet to see your proposals and approvals.</p>
                   </div>
                   <span className={'mst-work-row__action ' + accentText}>{authBusy ? 'Confirm in wallet…' : 'Open Inbox'} <ArrowRight className="h-4 w-4" /></span>
                 </a>
@@ -194,7 +202,7 @@ export default function StellarDashboardApp() {
                 <div className="mst-work-row">
                   <div>
                     <div className="mst-work-row__title">{inboxSummary.pendingCount > 0 ? 'Waiting on others' : "You're all caught up."}</div>
-                    <p className="mst-work-row__copy">{inboxSummary.pendingCount > 0 ? 'No action is required from this wallet right now.' : 'Start a new proposal or review completed activity.'}</p>
+                    <p className="mst-work-row__copy">{inboxSummary.pendingCount > 0 ? 'Nothing needs your action right now. Review the signing progress in Inbox.' : 'Start a new proposal or review completed activity.'}</p>
                     {inboxSummary.actionCounts.waiting > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2" aria-label="Inbox action summary">
                         {inboxActionCountPresentations(inboxSummary.actionCounts).map((item) => (
@@ -263,6 +271,7 @@ export default function StellarDashboardApp() {
               <a href={stellarHref('/new')}><Plus className="h-4 w-4" />New proposal</a>
               <a href={stellarHref('/treasury')}><Vault className="h-4 w-4" />Treasuries</a>
               <a href={stellarHref('/activity')} onClick={(event) => void openPrivateDestination(event, stellarHref('/activity'))}><History className="h-4 w-4" />Activity</a>
+              <a href={stellarHref('/identity')}><Fingerprint className="h-4 w-4" />Your account</a>
             </div>
           </section>
         </div>

@@ -1,9 +1,12 @@
 import { blobAuthStore } from '../server/blobAuthStore.js';
+import { PostgresIdentityStore } from '../server/identityStore.js';
+import { currentUserIdentity } from '../server/identityService.js';
 import { authConfigForRequest } from '../server/authConfig.js';
 import { AuthServiceError, requirePrivateWorkspaceSession } from '../server/authService.js';
 import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import { noStoreJson } from '../server/httpResponse.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
+import type { ReusableTemplateSummary } from '../../../../packages/stellar-core/src/reusableTemplate.js';
 import {
   ReusableTemplateServiceError,
   createReusableTemplate,
@@ -49,9 +52,34 @@ export async function GET(request: Request): Promise<Response> {
       throw new ReusableTemplateServiceError('Network must be public or testnet.', 400, 'invalid_network');
     }
     assertDeploymentNetwork(network);
-    const owner = await ownerAddress(request);
-    const templates = await listWalletTemplates(runtimeReusableTemplateStore(), owner, network);
-    return noStoreJson({ address: owner, templates });
+    const identities = new PostgresIdentityStore();
+    const identity = await currentUserIdentity(request, identities, network);
+    if (!identity) throw new AuthServiceError('Sign in with a Passkey or wallet to view Templates.', 401, 'authentication_required');
+    const templatesStore = runtimeReusableTemplateStore();
+    const walletTemplates = identity.address
+      ? await listWalletTemplates(templatesStore, identity.address, network) : [];
+    const userIds = await identities.grantedTemplateIds(identity.userId, network);
+    const known = new Set(walletTemplates.map((item) => item.id));
+    const extra: ReusableTemplateSummary[] = [];
+    for (const templateId of userIds) {
+      if (known.has(templateId)) continue;
+      const first = await templatesStore.getTemplateVersion(templateId, 1);
+      if (!first) continue;
+      const value = await templatesStore.getTemplateVersion(templateId, first.template.currentVersion);
+      if (!value || value.template.archivedAt || value.template.kind !== 'payment') continue;
+      extra.push({
+        id: value.template.id, ownerAddress: value.template.ownerAddress,
+        network: value.template.network, kind: value.template.kind, name: value.template.name,
+        currentVersion: value.template.currentVersion, definition: value.definition,
+        createdAt: value.template.createdAt, updatedAt: value.template.updatedAt,
+      });
+    }
+    const templates = await Promise.all([...walletTemplates, ...extra].map(async (item) =>
+      identity.address && item.ownerAddress === identity.address
+        ? { ...item, proposerUserIds: await identities.grantUsers(item.id),
+          pendingInvitations: await identities.listPendingInvitations(item.id) }
+        : item));
+    return noStoreJson({ address: identity.address ?? null, userId: identity.userId, templates });
   } catch (cause) {
     return errorResponse(cause);
   }

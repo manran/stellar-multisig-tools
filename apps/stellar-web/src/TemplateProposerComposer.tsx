@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, CircleAlert, LoaderCircle, ShieldCheck } from 'lucide-react';
 import { ActionButton, NetworkBadge, WorkflowProgress } from './MultiSigUi';
 import { useStellarWallet } from './StellarWalletContext';
+import { useUserIdentity } from './UserIdentityContext';
 import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
 import { isValidStellarTextMemo } from '../../../packages/stellar-core/src/memo';
 import type { ReusableTemplateSummary } from '../../../packages/stellar-core/src/reusableTemplate';
@@ -22,10 +23,12 @@ function assetName(assetKey: string): string {
 }
 
 export default function TemplateProposerComposer({ network }: Props) {
-  const { sessionAddress, privateUnlocked, unlockedAddress, unlockedNetwork, unlock, authBusy } = useStellarWallet();
+  const { unlock, authBusy } = useStellarWallet();
+  const { identity } = useUserIdentity();
   const id = new URLSearchParams(window.location.search).get('template') ?? '';
-  const verified = Boolean(privateUnlocked && sessionAddress && unlockedAddress === sessionAddress && unlockedNetwork === network);
-  const scope = verified ? `${network}:${sessionAddress}:${id}` : '';
+  const verified = Boolean(identity?.userId && identity.network === network);
+  const scope = verified ? `${network}:${identity?.userId}:${identity?.method}:${id}` : '';
+  const walletAddress = identity?.method === 'stellar_wallet' ? identity.address ?? '' : '';
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
   const [loaded, setLoaded] = useState<{ scope: string; template: ReusableTemplateSummary | null } | null>(null);
@@ -52,20 +55,20 @@ export default function TemplateProposerComposer({ network }: Props) {
     const controller = new AbortController();
     setLoading(true);
     void fetch(`/api/templates?network=${network}`, {
-      headers: privateSessionAddressHeaders(sessionAddress),
+      headers: walletAddress ? privateSessionAddressHeaders(walletAddress) : {},
       cache: 'no-store', signal: controller.signal,
     }).then(async (response) => {
-      const body = await response.json() as { address?: string; templates?: ReusableTemplateSummary[]; error?: string };
-      if (!response.ok || body.address !== sessionAddress) throw new Error(body.error || 'Cannot load Template.');
+      const body = await response.json() as { userId?: string; templates?: ReusableTemplateSummary[]; error?: string };
+      if (!response.ok || body.userId !== identity?.userId) throw new Error(body.error || 'Cannot load Template.');
       const found = body.templates?.find((item) => item.id === id && item.network === network
-        && item.kind === 'payment' && item.ownerAddress !== sessionAddress);
-      if (!found) throw new Error('This wallet has no delegated access to that payment Template.');
+        && item.kind === 'payment' && item.ownerAddress !== walletAddress);
+      if (!found) throw new Error('This account has no delegated access to that payment Template.');
       if (!controller.signal.aborted) { setLoaded({ scope, template: found }); setError(''); }
     }).catch((cause) => {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Cannot load Template.');
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [scope, network, sessionAddress, id]);
+  }, [scope, network, walletAddress, identity?.userId, id]);
 
   async function confirmWallet() {
     setError('');
@@ -85,7 +88,7 @@ export default function TemplateProposerComposer({ network }: Props) {
     try {
       const response = await fetch('/api/request', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...privateSessionAddressHeaders(sessionAddress) },
+        headers: { 'Content-Type': 'application/json', ...(walletAddress ? privateSessionAddressHeaders(walletAddress) : {}) },
         body: JSON.stringify({
           network,
           templatePayment: {
@@ -102,7 +105,7 @@ export default function TemplateProposerComposer({ network }: Props) {
         hash: body.request.id,
         state: {
           requestPreview: body.request, requestJustCreated: true, requestActivityBound: true,
-          requestReviewedByAddress: sessionAddress,
+          requestReviewedByAddress: walletAddress,
           returnTo: stellarHref('/inbox'), returnLabel: 'My requests',
         },
       });
@@ -119,11 +122,14 @@ export default function TemplateProposerComposer({ network }: Props) {
         <div className="mt-5 flex items-center gap-3"><h1 className="text-3xl font-bold">Request a payment</h1><NetworkBadge network={network} /></div>
         <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">Prepare a payment for Treasury approval.</p>
         {!verified && <section className="mt-6 rounded-xl border border-[var(--color-rule)] p-5">
-          <p className="text-sm">Confirm the wallet that was granted permission to use this Template.</p>
-          <ActionButton className="mt-3" disabled={authBusy} onClick={() => void confirmWallet()}>
-            {authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-            {authBusy ? 'Confirming…' : 'Confirm wallet'}
-          </ActionButton>
+          <p className="text-sm">Sign in with the MST account that received this Template invitation.</p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <a href={stellarHref('/identity')} className="mst-action-primary">Use Passkey</a>
+            <ActionButton variant="secondary" disabled={authBusy} onClick={() => void confirmWallet()}>
+              {authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+              {authBusy ? 'Confirming…' : 'Confirm wallet'}
+            </ActionButton>
+          </div>
         </section>}
         {loading && <p role="status" className="mt-5 text-sm"><LoaderCircle className="inline h-4 w-4 animate-spin" /> Loading authorized Template…</p>}
         {error && <div role="alert" className="mt-5 flex gap-2 rounded-lg border border-[var(--color-danger)] p-4 text-sm text-[var(--color-danger)]"><CircleAlert className="h-4 w-4 shrink-0" />{error}</div>}

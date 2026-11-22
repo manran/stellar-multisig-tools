@@ -3,11 +3,14 @@ import { Inbox, LoaderCircle, WalletCards } from 'lucide-react';
 import InboxApp from './InboxApp';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
+import { useUserIdentity } from './UserIdentityContext';
+import { stellarHref } from './workspaceNavigation';
 import { connectAndVerifyPrivateInbox } from './stellar/inboxEntry';
 import { isWalletUserRejected } from './stellar/walletKit';
 
 export default function InboxEntryApp() {
   const wallet = useStellarWallet();
+  const { identity, loading: identityLoading } = useUserIdentity();
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState('');
 
@@ -27,7 +30,7 @@ export default function InboxEntryApp() {
     }
   }
 
-  if (wallet.address) return <InboxApp />;
+  if (wallet.address || identity) return <InboxApp />;
 
   return (
     <StellarWorkspaceShell active="inbox">
@@ -35,9 +38,10 @@ export default function InboxEntryApp() {
         <section className="mx-auto max-w-xl py-12 sm:py-20">
           <div className="mst-kicker"><Inbox className="mr-2 inline h-4 w-4" />Private workspace</div>
           <h1 className="mt-5 text-4xl font-bold tracking-tight">Open your Inbox</h1>
-          <p className="mt-3 text-lg leading-8 text-neutral-600 dark:text-neutral-300">Confirm a Stellar wallet to see proposals that need your signature, submission, or review.</p>
+          <p className="mt-3 text-lg leading-8 text-neutral-600 dark:text-neutral-300">Use Passkey or confirm a Stellar wallet to see your requests and signing tasks.</p>
+          <a href={stellarHref('/identity')} className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-[var(--color-action)]">Use Passkey to open Inbox</a>
           <p className="mt-2 text-sm leading-6 text-neutral-500 dark:text-neutral-400">Your wallet may ask you to sign a verification message. This does not send a Stellar transaction.</p>
-          <button type="button" disabled={opening || wallet.busy || wallet.authBusy} onClick={() => void openInbox()} className="mst-action-primary mt-7">
+          <button type="button" disabled={opening || wallet.busy || wallet.authBusy || identityLoading} onClick={() => void openInbox()} className="mst-action-primary mt-7">
             {opening || wallet.busy || wallet.authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <WalletCards className="h-4 w-4" />}
             {opening || wallet.authBusy ? 'Verifying wallet…' : wallet.busy ? 'Opening wallets…' : 'Connect wallet'}
           </button>

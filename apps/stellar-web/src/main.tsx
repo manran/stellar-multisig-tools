@@ -14,6 +14,7 @@ import InboxEntryApp from './InboxEntryApp';
 import IntegrationAdminApp from './IntegrationAdminApp';
 import TestnetIntegrationApp from './TestnetIntegrationApp';
 import LegalApp from './LegalApp';
+import IdentityApp from './IdentityApp';
 import MultisigDesignerApp from './MultisigDesignerApp';
 import NewTransactionApp from './NewTransactionApp';
 import RequestApp from './RequestApp';
@@ -21,6 +22,9 @@ import SigningRoomApp from './SigningRoomApp';
 import SorobanIntentApp from './SorobanIntentApp';
 import StellarHomeApp from './StellarHomeApp';
 import { StellarWalletProvider } from './StellarWalletContext';
+import { UserIdentityProvider } from './UserIdentityContext';
+import { useUserIdentity } from './UserIdentityContext';
+import UserActivityApp from './UserActivityApp';
 import TreasuryApp from './TreasuryApp';
 import TreasuryBoxSettingsApp from './TreasuryBoxSettingsApp';
 import TransactionReceiptApp from './TransactionReceiptApp';
@@ -53,6 +57,7 @@ function titleFor(kind: StellarWorkspaceRouteKind) {
     case 'treasury-settings': return 'Treasury settings | MultiSig Tools';
     case 'bootstrap': return 'Set up multisig offline | MultiSig Tools';
     case 'address-book': return 'Address Book | MultiSig Tools';
+    case 'identity': return 'Your account | MultiSig Tools';
     case 'agent-access': return 'Agent access | MultiSig Tools';
     case 'activity': return 'Activity | MultiSig Tools';
     case 'request': return 'Transaction | MultiSig Tools';
@@ -68,6 +73,11 @@ function titleFor(kind: StellarWorkspaceRouteKind) {
 
 function currentLocationKey() {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+function ActivitySwitch() {
+  const { identity } = useUserIdentity();
+  return identity?.method === 'passkey' ? <UserActivityApp /> : <ActivityApp />;
 }
 
 function RoutedApp() {
@@ -144,8 +154,9 @@ function RoutedApp() {
     case 'treasury-settings': Component = TreasuryBoxSettingsApp; break;
     case 'bootstrap': Component = AccountSigningEntryApp; break;
     case 'address-book': Component = AddressBookApp; break;
+    case 'identity': Component = IdentityApp; break;
     case 'agent-access': Component = AgentAccessApp; break;
-    case 'activity': Component = ActivityApp; break;
+    case 'activity': Component = ActivitySwitch; break;
     case 'request': Component = RequestApp; break;
     case 'authorization': Component = SorobanIntentApp; break;
     case 'receipt': Component = TransactionReceiptApp; break;
@@ -158,11 +169,13 @@ function RoutedApp() {
 
   return (
     <StellarWalletProvider>
+      <UserIdentityProvider>
       <ContractWorkspaceProvider>
         <AddressBookProvider>
           <Component key={route.kind === 'request' || route.kind === 'authorization' || route.kind === 'receipt' || route.kind === 'contract-workspace' ? locationKey : route.kind} />
         </AddressBookProvider>
       </ContractWorkspaceProvider>
+      </UserIdentityProvider>
     </StellarWalletProvider>
   );
 }

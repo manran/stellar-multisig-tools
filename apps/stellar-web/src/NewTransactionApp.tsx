@@ -9,6 +9,7 @@ import { ActionButton, NetworkFallbackChoice, WorkflowProgress } from './MultiSi
 import type { NetworkFallbackChoiceSource } from './MultiSigUi';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
+import { useUserIdentity } from './UserIdentityContext';
 import { writeReviewHandoff } from './stellar/reviewHandoff';
 import { isValidStellarAccountId } from '../../../packages/stellar-core/src/horizon';
 import { resolveStellarNetwork } from './stellar/networkPreference';
@@ -44,6 +45,9 @@ function ChoiceRow({ href, icon, title, description, network, badge }: { href: s
 function TemplateGrantControls({ template, sessionAddress, network }: { template: ReusableTemplateSummary; sessionAddress: string; network: StellarNetwork }) {
   const [address, setAddress] = useState('');
   const [proposers, setProposers] = useState(template.proposerAddresses ?? []);
+  const [userIds, setUserIds] = useState(template.proposerUserIds ?? []);
+  const [pending, setPending] = useState(template.pendingInvitations ?? []);
+  const [inviteUrl, setInviteUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   if (!sessionAddress || template.ownerAddress !== sessionAddress || template.kind !== 'payment') return null;
@@ -64,9 +68,60 @@ function TemplateGrantControls({ template, sessionAddress, network }: { template
       setError(cause instanceof Error ? cause.message : 'Unable to update Template permission.');
     } finally { setBusy(false); }
   }
+  async function identityAction(action: string, extra: Record<string, string> = {}) {
+    setBusy(true); setError('');
+    try {
+      const response = await fetch('/api/identity', {
+        method: 'POST',
+        headers: { ...privateSessionAddressHeaders(sessionAddress), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, network, templateId: template.id, ...extra }),
+      });
+      const data = await response.json() as { token?: string; error?: string };
+      if (!response.ok) throw new Error(data.error || 'Unable to update invitation.');
+      if (action === 'create_invitation' && data.token) {
+        const url = new URL(stellarHrefWithSearch('/invite', { token: data.token }), window.location.origin);
+        setInviteUrl(url.toString());
+      }
+      if (action === 'revoke_user_grant') setUserIds((current) => current.filter((id) => id !== extra.userId));
+      if (action === 'revoke_invitation') {
+        setPending((current) => current.filter((item) => item.id !== extra.invitationId));
+        setInviteUrl('');
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to update invitation.');
+    } finally { setBusy(false); }
+  }
+
   return (
     <details className="mt-3 text-sm">
-      <summary className="cursor-pointer font-semibold text-[var(--color-accent)]">Allow another wallet to request payments</summary>
+      <summary className="cursor-pointer font-semibold text-[var(--color-accent)]">Payment request access</summary>
+      <div className="mt-3 space-y-3 border-b border-[var(--color-rule)] pb-4">
+        <p className="text-xs leading-5 text-[var(--color-ink-2)]">Invite someone without a Stellar wallet. They can sign in with Passkey and prepare a payment. Treasury signers retain approval rights.</p>
+        <ActionButton type="button" variant="secondary" disabled={busy}
+          onClick={() => void identityAction('create_invitation')}>Create invitation link</ActionButton>
+        {inviteUrl && <div className="space-y-2">
+          <p className="text-xs text-[var(--color-muted)]">Single-use · expires in 24 hours. Share privately.</p>
+          <input aria-label="Invitation link" value={inviteUrl} readOnly className="mst-request-control w-full text-xs" />
+          <ActionButton variant="secondary" type="button" onClick={() => void navigator.clipboard.writeText(inviteUrl).catch(() => setError('Unable to copy invitation.'))}>Copy invitation link</ActionButton>
+        </div>}
+        {pending.length > 0 && <div className="space-y-2">
+          <h4 className="text-xs font-semibold">Pending invitations</h4>
+          {pending.map((invitation) => <div key={invitation.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span>Expires {new Date(invitation.expiresAt).toLocaleDateString()}</span>
+            <button type="button" disabled={busy} className="min-h-11 font-semibold text-[var(--color-danger)]"
+              onClick={() => void identityAction('revoke_invitation', { invitationId: invitation.id })}>Revoke invitation</button>
+          </div>)}
+        </div>}
+        {userIds.length > 0 && <div className="space-y-2">
+          <h4 className="text-xs font-semibold">MST users with access</h4>
+          {userIds.map((id) => <div key={id} className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="min-w-0 truncate font-mono" title={id}>{id}</span>
+            <button type="button" disabled={busy} className="min-h-11 font-semibold text-[var(--color-danger)]"
+              onClick={() => void identityAction('revoke_user_grant', { userId: id })}>Revoke access</button>
+          </div>)}
+        </div>}
+      </div>
+      <h4 className="mt-3 text-xs font-semibold">Existing wallet-based permissions</h4>
       <p className="mt-2 leading-6 text-[var(--color-ink-2)]">This wallet can prepare payments from the Template. Treasury signers still approve each transaction.</p>
       <div className="mt-3 flex flex-wrap gap-2">
         <input aria-label="Proposer G address" value={address} onChange={(event) => setAddress(event.target.value.trim())}
@@ -92,6 +147,7 @@ function TemplateGrantControls({ template, sessionAddress, network }: { template
 
 function NewTransactionChoices() {
   const { sessionNetwork, sessionAddress, privateUnlocked, busy, authBusy, unlock } = useStellarWallet();
+  const { identity } = useUserIdentity();
   const [templateLoad, setTemplateLoad] = useState<{
     scope: string;
     status: 'loading' | 'ready' | 'error' | 'unlock_required';
@@ -104,7 +160,8 @@ function NewTransactionChoices() {
   const proposalNetwork = resolveStellarNetwork(route.network, sessionNetwork);
   const paymentHref = stellarHrefWithSearch('/new/payment', { fresh: '1', account: proposalAccount, network: proposalNetwork });
   const createAccountHref = stellarHrefWithSearch('/new/create-account', { fresh: '1', account: proposalAccount, network: proposalNetwork });
-  const templateScope = privateUnlocked && sessionAddress ? `${sessionAddress}:${proposalNetwork}` : '';
+  const verifiedIdentity = identity?.network === proposalNetwork ? identity : null;
+  const templateScope = verifiedIdentity ? `${verifiedIdentity.userId}:${proposalNetwork}` : '';
   // A previous wallet's response must not appear while the new scope is loading.
   const currentTemplates = templateScope && templateLoad?.scope === templateScope ? templateLoad : null;
   const templateLoading = Boolean(templateScope && (!currentTemplates || currentTemplates.status === 'loading'));
@@ -122,7 +179,8 @@ function NewTransactionChoices() {
     const controller = new AbortController();
     setTemplateLoad({ scope: templateScope, status: 'loading', items: [] });
     void fetch(`/api/templates?network=${proposalNetwork}`, {
-      headers: privateSessionAddressHeaders(sessionAddress),
+      headers: verifiedIdentity?.method === 'stellar_wallet' && verifiedIdentity.address
+        ? privateSessionAddressHeaders(verifiedIdentity.address) : {},
       cache: 'no-store',
       signal: controller.signal,
     })
@@ -131,10 +189,13 @@ function NewTransactionChoices() {
           if (!controller.signal.aborted) setTemplateLoad({ scope: templateScope, status: 'unlock_required', items: [] });
           return;
         }
-        const body = await response.json() as { address?: string; templates?: ReusableTemplateSummary[] };
+        const body = await response.json() as { address?: string | null; userId?: string; templates?: ReusableTemplateSummary[] };
         if (!response.ok || !Array.isArray(body.templates)) throw new Error('Unable to load templates.');
         if (controller.signal.aborted) return;
-        if (body.address !== sessionAddress || body.templates.some((item) => item.network !== proposalNetwork)) {
+        if (body.userId !== verifiedIdentity?.userId
+          || (verifiedIdentity?.method === 'stellar_wallet' && body.address !== verifiedIdentity.address)
+          || (verifiedIdentity?.method === 'passkey' && body.address !== null)
+          || body.templates.some((item) => item.network !== proposalNetwork)) {
           setTemplateLoad({ scope: templateScope, status: 'unlock_required', items: [] });
           return;
         }
@@ -144,7 +205,7 @@ function NewTransactionChoices() {
         if (!controller.signal.aborted) setTemplateLoad({ scope: templateScope, status: 'error', items: [] });
       });
     return () => controller.abort();
-  }, [templateScope, sessionAddress, proposalNetwork, templateRetry]);
+  }, [templateScope, verifiedIdentity?.method, verifiedIdentity?.address, verifiedIdentity?.userId, proposalNetwork, templateRetry]);
 
   async function showTemplates() {
     setTemplateUnlockError('');
@@ -195,7 +256,8 @@ function NewTransactionChoices() {
 
           {!templateScope && (
             <div className="mt-3 border-y border-[var(--color-rule)] py-4">
-              <p className="max-w-prose text-sm leading-6 text-[var(--color-ink-2)]">Confirm your wallet to see its saved templates. The wallet verification opens your private workspace.</p>
+              <p className="max-w-prose text-sm leading-6 text-[var(--color-ink-2)]">Sign in with a Passkey or confirm a Stellar wallet to open your saved and invited Templates.</p>
+              <a href={stellarHref('/identity')} className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-[var(--color-action)]">Use Passkey <ArrowRight className="ml-2 h-4 w-4" /></a>
               <ActionButton variant="secondary" className="mt-3" disabled={busy || authBusy} onClick={() => void showTemplates()}>
                 {busy || authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
                 {busy || authBusy ? 'Confirm in wallet…' : 'Show my templates'}
@@ -237,19 +299,19 @@ function NewTransactionChoices() {
                     <h3 className="mst-work-row__title">{template.name}</h3>
                     <p className="mst-work-row__copy">{template.definition.recipients.length} recipient{template.definition.recipients.length === 1 ? '' : 's'} · Source <span className="font-mono" title={template.definition.source}>{template.definition.source.slice(0, 8)}…{template.definition.source.slice(-8)}</span></p>
                     {template.definition.autoRemind && <p className="mt-1 text-xs font-medium text-[var(--color-ink-2)]">Automatic email reminders enabled</p>}
-                    {template.ownerAddress && template.ownerAddress !== sessionAddress && <p className="mt-1 text-xs font-semibold text-[var(--color-accent)]">You are authorized to initiate payments from this Template.</p>}
-                    <TemplateGrantControls template={template} sessionAddress={sessionAddress} network={proposalNetwork} />
+                    {template.ownerAddress && template.ownerAddress !== verifiedIdentity?.address && <p className="mt-1 text-xs font-semibold text-[var(--color-accent)]">You are authorized to initiate payments from this Template.</p>}
+                    <TemplateGrantControls template={template} sessionAddress={verifiedIdentity?.method === 'stellar_wallet' ? verifiedIdentity.address ?? '' : ''} network={proposalNetwork} />
                     {proposalAccount && template.definition.source !== proposalAccount && <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">This template uses a different source account.</p>}
                   </div>
                   <a
-                    href={stellarHrefWithSearch(template.ownerAddress && template.ownerAddress !== sessionAddress ? '/new/proposer' : '/new/payment', {
+                    href={stellarHrefWithSearch(template.ownerAddress && template.ownerAddress !== verifiedIdentity?.address ? '/new/proposer' : '/new/payment', {
                       fresh: '1',
                       template: template.id,
                       network: proposalNetwork,
                     })}
                     className="mst-work-row__action"
                   >
-                    {template.ownerAddress && template.ownerAddress !== sessionAddress ? 'Request payment' : 'Use template'} <ArrowRight className="h-4 w-4" />
+                    {template.ownerAddress && template.ownerAddress !== verifiedIdentity?.address ? 'Request payment' : 'Use template'} <ArrowRight className="h-4 w-4" />
                   </a>
                 </div>
               ))}

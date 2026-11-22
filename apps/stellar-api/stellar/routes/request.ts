@@ -1,5 +1,7 @@
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
 import { blobAuthStore } from '../server/blobAuthStore.js';
+import { IdentityError, PostgresIdentityStore } from '../server/identityStore.js';
+import { currentUserIdentity, requireUserIdentity } from '../server/identityService.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
 import {
   ClassicManagedExecutionStorageUnavailableError,
@@ -140,6 +142,7 @@ interface AuthorizedRequest {
   mode: RequestAccessMode;
   network: StellarNetwork;
   actorAddress?: string;
+  actorUserId?: string;
   activityBound: boolean;
   capabilityMatched: boolean;
   capabilityClosed?: ClosedCapabilityStatus;
@@ -167,6 +170,7 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof ClassicManagedChannelConfigurationError
     || cause instanceof ClassicManagedExecutionStorageUnavailableError
     || cause instanceof ReusableTemplateServiceError
+    || cause instanceof IdentityError
     || cause instanceof ReusableTemplateStorageUnavailableError
     || cause instanceof RequestAssignmentServiceError
   ) {
@@ -414,6 +418,24 @@ async function authorizeRequest(
       agentCredential,
       privateCommitment: stored.privateCommitment,
     };
+  }
+  if (!machineCaller && stored.proposerUserId) {
+    const identity = await currentUserIdentity(request, new PostgresIdentityStore(), stored.network);
+    if (identity?.userId === stored.proposerUserId) {
+      let signerNow = false;
+      if (identity.address && purpose === 'active') {
+        try {
+          signerNow = await signerCanAccessTransaction(identity.address, stored.baseXdr, stored.network, accountLoader);
+        } catch { signerNow = false; }
+      }
+      return {
+        id, stored, mode: signerNow ? 'session' : 'proposer', network: stored.network,
+        ...(identity.address ? { actorAddress: identity.address } : {}),
+        actorUserId: identity.userId,
+        activityBound: true, capabilityMatched: false,
+        privateCommitment: stored.privateCommitment,
+      };
+    }
   }
   if (session && stored.proposerAddress === session.address) {
     // If an ordinary proposer later becomes an actual signer, the on-chain
@@ -670,7 +692,8 @@ export async function GET(request: Request): Promise<Response> {
       return capabilityClosedResponse(access.network, access.capabilityClosed);
     }
 
-    if (historyRequested && (!access.actorAddress || !['session', 'proposer', 'contribution', 'agent'].includes(access.mode))) {
+    if (historyRequested && (!access.actorAddress && !access.actorUserId
+      || !['session', 'proposer', 'contribution', 'agent'].includes(access.mode))) {
       throw new SigningRequestServiceError(
         'Unlock an authorized signer wallet to view retained transaction history.',
         403,
@@ -1000,25 +1023,32 @@ export async function POST(request: Request): Promise<Response> {
         throw new SigningRequestServiceError('Network must be public or testnet.', 400, 'invalid_network');
       }
       assertDeploymentNetwork(network);
-      const session = await verifiedSignerSessionFromRequest(blobAuthStore, request, network);
-      if (!session) {
-        throw new SigningRequestServiceError('Confirm your proposer wallet first.', 401, 'template_proposer_identity_required');
+      const identities = new PostgresIdentityStore();
+      const identity = await requireUserIdentity(request, identities, network);
+      if (identity.method === 'passkey') {
+        const expected = authConfigForRequest(request).issuer.replace(/\/api\/auth$/, '');
+        if (request.headers.get('origin') !== expected) {
+          throw new SigningRequestServiceError('Passkey payment requests must originate from MST.', 403, 'invalid_origin');
+        }
       }
       const prepared = await prepareTemplateProposerPayment(
-        runtimeReusableTemplateStore(), session.address, network, body.templatePayment,
+        runtimeReusableTemplateStore(), identity.address ?? '', network, body.templatePayment,
+        { alternateGrant: (templateId) => identities.hasGrant(identity.userId, templateId) },
       );
-      const beforeCreate = requestCreationQuota(request, network, `proposer:${session.address}`);
+      const beforeCreate = requestCreationQuota(request, network, `proposer-user:${identity.userId}`);
       const store = withSigningRequestCreate(signingRequestStore, async (stored) => {
         await beforeCreate();
         return signingRequestStore.createRequest({
           ...stored,
-          proposerAddress: session.address,
+          ...(identity.address ? { proposerAddress: identity.address } : {}),
+          proposerUserId: identity.userId,
           templateRef: prepared.templateRef,
         });
       });
       const result = await createSigningRequest(store, { network, xdr: prepared.prepared.xdr }, serviceOptions);
       return noStoreJson({
-        request: { ...result, proposerAddress: session.address, template: prepared.templateRef },
+        request: { ...result, ...(identity.address ? { proposerAddress: identity.address } : {}),
+          proposerUserId: identity.userId, template: prepared.templateRef },
         access: { shareable: false, activityBound: true },
         context: {},
       }, 201);

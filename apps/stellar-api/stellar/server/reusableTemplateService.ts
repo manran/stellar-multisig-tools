@@ -236,6 +236,7 @@ export async function authorizeTemplateProposer(
   network: StellarNetwork,
   reference: unknown,
   accountLoader: typeof loadAccount = loadAccount,
+  alternateGrant?: (templateId: string) => Promise<boolean>,
 ): Promise<StoredReusableTemplateVersion> {
   if (!reference || typeof reference !== 'object' || Array.isArray(reference)) {
     throw new ReusableTemplateServiceError('Valid Template id and version are required.', 400, 'invalid_template_reference');
@@ -250,7 +251,9 @@ export async function authorizeTemplateProposer(
     || record.template.currentVersion !== version || record.template.kind !== 'payment') {
     throw new ReusableTemplateServiceError('This payment Template is not available.', 404, 'template_not_found');
   }
-  if (!store.hasActiveGrant || !await store.hasActiveGrant(id, proposer)) {
+  const granted = (alternateGrant && await alternateGrant(id))
+    || (Boolean(proposer) && Boolean(await store.hasActiveGrant?.(id, proposer)));
+  if (!granted) {
     throw new ReusableTemplateServiceError('This wallet has no active permission to propose from the Template.', 403, 'template_proposer_not_authorized');
   }
   await requireTemplateOwnerSigner(record, accountLoader);

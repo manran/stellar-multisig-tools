@@ -31,6 +31,10 @@ export interface ReusableTemplateSummary {
   ownerAddress?: string;
   /** Active grants are disclosed only when the owner opens their own templates. */
   proposerAddresses?: string[];
+  /** Unified MST users who can start a Template payment. Only shown to the owner. */
+  proposerUserIds?: string[];
+  /** Active one-time invitations. Only shown to the owner. */
+  pendingInvitations?: { id: string; expiresAt: string }[];
   network: StellarNetwork;
   name: string;
   kind: ReusableTemplateKind;

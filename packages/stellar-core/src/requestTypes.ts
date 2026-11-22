@@ -61,6 +61,8 @@ export interface SigningRequestSnapshot {
   creatorAddress?: string;
   /** Wallet that initiated this Template Proposal; not automatically a transaction signer. */
   proposerAddress?: string;
+  /** Off-chain MST identity for the person who prepared this delegated payment. */
+  proposerUserId?: string;
   contributionCount: number;
   signatureCount: number;
   status: SigningRequestStatus;

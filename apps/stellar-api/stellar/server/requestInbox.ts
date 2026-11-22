@@ -102,6 +102,25 @@ export async function listSignerInbox(
 }
 
 
+/** Personal work for a User ID is independent of any wallet signer rights. */
+export async function listUserProposerInbox(
+  store: SigningRequestStore,
+  userId: string,
+  network: StellarNetwork,
+  options: InboxOptions = {},
+): Promise<SigningRequestSnapshot[]> {
+  const requests = await store.listRequestsByProposerUser?.(network, userId) ?? [];
+  const now = options.now ?? new Date();
+  const active = requests.filter((request) => request.proposerUserId === userId && request.network === network
+    && new Date(request.expiresAt).getTime() > now.getTime())
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt)).slice(0, 100);
+  const values = await Promise.all(active.map((item) => getSigningRequest(store, item.id, {
+    now, accountLoader: options.accountLoader ?? loadAccount,
+    networkParametersLoader: options.networkParametersLoader ?? loadNetworkParameters,
+  })));
+  return values.filter((item) => item.status !== 'submitted' && item.status !== 'expired');
+}
+
 function projectedRequestExecutionMode(snapshot: SigningRequestSnapshot): 'multisigtools' | 'external' | undefined {
   if (snapshot.execution?.mode) return snapshot.execution.mode;
   try {
@@ -135,6 +154,7 @@ export async function projectHumanInboxRequests(
   store: SigningRequestStore,
   address: string,
   requests: readonly SigningRequestSnapshot[],
+  viewerUserId?: string,
 ): Promise<InboxRequestSnapshot[]> {
   return Promise.all(requests.map(async (snapshot) => {
     const declined = snapshot.status === 'awaiting_signatures' && store.listActivityEvents
@@ -142,7 +162,9 @@ export async function projectHumanInboxRequests(
           event.type === 'approval_declined' && event.actorAddress === address,
         )
       : false;
-    const viewerAction = snapshot.proposerAddress === address
+    const viewerIsProposer = (viewerUserId && snapshot.proposerUserId === viewerUserId)
+      || (address && snapshot.proposerAddress === address);
+    const viewerAction = viewerIsProposer
       ? snapshot.status === 'awaiting_signatures' ? 'proposer_waiting' as const
         : snapshot.status === 'ready' ? 'proposer_ready' as const
           : projectInboxViewerAction(snapshot.status, { hasSigned: true,
@@ -152,7 +174,7 @@ export async function projectHumanInboxRequests(
       declined,
       executionMode: projectedRequestExecutionMode(snapshot),
     });
-    const coordinationEvents = (viewerAction === 'waiting_for_others' || viewerAction === 'proposer_waiting') && store.listRequestCoordinationEvents
+    const coordinationEvents = address && (viewerAction === 'waiting_for_others' || viewerAction === 'proposer_waiting') && store.listRequestCoordinationEvents
       ? outgoingCoordinationEvents(await store.listRequestCoordinationEvents(snapshot.id), address)
       : [];
     return {

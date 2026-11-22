@@ -37,6 +37,7 @@ interface RequestRow {
   expires_at: Date | string;
   creator_address: string | null;
   proposer_address: string | null;
+  proposer_user_id: string | null;
   creator_actor: MachineCallerProvenance | null;
   integration_context: RequestIntegrationContext | null;
   instruction_digest: string | null;
@@ -68,7 +69,7 @@ async function readRequest(
 ): Promise<StoredSigningRequest | null> {
   const result = await db.query<RequestRow>(
     `SELECT r.id, r.network, r.base_xdr, r.transaction_hash, r.created_at, r.expires_at,
-            r.creator_address, r.proposer_address, r.creator_actor, r.integration_context, r.instruction_digest,
+            r.creator_address, r.proposer_address, r.proposer_user_id, r.creator_actor, r.integration_context, r.instruction_digest,
             r.execution_policy, r.discovery_signer_keys, r.capability_hash,
             r.soroban_effects_baseline, r.soroban_origin,
             r.reusable_template_id, r.reusable_template_version,
@@ -95,6 +96,7 @@ async function readRequest(
     expiresAt: iso(row.expires_at),
     ...(row.creator_address ? { creatorAddress: row.creator_address } : {}),
     ...(row.proposer_address ? { proposerAddress: row.proposer_address } : {}),
+    ...(row.proposer_user_id ? { proposerUserId: row.proposer_user_id } : {}),
     ...(row.creator_actor ? { creatorActor: row.creator_actor } : {}),
     ...(row.integration_context ? { integration: row.integration_context } : {}),
     ...(row.instruction_digest ? { instructionDigest: row.instruction_digest } : {}),
@@ -232,7 +234,21 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
     await putPrivateRoot(this.privateStore, request);
 
     await withPostgresTransaction(this.pool, async (client) => {
-      if (request.proposerAddress) {
+      let userGrant = false;
+      if (request.proposerUserId) {
+        const grant = await client.query(
+          `SELECT 1 FROM mst_stellar.mst_template_user_grants g
+             JOIN mst_stellar.reusable_templates t ON t.id = g.template_id
+            WHERE g.template_id = $1 AND g.user_id = $2 AND g.revoked_at IS NULL
+              AND t.network = $3 AND t.current_version = $4
+              AND t.archived_at IS NULL AND t.kind = 'payment'
+            FOR SHARE OF g, t`,
+          [request.templateRef?.id ?? '', request.proposerUserId,
+            request.network, request.templateRef?.version ?? 0],
+        );
+        userGrant = Boolean(grant.rowCount);
+      }
+      if (!userGrant && request.proposerAddress) {
         // Serialize a new delegated Request with concurrent grant revocation.
         const grant = await client.query(
           `SELECT 1 FROM mst_stellar.reusable_template_proposer_grants g
@@ -251,6 +267,11 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
             403, 'template_proposer_not_authorized',
           );
         }
+      } else if (!userGrant && request.proposerUserId) {
+        throw new ReusableTemplateServiceError(
+          'Template proposer permission was revoked before Request creation.',
+          403, 'template_proposer_not_authorized',
+        );
       }
       await client.query(
         `INSERT INTO mst_stellar.classic_requests (
@@ -259,11 +280,11 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
            instruction_digest, execution_policy, discovery_signer_keys, capability_hash,
            soroban_effects_baseline, soroban_origin,
            reusable_template_id, reusable_template_version, has_private_data,
-           proposer_address
+           proposer_address, proposer_user_id
          ) VALUES (
            $1, $2, $3, $4, $5, $6,
            $7, $8, $9, $10, $11, $12, $13, $14,
-           $15, $16, $17, $18, $19, $20
+           $15, $16, $17, $18, $19, $20, $21
          )`,
         [
           request.id,
@@ -286,6 +307,7 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
           request.templateRef?.version ?? null,
           Boolean(request.initialPrivateNote || request.privateCommitment),
           request.proposerAddress ?? null,
+          request.proposerUserId ?? null,
         ],
       );
       await insertSubjects(client, request.id, request.network, 'discovery', 'account', subjects.sourceAccountIds);
@@ -322,6 +344,17 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
   async listRequests(): Promise<StoredSigningRequest[]> {
     const ids = await this.pool.query<{ id: string }>(
       'SELECT id FROM mst_stellar.classic_requests ORDER BY created_at DESC, id DESC',
+    );
+    const values = await Promise.all(ids.rows.map((row) => this.getRequest(row.id)));
+    return values.filter((value): value is StoredSigningRequest => Boolean(value));
+  }
+
+  async listRequestsByProposerUser(network: StellarNetwork, userId: string): Promise<StoredSigningRequest[]> {
+    const ids = await this.pool.query<{ id: string }>(
+      `SELECT id FROM mst_stellar.classic_requests
+        WHERE network = $1 AND proposer_user_id = $2
+        ORDER BY created_at DESC, id DESC LIMIT 100`,
+      [network, userId],
     );
     const values = await Promise.all(ids.rows.map((row) => this.getRequest(row.id)));
     return values.filter((value): value is StoredSigningRequest => Boolean(value));
