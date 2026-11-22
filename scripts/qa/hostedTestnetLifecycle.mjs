@@ -13,6 +13,7 @@ const LIVE = process.argv.includes('--live');
 const AGENT = process.argv.includes('--agent');
 const COORDINATION = process.argv.includes('--coordination');
 const PROPOSER = process.argv.includes('--proposer');
+const PASSKEY = process.argv.includes('--passkey');
 const now = () => new Date().toISOString();
 const trace = [];
 function record(step, extra = {}) {
@@ -223,6 +224,134 @@ async function proposerE2E() {
   const activity = await call('/activity?request=' + encodeURIComponent(requestId), 'GET', undefined, financeHeaders);
   check(activity.item, 'Proposer cannot view completed Activity');
   record('proposer-retained-transaction-receipt');
+  if (PASSKEY) {
+  // Linked governance lifecycle: Template invitation -> walletless Passkey -> ledger.
+  const invite = await call('/identity', 'POST',
+    { action: 'create_invitation', network: 'testnet', templateId: id },
+    { ...ownerHeaders, Origin: 'https://stellar-testnet.multisig.tools' }, 201);
+  check(typeof invite.token === 'string' && invite.token.length === 43,
+    'Treasury owner did not issue a Passkey invitation');
+  record('passkey-template-invitation-issued');
+
+  const { chromium } = await import(process.env.MST_QA_PLAYWRIGHT_MODULE || 'playwright');
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto('https://stellar-testnet.multisig.tools/', { waitUntil: 'domcontentloaded' });
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('WebAuthn.enable');
+    const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', {
+      options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true,
+        hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
+    });
+    const post = (action, data = {}) => page.evaluate(async ({ action, data }) => {
+      const r = await fetch('/api/identity', { method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, network: 'testnet', ...data }) });
+      return { status: r.status, body: await r.json() };
+    }, { action, data });
+    const preview = await post('invitation_preview', { token: invite.token });
+    check(preview.status === 200 && preview.body.invitation?.templateId === id,
+      'Invitation preview failed');
+    const registration = await post('registration_options', { token: invite.token });
+    check(registration.status === 200, 'Passkey invitation registration options failed');
+    const attestation = await page.evaluate(async (o) => {
+      const d = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')
+        .padEnd(Math.ceil(s.length / 4) * 4, '=')), ch => ch.charCodeAt(0));
+      const e = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const c = await navigator.credentials.create({ publicKey: { ...o,
+        challenge: d(o.challenge), user: { ...o.user, id: d(o.user.id) },
+        excludeCredentials: (o.excludeCredentials ?? []).map(x => ({ ...x, id: d(x.id) })),
+      } });
+      if (!c) throw Error('No Passkey attestation');
+      return { id: c.id, rawId: e(c.rawId), type: c.type,
+        response: { clientDataJSON: e(c.response.clientDataJSON),
+          attestationObject: e(c.response.attestationObject),
+          transports: c.response.getTransports() },
+        clientExtensionResults: c.getClientExtensionResults(),
+        authenticatorAttachment: c.authenticatorAttachment };
+    }, registration.body.options);
+    const joined = await post('registration_verify', {
+      challengeId: registration.body.challengeId, response: attestation,
+    });
+    check(joined.status === 200 && typeof joined.body.userId === 'string',
+      'Passkey invitation registration failed');
+    const passkeyUserId = joined.body.userId;
+    check((await post('invitation_preview', { token: invite.token })).status === 404,
+      'Invitation was not consumed once');
+    record('walletless-passkey-accepted-invitation');
+
+    const payment = { network: 'testnet', templatePayment: {
+      template: reference, amount: '1', memo: 'MST-PASSKEY-QA',
+    } };
+    const browserRequest = (body) => page.evaluate(async (body) => {
+      const r = await fetch('/api/request', { method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      return { status: r.status, body: await r.json() };
+    }, body);
+    const made = await browserRequest(payment);
+    check(made.status === 201 && made.body.request?.proposerUserId === passkeyUserId,
+      'Passkey User ID could not create delegated Request');
+    const passkeyRequestId = made.body.request.id;
+    const xdr = made.body.request.baseXdr;
+    const review = TransactionBuilder.fromXdr(xdr, Networks.TESTNET);
+    check(review.source === source && review.operations[0].destination === source
+      && review.signatures.length === 0, 'Unapproved Passkey XDR mutation');
+    record('walletless-passkey-created-request', { requestId: passkeyRequestId });
+
+    const inbox = await page.evaluate(async () => {
+      const r = await fetch('/api/inbox');
+      return { status: r.status, body: await r.json() };
+    });
+    check(inbox.status === 200 && inbox.body.userId === passkeyUserId
+      && inbox.body.requests.some(x => x.id === passkeyRequestId),
+      'Passkey Request missing from personal Inbox');
+    record('walletless-passkey-personal-inbox');
+
+    const aSigned = TransactionBuilder.fromXdr(xdr, Networks.TESTNET);
+    aSigned.sign(alice);
+    const one = await call('/request', 'PATCH', { signedXdr: aSigned.toXdr() },
+      requestHeaders(passkeyRequestId, '', ownerHeaders));
+    check(one.addedSignatureCount === 1, 'First signer failed Passkey Request');
+    const bSigned = TransactionBuilder.fromXdr(xdr, Networks.TESTNET);
+    bSigned.sign(bob);
+    const two = await call('/request', 'PATCH', { signedXdr: bSigned.toXdr() },
+      requestHeaders(passkeyRequestId, '',
+        { ...cookieHeaders(bobToken), 'x-multisig-session-address': bob.publicKey() }));
+    check(two.request.status === 'ready', 'Second signer failed Passkey Request');
+    const submitted = await call('/request', 'PUT', {}, requestHeaders(passkeyRequestId, '', ownerHeaders));
+    const passkeyHash = submitted.request?.submission?.transactionHash;
+    check(typeof passkeyHash === 'string' && submitted.request?.status === 'submitted',
+      'Passkey Request not submitted');
+    const onChain = await horizon('/transactions/' + passkeyHash);
+    check(onChain.successful && onChain.hash === passkeyHash,
+      'Passkey Request not confirmed on ledger');
+    record('passkey-payment-ledger-confirmed', { ledger: onChain.ledger });
+
+    const activity = await page.evaluate(async () => {
+      const r = await fetch('/api/identity?network=testnet&view=activity');
+      return { status: r.status, body: await r.json() };
+    });
+    check(activity.status === 200 && activity.body.requests.some(x =>
+      x.id === passkeyRequestId && x.status === 'submitted'),
+      'Passkey User ID lost completed Activity');
+    record('walletless-passkey-personal-ledger-receipt');
+
+    const revoked = await call('/identity', 'POST',
+      { action: 'revoke_user_grant', network: 'testnet', templateId: id, userId: passkeyUserId },
+      { ...ownerHeaders, Origin: 'https://stellar-testnet.multisig.tools' });
+    check(revoked.revoked === true, 'Passkey grant revoke failed');
+    const denied = await browserRequest(payment);
+    check(denied.status === 403 && denied.body.code === 'template_proposer_not_authorized',
+      'Revoked Passkey still creates payments');
+    record('walletless-passkey-grant-revoked');
+    await cdp.send('WebAuthn.removeVirtualAuthenticator', { authenticatorId });
+    await context.close();
+  } finally { await browser.close(); }
+  }
+
   console.log('LIVE TEMPLATE PROPOSER TESTNET E2E PASSED');
   console.log(JSON.stringify({ requestId, ledger: chain.ledger, transactionHash: chain.hash,
     proposerFunded: false, evidence: trace }, null, 2));
