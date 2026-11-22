@@ -45,20 +45,15 @@ export function UserIdentityProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     const revision = ++refreshVersion.current;
-    let identityResponse: Response;
-    // Prefer an existing Passkey session; this avoids auto-creating a second wallet
-    // account before the user explicitly links the verified wallet to it.
-    identityResponse = await fetch(`/api/identity?network=${network}`, { cache: 'no-store' });
+    // A linked verified wallet exposes signer/owner capabilities. An unlinked
+    // wallet stays a separate credential until the Passkey user links it.
+    const identityResponse = await fetch(`/api/identity?network=${network}`, {
+      cache: 'no-store',
+      headers: selectedWallet ? privateSessionAddressHeaders(selectedWallet) : {},
+    });
     let body = await identityResponse.json() as { authenticated?: boolean; identity?: MstUserIdentity; credentials?: IdentityMethod[] };
     if (!identityResponse.ok && identityResponse.status !== 401) throw new Error('Unable to load MST identity.');
     if (identityResponse.status === 401) body = { authenticated: false };
-    if (!body.authenticated && selectedWallet) {
-      identityResponse = await fetch(`/api/identity?network=${network}`, {
-        cache: 'no-store', headers: privateSessionAddressHeaders(selectedWallet),
-      });
-      body = await identityResponse.json() as typeof body;
-      if (!identityResponse.ok) throw new Error('Unable to verify wallet identity.');
-    }
     if (currentScope.current !== scope || refreshVersion.current !== revision) return;
     setState({ scope, identity: body.authenticated && body.identity?.network === network ? body.identity : null,
       credentials: Array.isArray(body.credentials) ? body.credentials : [] });

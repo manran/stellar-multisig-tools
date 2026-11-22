@@ -118,8 +118,21 @@ export async function currentUserIdentity(
   network: StellarNetwork,
 ): Promise<UserIdentity | null> {
   const wallet = await verifiedSignerSessionFromRequest(blobAuthStore, request, network);
-  if (wallet) return { userId: await store.walletUser(wallet.address),
-    network, method: 'stellar_wallet', address: wallet.address, expiresAt: wallet.expiresAt };
+  if (wallet) {
+    const linked = await store.findCredential('stellar_wallet', wallet.address);
+    if (linked) return { userId: linked.userId,
+      network, method: 'stellar_wallet', address: wallet.address, expiresAt: wallet.expiresAt };
+    // A verified but unlinked wallet must not silently create a second account
+    // while a valid Passkey user is signed in. Linking requires both proofs.
+    let passkey: UserIdentity | null = null;
+    try { passkey = await passkeyIdentityFromRequest(request, store); }
+    catch (cause) {
+      if (!(cause instanceof IdentityError) || cause.status !== 401) throw cause;
+    }
+    if (passkey?.network === network) return passkey;
+    return { userId: await store.walletUser(wallet.address),
+      network, method: 'stellar_wallet', address: wallet.address, expiresAt: wallet.expiresAt };
+  }
   const passkey = await passkeyIdentityFromRequest(request, store);
   return passkey?.network === network ? passkey : null;
 }

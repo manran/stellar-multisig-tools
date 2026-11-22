@@ -226,10 +226,13 @@ async function fixturePage(width, options = {}) {
         if (url.searchParams.get('view') === 'activity') {
           return json({ userId: state.passkeyUserId, network: 'testnet', requests: state.identityHistory ?? [] });
         }
-        if (selected) return json({ authenticated: true,
-          identity: { network: 'testnet', method: 'stellar_wallet', userId: userForAddress(selected), address: selected },
-          credentials: [{ kind: 'stellar_wallet', address: selected }],
-        });
+        if (selected && !(state.passkeyLoggedIn && !(state.walletLinkCount > 0))) {
+          const userId = state.passkeyLoggedIn ? state.passkeyUserId : userForAddress(selected);
+          return json({ authenticated: true,
+            identity: { network: 'testnet', method: 'stellar_wallet', userId, address: selected },
+            credentials: [{ kind: 'stellar_wallet', address: selected }],
+          });
+        }
         if (state.passkeyLoggedIn) return json({ authenticated: true,
           identity: { network: 'testnet', method: 'passkey', userId: state.passkeyUserId },
           credentials: [{ kind: 'passkey', id: 'passkey-qa' }],
@@ -277,8 +280,9 @@ async function fixturePage(width, options = {}) {
         return json({ proposerAddresses: state.proposerGrants });
       }
       const selected = request.headers()['x-multisig-session-address'];
-      const response = { address: state.passkeyLoggedIn && !selected ? null : state.templateOwner,
-        userId: state.passkeyLoggedIn && !selected ? state.passkeyUserId : userForAddress(selected),
+      const passkeyOnly = state.passkeyLoggedIn && (!selected || !(state.walletLinkCount > 0));
+      const response = { address: passkeyOnly ? null : state.templateOwner,
+        userId: state.passkeyLoggedIn ? state.passkeyUserId : userForAddress(selected),
         templates: state.templates };
       const status = state.templateStatus;
       if (state.templateDelay) await state.templateDelay;
@@ -921,7 +925,9 @@ try {
     if (width === 375) {
       await run('passkey-wallet-link-requires-explicit-both-proofs', width, {
         wallet: walletState(addresses.alice),
-        state: { passkeyLoggedIn: true },
+        state: { passkeyLoggedIn: true,
+          templates: [{ ...templateFixture(), ownerAddress: addresses.alice }],
+        },
       }, async ({ page, state }) => {
         await page.goto(`${origin}/identity`);
         await visible(page, 'Your MST account', 'heading');
@@ -931,6 +937,11 @@ try {
         await visible(page, 'Wallet linked to this MST user. Both login methods now open the same account.');
         assert.equal(state.walletLinkCount, 1);
         await snapshot(page, 'passkey-wallet-link', width);
+        await page.goto(`${origin}/new`);
+        await visible(page, 'Monthly suppliers', 'heading');
+        await page.getByText('Payment request access').waitFor({ state: 'visible' });
+        assert.equal(state.walletLinkCount, 1, 'Template management never silently changes wallet binding');
+        await snapshot(page, 'linked-passkey-treasury-owner-controls', width);
       });
     }
 
