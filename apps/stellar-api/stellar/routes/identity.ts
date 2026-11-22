@@ -62,14 +62,6 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const url = new URL(request.url);
     const identityStore = store();
-    if (url.searchParams.has('invite')) {
-      const invite = await availableInvitation(identityStore, url.searchParams.get('invite') ?? '');
-      assertDeploymentNetwork(invite.network);
-      return noStoreJson({ invitation: {
-        templateName: invite.templateName, templateId: invite.templateId,
-        network: invite.network, expiresIn: '24 hours',
-      } });
-    }
     const n = network(url.searchParams.get('network'));
     const identity = await currentUserIdentity(request, identityStore, n);
     if (!identity) return noStoreJson({ authenticated: false });
@@ -101,6 +93,14 @@ export async function POST(request: Request): Promise<Response> {
     const action = body.action;
     const n = network(body.network);
     const identityStore = store();
+    if (action === 'invitation_preview') {
+      const invite = await availableInvitation(identityStore, typeof body.token === 'string' ? body.token : '');
+      if (invite.network !== n) throw new IdentityError('Invitation belongs to another network.', 403, 'invitation_network_mismatch');
+      return noStoreJson({ invitation: {
+        templateName: invite.templateName, templateId: invite.templateId,
+        network: invite.network, expiresIn: '24 hours',
+      } });
+    }
     if (action === 'create_invitation') {
       if (typeof body.templateId !== 'string') throw new IdentityError('Template id is required.', 400, 'invalid_template');
       return noStoreJson(await createTemplateInvitation(request, identityStore, body.templateId, n), 201);

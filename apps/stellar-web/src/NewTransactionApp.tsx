@@ -79,7 +79,8 @@ function TemplateGrantControls({ template, sessionAddress, network }: { template
       const data = await response.json() as { token?: string; error?: string };
       if (!response.ok) throw new Error(data.error || 'Unable to update invitation.');
       if (action === 'create_invitation' && data.token) {
-        const url = new URL(stellarHrefWithSearch('/invite', { token: data.token }), window.location.origin);
+        const url = new URL(stellarHref('/invite'), window.location.origin);
+        url.hash = `token=${data.token}`;
         setInviteUrl(url.toString());
       }
       if (action === 'revoke_user_grant') setUserIds((current) => current.filter((id) => id !== extra.userId));

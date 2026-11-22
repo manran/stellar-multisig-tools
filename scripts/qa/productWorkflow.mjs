@@ -218,11 +218,6 @@ async function fixturePage(width, options = {}) {
         return json({ authenticated: false });
       }
       if (request.method() === 'GET') {
-        if (url.searchParams.has('invite')) {
-          return state.inviteAvailable
-            ? json({ invitation: { network: 'testnet', templateId: 'tpl_qa_monthly', templateName: 'Monthly suppliers' } })
-            : json({ error: 'Invitation expired' }, 404);
-        }
         if (url.searchParams.get('view') === 'activity') {
           return json({ userId: state.passkeyUserId, network: 'testnet', requests: state.identityHistory ?? [] });
         }
@@ -241,6 +236,12 @@ async function fixturePage(width, options = {}) {
       }
       const body = request.postDataJSON();
       assert.equal(body.network, 'testnet');
+      if (body.action === 'invitation_preview') {
+        assert.equal(body.token, state.inviteToken);
+        return state.inviteAvailable
+          ? json({ invitation: { network: 'testnet', templateId: 'tpl_qa_monthly', templateName: 'Monthly suppliers' } })
+          : json({ error: 'Invitation expired' }, 404);
+      }
       if (body.action === 'create_invitation') {
         assert.equal(selected, addresses.alice);
         state.invitationCreated += 1;
@@ -866,7 +867,8 @@ try {
         await link.waitFor({ state: 'visible' });
         const url = new URL(await link.inputValue());
         assert.equal(url.pathname, '/invite');
-        assert.equal(url.searchParams.get('token'), state.inviteToken);
+        assert.equal(url.searchParams.has('token'), false, 'Invite token must not enter the HTTP request URL');
+        assert.equal(new URLSearchParams(url.hash.slice(1)).get('token'), state.inviteToken);
         assert.equal(state.invitationCreated, 1);
         await snapshot(page, 'passkey-invitation-issued', width);
         await page.getByRole('button', { name: 'Revoke invitation' }).click();
@@ -881,7 +883,7 @@ try {
           templates: [{ ...templateFixture(), ownerAddress: addresses.alice }],
         },
       }, async ({ page, state }) => {
-        await page.goto(`${origin}/invite?token=${state.inviteToken}`);
+        await page.goto(`${origin}/invite#token=${state.inviteToken}`);
         await visible(page, 'Join a payment workflow', 'heading');
         await visible(page, 'You are invited to prepare payments', 'heading');
         await page.getByRole('button', { name: 'Accept invitation' }).click();

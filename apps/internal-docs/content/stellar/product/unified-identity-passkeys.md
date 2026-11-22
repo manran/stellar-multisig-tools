@@ -70,9 +70,10 @@ Payment Request. Actual signing/submission remains governed by the current Stell
 - Authentication `Origin` and WebAuthn `expectedRPID` are checked; the RP ID uses
   `multisig.tools` on subdomains, with origin checks remaining domain-specific.
   Passkey sessions use a separate cookie and never substitute for SEP-53 in signer routes.
-- One-time links are confidential until accepted. Avoid displaying invite tokens in
-  logs, analytics, public URLs/Referer headers. Secure logs, rate limits, and origin
-  policies are a release gate.
+- One-time links are confidential until accepted. The invitation token stays in
+  the URL fragment and is sent to the API only in a same-origin JSON POST body;
+  it never belongs in a request path, query string, Referer or access log.
+  Secure logs, rate limits, and origin policies are a release gate.
 
 ## Test and deployment gates
 

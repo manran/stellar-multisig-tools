@@ -28,7 +28,8 @@ interface Invitation {
 export default function IdentityApp() {
   const { identity, credentials, loading, refresh, network } = useUserIdentity();
   const { privateUnlocked, unlockedAddress, unlockedNetwork, authBusy, unlock } = useStellarWallet();
-  const inviteToken = new URLSearchParams(window.location.search).get('token') ?? '';
+  // Invitation capabilities stay in URL fragments, never in HTTP request paths.
+  const inviteToken = new URLSearchParams(window.location.hash.slice(1)).get('token') ?? '';
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [inviteError, setInviteError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -41,7 +42,11 @@ export default function IdentityApp() {
   useEffect(() => {
     if (!inviteToken) return;
     const controller = new AbortController();
-    void fetch(`/api/identity?invite=${encodeURIComponent(inviteToken)}`, { cache: 'no-store', signal: controller.signal })
+    void fetch('/api/identity', {
+      method: 'POST', cache: 'no-store', signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'invitation_preview', network, token: inviteToken }),
+    })
       .then(async (response) => {
         const body = await response.json() as { invitation?: Invitation; error?: string };
         if (!response.ok || !body.invitation) throw new Error(body.error || 'Invitation is no longer available.');
@@ -49,7 +54,7 @@ export default function IdentityApp() {
       })
       .catch((cause) => { if (!controller.signal.aborted) setInviteError(cause instanceof Error ? cause.message : 'Invitation is unavailable.'); });
     return () => controller.abort();
-  }, [inviteToken]);
+  }, [inviteToken, network]);
 
   async function api(action: string, data: Record<string, unknown> = {}, wallet = false): Promise<ResponseBody> {
     const response = await fetch('/api/identity', {
