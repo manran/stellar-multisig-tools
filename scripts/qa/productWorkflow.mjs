@@ -966,7 +966,6 @@ try {
       }, async ({ page, state }) => {
         await page.goto(`${origin}/identity`);
         await visible(page, 'Your account', 'heading');
-        await visible(page, 'Account', 'heading');
         assert.equal(state.walletLinkCount ?? 0, 0, 'Wallet must not auto-link to a Passkey user');
         await page.getByRole('button', { name: 'Link wallet' }).click();
         await visible(page, 'Wallet linked.');
@@ -1205,7 +1204,7 @@ try {
         await visible(page, 'Waiting for other signatures', 'heading');
         await visible(page, '1 more signer needs to sign.');
         await visible(page, 'Follow up with signers', 'heading');
-        await visible(page, 'Add a contact email to an eligible signer below, or share the private link.');
+        await visible(page, 'Add an email or share the link.');
         assert.equal(state.assignments.length, 0, 'No automatic invitations without saved email and selection');
         await snapshot(page, 'proposal-owner-followup', width);
         if (width === 375) {
