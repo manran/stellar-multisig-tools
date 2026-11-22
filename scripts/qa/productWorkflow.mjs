@@ -12,7 +12,8 @@ import { createServer } from 'vite';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const output = process.env.MST_QA_OUTPUT || path.join(os.tmpdir(), 'mst-product-workflow-qa');
-const { chromium } = await import(process.env.MST_QA_PLAYWRIGHT_MODULE || 'playwright');
+const { chromium, webkit } = await import(process.env.MST_QA_PLAYWRIGHT_MODULE || 'playwright');
+const browserEngine = process.env.MST_QA_BROWSER === 'webkit' ? 'webkit' : 'chromium';
 const widths = [320, 375, 414, 768, 1280];
 const requestId = 'QA00000000000001';
 const capability = 'QA'.repeat(13);
@@ -142,7 +143,7 @@ const server = await createServer({
 });
 await server.listen();
 const origin = 'http://127.0.0.1:4177';
-const browser = await chromium.launch({ headless: true });
+const browser = await (browserEngine === 'webkit' ? webkit : chromium).launch({ headless: true });
 const results = [];
 const unexpectedRequests = [];
 const pageErrors = [];
@@ -1187,6 +1188,23 @@ try {
           'Unlinked selected wallet must not appear as account treasuries');
         await snapshot(page, 'unlinked-wallet-contacts', width);
       });
+      await run('passkey-wallet-switch-never-links-old-proof', width, {
+        wallet: walletState(addresses.alice), state: { passkeyLoggedIn: true },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/identity`);
+        await visible(page, 'Link this wallet', 'button');
+        await page.evaluate((next) => window.__MST_QA_SET_WALLET__({
+          address: next, sessionAddress: next, network: 'testnet',
+          privateUnlocked: true, unlockedAddress: window.__MST_QA_INITIAL_WALLET__.address,
+          unlockedNetwork: 'testnet',
+        }), addresses.bob);
+        await visible(page, 'Your account', 'heading');
+        await visible(page, 'Connect Stellar wallet', 'button');
+        assert.equal(await page.getByRole('button', { name: 'Link this wallet' }).count(), 0);
+        assert.equal(await page.getByText('Verified wallet', { exact: true }).count(), 0);
+        assert.equal(state.walletLinkCount ?? 0, 0);
+        await snapshot(page, 'wallet-switch-stale-verification', width);
+      });
       await run('passkey-wallet-link-rejects-another-owner', width, {
         wallet: walletState(addresses.alice),
         state: { passkeyLoggedIn: true, walletLinkConflict: true },
@@ -1813,7 +1831,7 @@ try {
     catch { commit = 'unavailable; set MST_QA_COMMIT for a mounted worktree'; }
   }
   const report = { commit,
-    generatedAt: new Date().toISOString(), method: 'Actual React UI in Chromium; fixture wallet, API, and Horizon; no broadcast or email.', widths,
+    generatedAt: new Date().toISOString(), method: `Actual React UI in ${browserEngine}; fixture wallet, API, and Horizon; no broadcast or email.`, widths, browserEngine,
     passed: results.filter((item) => item.passed).length, failed: results.filter((item) => !item.passed).length, unexpectedRequests, pageErrors, results };
   await writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify({ passed: report.passed, failed: report.failed, unexpectedRequests, pageErrors, output }));

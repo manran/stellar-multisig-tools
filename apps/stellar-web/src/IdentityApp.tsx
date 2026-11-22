@@ -33,7 +33,7 @@ function shortAddress(address: string): string {
 
 export default function IdentityApp() {
   const { identity, credentials, loading, refresh, network } = useUserIdentity();
-  const { privateUnlocked, unlockedAddress, unlockedNetwork, authBusy, unlock, lock, connect } = useStellarWallet();
+  const { address, privateUnlocked, unlockedAddress, unlockedNetwork, authBusy, unlock, lock, connect } = useStellarWallet();
   // Invitation capabilities stay in URL fragments, never in HTTP request paths.
   const inviteToken = new URLSearchParams(window.location.hash.slice(1)).get('token') ?? '';
   const returnToTool = toolReturnPath(new URLSearchParams(window.location.search).get('next'));
@@ -44,7 +44,7 @@ export default function IdentityApp() {
   const [info, setInfo] = useState('');
   const [confirmLink, setConfirmLink] = useState(false);
   const [blockedWallet, setBlockedWallet] = useState('');
-  const walletVerified = Boolean(privateUnlocked && unlockedAddress && unlockedNetwork === network);
+  const walletVerified = Boolean(privateUnlocked && address && address === unlockedAddress && unlockedNetwork === network);
   const walletBlocked = walletVerified && blockedWallet === unlockedAddress;
   const walletHeaders = walletVerified ? privateSessionAddressHeaders(unlockedAddress) : {};
   const canPasskey = typeof PublicKeyCredential !== 'undefined';

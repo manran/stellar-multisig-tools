@@ -12,7 +12,8 @@ const {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
 } = require('@simplewebauthn/server');
-const { chromium } = await import(process.env.MST_QA_PLAYWRIGHT_MODULE || 'playwright');
+const { chromium, devices } = await import(process.env.MST_QA_PLAYWRIGHT_MODULE || 'playwright');
+const android = process.env.MST_QA_DEVICE === 'android';
 
 const web = createServer((_request, response) => {
   response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -24,9 +25,16 @@ const origin = `http://localhost:${port}`;
 let browser;
 try {
   browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext();
+  const device = android ? devices['Pixel 7'] : null;
+  const context = await browser.newContext(device ? {
+    viewport: device.viewport, deviceScaleFactor: device.deviceScaleFactor,
+    userAgent: device.userAgent, isMobile: true, hasTouch: true,
+  } : {});
   const page = await context.newPage();
   await page.goto(origin);
+  if (android) {
+    assert.equal(await page.evaluate(() => navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches), true);
+  }
   const cdp = await context.newCDPSession(page);
   await cdp.send('WebAuthn.enable');
   const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', {
@@ -118,7 +126,7 @@ try {
   );
   console.log('PASS webauthn-challenge-signature-replay-rejected');
   await cdp.send('WebAuthn.removeVirtualAuthenticator', { authenticatorId });
-  console.log('PASS isolated WebAuthn cryptographic acceptance');
+  console.log(`PASS isolated WebAuthn cryptographic acceptance${android ? ' (Android touch emulation)' : ''}`);
 } finally {
   await browser?.close();
   await new Promise((resolve) => web.close(resolve));

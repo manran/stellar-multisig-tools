@@ -26,6 +26,11 @@ test('Activity switches by verified wallet capability, not the login method', ()
   assert.match(walletActivity, /\{!isTreasuryActivity && navigation\}/);
 });
 
+test('account linking never treats an old wallet proof as a newly selected wallet', () => {
+  assert.match(accountPage, /walletVerified = Boolean\(privateUnlocked && address && address === unlockedAddress && unlockedNetwork === network\)/);
+  assert.match(accountPage, /walletHeaders = walletVerified \? privateSessionAddressHeaders\(unlockedAddress\) : \{\}/);
+});
+
 test('one account entry offers Passkey creation and wallet login', () => {
   assert.match(accountPage, /WORKSPACE_COPY.identity.createPasskey/);
   assert.match(accountPage, /WORKSPACE_COPY.identity.signInPasskey/);

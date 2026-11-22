@@ -19,6 +19,10 @@ PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --prefix /tmp/mst-qa-tools --no-a
 MST_QA_PLAYWRIGHT_MODULE=/tmp/mst-qa-tools/node_modules/playwright/index.mjs MST_QA_OUTPUT=/artifacts MST_QA_COMMIT=<checked-commit-sha> node scripts/qa/productWorkflow.mjs
 ```
 
+Set `MST_QA_BROWSER=webkit` to run the same browser scenarios in WebKit
+(the engine used by Safari). Its mobile-width checks do not replace testing
+on an actual iOS device or the native Passkey sheet.
+
 The matching image `mcr.microsoft.com/playwright:v1.58.2-noble` contains the
 browser and system dependencies. Run Vite and Chromium in the same disposable
 container. No published host ports are required. Mount only the disposable
@@ -36,6 +40,10 @@ unexpected API calls. A failed check or unexpected API call returns exit code 1.
 Template payment → own Inbox → Activity flow without any wallet calls at 375px
 and 1280px. These use an intercepted API/identity fixture; they do **not**
 validate the real WebAuthn, JWT cookie, or live database.
+
+Set `MST_QA_DEVICE=android` to run the same WebAuthn cryptographic checks
+under a Pixel 7-style touch/mobile Chromium context. This is simulated Android,
+not a physical device or Google Password Manager.
 
 `passkeyVirtualAuthenticator.mjs` uses Chromium's **virtual CTAP2 authenticator**
 and real SimpleWebAuthn verification. It checks a user-verified discoverable
