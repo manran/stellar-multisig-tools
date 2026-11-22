@@ -37,7 +37,9 @@ export class IdentityQuotaError extends Error {
 export function identityClientAddress(request: Request): string | null {
   // Trust the header set by the actual ingress only. Accepting Cloudflare's
   // header on Vercel (or vice versa) would let callers spoof their quota key.
-  const header = process.env.VERCEL === '1'
+  const provider = process.env.MST_IDENTITY_TRUSTED_PROXY
+    ?? (process.env.VERCEL === '1' ? 'vercel' : 'cloudflare');
+  const header = provider === 'vercel'
     ? 'x-vercel-forwarded-for' : 'cf-connecting-ip';
   const value = request.headers.get(header)?.trim();
   if (!value || value.includes(',') || !ipaddr.isValid(value)) return null;
