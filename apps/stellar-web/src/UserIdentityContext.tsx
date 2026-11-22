@@ -13,6 +13,8 @@ export interface MstUserIdentity {
   expiresAt?: number;
 }
 
+export interface MstUserProfile { nickname: string; }
+
 export interface IdentityMethod {
   kind: 'passkey' | 'stellar_wallet';
   id?: string;
@@ -22,6 +24,7 @@ export interface IdentityMethod {
 interface IdentityContextValue {
   identity: MstUserIdentity | null;
   credentials: IdentityMethod[];
+  profile: MstUserProfile | null;
   network: StellarNetwork;
   loading: boolean;
   refresh: () => Promise<void>;
@@ -38,10 +41,11 @@ export function UserIdentityProvider({ children }: { children: ReactNode }) {
   const currentScope = useRef(scope);
   currentScope.current = scope;
   const refreshVersion = useRef(0);
-  const [state, setState] = useState<{ scope: string; identity: MstUserIdentity | null; credentials: IdentityMethod[] } | null>(null);
+  const [state, setState] = useState<{ scope: string; identity: MstUserIdentity | null; credentials: IdentityMethod[]; profile: MstUserProfile | null } | null>(null);
   const [loading, setLoading] = useState(false);
   const identity = state?.scope === scope ? state.identity : null;
   const credentials = state?.scope === scope ? state.credentials : [];
+  const profile = state?.scope === scope ? state.profile : null;
 
   const refresh = useCallback(async () => {
     const revision = ++refreshVersion.current;
@@ -51,24 +55,25 @@ export function UserIdentityProvider({ children }: { children: ReactNode }) {
       cache: 'no-store',
       headers: selectedWallet ? privateSessionAddressHeaders(selectedWallet) : {},
     });
-    let body = await identityResponse.json() as { authenticated?: boolean; identity?: MstUserIdentity; credentials?: IdentityMethod[] };
+    let body = await identityResponse.json() as { authenticated?: boolean; identity?: MstUserIdentity; credentials?: IdentityMethod[]; profile?: MstUserProfile };
     if (!identityResponse.ok && identityResponse.status !== 401) throw new Error('Unable to load MST identity.');
     if (identityResponse.status === 401) body = { authenticated: false };
     if (currentScope.current !== scope || refreshVersion.current !== revision) return;
     setState({ scope, identity: body.authenticated && body.identity?.network === network ? body.identity : null,
-      credentials: Array.isArray(body.credentials) ? body.credentials : [] });
+      credentials: Array.isArray(body.credentials) ? body.credentials : [],
+      profile: body.authenticated && body.profile && typeof body.profile.nickname === 'string' ? body.profile : null });
   }, [network, scope, selectedWallet]);
 
   useEffect(() => {
     let current = true;
     setLoading(true);
     void refresh().catch(() => {
-      if (current) setState({ scope, identity: null, credentials: [] });
+      if (current) setState({ scope, identity: null, credentials: [], profile: null });
     }).finally(() => { if (current) setLoading(false); });
     return () => { current = false; refreshVersion.current += 1; };
   }, [refresh, scope]);
 
-  return <IdentityContext.Provider value={{ identity, credentials, network, loading, refresh }}>
+  return <IdentityContext.Provider value={{ identity, credentials, profile, network, loading, refresh }}>
     {children}
   </IdentityContext.Provider>;
 }

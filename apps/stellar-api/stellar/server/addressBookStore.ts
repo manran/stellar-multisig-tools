@@ -1,4 +1,4 @@
-export type AddressAliasSubjectType = 'account' | 'signer';
+export type AddressAliasSubjectType = 'account' | 'signer' | 'person';
 
 export interface StoredAddressAlias {
   version: 1;

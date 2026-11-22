@@ -39,6 +39,18 @@ test('same Stellar wallet always resolves to one MST user, concurrent first logi
   assert.equal(credential?.publicKey, undefined);
 });
 
+test('MST nickname is durable per user and rejects invalid changes', active, async () => {
+  const store = new PostgresIdentityStore();
+  const userId = await store.walletUser(Keypair.random().publicKey());
+  assert.deepEqual(await store.userProfile(userId), { nickname: '' });
+  assert.deepEqual(await store.updateNickname(userId, ' Finance team '), { nickname: 'Finance team' });
+  assert.deepEqual(await store.userProfile(userId), { nickname: 'Finance team' });
+  await assert.rejects(() => store.updateNickname(userId, ' '),
+    (cause: unknown) => cause instanceof IdentityError && cause.code === 'invalid_nickname');
+  await assert.rejects(() => store.updateNickname(userId, 'x'.repeat(65)),
+    (cause: unknown) => cause instanceof IdentityError && cause.code === 'invalid_nickname');
+});
+
 test('WebAuthn challenge is short-lived and consumed exactly once', active, async () => {
   const store = new PostgresIdentityStore();
   const challenge = await store.createChallenge({

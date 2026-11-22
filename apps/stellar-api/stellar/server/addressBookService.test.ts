@@ -100,6 +100,16 @@ test('stores, preserves, clears, and validates a private notification email', as
   );
 });
 
+test('a person can be saved without a wallet address and later removed', async () => {
+  const store = memoryStore();
+  const owner = 'user:testnet:00000000-0000-4000-8000-000000000001';
+  const key = 'contact:00000000-0000-4000-8000-000000000099';
+  await upsertAddressAlias(store, owner, { address: key, subjectType: 'person', label: 'Project manager', notificationEmail: 'pm@example.org' });
+  assert.equal((await listAddressAliases(store, owner))[0].notificationEmail, 'pm@example.org');
+  await deleteAddressAlias(store, owner, { address: key, subjectType: 'person' });
+  assert.equal((await listAddressAliases(store, owner)).length, 0);
+});
+
 test('rejects invalid alias input', async () => {
   const owner = Keypair.random().publicKey();
   const address = Keypair.random().publicKey();
@@ -107,7 +117,7 @@ test('rejects invalid alias input', async () => {
 
   await assert.rejects(
     () => upsertAddressAlias(store, owner, { address, subjectType: 'person', label: 'Alice' }),
-    (cause: unknown) => cause instanceof AddressBookServiceError && cause.code === 'invalid_subject_type',
+    (cause: unknown) => cause instanceof AddressBookServiceError && cause.code === 'invalid_contact',
   );
   await assert.rejects(
     () => upsertAddressAlias(store, owner, { address: 'not-a-key', subjectType: 'signer', label: 'Alice' }),

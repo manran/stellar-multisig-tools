@@ -67,6 +67,20 @@ test('upsert preserves creation time, orders recent work first, and delete is sc
   assert.deepEqual((await listContractWorkspaces(store, principal)).map((entry) => entry.contractId), [CONTRACT_B]);
 });
 
+test('business labels are optional and stay user-provided across saves', async () => {
+  const store = memoryStore();
+  const principal: ContractWorkspacePrincipal = { type: 'user', network: 'testnet', userId: '00000000-0000-4000-8000-000000000001' };
+  const created = await keepContractWorkspace(store, principal, CONTRACT_A, new Date('2026-11-22T01:00:00Z'),
+    { nickname: '  Payroll  ', organization: ' Example Org ' });
+  assert.equal(created.nickname, 'Payroll');
+  assert.equal(created.organization, 'Example Org');
+  const updated = await keepContractWorkspace(store, principal, CONTRACT_A, new Date('2026-11-22T01:01:00Z'));
+  assert.equal(updated.organization, 'Example Org');
+  await assert.rejects(() => keepContractWorkspace(store, principal, CONTRACT_A, new Date(), { nickname: 'x'.repeat(81) }),
+    (cause: unknown) => cause instanceof ContractWorkspaceServiceError && cause.code === 'invalid_contract_label');
+  assert.equal((await listContractWorkspaces(store, principal))[0].nickname, 'Payroll');
+});
+
 test('invalid contract ids fail before storage mutation', async () => {
   const store = memoryStore();
   const principal: SignerPrincipalRef = {

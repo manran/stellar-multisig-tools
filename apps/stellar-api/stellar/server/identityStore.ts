@@ -76,6 +76,28 @@ export class PostgresIdentityStore {
     return result.rows[0] ? credentialFromRow(result.rows[0]) : null;
   }
 
+  async userProfile(userId: string): Promise<{ nickname: string }> {
+    const result = await this.pool.query<{ nickname: string }>(
+      'SELECT nickname FROM mst_stellar.mst_users WHERE id = $1', [userId],
+    );
+    if (!result.rows[0]) throw new IdentityError('Account not found.', 404, 'unknown_user');
+    return { nickname: result.rows[0].nickname };
+  }
+
+  async updateNickname(userId: string, value: unknown): Promise<{ nickname: string }> {
+    if (typeof value !== 'string') throw new IdentityError('Enter a nickname.', 400, 'invalid_nickname');
+    const nickname = value.trim().normalize('NFC');
+    if (!nickname || [...nickname].length > 64 || /[\u0000-\u001f\u007f]/.test(nickname)) {
+      throw new IdentityError('Nickname must be 1–64 characters.', 400, 'invalid_nickname');
+    }
+    const result = await this.pool.query<{ nickname: string }>(
+      'UPDATE mst_stellar.mst_users SET nickname = $2 WHERE id = $1 RETURNING nickname',
+      [userId, nickname],
+    );
+    if (!result.rows[0]) throw new IdentityError('Account not found.', 404, 'unknown_user');
+    return { nickname: result.rows[0].nickname };
+  }
+
   async userExists(userId: string): Promise<boolean> {
     const result = await this.pool.query(
       'SELECT 1 FROM mst_stellar.mst_users WHERE id = $1',

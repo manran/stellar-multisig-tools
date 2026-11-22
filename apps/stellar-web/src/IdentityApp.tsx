@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
-import { ArrowLeft, ArrowRight, CheckCircle2, Fingerprint, KeyRound, LoaderCircle, ShieldCheck, WalletCards } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Copy, Fingerprint, KeyRound, LoaderCircle, Pencil, ShieldCheck, WalletCards } from 'lucide-react';
+import AccountAvatar from './AccountAvatar';
+import { accountDisplayName } from './accountDisplayName';
 import { ActionButton } from './MultiSigUi';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
@@ -32,7 +34,7 @@ function shortAddress(address: string): string {
 }
 
 export default function IdentityApp() {
-  const { identity, credentials, loading, refresh, network } = useUserIdentity();
+  const { identity, profile, credentials, loading, refresh, network } = useUserIdentity();
   const { address, privateUnlocked, unlockedAddress, unlockedNetwork, authBusy, unlock, lock, connect } = useStellarWallet();
   // Invitation capabilities stay in URL fragments, never in HTTP request paths.
   const inviteToken = new URLSearchParams(window.location.hash.slice(1)).get('token') ?? '';
@@ -44,6 +46,10 @@ export default function IdentityApp() {
   const [info, setInfo] = useState('');
   const [confirmLink, setConfirmLink] = useState(false);
   const [blockedWallet, setBlockedWallet] = useState('');
+  const [editingNickname, setEditingNickname] = useState(false);
+  const [nicknameDraft, setNicknameDraft] = useState('');
+  const displayName = identity ? accountDisplayName(identity.userId, profile?.nickname) : '';
+  useEffect(() => { setNicknameDraft(profile?.nickname || displayName); setEditingNickname(false); }, [identity?.userId, profile?.nickname]);
   const walletVerified = Boolean(privateUnlocked && address && address === unlockedAddress && unlockedNetwork === network);
   const walletBlocked = walletVerified && blockedWallet === unlockedAddress;
   const walletHeaders = walletVerified ? privateSessionAddressHeaders(unlockedAddress) : {};
@@ -159,6 +165,20 @@ export default function IdentityApp() {
     setInfo(WORKSPACE_COPY.identity.linkedSuccess);
   }
 
+  async function saveNickname() {
+    const nickname = nicknameDraft.trim();
+    if (!nickname || [...nickname].length > 64) throw new Error('Nickname must be 1–64 characters.');
+    await api('update_profile', { nickname });
+    await refresh();
+    setEditingNickname(false);
+  }
+
+  async function copyUserId() {
+    if (!identity) return;
+    await navigator.clipboard.writeText(identity.userId);
+    setInfo('User ID copied.');
+  }
+
   async function signOutPasskey() {
     const response = await fetch('/api/identity', { method: 'DELETE' });
     if (!response.ok) throw new Error('Unable to sign out.');
@@ -204,7 +224,25 @@ export default function IdentityApp() {
         </section>}
 
         {identity && <section className="mt-7 border-t border-[var(--color-rule)] pt-6" aria-label="Your account and login methods">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-4">
+            <AccountAvatar value={identity.userId} className="h-14 w-14" label="Your account avatar" />
+            <div className="min-w-0 flex-1">
+              {editingNickname ? <div className="flex flex-wrap items-center gap-2">
+                <label htmlFor="identity-nickname" className="sr-only">Nickname</label>
+                <input id="identity-nickname" autoFocus maxLength={64} value={nicknameDraft} onChange={(event) => setNicknameDraft(event.target.value)} className="mst-address-control min-w-0 flex-1" />
+                <ActionButton disabled={actionBusy || !nicknameDraft.trim()} onClick={() => void perform(saveNickname)}>Save</ActionButton>
+                <button type="button" className="text-sm underline" onClick={() => setEditingNickname(false)}>Cancel</button>
+              </div> : <div className="flex items-center gap-2">
+                <h2 className="min-w-0 break-words text-xl font-semibold">{displayName}</h2>
+                <button type="button" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-[var(--color-ink-2)] hover:bg-[var(--color-paper-2)]" onClick={() => { setNicknameDraft(profile?.nickname || displayName); setEditingNickname(true); }} aria-label="Edit nickname"><Pencil className="h-4 w-4" /></button>
+              </div>}
+              <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--color-ink-2)]">
+                <span className="font-mono">ID · {identity.userId.slice(0, 8)}</span>
+                <button type="button" className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold underline underline-offset-4" onClick={() => void perform(copyUserId)}><Copy className="h-3.5 w-3.5" />Copy ID</button>
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="flex items-center gap-2 text-sm text-[var(--color-ink-2)]"><CheckCircle2 className="h-4 w-4 text-[var(--color-accent)]" />{WORKSPACE_COPY.identity.signedInWith(identity.method)}</p>
             </div>

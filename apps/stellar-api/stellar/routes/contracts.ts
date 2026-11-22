@@ -32,12 +32,16 @@ function json(data: unknown, status = 200): Response {
 function publicWorkspace(entry: {
   contractId: string;
   network: 'public' | 'testnet';
+  nickname?: string;
+  organization?: string;
   createdAt: string;
   updatedAt: string;
 }) {
   return {
     contractId: entry.contractId,
     network: entry.network,
+    ...(entry.nickname ? { nickname: entry.nickname } : {}),
+    ...(entry.organization ? { organization: entry.organization } : {}),
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
   };
@@ -112,7 +116,10 @@ export async function PUT(request: Request): Promise<Response> {
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
     const principal = await principalFor(request, 'write', body);
     assertRequestedNetwork(body, principal);
-    const contract = await keepContractWorkspace(blobContractWorkspaceStore, principal, contractIdFromBody(body));
+    const contract = await keepContractWorkspace(blobContractWorkspaceStore, principal, contractIdFromBody(body), new Date(), {
+      nickname: typeof body.nickname === 'string' ? body.nickname : undefined,
+      organization: typeof body.organization === 'string' ? body.organization : undefined,
+    });
     return json({ operation: 'contract.workspace.keep', version: 1, principal, contract: publicWorkspace(contract) });
   } catch (cause) {
     return errorResponse(cause);

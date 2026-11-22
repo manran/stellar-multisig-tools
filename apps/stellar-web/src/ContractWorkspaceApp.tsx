@@ -30,9 +30,16 @@ export default function ContractWorkspaceApp() {
   const [saving, setSaving] = useState(false);
   const [savedOverride, setSavedOverride] = useState(false);
   const [error, setError] = useState('');
-  const saved = savedOverride || contracts.some(
-    (item) => item.contractId === contractId && item.network === network,
-  );
+  const savedContract = contracts.find((item) => item.contractId === contractId && item.network === network);
+  const saved = savedOverride || Boolean(savedContract);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [nickname, setNickname] = useState('');
+  const [organization, setOrganization] = useState('');
+
+  useEffect(() => {
+    setNickname(savedContract?.nickname ?? '');
+    setOrganization(savedContract?.organization ?? '');
+  }, [savedContract?.nickname, savedContract?.organization]);
 
   useEffect(() => {
     if (route) return;
@@ -73,8 +80,9 @@ export default function ContractWorkspaceApp() {
         navigateWorkspace('/identity', { search: '?next=/contracts' });
         return;
       }
-      await keep(contractId);
+      await keep(contractId, { nickname, organization });
       setSavedOverride(true);
+      navigateWorkspace('/contracts');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to save this contract.');
     } finally {
@@ -102,17 +110,18 @@ export default function ContractWorkspaceApp() {
           <a href={stellarHref('/contracts')} className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black dark:text-neutral-300 dark:hover:text-white"><ArrowLeft className="h-4 w-4" />{WORKSPACE_COPY.tools.contracts}</a>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Braces className="mst-contract-accent h-6 w-6" />
-            <h1 className="text-3xl font-bold tracking-tight">Contract Workspace</h1>
+            <h1 className="text-3xl font-bold tracking-tight">{savedContract?.nickname || 'Contract details'}</h1>
             <NetworkBadge network={network} />
             {saved && <span className="mst-contract-saved">Saved</span>}
           </div>
+          {savedContract?.organization && <p className="mt-2 text-sm font-semibold">{savedContract.organization} <span className="font-normal text-[var(--color-ink-2)]">· Your label</span></p>}
           <p className="mt-2 break-all font-mono text-sm text-neutral-500 dark:text-neutral-400">{contractId}</p>
 
           {error && <div className="mt-5 flex gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div>}
 
           <div className="mst-contract-workspace mt-6">
             <section className="mst-contract-methods">
-              <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-bold">Callable methods</h2>{loading && <LoaderCircle className="h-4 w-4 animate-spin text-neutral-400" />}</div>
+              <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-bold">Available actions</h2>{loading && <LoaderCircle className="h-4 w-4 animate-spin text-neutral-400" />}</div>
               {loading && <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">Loading callable methods from the on-chain contract spec…</p>}
               {!loading && !error && (
                 <div className="mst-contract-method-list">
@@ -136,15 +145,23 @@ export default function ContractWorkspaceApp() {
               </section>
 
               <section className="mst-contract-fact">
-                <h2 className="font-bold">Workspace</h2>
+                <h2 className="font-bold">Saved contract</h2>
                 {saved ? (
                   <>
-                    <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Saved to your account.</p>
+                    <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Saved to Smart Contracts.</p>
+                    <button type="button" className="mt-3 text-sm font-semibold underline underline-offset-4" onClick={() => setEditingDetails((value) => !value)} aria-expanded={editingDetails}>Edit details</button>
+                    {editingDetails && <div className="mt-3 space-y-3">
+                      <label htmlFor="saved-contract-nickname" className="block text-sm font-semibold">Nickname</label>
+                      <input id="saved-contract-nickname" className="mst-contract-control w-full" maxLength={80} value={nickname} onChange={(event) => setNickname(event.target.value)} />
+                      <label htmlFor="saved-contract-organization" className="block text-sm font-semibold">Organization</label>
+                      <input id="saved-contract-organization" className="mst-contract-control w-full" maxLength={80} value={organization} onChange={(event) => setOrganization(event.target.value)} />
+                      <button type="button" disabled={saving} className="mst-action-secondary disabled:opacity-50" onClick={() => void keepContract()}>Save changes</button>
+                    </div>}
                     <button type="button" disabled={!ready || saving} onClick={() => void forgetContract()} className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-red-700 hover:underline disabled:opacity-40 dark:text-red-300"><Trash2 className="h-4 w-4" />Forget contract</button>
                   </>
                 ) : (
                   <>
-                    <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Save this contract to your account.</p>
+                    <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Keep this contract in Smart Contracts for later.</p>
                     <button type="button" disabled={saving || authBusy} onClick={() => void keepContract()} className="mst-action-secondary mt-4 disabled:opacity-40">{saving || authBusy ? 'Saving…' : WORKSPACE_COPY.contracts.save}</button>
                   </>
                 )}

@@ -19,6 +19,7 @@ const LIMITS: Record<string, number> = {
   revoke_user_grant: 20,
   revoke_invitation: 20,
   link_wallet: 12,
+  update_profile: 30,
   unknown: 15,
 };
 

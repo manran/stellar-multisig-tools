@@ -11,6 +11,7 @@ interface Props {
   semantics?: 'name' | 'note';
   allowNotificationEmail?: boolean;
   showEmailPreview?: boolean;
+  hideDeleteInEdit?: boolean;
 }
 
 export default function AddressAliasEditor(props: Props) {
@@ -26,6 +27,7 @@ function ScopedAddressAliasEditor({
   semantics = 'name',
   allowNotificationEmail = false,
   showEmailPreview = true,
+  hideDeleteInEdit = false,
 }: Props) {
   const { labelFor, emailFor, saveAlias, removeAlias } = useAddressBook();
   const currentLabel = labelFor(address, subjectType);
@@ -50,14 +52,15 @@ function ScopedAddressAliasEditor({
     if (!value || busy) return;
     setBusy(true);
     setError('');
+    setEditing(false);
     void saveAlias(
       address,
       subjectType,
       value,
       allowNotificationEmail ? (draftEmail.trim() || null) : undefined,
     )
-      .then(() => setEditing(false))
       .catch((cause) => {
+        setEditing(true);
         setError(cause instanceof Error ? cause.message : `Unable to save ${noun}.`);
       })
       .finally(() => setBusy(false));
@@ -138,7 +141,7 @@ function ScopedAddressAliasEditor({
         </div>
         <button type="button" disabled={busy || !draft.trim()} onClick={save} className="rounded-lg p-2 text-emerald-700 hover:bg-emerald-500/10 disabled:opacity-40 dark:text-emerald-300" aria-label={allowNotificationEmail ? 'Save contact' : noteMode ? 'Save note' : 'Save name'}><Check className="h-4 w-4" /></button>
         <button type="button" disabled={busy} onClick={() => setEditing(false)} className="rounded-lg p-2 text-neutral-500 hover:bg-black/5 dark:hover:bg-white/10" aria-label={allowNotificationEmail ? 'Cancel contact editing' : noteMode ? 'Cancel note' : 'Cancel naming'}><X className="h-4 w-4" /></button>
-        {currentLabel && <button type="button" disabled={busy} onClick={() => void remove()} className="rounded-lg p-2 text-red-600 hover:bg-red-500/10 disabled:opacity-40" aria-label={allowNotificationEmail ? 'Remove contact' : noteMode ? 'Remove note' : 'Remove name'}><Trash2 className="h-4 w-4" /></button>}
+        {currentLabel && !hideDeleteInEdit && <button type="button" disabled={busy} onClick={() => void remove()} className="rounded-lg p-2 text-red-600 hover:bg-red-500/10 disabled:opacity-40" aria-label={allowNotificationEmail ? 'Remove contact' : noteMode ? 'Remove note' : 'Remove name'}><Trash2 className="h-4 w-4" /></button>}
       </div>
       {error && <div className="mt-1.5 text-xs text-red-700 dark:text-red-300">{error}</div>}
       <div className="mt-1 text-[11px] text-neutral-400">{allowNotificationEmail

@@ -70,15 +70,26 @@ export async function keepContractWorkspace(
   principalValue: ContractWorkspacePrincipal,
   contractIdValue: string,
   now = new Date(),
+  metadata?: { nickname?: string; organization?: string },
 ): Promise<StoredContractWorkspace> {
   const principal = normalizedPrincipal(principalValue);
   const contractId = normalizedContractId(contractIdValue);
   const existing = await store.get(principal, contractId);
+  const cleanLabel = (value: string | undefined, key: string, previous?: string) => {
+    if (value === undefined) return previous;
+    const trimmed = value.trim();
+    if (trimmed.length > 80) throw new ContractWorkspaceServiceError(`${key} must be 80 characters or fewer.`, 400, 'invalid_contract_label');
+    return trimmed || undefined;
+  };
+  const nickname = cleanLabel(metadata?.nickname, 'Nickname', existing?.nickname);
+  const organization = cleanLabel(metadata?.organization, 'Organization', existing?.organization);
   const timestamp = now.toISOString();
   const workspace: StoredContractWorkspace = {
     version: 1,
     contractId,
     network: principal.network,
+    ...(nickname ? { nickname } : {}),
+    ...(organization ? { organization } : {}),
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
   };

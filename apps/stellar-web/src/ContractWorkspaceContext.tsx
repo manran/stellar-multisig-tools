@@ -15,7 +15,7 @@ interface ContractWorkspaceContextValue {
   error: string;
   ready: boolean;
   refresh(): Promise<void>;
-  keep(contractId: string): Promise<void>;
+  keep(contractId: string, metadata?: { nickname?: string; organization?: string }): Promise<void>;
   forget(contractId: string): Promise<void>;
 }
 
@@ -73,9 +73,9 @@ export function ContractWorkspaceProvider({ children }: { children: ReactNode })
     return () => { cancelled = true; };
   }, [owner, network, selectedWallet]);
 
-  const keep = useCallback(async (contractId: string) => {
+  const keep = useCallback(async (contractId: string, metadata?: { nickname?: string; organization?: string }) => {
     if (!owner) throw new Error('Sign in to save contracts.');
-    const contract = await keepContractOperation(contractId, network, selectedWallet);
+    const contract = await keepContractOperation(contractId, network, selectedWallet, metadata);
     if (scopeRef.current === owner) {
       setState((current) => ({
         owner,

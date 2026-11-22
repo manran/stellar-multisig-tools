@@ -1,14 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { accountDisplayName } from '../accountDisplayName.js';
 
 const headerAccount = readFileSync(new URL('../StellarAccountControl.tsx', import.meta.url), 'utf8');
 const accountPage = readFileSync(new URL('../IdentityApp.tsx', import.meta.url), 'utf8');
 
+test('account uses a stable nickname until the user names it', () => {
+  const id = '94b2acdf-0000-4000-8000-000000000000';
+  assert.equal(accountDisplayName(id), 'MST-94B2AC');
+  assert.equal(accountDisplayName(id, ' Payroll team '), 'Payroll team');
+  assert.match(accountPage, /Edit nickname/);
+  assert.match(accountPage, /Copy ID/);
+});
+
 test('header opens unified account entry instead of wallet-only sign-in', () => {
   assert.match(headerAccount, /href=\{stellarHref\('\/identity'\)\}/);
   assert.match(headerAccount, /Sign in \/ Sign up/);
-  assert.match(headerAccount, /\{identity \? 'Your account' : 'Sign in \/ Sign up'\}/);
+  assert.match(headerAccount, /identity \? accountDisplayName\(identity.userId, profile\?\.nickname\) : 'Sign in \/ Sign up'/);
   assert.doesNotMatch(headerAccount, /onClick=\{\(\) => void signIn\(\)\}/);
   assert.match(headerAccount, /WORKSPACE_COPY.identity.accountMethods/);
 });

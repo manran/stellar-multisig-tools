@@ -50,8 +50,17 @@ export async function importLegacyAddressBook(
 }
 
 function normalizeSubjectType(value: string): AddressAliasSubjectType {
-  if (value === 'account' || value === 'signer') return value;
-  throw new AddressBookServiceError('Alias subject type must be account or signer.', 400, 'invalid_subject_type');
+  if (value === 'account' || value === 'signer' || value === 'person') return value;
+  throw new AddressBookServiceError('Invalid contact type.', 400, 'invalid_subject_type');
+}
+
+function normalizeContactKey(value: string, type: AddressAliasSubjectType): string {
+  if (type !== 'person') return normalizeAddress(value);
+  const trimmed = value.trim();
+  if (!/^contact:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+    throw new AddressBookServiceError('Invalid contact reference.', 400, 'invalid_contact');
+  }
+  return trimmed.toLowerCase();
 }
 
 function normalizeLabel(value: string): string {
@@ -109,8 +118,8 @@ export async function upsertAddressAlias(
   now = new Date(),
 ): Promise<StoredAddressAlias> {
   const ownerAddress = normalizeOwner(ownerAddressValue);
-  const address = normalizeAddress(input.address);
   const subjectType = normalizeSubjectType(input.subjectType);
+  const address = normalizeContactKey(input.address, subjectType);
   const label = normalizeLabel(input.label);
   const notificationEmailUpdate = normalizeNotificationEmail(input.notificationEmail);
   const existing = await store.get(ownerAddress, subjectType, address);
@@ -137,7 +146,7 @@ export async function deleteAddressAlias(
   input: { address: string; subjectType: string },
 ): Promise<void> {
   const ownerAddress = normalizeOwner(ownerAddressValue);
-  const address = normalizeAddress(input.address);
   const subjectType = normalizeSubjectType(input.subjectType);
+  const address = normalizeContactKey(input.address, subjectType);
   await store.delete(ownerAddress, subjectType, address);
 }

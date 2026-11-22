@@ -8,6 +8,8 @@ import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src
 export interface ContractWorkspaceRef {
   contractId: string;
   network: StellarNetwork;
+  nickname?: string;
+  organization?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -120,12 +122,13 @@ export async function keepContractOperation(
   contractId: string,
   network: StellarNetwork,
   walletAddress?: string,
+  metadata?: { nickname?: string; organization?: string },
 ): Promise<ContractWorkspaceRef> {
   const response = await fetch('/api/contracts', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json',
       ...(walletAddress ? privateSessionAddressHeaders(walletAddress) : {}) },
-    body: JSON.stringify({ contractId, network }),
+    body: JSON.stringify({ contractId, network, ...metadata }),
   });
   const body = await responseJson<{ contract?: ContractWorkspaceRef }>(response, 'Unable to save contract');
   if (!body.contract) throw new Error('Contract workspace response is invalid.');

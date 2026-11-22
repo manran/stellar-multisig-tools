@@ -192,7 +192,7 @@ test('Operational tools connect decisions to the existing secure workflow', () =
   );
   assert.match(addressBook, /unlockedAddress === relatedAddress && unlockedNetwork === network/);
   assert.match(addressBook, /const relatedAddress = identity\?\.address === address \? address : ''/);
-  assert.match(addressBook, /await saveAlias\(target, 'account', name\)/);
+  assert.match(addressBook, /await saveAlias\(contactKey, contactType, name, email \|\| undefined\)/);
   assert.match(addressBook, /id="contact-search" type="search"/);
   assert.match(agentAccess, /pendingRevokeId === credential\.credentialId/);
   assert.match(agentAccess, /Confirm revoke/);

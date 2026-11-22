@@ -5,7 +5,7 @@ import { useUserIdentity } from './UserIdentityContext';
 import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
 import { preferredAddressEntry, preferredAddressLabel } from './stellar/addressIdentity';
 
-export type AddressAliasSubjectType = 'account' | 'signer';
+export type AddressAliasSubjectType = 'account' | 'signer' | 'person';
 
 export interface AddressAliasEntry {
   address: string;
@@ -44,7 +44,7 @@ function parseEntry(value: unknown): AddressAliasEntry | null {
   const subjectType = record.subject_type ?? record.subjectType;
   const notificationEmail = record.notification_email ?? record.notificationEmail;
   if (typeof record.address !== 'string' || typeof record.label !== 'string') return null;
-  if (subjectType !== 'account' && subjectType !== 'signer') return null;
+  if (subjectType !== 'account' && subjectType !== 'signer' && subjectType !== 'person') return null;
   return {
     address: record.address,
     subjectType,

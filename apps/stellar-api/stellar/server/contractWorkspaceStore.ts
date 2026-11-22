@@ -7,6 +7,9 @@ export interface StoredContractWorkspace {
   version: 1;
   contractId: string;
   network: StellarNetwork;
+  /** User-provided business labels; never treated as verified organization ownership. */
+  nickname?: string;
+  organization?: string;
   createdAt: string;
   updatedAt: string;
 }

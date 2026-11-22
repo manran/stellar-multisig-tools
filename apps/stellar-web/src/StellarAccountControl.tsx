@@ -7,6 +7,8 @@ import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
 import type { WalletNetworkSource } from './stellar/walletKit';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
 import { WORKSPACE_COPY } from './workspaceCopy';
+import AccountAvatar from './AccountAvatar';
+import { accountDisplayName } from './accountDisplayName';
 
 function shortAddress(address: string) {
   return address.length <= 12 ? address : `${address.slice(0, 4)}…${address.slice(-3)}`;
@@ -22,7 +24,7 @@ function visibleNetworkLabel(network: StellarNetwork | null, networkSource: Wall
 
 export default function StellarAccountControl() {
   const { labelFor } = useAddressBook();
-  const { identity } = useUserIdentity();
+  const { identity, profile } = useUserIdentity();
   const fixedDeploymentNetwork = fixedClientStellarDeploymentNetwork();
   const {
     address,
@@ -52,8 +54,8 @@ export default function StellarAccountControl() {
 
   if (address) {
     const alias = labelFor(address, 'signer');
-    const accountLabel = identity?.method === 'passkey'
-      ? WORKSPACE_COPY.identity.account : alias || shortAddress(address);
+    const accountLabel = identity
+      ? accountDisplayName(identity.userId, profile?.nickname) : alias || shortAddress(address);
     const networkMismatch = fixedDeploymentNetwork && networkSource === 'wallet' && network !== fixedDeploymentNetwork;
     const networkLabel = fixedDeploymentNetwork
       ? networkMismatch
@@ -72,6 +74,7 @@ export default function StellarAccountControl() {
           title={`${identity?.method === 'passkey' ? 'Your MST account · ' : ''}${address}${networkLabel ? ` · ${networkLabel}` : ''}`}
           className="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-semibold shadow-sm transition hover:bg-black/[0.03] dark:border-white/15 dark:bg-white/5 dark:hover:bg-white/10 sm:px-3.5"
         >
+          {identity && <AccountAvatar value={identity.userId} className="h-6 w-6" />}
           <span className="max-w-[7rem] truncate sm:max-w-[11rem]">{accountLabel}</span>
           {networkLabel && <span className={`hidden text-xs font-semibold sm:inline ${networkTextClass}`}>{networkLabel}</span>}
           <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" />
@@ -183,7 +186,8 @@ export default function StellarAccountControl() {
       className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-xl border border-black/10 bg-white px-2 py-2.5 text-xs font-semibold shadow-sm transition hover:border-emerald-500/30 hover:bg-emerald-500/[0.04] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)] dark:border-white/15 dark:bg-white/5 dark:hover:border-emerald-400/30 sm:px-3.5 sm:text-sm"
     >
       <Fingerprint className="hidden h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300 sm:inline" />
-      <span>{identity ? 'Your account' : 'Sign in / Sign up'}</span>
+      {identity && <AccountAvatar value={identity.userId} className="h-6 w-6" />}
+      <span>{identity ? accountDisplayName(identity.userId, profile?.nickname) : 'Sign in / Sign up'}</span>
     </a>
   );
 }

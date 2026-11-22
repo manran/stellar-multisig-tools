@@ -231,6 +231,7 @@ async function fixturePage(width, options = {}) {
           return json({ authenticated: true,
             identity: { network: 'testnet', method: 'passkey', userId: state.passkeyUserId,
               ...(linkedWallet ? { address: selected } : {}) },
+            profile: { nickname: state.accountNickname ?? '' },
             credentials: [{ kind: 'passkey', id: 'passkey-qa' },
               ...(linkedWallet ? [{ kind: 'stellar_wallet', address: selected }] : [])],
           });
@@ -238,6 +239,7 @@ async function fixturePage(width, options = {}) {
         if (selected) {
           return json({ authenticated: true,
             identity: { network: 'testnet', method: 'stellar_wallet', userId: userForAddress(selected), address: selected },
+            profile: { nickname: state.accountNickname ?? '' },
             credentials: [{ kind: 'stellar_wallet', address: selected }],
           });
         }
@@ -245,6 +247,10 @@ async function fixturePage(width, options = {}) {
       }
       const body = request.postDataJSON();
       assert.equal(body.network, 'testnet');
+      if (body.action === 'update_profile') {
+        state.accountNickname = body.nickname;
+        return json({ profile: { nickname: body.nickname } });
+      }
       if (body.action === 'invitation_preview') {
         assert.equal(body.token, state.inviteToken);
         return state.inviteAvailable
@@ -364,8 +370,8 @@ async function fixturePage(width, options = {}) {
       if (request.method() === 'PUT') {
         const body = request.postDataJSON();
         assert.equal(body.network, 'testnet');
-        const contract = { contractId: body.contractId, network: 'testnet', createdAt: now, updatedAt: now };
-        state.savedContracts = [...(state.savedContracts ?? []), contract];
+        const contract = { contractId: body.contractId, network: 'testnet', nickname: body.nickname || '', organization: body.organization || '', createdAt: now, updatedAt: now };
+        state.savedContracts = [...(state.savedContracts ?? []).filter((item) => item.contractId !== body.contractId), contract];
         return json({ contract });
       }
       if (request.method() === 'DELETE') {
@@ -569,21 +575,56 @@ try {
           await snapshot(page, 'tool-needs-wallet-' + tool, width);
         });
       }
+      if (width === 375) {
+        await run('passkey-person-contact-without-wallet-address', width, {
+          wallet: walletState('', false), state: { passkeyLoggedIn: true, addressEntries: [] },
+        }, async ({ page, state }) => {
+          await page.goto(`${origin}/address-book`);
+          await page.getByRole('button', { name: 'Add contact' }).click();
+          await page.getByRole('textbox', { name: 'Nickname', exact: true }).fill('Finance manager');
+          await page.getByRole('textbox', { name: 'Email (optional)' }).fill('finance@example.org');
+          await page.getByRole('button', { name: 'Save contact' }).click();
+          await visible(page, 'Finance manager');
+          await visible(page, 'finance@example.org');
+          assert.equal(state.addressEntries?.[0]?.subject_type, 'person');
+          await page.reload();
+          await visible(page, 'Finance manager');
+          await page.getByRole('button', { name: 'Remove contact Finance manager' }).click();
+          await page.getByRole('button', { name: 'Confirm remove' }).click();
+          await visible(page, 'No contacts yet. Add one above.');
+          assert.equal(state.addressEntries.length, 0);
+          await snapshot(page, 'person-contact-no-wallet', width);
+        });
+        await run('account-nickname-can-be-edited', width, {
+          wallet: walletState('', false), state: { passkeyLoggedIn: true },
+        }, async ({ page, state }) => {
+          await page.goto(`${origin}/identity`);
+          await visible(page, 'Your account', 'heading');
+          await page.getByRole('button', { name: 'Edit nickname' }).click();
+          await page.getByRole('textbox', { name: 'Nickname', exact: true }).fill('Treasury operations');
+          await page.getByRole('button', { name: 'Save', exact: true }).click();
+          await visible(page, 'Treasury operations', 'heading');
+          assert.equal(state.accountNickname, 'Treasury operations');
+          await page.reload();
+          await visible(page, 'Treasury operations', 'heading');
+          await snapshot(page, 'human-account-nickname', width);
+        });
+      }
       await run('passkey-only-contact-create-edit-delete', width, {
         wallet: walletState('', false), state: { passkeyLoggedIn: true, addressEntries: [] },
       }, async ({ page, state }) => {
         await page.goto(origin + '/address-book');
         await page.getByRole('button', { name: 'Add contact' }).click();
-        await page.getByRole('textbox', { name: 'Contact address' }).fill(addresses.recipient);
-        await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Passkey Vendor');
+        await page.getByRole('textbox', { name: 'Stellar address (optional)' }).fill(addresses.recipient);
+        await page.getByRole('textbox', { name: 'Nickname', exact: true }).fill('Passkey Vendor');
         await page.getByRole('button', { name: 'Save contact' }).click();
-        await page.getByRole('button', { name: 'Rename Passkey Vendor' }).waitFor();
+        await page.getByRole('button', { name: 'Edit contact Passkey Vendor' }).waitFor();
         assert.equal(state.contactSaveCount, 1);
         assert.equal(state.addressEntries?.[0]?.label, 'Passkey Vendor');
         const row = page.locator('.mst-address-row').filter({ hasText: addresses.recipient });
-        await row.getByRole('button', { name: 'Rename Passkey Vendor' }).click();
-        await row.getByRole('button', { name: 'Remove name' }).click();
-        await row.getByRole('button', { name: 'Rename Passkey Vendor' }).waitFor({ state: 'detached' });
+        await row.getByRole('button', { name: 'Remove contact Passkey Vendor' }).click();
+        await row.getByRole('button', { name: 'Confirm remove' }).click();
+        await row.waitFor({ state: 'detached' });
         assert.equal(state.addressEntries?.length, 0);
         assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), []);
         await snapshot(page, 'passkey-only-contacts', width);
@@ -594,8 +635,9 @@ try {
         const contract = 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4';
         await page.goto(origin + '/contract?contract=' + contract + '&network=testnet');
         await page.getByRole('button', { name: 'Save contract' }).click();
-        await page.getByRole('button', { name: 'Forget contract' }).waitFor();
+        await page.waitForURL(url => url.pathname === '/contracts');
         assert.equal(state.savedContracts?.length, 1);
+        await page.locator('.mst-contract-row').first().click();
         await page.getByRole('button', { name: 'Forget contract' }).click();
         await page.waitForURL(url => url.pathname === '/contracts');
         await visible(page, 'No saved contracts yet', 'heading');
@@ -815,8 +857,8 @@ try {
         await visible(page, 'No matching contacts. Try another name or address.');
         await search.fill('');
         await page.getByRole('button', { name: 'Add contact' }).click();
-        await page.getByRole('textbox', { name: 'Contact address' }).fill(addresses.recipient);
-        const name = page.getByRole('textbox', { name: 'Name', exact: true });
+        await page.getByRole('textbox', { name: 'Stellar address (optional)' }).fill(addresses.recipient);
+        const name = page.getByRole('textbox', { name: 'Nickname', exact: true });
         await name.fill('Vendor Example');
         state.contactSaveStatus = 500;
         await page.getByRole('button', { name: 'Save contact' }).click();
@@ -1143,6 +1185,30 @@ try {
       });
     }
 
+    if (width === 375) {
+      await run('contract-business-review-before-save', width, {
+        wallet: walletState('', false), state: { passkeyLoggedIn: true, savedContracts: [] },
+      }, async ({ page, state }) => {
+        const contract = 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4';
+        await page.goto(`${origin}/contracts`);
+        await visible(page, 'Smart Contracts', 'heading');
+        await page.getByRole('button', { name: 'Add contract' }).click();
+        await visible(page, 'Add a contract you use with an organization. Review its details before saving it.');
+        await page.getByRole('textbox', { name: 'Contract address' }).fill(contract);
+        await page.getByRole('button', { name: 'Review contract' }).click();
+        await visible(page, 'Contract details', 'heading');
+        await page.getByRole('textbox', { name: 'Nickname (optional)' }).fill('Payroll contract');
+        await page.getByRole('textbox', { name: 'Organization (optional)' }).fill('Example organization');
+        await page.getByRole('button', { name: 'Save contract' }).click();
+        await visible(page, 'Payroll contract');
+        await visible(page, 'Example organization');
+        assert.deepEqual(state.savedContracts.map((item) => ({ nickname: item.nickname, organization: item.organization })),
+          [{ nickname: 'Payroll contract', organization: 'Example organization' }]);
+        await page.locator('.mst-contract-row').first().click();
+        await visible(page, 'Payroll contract', 'heading');
+        await snapshot(page, 'contract-business-details', width);
+      });
+    }
     await run('smart-contracts-address-workbench', width, {
       wallet: walletState('', false),
       state: { passkeyLoggedIn: true, savedContracts: [{
@@ -1153,7 +1219,7 @@ try {
       await page.goto(origin + '/contracts');
       await visible(page, 'Smart Contracts', 'heading');
       await visible(page, 'Soroban contract');
-      await page.getByRole('link', { name: /Inspect/ }).waitFor();
+      await page.getByRole('link', { name: /View details/ }).waitFor();
       const destination = await page.locator('.mst-contract-row').first().getAttribute('href');
       assert.match(destination, /contract=/);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

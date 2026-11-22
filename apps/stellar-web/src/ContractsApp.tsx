@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, Braces, CircleAlert, LoaderCircle, Plus } from 'lucide-react';
+import { isValidContractId } from '../../../packages/stellar-core/src/contractSpec';
+import { inspectContractOperation } from './contractOperationsClient';
+import type { ContractMethodDescriptor } from '../../../packages/stellar-core/src/contractSpec';
 import { legacyContractsToImport, removeContractWorkspace } from './contractWorkspace';
 import type { ContractWorkspaceRef as LegacyContractRef } from './contractWorkspace';
 import { PageHeader } from './MultiSigUi';
@@ -23,10 +26,52 @@ export default function ContractsApp() {
   const [legacy, setLegacy] = useState<LegacyContractRef[]>([]);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [newContractId, setNewContractId] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [organization, setOrganization] = useState('');
+  const [review, setReview] = useState<{ contractId: string; methods: ContractMethodDescriptor[] } | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [addError, setAddError] = useState('');
 
   useEffect(() => {
     setLegacy(!loading && privateReady && network ? legacyContractsToImport(network, contracts) : []);
   }, [loading, privateReady, network, identity?.userId, contracts]);
+
+  async function reviewContract() {
+    const contractId = newContractId.trim();
+    if (!network || !isValidContractId(contractId) || reviewing) return;
+    setReviewing(true);
+    setAddError('');
+    setReview(null);
+    try {
+      const loaded = await inspectContractOperation(contractId, network);
+      setReview({ contractId, methods: loaded.methods });
+    } catch (cause) {
+      setAddError(cause instanceof Error ? cause.message : 'Unable to find this contract.');
+    } finally {
+      setReviewing(false);
+    }
+  }
+
+  async function saveReviewedContract() {
+    if (!review || saving) return;
+    setSaving(true);
+    setAddError('');
+    try {
+      await keep(review.contractId, { nickname, organization });
+      setAdding(false);
+      setReview(null);
+      setNewContractId('');
+      setNickname('');
+      setOrganization('');
+    } catch (cause) {
+      setAddError(cause instanceof Error ? cause.message : 'Unable to save this contract.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function importLegacy() {
     if (!network || importing) return;
@@ -72,8 +117,35 @@ export default function ContractsApp() {
                 <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
                   <span>{WORKSPACE_COPY.contracts.count(contracts.length)}</span>
                 </div>
-                <a href={stellarHrefWithSearch('/new/contract', { network: network ?? 'public' })} className="mst-action-primary"><Plus className="h-4 w-4" />{WORKSPACE_COPY.contracts.add}</a>
+                <button type="button" className="mst-action-primary" onClick={() => { setAdding((value) => !value); setAddError(''); setReview(null); }} aria-expanded={adding}><Plus className="h-4 w-4" />{WORKSPACE_COPY.contracts.add}</button>
               </div>
+
+              {adding && <section className="border-t border-[var(--color-rule)] pt-5" aria-label="Add a contract">
+                <h2 className="text-lg font-semibold">{WORKSPACE_COPY.contracts.add}</h2>
+                <p className="mt-1 max-w-2xl text-sm text-[var(--color-ink-2)]">{WORKSPACE_COPY.contracts.addDescription}</p>
+                <label htmlFor="new-contract-address" className="mt-5 block text-sm font-semibold">Contract address</label>
+                <div className="mt-2 flex flex-col gap-3 sm:flex-row">
+                  <input id="new-contract-address" className="mst-contract-control min-w-0 flex-1 font-mono" placeholder="C..." value={newContractId} spellCheck={false} onChange={(event) => { setNewContractId(event.target.value.trim()); setReview(null); setAddError(''); }} />
+                  <button type="button" className="mst-action-secondary shrink-0 disabled:opacity-50" disabled={!network || !isValidContractId(newContractId) || reviewing || saving} onClick={() => void reviewContract()}>{reviewing && <LoaderCircle className="h-4 w-4 animate-spin" />}{reviewing ? 'Checking…' : WORKSPACE_COPY.contracts.review}</button>
+                </div>
+                {newContractId && !isValidContractId(newContractId) && <p className="mt-2 text-sm text-[var(--color-ink-2)]">Use a valid C... address.</p>}
+                {review && <div className="mt-6 border-t border-[var(--color-rule)] pt-5">
+                  <h3 className="font-semibold">{WORKSPACE_COPY.contracts.reviewTitle}</h3>
+                  <p className="mt-2 break-all font-mono text-xs text-[var(--color-ink-2)]">{review.contractId}</p>
+                  <p className="mt-3 text-sm text-[var(--color-ink-2)]">{network === 'testnet' ? 'Testnet' : 'Mainnet'} · {review.methods.length} available {review.methods.length === 1 ? 'action' : 'actions'}</p>
+                  {review.methods.length > 0 && <div className="mt-3 flex flex-wrap gap-2" aria-label={WORKSPACE_COPY.contracts.methodsPreview}>{review.methods.slice(0, 5).map((method) => <span key={method.name} className="rounded-md border border-[var(--color-rule)] px-2 py-1 font-mono text-xs">{method.name}</span>)}{review.methods.length > 5 && <span className="text-xs text-[var(--color-ink-2)]">+{review.methods.length - 5}</span>}</div>}
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <div><label htmlFor="contract-nickname" className="text-sm font-semibold">{WORKSPACE_COPY.contracts.nickname}</label><input id="contract-nickname" maxLength={80} value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="e.g. Payroll" className="mst-contract-control mt-2 w-full" /></div>
+                    <div><label htmlFor="contract-organization" className="text-sm font-semibold">{WORKSPACE_COPY.contracts.organization}</label><input id="contract-organization" maxLength={80} value={organization} onChange={(event) => setOrganization(event.target.value)} placeholder="e.g. Acme Finance" className="mst-contract-control mt-2 w-full" /></div>
+                  </div>
+                  <p className="mt-2 text-xs text-[var(--color-ink-2)]">{WORKSPACE_COPY.contracts.organizationHint}</p>
+                  <div className="mt-5 flex flex-wrap items-center gap-3">
+                    <button type="button" className="mst-action-primary disabled:opacity-50" disabled={saving} onClick={() => void saveReviewedContract()}>{saving && <LoaderCircle className="h-4 w-4 animate-spin" />}{saving ? 'Saving…' : WORKSPACE_COPY.contracts.saveAndReturn}</button>
+                    <a href={stellarHrefWithSearch('/contract', { contract: review.contractId, network: network ?? 'testnet' })} className="text-sm font-semibold text-[var(--color-ink-2)] underline underline-offset-4">{WORKSPACE_COPY.contracts.showMethods}</a>
+                  </div>
+                </div>}
+                {addError && <p role="alert" className="mt-3 text-sm text-[var(--color-danger)]">{addError}</p>}
+              </section>}
 
               {error && (
                 <div className="flex items-start justify-between gap-4 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">
@@ -96,7 +168,8 @@ export default function ContractsApp() {
                   {contracts.map((contract) => (
                     <a key={contract.contractId} href={stellarHrefWithSearch('/contract', { contract: contract.contractId, network: contract.network })} className="mst-contract-row">
                       <span className="min-w-0">
-                        <span className="mst-contract-row__type"><Braces className="h-3.5 w-3.5" />{WORKSPACE_COPY.contracts.type}</span>
+                        <span className="mst-contract-row__type"><Braces className="h-3.5 w-3.5" />{contract.organization || WORKSPACE_COPY.contracts.type}</span>
+                        {contract.nickname && <span className="block text-sm font-semibold">{contract.nickname}</span>}
                         <span className="mst-contract-row__address" title={contract.contractId}>{shortContract(contract.contractId)}</span>
                       </span>
                       <span className="mst-contract-row__action">{WORKSPACE_COPY.contracts.inspect} <ArrowRight className="h-4 w-4" /></span>

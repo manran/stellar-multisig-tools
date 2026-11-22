@@ -83,8 +83,10 @@ export async function GET(request: Request): Promise<Response> {
         }));
       return noStoreJson({ userId: identity.userId, network: n, requests });
     }
-    const credentials = await identityStore.listCredentials(identity.userId);
-    return noStoreJson({ authenticated: true, identity, credentials: credentials.map((c) => ({
+    const [credentials, profile] = await Promise.all([
+      identityStore.listCredentials(identity.userId), identityStore.userProfile(identity.userId),
+    ]);
+    return noStoreJson({ authenticated: true, identity, profile, credentials: credentials.map((c) => ({
       kind: c.kind,
       ...(c.kind === 'stellar_wallet' ? { address: c.subject } : { id: c.id }),
     })) });
@@ -99,6 +101,10 @@ export async function POST(request: Request): Promise<Response> {
     const n = network(body.network);
     await enforceIdentityQuota(request, n, action);
     const identityStore = store();
+    if (action === 'update_profile') {
+      const identity = await requireUserIdentity(request, identityStore, n);
+      return noStoreJson({ profile: await identityStore.updateNickname(identity.userId, body.nickname) });
+    }
     if (action === 'invitation_preview') {
       const invite = await availableInvitation(identityStore, typeof body.token === 'string' ? body.token : '');
       if (invite.network !== n) throw new IdentityError('Invitation belongs to another network.', 403, 'invitation_network_mismatch');

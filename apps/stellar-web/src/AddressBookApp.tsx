@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { CircleAlert, LoaderCircle, Plus } from 'lucide-react';
+import { CircleAlert, LoaderCircle, Plus, Trash2 } from 'lucide-react';
+import AccountAvatar from './AccountAvatar';
 import AddressAliasEditor from './AddressAliasEditor';
 import { PageHeader } from './MultiSigUi';
 import { useAddressBook } from './AddressBookContext';
@@ -36,7 +37,7 @@ export default function AddressBookApp() {
   const { address, network, privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
   const { identity } = useUserIdentity();
   const relatedAddress = identity?.address === address ? address : '';
-  const { entries, labelFor, saveAlias, loading: aliasesLoading, error: aliasError } = useAddressBook();
+  const { entries, labelFor, saveAlias, removeAlias, loading: aliasesLoading, error: aliasError } = useAddressBook();
   const [accounts, setAccounts] = useState<StellarAccountSnapshot[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -44,18 +45,22 @@ export default function AddressBookApp() {
   const [adding, setAdding] = useState(false);
   const [newAddress, setNewAddress] = useState('');
   const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [removeTarget, setRemoveTarget] = useState('');
   const [addError, setAddError] = useState('');
   const [savingContact, setSavingContact] = useState(false);
   const [search, setSearch] = useState('');
   const privateReady = Boolean(identity);
   const treasuryPrivateReady = Boolean(privateUnlocked && relatedAddress && network && unlockedAddress === relatedAddress && unlockedNetwork === network);
-  const visibleLabelFor = (identity: string, type: 'account' | 'signer') => privateReady ? labelFor(identity, type) : '';
+  const visibleLabelFor = (identity: string, type: 'account' | 'signer' | 'person') => privateReady ? labelFor(identity, type) : '';
   const visibleTreasuryNames = privateReady ? treasuryNames : {};
 
   useEffect(() => {
     setAdding(false);
     setNewAddress('');
     setNewName('');
+    setNewEmail('');
+    setRemoveTarget('');
     setAddError('');
     setSearch('');
   }, [address, network, identity?.userId]);
@@ -126,22 +131,35 @@ export default function AddressBookApp() {
     if (savingContact) return;
     const target = newAddress.trim();
     const name = newName.trim();
-    if (!isValidStellarAccountId(target)) {
-      setAddError('Enter a valid Stellar G... address.');
+    if (target && !isValidStellarAccountId(target)) {
+      setAddError('Enter a valid G... address or leave this blank.');
       return;
     }
     if (!name) {
       setAddError('Add a name for this address.');
       return;
     }
+    const contactKey = target || `contact:${crypto.randomUUID()}`;
+    const contactType = target ? 'account' : 'person';
+    const email = newEmail.trim();
+    if (email && (!/^\S+@\S+\.\S+$/.test(email) || email.length > 254)) {
+      setAddError('Enter a valid email address.');
+      return;
+    }
     setSavingContact(true);
     setAddError('');
+    // Save starts optimistically in the shared address-book provider.
+    setAdding(false);
+    setNewAddress('');
+    setNewName('');
+    setNewEmail('');
     try {
-      await saveAlias(target, 'account', name);
-      setNewAddress('');
-      setNewName('');
-      setAdding(false);
+      await saveAlias(contactKey, contactType, name, email || undefined);
     } catch (cause) {
+      setNewAddress(target);
+      setNewName(name);
+      setNewEmail(email);
+      setAdding(true);
       setAddError(cause instanceof Error ? cause.message : 'Could not save this contact.');
     } finally {
       setSavingContact(false);
@@ -178,8 +196,9 @@ export default function AddressBookApp() {
 
           {privateReady && adding && (
             <form onSubmit={addAddress} className="mst-address-add-form mt-5">
-              <div><label htmlFor="address-book-new-address" className="text-sm font-semibold">Contact address</label><input id="address-book-new-address" value={newAddress} onChange={(event) => setNewAddress(event.target.value.trim())} placeholder="G..." spellCheck={false} className="mst-address-control mt-2 w-full font-mono" /></div>
-              <div><label htmlFor="address-book-new-name" className="text-sm font-semibold">Name</label><input id="address-book-new-name" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="e.g. Alice" maxLength={64} className="mst-address-control mt-2 w-full" /></div>
+              <div><label htmlFor="address-book-new-address" className="text-sm font-semibold">Stellar address (optional)</label><input id="address-book-new-address" value={newAddress} onChange={(event) => setNewAddress(event.target.value.trim())} placeholder="G..." spellCheck={false} className="mst-address-control mt-2 w-full font-mono" /></div>
+              <div><label htmlFor="address-book-new-name" className="text-sm font-semibold">Nickname</label><input id="address-book-new-name" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="e.g. Alice" maxLength={64} className="mst-address-control mt-2 w-full" /></div>
+              <div><label htmlFor="address-book-new-email" className="text-sm font-semibold">Email (optional)</label><input id="address-book-new-email" type="email" autoComplete="off" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} placeholder="For invitations and reminders" maxLength={254} className="mst-address-control mt-2 w-full" /></div>
               <div className="mst-contacts-form-actions">
                 <button type="submit" disabled={savingContact} className="mst-action-primary">{savingContact ? 'Saving…' : 'Save contact'}</button>
                 <button type="button" disabled={savingContact} className="mst-action-secondary" onClick={() => { setAdding(false); setAddError(''); }}>Cancel</button>
@@ -216,7 +235,7 @@ export default function AddressBookApp() {
                   const displayName = treasuryMaster ? `${treasuryLabel || 'Treasury'} · account key` : alias || 'Unnamed signer';
                   return (
                     <div key={signer.address} className="mst-address-row">
-                      <span className="mst-contact-avatar" aria-hidden="true">{alias ? Array.from(alias)[0].toUpperCase() : 'G'}</span>
+                      <AccountAvatar value={signer.address} className="h-10 w-10" />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2"><div className="font-bold">{displayName}</div>{signer.address === relatedAddress && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">Current wallet</span>}</div>
                         <div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{signer.address}</div>
@@ -234,7 +253,7 @@ export default function AddressBookApp() {
               <div className="mst-operations-section-head"><h2>{WORKSPACE_COPY.contacts.title} <span className="mst-operations-count">{visibleContacts.length}</span></h2><p>{WORKSPACE_COPY.contacts.savedDescription}</p></div>
               <div className="mst-address-list">
                 {visibleContacts.map((entry) => (
-                  <div key={entry.address} className="mst-address-row"><span className="mst-contact-avatar" aria-hidden="true">{Array.from(visibleLabelFor(entry.address, 'account'))[0]?.toUpperCase() || 'G'}</span><div className="min-w-0 flex-1"><div className="font-bold">{visibleLabelFor(entry.address, 'account')}</div><div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{entry.address}</div></div><AddressAliasEditor address={entry.address} subjectType="account" /></div>
+                  <div key={entry.address} className="mst-address-row"><AccountAvatar value={entry.address} className="h-10 w-10" /><div className="min-w-0 flex-1"><div className="font-bold">{visibleLabelFor(entry.address, entry.subjectType)}</div>{entry.subjectType === 'person' ? <p className="mt-1 text-xs text-[var(--color-ink-2)]">{entry.notificationEmail || 'No wallet address'}</p> : <div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{entry.address}</div>}</div><div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center"><AddressAliasEditor address={entry.address} subjectType={entry.subjectType} allowNotificationEmail hideDeleteInEdit />{removeTarget === entry.address ? <span className="inline-flex items-center gap-2 text-xs"><button type="button" onClick={() => { void removeAlias(entry.address, entry.subjectType).catch((cause) => setError(cause instanceof Error ? cause.message : 'Unable to remove contact.')); setRemoveTarget(''); }} className="font-semibold text-[var(--color-danger)]">Confirm remove</button><button type="button" onClick={() => setRemoveTarget('')}>Cancel</button></span> : <button type="button" onClick={() => setRemoveTarget(entry.address)} aria-label={`Remove contact ${visibleLabelFor(entry.address, 'account')}`} className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-[var(--color-ink-2)] hover:text-[var(--color-danger)]"><Trash2 className="h-4 w-4" />Remove</button>}</div></div>
                 ))}
               </div>
             </section>
