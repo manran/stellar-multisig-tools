@@ -483,6 +483,67 @@ async function run(name, width, options, check) {
 
 try {
   for (const width of widths) {
+    for (const [tool, route] of [
+      ['contracts', '/contracts'],
+      ['treasuries', '/treasury'],
+      ['contacts', '/address-book'],
+      ['agent-access', '/agent-access'],
+    ]) {
+      await run('tool-login-entry-' + tool, width, {
+        wallet: walletState('', false), state: { passkeyLoggedIn: false },
+      }, async ({ page }) => {
+        await page.goto(origin + route);
+        await visible(page, 'Sign in to continue', 'heading');
+        const link = page.getByRole('link', { name: 'Sign in / Sign up', exact: true });
+        const href = new URL(await link.getAttribute('href'), origin);
+        assert.equal(href.pathname, '/identity');
+        assert.equal(href.searchParams.get('next'), route);
+        assert.equal(await page.getByRole('button', { name: 'Connect Stellar wallet' }).count(), 0);
+        await snapshot(page, 'tool-access-' + tool, width);
+        await link.click();
+        await visible(page, 'Sign in or sign up', 'heading');
+        assert.equal(new URL(page.url()).searchParams.get('next'), route);
+        assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), []);
+        await snapshot(page, 'tool-sign-in-' + tool, width);
+      });
+    }
+
+    if (width === 375) {
+      for (const [tool, route] of [
+        ['contracts', '/contracts'],
+        ['treasuries', '/treasury'],
+        ['contacts', '/address-book'],
+        ['agent-access', '/agent-access'],
+      ]) {
+        await run('tool-passkey-needs-wallet-' + tool, width, {
+          wallet: walletState('', false), state: { passkeyLoggedIn: true },
+        }, async ({ page }) => {
+          await page.goto(origin + route);
+          await visible(page, 'Connect Stellar wallet', 'heading');
+          await visible(page, 'Connect Stellar wallet', 'button');
+          assert.equal(await page.getByRole('link', { name: 'Sign in / Sign up' }).count(), 0);
+          await snapshot(page, 'tool-needs-wallet-' + tool, width);
+        });
+      }
+      await run('tool-passkey-can-verify-wallet', width, {
+        wallet: walletState('', false), state: { passkeyLoggedIn: true },
+      }, async ({ page }) => {
+        await page.goto(origin + '/contracts');
+        await page.getByRole('button', { name: 'Connect Stellar wallet' }).click();
+        await visible(page, 'No saved contracts yet', 'heading');
+        assert.deepEqual(await page.evaluate(() => window.__MST_QA_WALLET_CALLS__), ['unlock']);
+      });
+      await run('tool-login-returns-to-selected-tool', width, {
+        wallet: walletState('', false), state: { passkeyLoggedIn: false },
+      }, async ({ page }) => {
+        await page.goto(origin + '/contracts');
+        await page.getByRole('link', { name: 'Sign in / Sign up', exact: true }).click();
+        await page.getByRole('button', { name: 'Sign in with Stellar wallet' }).click();
+        await page.waitForURL((url) => url.pathname === '/contracts', { timeout: 15_000 });
+        await visible(page, 'No saved contracts yet', 'heading');
+      });
+    }
+
     await run('unified-header-account-entry', width, {
       wallet: walletState('', false),
       state: { passkeyLoggedIn: false },

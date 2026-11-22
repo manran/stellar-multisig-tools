@@ -6,6 +6,7 @@ import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
 import { useUserIdentity } from './UserIdentityContext';
 import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
+import { toolReturnPath } from './stellar/toolAccessRouting';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 
@@ -34,6 +35,7 @@ export default function IdentityApp() {
   const { privateUnlocked, unlockedAddress, unlockedNetwork, authBusy, unlock, lock, connect } = useStellarWallet();
   // Invitation capabilities stay in URL fragments, never in HTTP request paths.
   const inviteToken = new URLSearchParams(window.location.hash.slice(1)).get('token') ?? '';
+  const returnToTool = toolReturnPath(new URLSearchParams(window.location.search).get('next'));
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [inviteError, setInviteError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -93,7 +95,7 @@ export default function IdentityApp() {
     const response = await startAuthentication({ optionsJSON: options.options as PublicKeyCredentialRequestOptionsJSON });
     await api('authentication_verify', { challengeId: options.challengeId, response });
     await refresh();
-    if (!inviteToken) navigateWorkspace('/inbox');
+    if (!inviteToken) navigateWorkspace(returnToTool ?? '/inbox');
     else setInfo('Signed in with Passkey. You can accept this invitation.');
   }
 
@@ -105,7 +107,7 @@ export default function IdentityApp() {
     await api('registration_verify', { challengeId: options.challengeId, response }, identity?.method === 'stellar_wallet');
     await refresh();
     if (inviteToken) navigateWorkspace('/new');
-    else if (!identity) navigateWorkspace('/');
+    else if (!identity) navigateWorkspace(returnToTool ?? '/');
     else setInfo('Passkey added.');
   }
 
@@ -118,7 +120,7 @@ export default function IdentityApp() {
   async function confirmWallet() {
     await unlock(undefined, network);
     await refresh();
-    if (!identity) navigateWorkspace('/inbox');
+    if (!identity) navigateWorkspace(returnToTool ?? '/inbox');
     else setInfo('Wallet verified.');
   }
 

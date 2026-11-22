@@ -8,14 +8,13 @@ import {
   Plus,
   Settings2,
   ShieldCheck,
-  Vault,
-  WalletCards,
 } from 'lucide-react';
 import AddressAliasEditor from './AddressAliasEditor';
 import SaintSecurityTimeline from './SaintSecurityTimeline';
 import { PageHeader } from './MultiSigUi';
 import { useAddressBook } from './AddressBookContext';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
+import ToolAccessEntry from './ToolAccessEntry';
 import { useStellarWallet } from './StellarWalletContext';
 import { analyzeAccountAuthorization } from '../../../packages/stellar-core/src/authorization';
 import { approvalPowerLabel, humanAuthorizationRequirement } from './stellar/authorizationPresentation';
@@ -290,7 +289,7 @@ function TreasuryDetail({
 }
 
 export default function TreasuryApp() {
-  const { address, network: connectedNetwork, networkSource, busy, connect, privateUnlocked, authBusy, unlock, unlockedAddress, unlockedNetwork } = useStellarWallet();
+  const { address, network: connectedNetwork, networkSource, privateUnlocked, authBusy, unlock, unlockedAddress, unlockedNetwork } = useStellarWallet();
   const route = parseTreasuryRoute(window.location.search);
   const network = networkSource === 'application' && route.network ? route.network : connectedNetwork;
   const [accounts, setAccounts] = useState<StellarAccountSnapshot[]>([]);
@@ -432,7 +431,7 @@ export default function TreasuryApp() {
         <div className="mx-auto max-w-6xl">
           {!accountParam && <PageHeader title="Treasuries" description="Shared accounts you can authorize. Start a proposal or review their signing rules." />}
 
-          {!address && <section className="mx-auto max-w-xl py-14 sm:py-20"><Vault className="h-8 w-8 text-neutral-400" /><h2 className="mt-5 text-3xl font-bold">Connect a wallet</h2><p className="mt-2 text-base leading-7 text-neutral-600 dark:text-neutral-300">We'll use public Stellar account data to find accounts this wallet can help authorize.</p><button type="button" disabled={busy} onClick={() => void connect()} className="mt-6 flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-white disabled:opacity-50"><WalletCards className="h-4 w-4" />{busy ? 'Opening wallets…' : 'Connect wallet'}</button></section>}
+          {!address && <ToolAccessEntry returnTo="/treasury" />}
 
           {address && !privateReady && !accountParam && <section className="mst-treasury-action-row mt-5"><div><div className="font-semibold">Treasury names are private</div><p className="mt-1 text-sm leading-6 text-neutral-500 dark:text-neutral-400">Public account relationships are available now. Confirm this wallet only when you want to load shared Treasury names and other private details.</p></div><button type="button" disabled={authBusy} onClick={() => void unlock()} className="flex shrink-0 items-center gap-2 rounded-xl border border-emerald-500/30 px-4 py-2.5 text-sm font-semibold text-emerald-700 disabled:opacity-50 dark:text-emerald-300">{authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Show private details</button></section>}
 

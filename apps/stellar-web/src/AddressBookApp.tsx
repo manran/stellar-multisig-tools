@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { BookUser, CircleAlert, LoaderCircle, Plus, ShieldCheck, WalletCards } from 'lucide-react';
+import { CircleAlert, LoaderCircle, Plus, ShieldCheck } from 'lucide-react';
 import AddressAliasEditor from './AddressAliasEditor';
 import { PageHeader } from './MultiSigUi';
 import { useAddressBook } from './AddressBookContext';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
+import ToolAccessEntry from './ToolAccessEntry';
 import { useStellarWallet } from './StellarWalletContext';
 import { isValidStellarAccountId } from '../../../packages/stellar-core/src/horizon';
 import { loadAccountsForSigner, peekAccountsForSigner } from '../../../packages/stellar-core/src/signerAccounts';
@@ -30,7 +31,7 @@ function relatedSigners(accounts: StellarAccountSnapshot[]): RelatedSigner[] {
 }
 
 export default function AddressBookApp() {
-  const { address, network, busy, connect, privateUnlocked, authBusy, unlock, unlockedAddress, unlockedNetwork } = useStellarWallet();
+  const { address, network, privateUnlocked, authBusy, unlock, unlockedAddress, unlockedNetwork } = useStellarWallet();
   const { entries, labelFor, saveAlias, loading: aliasesLoading, error: aliasError } = useAddressBook();
   const [accounts, setAccounts] = useState<StellarAccountSnapshot[]>([]);
   const [loading, setLoading] = useState(false);
@@ -160,7 +161,7 @@ export default function AddressBookApp() {
         <div className="mx-auto max-w-6xl">
           <PageHeader
             title="Contacts"
-            description="Find signers, manage invitation emails, and reuse saved Stellar addresses."
+            description="Save signer names and invitation emails."
             actions={privateReady ? (
               <button type="button" aria-expanded={adding} onClick={() => { setAdding((value) => !value); setAddError(''); }} className="mst-action-secondary">
                 <Plus className="h-4 w-4" />Add contact
@@ -168,14 +169,7 @@ export default function AddressBookApp() {
             ) : undefined}
           />
 
-          {!address && (
-            <section className="mx-auto max-w-xl py-14 sm:py-20">
-              <BookUser className="h-8 w-8 text-neutral-400" />
-              <h2 className="mt-5 text-3xl font-bold">Connect a wallet</h2>
-              <p className="mt-2 text-base leading-7 text-neutral-600 dark:text-neutral-300">Connect to see treasuries, their signers, and your saved names.</p>
-              <button type="button" disabled={busy} onClick={() => void connect()} className="mst-action-primary mt-6 disabled:opacity-50"><WalletCards className="h-4 w-4" />{busy ? 'Opening wallets…' : 'Connect wallet'}</button>
-            </section>
-          )}
+          {!address && <ToolAccessEntry returnTo="/address-book" />}
 
           {address && !privateReady && (
             <section className="mst-address-action-row mt-5">

@@ -1,6 +1,7 @@
 import { ArrowRight, Braces, CircleAlert, LoaderCircle, Plus } from 'lucide-react';
 import { NetworkBadge, PageHeader } from './MultiSigUi';
 import PrivateWorkspaceUnlock from './PrivateWorkspaceUnlock';
+import ToolAccessEntry from './ToolAccessEntry';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useContractWorkspaces } from './ContractWorkspaceContext';
 import { useStellarWallet } from './StellarWalletContext';
@@ -14,8 +15,6 @@ export default function ContractsApp() {
   const {
     address,
     network,
-    busy,
-    connect,
     privateUnlocked,
     unlockedAddress,
     unlockedNetwork,
@@ -34,19 +33,11 @@ export default function ContractsApp() {
       <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto max-w-5xl">
           <PageHeader
-            eyebrow="Contract workspace"
             title="Contracts"
-            description="Contracts kept by this signer workspace. Keeping a contract remembers work context; it never grants contract authority."
+            description="Save and revisit contracts."
           />
 
-          {!address && (
-            <section className="mx-auto max-w-xl py-14 sm:py-20">
-              <Braces className="mst-contract-accent h-8 w-8" />
-              <h2 className="mt-5 text-3xl font-bold">Connect the signer workspace</h2>
-              <p className="mt-2 text-base leading-7 text-neutral-600 dark:text-neutral-300">Saved contracts stay private to the connected signer workspace.</p>
-              <button type="button" disabled={busy} onClick={() => void connect()} className="mst-action-primary mt-6 disabled:opacity-50">{busy ? 'Opening wallets…' : 'Connect wallet'}</button>
-            </section>
-          )}
+          {!address && <ToolAccessEntry returnTo="/contracts" />}
 
           {address && !privateReady && (
             <PrivateWorkspaceUnlock

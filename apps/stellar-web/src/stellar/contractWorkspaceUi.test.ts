@@ -47,7 +47,8 @@ test('Contracts is a first-class workspace route and navigation destination', ()
 
   assert.ok(routes.includes('/contracts'));
   assert.match(shell, />Contracts</);
-  assert.match(contracts, /Contract workspace/);
+  assert.match(contracts, /title="Contracts"/);
+  assert.match(contracts, /ToolAccessEntry returnTo="\/contracts"/);
   assert.match(contracts, /Add or call contract/);
   assert.match(contracts, /PrivateWorkspaceUnlock/);
 });

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { CircleAlert, ClipboardCopy, KeyRound, LoaderCircle, ShieldCheck, Trash2 } from 'lucide-react';
+import { CircleAlert, ClipboardCopy, LoaderCircle, ShieldCheck, Trash2 } from 'lucide-react';
 import PrivateWorkspaceUnlock from './PrivateWorkspaceUnlock';
+import ToolAccessEntry from './ToolAccessEntry';
 import { PageHeader } from './MultiSigUi';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
@@ -38,8 +39,6 @@ export default function AgentAccessApp() {
   const {
     address,
     network,
-    busy,
-    connect,
     privateUnlocked,
     unlockedAddress,
     unlockedNetwork,
@@ -163,17 +162,10 @@ export default function AgentAccessApp() {
         <div className="mx-auto max-w-6xl">
           <PageHeader
             title="Agent access"
-            description="Give each agent its own credential and permission. Your wallet remains the signer."
+            description="Create, review, and revoke agent credentials."
           />
 
-          {!address && (
-            <section className="mx-auto max-w-xl py-14 sm:py-20">
-              <KeyRound className="h-8 w-8 text-neutral-400" />
-              <h2 className="mt-5 text-3xl font-bold">Connect the signer</h2>
-              <p className="mt-2 text-base leading-7 text-neutral-600 dark:text-neutral-300">Agent credentials belong to a signer identity, not to a Treasury.</p>
-              <button type="button" disabled={busy} onClick={() => void connect()} className="mst-action-primary mt-6 disabled:opacity-50">{busy ? 'Opening wallets…' : 'Connect wallet'}</button>
-            </section>
-          )}
+          {!address && <ToolAccessEntry returnTo="/agent-access" />}
 
           {address && !privateReady && (
             <PrivateWorkspaceUnlock title="Unlock Agent access" description="Confirm this wallet before creating or revoking credentials that represent this signer. This does not sign a Stellar transaction." buttonLabel="Unlock Agent access" />

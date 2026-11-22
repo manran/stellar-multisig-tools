@@ -30,7 +30,8 @@ test('Treasury signing policy defaults to Human authorization language', () => {
   assert.doesNotMatch(treasury, /account\.thresholds\.high\} \/ \{analysis\.totalActiveWeight/);
   assert.doesNotMatch(treasury, /Unlock private data|active ed25519|signer relationships/);
   assert.match(treasury, /Show private details/);
-  assert.match(treasury, /public Stellar account data/);
+  assert.match(treasury, /ToolAccessEntry returnTo="\/treasury"/);
+  assert.match(treasury, /loadAccountsForSigner\(address, network/);
   assert.match(treasury, /signing authority for that Treasury/);
 });
 

@@ -18,6 +18,7 @@ Shared authorization without shared custody.
 - Show security consequences where the action occurs: share-link visibility before sharing, and irreversible ledger submission at confirmation.
 - Keep technical evidence in Advanced details and documentation. Do not paste architecture rules into account or landing screens.
 - Keep the words Passkey, wallet, Proposal, Sign, Inbox, and Activity consistent.
+- The four Tools share one access entry: show `Sign in / Sign up` when signed out; request a verified Stellar wallet only after sign-in, and return users to the tool they opened.
 
 The visual system should communicate:
 
