@@ -83,10 +83,11 @@ node scripts/qa/hostedTestnetLifecycle.mjs         # read-only Testnet runtime c
 node scripts/qa/hostedTestnetLifecycle.mjs --live          # 2-of-3 Human lifecycle
 node scripts/qa/hostedTestnetLifecycle.mjs --live --coordination # ID-only Ask/remind, no emails
 node scripts/qa/hostedTestnetLifecycle.mjs --live --proposer    # Delegated payment, revocation, signer E2E
+MST_QA_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs node scripts/qa/hostedTestnetLifecycle.mjs --live --proposer --passkey  # Virtual WebAuthn invitation -> payment -> signed ledger -> private Activity
 node scripts/qa/hostedTestnetLifecycle.mjs --live --agent  # scoped Agent signer lifecycle
 ```
 
-The live mode always uses `api-testnet.multisig.tools/stellar`, the Testnet
+The explicit `--passkey` option adds a Testnet-only browser-driven WebAuthn invitation and walletless Template proposer after the ordinary proposer flow. It requires an installed Playwright Chromium with a virtual authenticator. It verifies one-use invitation, user-scoped Request/Inbox/Activity, two Treasury signatures, ledger confirmation, and grant revocation. It never logs credential material or sends an email.\n\nThe live mode always uses `api-testnet.multisig.tools/stellar`, the Testnet
 Horizon and Friendbot. It creates one **ephemeral** Stellar account and applies
 2-of-3 thresholds. An actual wallet-key signature unlocks the hosted API.
 The hosted PostgreSQL Request then receives two separate signer contributions,
