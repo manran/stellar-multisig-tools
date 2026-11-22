@@ -46,6 +46,19 @@ MST_QA_PLAYWRIGHT_MODULE=/tmp/mst-qa-tools/node_modules/playwright/index.mjs \
   node scripts/qa/passkeyVirtualAuthenticator.mjs
 ```
 
+`passkeyIdentityHttps.mjs` also runs the **real MST identity API route** over
+loopback HTTPS with an ephemeral TLS certificate, Chromium virtual Passkey,
+actual PostgreSQL challenges, identity cookies, and DB-backed request limits.
+It checks first registration, logout, returning login, replay denial, and 429
+with `Retry-After`. It uses an in-memory auth signing key and never contacts
+deployed services. Apply all migrations to a disposable database first:
+
+```sh
+MST_POSTGRES_TEST_URL=postgresql://.../postgres MST_POSTGRES_TEST_ALLOW_RESET=1 \
+  MST_QA_PLAYWRIGHT_MODULE=/tmp/mst-qa-tools/node_modules/playwright/index.mjs \
+  ./node_modules/.bin/tsx scripts/qa/passkeyIdentityHttps.mjs
+```
+
 Backend `postgresIdentityStore.test.ts` requires **only a disposable Postgres
 database** with `MST_POSTGRES_TEST_URL` and explicit
 `MST_POSTGRES_TEST_ALLOW_RESET=1`; the test drops/recreates `mst_stellar`.

@@ -8,6 +8,7 @@ import { createPostgresReusableTemplateStore } from './postgresReusableTemplateS
 import { createPostgresSigningRequestStore } from './postgresSigningRequestStore.js';
 import { createReusableTemplate, ReusableTemplateServiceError } from '../server/reusableTemplateService.js';
 import { IdentityError, PostgresIdentityStore } from '../server/identityStore.js';
+import { consumeIdentityQuota } from '../server/identityQuota.js';
 import type { RequestPrivateDataStore } from '../server/requestPrivateDataStore.js';
 
 const TEST_URL = process.env.MST_POSTGRES_TEST_URL?.trim();
@@ -136,4 +137,29 @@ test('invited Passkey user has stable credentials, grants, Request history and r
     [template.id, user],
   );
   assert.equal(revoked.rows[0].revoked_by_address, owner);
+});
+
+test('PostgreSQL identity quota counts concurrent requests atomically and resets only after expiry', active, async () => {
+  const pool = coordinationPool();
+  const actor = createHash('sha256').update(randomUUID()).digest();
+  const bucket = `qa:${randomUUID()}`;
+  const attempts = await Promise.all(Array.from({ length: 24 }, () =>
+    consumeIdentityQuota(pool, bucket, actor, 9)));
+  assert.equal(attempts.filter(Boolean).length, 9);
+  assert.equal(attempts.filter((allowed) => !allowed).length, 15);
+  const counted = await pool.query<{ hits: number }>(
+    'SELECT hits FROM mst_stellar.mst_identity_rate_limits WHERE bucket = $1 AND actor_hash = $2',
+    [bucket, actor],
+  );
+  assert.equal(counted.rows[0].hits, 24);
+  await pool.query(
+    "UPDATE mst_stellar.mst_identity_rate_limits SET reset_at = now() - interval '1 second' WHERE bucket = $1 AND actor_hash = $2",
+    [bucket, actor],
+  );
+  assert.equal(await consumeIdentityQuota(pool, bucket, actor, 9), true);
+  const reset = await pool.query<{ hits: number }>(
+    'SELECT hits FROM mst_stellar.mst_identity_rate_limits WHERE bucket = $1 AND actor_hash = $2',
+    [bucket, actor],
+  );
+  assert.equal(reset.rows[0].hits, 1);
 });

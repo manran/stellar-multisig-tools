@@ -36,9 +36,9 @@ Payment Request. Actual signing/submission remains governed by the current Stell
 2. **Invite a person**: a current signer owning a fixed payment Template generates a
    one-time invitation. Opening the link only previews its Template name; the recipient
    must authenticate before consuming it.
-3. **First Passkey**: a walletless recipient registers a discoverable, UV-required Passkey
-   with WebAuthn. Only verified registration consumes the invitation and creates the User
-   and Template grant in a single database transaction.
+3. **First Passkey**: anyone may register a discoverable, UV-required Passkey without a
+   wallet or invitation. If an invitation is supplied, verified registration consumes it
+   and creates the User and Template grant in a single database transaction.
 4. **Returning Passkey**: discoverable Passkey challenge + WebAuthn signature creates an
    8-hour HttpOnly Secure SameSite=Strict session. No username, password or G address.
 5. **Linking another method**: users already authenticated may add a second Passkey;
@@ -75,22 +75,47 @@ Payment Request. Actual signing/submission remains governed by the current Stell
   it never belongs in a request path, query string, Referer or access log.
   Secure logs, rate limits, and origin policies are a release gate.
 
+## Identity abuse protection
+
+- Migration `0018_identity_rate_limits.sql` adds shared PostgreSQL fixed-window counters;
+  no in-memory or Vercel-only limiter is relied on for the self-hosted API.
+- Independent five-minute buckets apply per verified edge client and per network/action,
+  plus a global cap. Raw IP addresses are not stored. Invalid or missing proxy IP
+  headers share a small fallback bucket; they cannot create unlimited identities.
+- `registration_options` allows 8 requests per client per five minutes, while
+  authentication, verification, invitation, and credential linking have separate
+  quotas. Excess returns 429 with `Retry-After`; unavailable quota storage returns 503.
+- Only trust the edge-set `CF-Connecting-IP` or Vercel's `X-Vercel-Forwarded-For`.
+  Cloudflare Tunnel must remain the sole external path to the Testnet API; do not
+  expose the API container directly or trust caller-controlled `X-Forwarded-For`.
+- Older counters are pruned opportunistically. Confirm the effective edge headers,
+  response status, and retry behavior at the live HTTPS origin before beta.
+
 ## Test and deployment gates
 
-1. Migrate `0017_unified_identity.sql` on **Testnet PostgreSQL** after a recoverable
-   encrypted backup. Existing 0016 data remains. No automatic Mainnet migration.
-2. Isolated database tests: 17 migrations in order, concurrent wallet identity creation,
+1. Back up **Testnet PostgreSQL** (recoverable encrypted backup plus restore check).
+   Apply `0017_unified_identity.sql` then `0018_identity_rate_limits.sql` with
+   `npm run db:migrate` only after verifying the intended Testnet database URL.
+   Existing 0016 data remains. Do not migrate Mainnet.
+2. Isolated database tests: 18 migrations in order, concurrent wallet identity creation,
    unique credential subjects, Passkey counters, one-use/expiry challenges,
    invitation redemption/revocation, User grant and Request binding/locking.
 3. Chromium virtual WebAuthn authenticator: verified registration, authentication,
-   and wrong challenge rejection; run Node 24 repository CI and browser QA.
+   and wrong challenge rejection. The isolated loopback HTTPS acceptance test
+   additionally covers the real MST API route, PostgreSQL identity session,
+   and HTTP 429. Run Node 24 repository CI and browser QA.
 4. Real-world Testnet: verified wallet inviter → walletless Passkey recipient →
    fixed-template Request → real Treasury signers → confirmed ledger → returning
    Passkey Activity/receipt. Verify link expiration/revocation and two-method login.
-5. Review abuse controls for unauthenticated Passkey challenge endpoints,
-   WebAuthn RP/origin settings, invitation/referrer handling, public response privacy,
-   account recovery, and real Resend email delivery before public Testnet beta.
-6. Do not enable Mainnet deployment or announce public Testnet beta until the user
+5. Confirm the Testnet Human origin responds on `/api/identity?network=testnet`
+   before any WebAuthn acceptance: 200 and `authenticated:false` when signed out,
+   not 404 or a response from another domain. Verify `expectedOrigin` is the exact
+   Human HTTPS origin and `expectedRPID` is `multisig.tools`. Check Secure,
+   HttpOnly, SameSite cookie and network isolation. Reject repeated challenges and
+   verify the 429/503 quota behavior from the actual edge route.
+6. Review invitation/referrer handling, public response privacy, account recovery,
+   and real Resend email delivery before public Testnet beta.
+7. Do not enable Mainnet deployment or announce public Testnet beta until the user
    explicitly approves the UI and release acceptance results.
 
 ## Out of scope for first release

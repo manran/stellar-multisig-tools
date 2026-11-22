@@ -20,6 +20,7 @@ import {
 import { ReusableTemplateServiceError } from '../server/reusableTemplateService.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import { noStoreJson } from '../server/httpResponse.js';
+import { enforceIdentityQuota, IdentityQuotaError } from '../server/identityQuota.js';
 import { runtimeSigningRequestStore } from '../server/coordinationStores.js';
 import { getSigningRequest } from '../server/requestService.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
@@ -50,6 +51,10 @@ function assertSameOrigin(request: Request): void {
 }
 
 function errorResponse(cause: unknown): Response {
+  if (cause instanceof IdentityQuotaError) {
+    return noStoreJson({ error: cause.message, code: cause.code }, cause.status,
+      cause.retryAfterSeconds ? { 'Retry-After': String(cause.retryAfterSeconds) } : {});
+  }
   if (cause instanceof IdentityError || cause instanceof AuthServiceError || cause instanceof RequestBodyError
     || cause instanceof DeploymentNetworkPolicyError || cause instanceof ReusableTemplateServiceError) {
     return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
@@ -92,6 +97,7 @@ export async function POST(request: Request): Promise<Response> {
     const body = await readJsonObjectBody(request, BODY_LIMIT);
     const action = body.action;
     const n = network(body.network);
+    await enforceIdentityQuota(request, n, action);
     const identityStore = store();
     if (action === 'invitation_preview') {
       const invite = await availableInvitation(identityStore, typeof body.token === 'string' ? body.token : '');
