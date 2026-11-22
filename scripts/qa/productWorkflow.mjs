@@ -461,7 +461,7 @@ async function snapshot(page, name, width) {
   const overflow = await page.evaluate(() => ({ width: innerWidth, document: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
   assert.ok(overflow.document <= overflow.width + 1 && overflow.body <= overflow.width + 1, `${name}: horizontal overflow ${JSON.stringify(overflow)}`);
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: path.join(output, `${name}-${width}.png`), fullPage: true });
+  await page.screenshot({ path: path.join(output, `${name}-${width}.png`), fullPage: true, timeout: 30_000, animations: 'disabled' });
 }
 
 async function run(name, width, options, check) {
