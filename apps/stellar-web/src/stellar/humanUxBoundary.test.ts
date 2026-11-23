@@ -35,7 +35,7 @@ test('primary wallet menu does not expose workspace philosophy or unlock duratio
   assert.doesNotMatch(account, /Default unlock duration/);
   assert.doesNotMatch(account, /Private data/);
   assert.doesNotMatch(account, />Manage</);
-  assert.match(account, /Sign in to workspace/);
+  assert.match(account, /Confirm wallet/);
   assert.match(account, /onClick=\{\(\) => void signIn\(\)\}/);
   assert.match(account, /Lock private workspace/);
 });

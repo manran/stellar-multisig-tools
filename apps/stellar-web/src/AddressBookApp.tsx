@@ -171,7 +171,7 @@ export default function AddressBookApp() {
           {!address && (
             <section className="mx-auto max-w-xl py-14 sm:py-20">
               <BookUser className="h-8 w-8 text-neutral-400" />
-              <h2 className="mt-5 text-3xl font-bold">Connect a wallet</h2>
+              <h2 className="mt-5 text-3xl font-bold">Connect wallet</h2>
               <p className="mt-2 text-base leading-7 text-neutral-600 dark:text-neutral-300">Connect to see treasuries, their signers, and your saved names.</p>
               <button type="button" disabled={busy} onClick={() => void connect()} className="mst-action-primary mt-6 disabled:opacity-50"><WalletCards className="h-4 w-4" />{busy ? 'Opening wallets…' : 'Connect wallet'}</button>
             </section>

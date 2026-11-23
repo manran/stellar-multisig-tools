@@ -44,8 +44,8 @@ test('top-level Sign in selects a wallet and verifies workspace identity in one 
   assert.match(walletContext, /const signIn = useCallback[\s\S]*if \(unlockedAddress && unlockedNetwork\) await lock\(\)[\s\S]*await connect\(\)[\s\S]*return unlock\(durationSeconds\)/);
   assert.match(walletContext, /if \(isWalletSelectionCancelled\(cause\)\) return ''/);
   assert.match(accountControl, /onClick=\{\(\) => void signIn\(\)\}/);
-  assert.match(accountControl, /'Sign in'/);
-  assert.match(accountControl, /Sign in to workspace/);
+  assert.match(accountControl, /'Connect wallet'/);
+  assert.match(accountControl, /Confirm wallet/);
 });
 
 

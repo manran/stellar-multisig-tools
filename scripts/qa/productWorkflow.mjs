@@ -102,6 +102,12 @@ export function StellarWalletProvider({ children }) {
     networkSource: 'wallet', sessionExpiresAt: null, unlockExpiresAt: Date.now() + 3600000,
     accountMenuOpen, setAccountMenuOpen,
     connect: async () => { calls.push('connect'); return identity.address; },
+    signIn: async () => {
+      calls.push('signIn');
+      const address = identity.address || window.__MST_QA_DEFAULT_ADDRESS__;
+      apply({ address, sessionAddress: address, network: 'testnet', sessionNetwork: 'testnet', privateUnlocked: true, unlockedAddress: address, unlockedNetwork: 'testnet' });
+      return address;
+    },
     unlock: async () => {
       calls.push('unlock');
       if (window.__MST_QA_CANCEL_UNLOCK__) throw new Error('The user rejected this request.');
@@ -423,6 +429,14 @@ try {
     });
 
     if (width === 375 || width === 1280) {
+      await run('wallet-connect-entry', width, { wallet: walletState('', false) }, async ({ page }) => {
+        await page.goto(origin + '/');
+        await page.getByRole('button', { name: 'Connect wallet', exact: true }).click();
+        assert.ok((await page.evaluate(() => window.__MST_QA_WALLET_CALLS__)).includes('signIn'));
+        assert.equal(await page.getByRole('button', { name: 'Connect wallet', exact: true }).count(), 0,
+          'Connected account replaces the entry button');
+      });
+
       await run('overview-workbench', width, {}, async ({ page }) => {
         await page.goto(origin + '/');
         await visible(page, 'Overview', 'heading');
@@ -432,6 +446,7 @@ try {
           const more = page.getByRole('button', { name: 'More workspace tools' });
           await more.click();
           await visible(page, 'Activity', 'menuitem');
+          await visible(page, 'Templates', 'menuitem');
           await visible(page, 'Contracts', 'menuitem');
           await visible(page, 'Treasuries', 'menuitem');
           await visible(page, 'Contacts', 'menuitem');
@@ -658,6 +673,9 @@ try {
       }, async ({ page, state }) => {
         await page.goto(`${origin}/new`);
         await visible(page, 'Monthly suppliers', 'heading');
+        assert.equal(await page.getByText('Allow another wallet to request payments').count(), 0, 'Creating a proposal must not expose permission management');
+        await page.getByRole('link', { name: 'Manage templates' }).click();
+        await visible(page, 'Templates', 'heading');
         const grant = page.getByText('Allow another wallet to request payments');
         await grant.click();
         const address = page.getByRole('textbox', { name: 'Proposer G address' });
@@ -668,9 +686,39 @@ try {
         assert.deepEqual(state.proposerGrants, [addresses.carol]);
         await snapshot(page, 'template-proposer-grant', width);
         await page.getByRole('button', { name: 'Revoke', exact: true }).click();
-        await page.getByRole('button', { name: 'Revoke', exact: true }).waitFor({ state: 'hidden' });
+        await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+        assert.equal(state.proposerGrantCount, 1, 'Cancel must not revoke access');
+        await page.getByRole('button', { name: 'Revoke', exact: true }).click();
+        await page.getByRole('button', { name: 'Confirm revoke', exact: true }).click();
+        await page.getByRole('button', { name: 'Confirm revoke', exact: true }).waitFor({ state: 'hidden' });
         assert.equal(state.proposerGrantCount, 2);
         assert.deepEqual(state.proposerGrants, []);
+      });
+
+      await run('templates-wallet-change-hides-previous-owner', width, {
+        state: { templates: [{ ...templateFixture(), ownerAddress: addresses.alice }] },
+      }, async ({ page, state }) => {
+        await page.goto(`${origin}/templates`);
+        await visible(page, 'Monthly suppliers', 'heading');
+        state.templateOwner = addresses.bob;
+        state.templates = [];
+        await page.evaluate((wallet) => window.__MST_QA_SET_WALLET__(wallet), walletState(addresses.bob));
+        await visible(page, 'No saved templates yet', 'heading');
+        assert.equal(await page.getByRole('heading', { name: 'Monthly suppliers' }).count(), 0,
+          'Template from the previous wallet must disappear after account switch');
+        await snapshot(page, 'templates-owner-switched', width);
+      });
+
+      await run('templates-delegated-wallet-cannot-manage-grants', width, {
+        wallet: walletState(addresses.carol),
+        state: { templateOwner: addresses.carol, templates: [{ ...templateFixture(), ownerAddress: addresses.alice }] },
+      }, async ({ page }) => {
+        await page.goto(`${origin}/templates`);
+        await visible(page, 'Monthly suppliers', 'heading');
+        await page.getByText(/Shared with this wallet/).waitFor({ state: 'visible' });
+        assert.equal(await page.getByText('Allow another wallet to request payments').count(), 0);
+        const link = page.getByRole('link', { name: 'Request payment', exact: true });
+        assert.equal(new URL(await link.getAttribute('href'), origin).pathname, '/new/proposer');
       });
 
       await run('delegated-wallet-creates-payment-without-signing', width, {
@@ -690,6 +738,7 @@ try {
         await page.goto(`${origin}/new`);
         await visible(page, 'Monthly suppliers', 'heading');
         await visible(page, 'You are authorized to initiate payments from this Template.');
+        assert.equal(await page.getByText('Allow another wallet to request payments').count(), 0, 'Delegated users cannot administer templates');
         const link = page.getByRole('link', { name: 'Request payment', exact: true });
         await link.click();
         await visible(page, 'Request a payment', 'heading');

@@ -115,7 +115,7 @@ export default function StellarAccountControl() {
                 className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-emerald-700 hover:bg-emerald-500/5 disabled:opacity-50 dark:text-emerald-300"
               >
                 {authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                {authBusy ? 'Confirming wallet…' : 'Sign in to workspace'}
+                {authBusy ? 'Confirming wallet…' : 'Confirm wallet'}
               </button>
             )}
             <button
@@ -169,10 +169,10 @@ export default function StellarAccountControl() {
       type="button"
       disabled={busy || authBusy}
       onClick={() => void signIn()}
-      className="flex items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-semibold shadow-sm transition hover:border-emerald-500/30 hover:bg-emerald-500/[0.04] disabled:opacity-50 dark:border-white/15 dark:bg-white/5 dark:hover:border-emerald-400/30 sm:px-3.5"
+      className="mst-action-secondary disabled:opacity-50"
     >
-      {busy || authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />}
-      <span>{busy ? 'Opening wallets…' : authBusy ? 'Confirming…' : 'Sign in'}</span>
+      {busy || authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <WalletCards className="h-4 w-4" />}
+      <span>{busy ? 'Opening wallets…' : authBusy ? 'Confirming…' : 'Connect wallet'}</span>
     </button>
   );
 }
