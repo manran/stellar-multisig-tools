@@ -946,7 +946,7 @@ export default function RequestApp() {
                     <p className="mst-proposal-task__detail">{nextStep.detail}</p>
                   </div>
                   <div className="mst-proposal-task__actions">
-                    <ActionButton variant={nextStep.heading === 'Next step' ? 'primary' : 'secondary'} onClick={openCurrentStep}>{nextStep.action.label}</ActionButton>
+                    <ActionButton variant={nextStep.heading === 'Next step' && nextStep.action.target !== 'signatures' ? 'primary' : 'secondary'} onClick={openCurrentStep}>{nextStep.action.target === 'signatures' && walletSigningState === 'can_sign' ? 'Go to signing' : nextStep.action.label}</ActionButton>
                     {walletAlreadySigned && <a href={stellarHref('/inbox')} className="mst-proposal-task__back">Back to Inbox</a>}
                   </div>
                 </section>

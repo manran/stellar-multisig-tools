@@ -325,7 +325,8 @@ test('Human CTAs have semantic Action ownership without turning actions into sta
 test('Proposal signing and sharing use semantic actions', () => {
   const signing = source('../SigningGuidance.tsx');
   assert.match(signing, /import \{ ActionButton \} from '\.\/MultiSigUi'/);
-  assert.match(signing, /<ActionButton variant=\{walletAlreadySigned \? 'secondary' : 'primary'\}/);
+  assert.match(signing, /<ActionButton variant="primary" disabled=\{walletBusy\}/);
+  assert.match(signing, /walletAlreadySigned \? \(/);
   assert.match(signing, /<ActionButton variant="secondary" disabled=\{shareBusy\}/);
   assert.match(signing, /<ActionButton\s+variant="secondary"\s+size="sm"/);
   assert.match(signing, /aria-busy=\{walletBusy\}/);

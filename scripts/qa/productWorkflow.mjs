@@ -918,6 +918,7 @@ try {
       await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
       await page.getByRole('button', { name: 'Sign', exact: true }).click();
       await visible(page, 'Your signature is recorded', 'heading');
+      assert.equal(await page.getByRole('button', { name: 'Signed', exact: true }).count(), 0, 'Completed signature is status, not a disabled action');
       assert.equal(state.contributionCount, 1);
       assert.equal(state.submitCount, 0);
       await page.getByRole('button', { name: 'View signing progress', exact: true }).click();
@@ -948,9 +949,14 @@ try {
       await page.getByRole('button', { name: 'Review transaction', exact: true }).click();
       await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
       await visible(page, 'Your signature is needed', 'heading');
+      await visible(page, 'Go to signing', 'button');
       await visible(page, 'Approval power required');
       await visible(page, '2 / 3');
       await visible(page, 'Needs 1 more approval power');
+      const signBounds = await page.getByRole('button', { name: 'Sign', exact: true }).boundingBox();
+      const ledgerBounds = await page.locator('.mst-signing-requirements').boundingBox();
+      assert.ok(signBounds && ledgerBounds && signBounds.y < ledgerBounds.y, 'Primary Sign is before signer ledger');
+      assert.ok((await page.locator('.mst-proposal-task__actions button').getAttribute('class') || '').includes('bg-[var(--color-paper)]'), 'Signing step jump is secondary, not a second primary button');
       await snapshot(page, 'proposal-weighted', width);
     });
 
@@ -963,6 +969,9 @@ try {
         await page.getByRole('button', { name: 'Review transaction', exact: true }).click();
         await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
         await visible(page, 'Invite signers', 'heading');
+        const signBounds = await page.getByRole('button', { name: 'Sign', exact: true }).boundingBox();
+        const inviteBounds = await page.getByRole('region', { name: 'Invite and follow up with signers' }).boundingBox();
+        assert.ok(signBounds && inviteBounds && signBounds.y < inviteBounds.y, 'Current signer action precedes invitation controls');
         const button = page.getByRole('button', { name: 'Select signers above' });
         assert.equal(await button.isDisabled(), true, 'No signer is preselected');
         await page.getByRole('checkbox', { name: 'Invite Bob' }).check();
