@@ -38,6 +38,8 @@ curl -sS -X POST https://api-testnet.multisig.tools/stellar/integration-testnet 
   }'
 ```
 
+Use a lowercase service ID of 1–40 letters, digits or hyphens, starting with a letter or digit. Invalid IDs return HTTP 400 (`invalid_integration_service_id`); the API does not silently lowercase them.
+
 Store the returned one-time `msi_*` credential directly in your server-side or Agent secret store.
 
 The default profile lets MST submit the authorized Request. To own final submission yourself, include the same Treasury in `classicExternalExecutionSourceAccounts` when creating the profile. The prepared-XDR path below works without managed transaction-source channels.

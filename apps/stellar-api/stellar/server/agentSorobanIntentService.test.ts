@@ -88,9 +88,9 @@ function credential(access: 'read' | 'write' | 'sign' = 'write') {
     createdBy: address,
   } satisfies StoredSignerAgentCredential;
 }
-async function serviceOptions(sourceBound = false) {
+async function serviceOptions(sourceBound = false, principalAddress?: string) {
   const planningSource = Keypair.random();
-  const authorizer = Keypair.random();
+  const authorizer = principalAddress ?? Keypair.random().publicKey();
   const built = await buildContractIntent({
     network: 'testnet',
     contractId: CONTRACT_ID,
@@ -113,7 +113,7 @@ async function serviceOptions(sourceBound = false) {
       })
     : new xdr.SorobanAuthorizationEntry({
         credentials: xdr.SorobanCredentials.sorobanCredentialsAddressV2(new xdr.SorobanAddressCredentials({
-          address: new Address(authorizer.publicKey()).toScAddress(),
+          address: new Address(authorizer).toScAddress(),
           nonce: xdr.Int64(42n),
           signatureExpirationLedger: 0,
           signature: xdr.ScVal.scvVoid(),
@@ -133,12 +133,12 @@ async function serviceOptions(sourceBound = false) {
     planningSource: planningSource.publicKey(),
     contractDependencies: { interfaceLoader: async () => loadedInterface() },
     planningDependencies: {
-      accountLoader: async (address: string) => address === authorizer.publicKey()
+      accountLoader: async (address: string) => address === authorizer
         ? ({
-            accountId: authorizer.publicKey(), sequence: '1', subentryCount: 0,
+            accountId: authorizer, sequence: '1', subentryCount: 0,
             numSponsoring: 0, numSponsored: 0,
             thresholds: { low: 1, medium: 1, high: 1 },
-            signers: [{ key: authorizer.publicKey(), type: 'ed25519_public_key' as const, weight: 1 }],
+            signers: [{ key: authorizer, type: 'ed25519_public_key' as const, weight: 1 }],
           } as never)
         : ({ accountId: planningSource.publicKey(), sequence: '7' } as never),
       networkParametersLoader: async () => ({ baseFeeInStroops: 100 } as never),
@@ -166,7 +166,7 @@ test('Write Agent creates a source-free Intent with detached AuthorizationPlan a
     intents,
     key,
     createInput,
-    { ...(await serviceOptions()), idFactory: () => 'A'.repeat(16), now: new Date('2026-09-14T01:00:00Z') },
+    { ...(await serviceOptions(false, key.principal.address)), idFactory: () => 'A'.repeat(16), now: new Date('2026-09-14T01:00:00Z') },
   );
   assert.equal(result.replayed, false);
   assert.equal(result.intent.id, 'A'.repeat(16));
@@ -181,13 +181,24 @@ test('Agent Intent creation replays the same durable resource through existing i
   const intents = new MemoryIntentStore();
   const key = credential('write');
   agents.credentials.set(key.credentialId, key);
-  const options = { ...(await serviceOptions()), idFactory: () => 'B'.repeat(16) };
+  const options = { ...(await serviceOptions(false, key.principal.address)), idFactory: () => 'B'.repeat(16) };
   const first = await createAgentSorobanIntent(agents, intents, key, createInput, options);
   const second = await createAgentSorobanIntent(agents, intents, key, createInput, options);
   assert.equal(first.intent.id, 'B'.repeat(16));
   assert.equal(second.intent.id, first.intent.id);
   assert.equal(second.replayed, true);
   assert.equal(intents.values.size, 1);
+});
+
+test('An unrelated Agent cannot persist an Intent or reserve its idempotency key', async () => {
+  const agents = new MemoryAgentStore();
+  const intents = new MemoryIntentStore();
+  const key = credential('write');
+  const options = await serviceOptions();
+  await assert.rejects(() => createAgentSorobanIntent(agents, intents, key, createInput, options),
+    (cause: unknown) => cause instanceof Error && 'status' in cause && cause.status === 403 && 'code' in cause && cause.code === 'principal_intent_access_denied');
+  assert.equal(intents.values.size, 0);
+  assert.equal(agents.claims.size, 0);
 });
 
 test('SOURCE_ACCOUNT planning is rejected instead of binding Intent to a transaction source', async () => {
@@ -237,7 +248,7 @@ test('reusing an idempotency key for a different Intent is rejected', async () =
   const intents = new MemoryIntentStore();
   const key = credential('write');
   agents.credentials.set(key.credentialId, key);
-  const options = { ...(await serviceOptions()), idFactory: () => 'D'.repeat(16) };
+  const options = { ...(await serviceOptions(false, key.principal.address)), idFactory: () => 'D'.repeat(16) };
   await createAgentSorobanIntent(agents, intents, key, createInput, options);
   await assert.rejects(
     () => createAgentSorobanIntent(agents, intents, key, {

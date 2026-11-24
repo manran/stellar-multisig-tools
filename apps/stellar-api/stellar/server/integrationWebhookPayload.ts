@@ -120,6 +120,7 @@ export function projectSorobanIntegrationWebhook(
   observations: Awaited<ReturnType<NonNullable<SorobanIntentStore['listExecutionObservations']>>>,
   reviewOrigin: string,
   now = new Date(),
+  executionAvailable = true,
 ): IntegrationSorobanWebhookProjection {
   return {
     type: 'soroban_job',
@@ -129,6 +130,7 @@ export function projectSorobanIntegrationWebhook(
       preparations,
       observations,
       reviewUrl: reviewUrl(reviewOrigin, stored.id),
+      executionAvailable,
       now,
     }),
   };
@@ -162,6 +164,7 @@ export function createIntegrationWebhookPayloadBuilder(input: {
   requests: SigningRequestStore;
   intents: SorobanIntentStore;
   reviewOriginFor: (network: StellarNetwork) => string;
+  executionAvailableFor?: (stored: StoredSorobanIntent, serviceId: string) => Promise<boolean>;
   loadClassicSnapshot?: (
     store: SigningRequestStore,
     stored: StoredSigningRequest,
@@ -215,6 +218,7 @@ export function createIntegrationWebhookPayloadBuilder(input: {
         observations,
         input.reviewOriginFor(stored.network),
         now(),
+        await input.executionAvailableFor?.(stored, record.serviceId) ?? true,
       );
       return integrationWebhookEnvelope(
         record,

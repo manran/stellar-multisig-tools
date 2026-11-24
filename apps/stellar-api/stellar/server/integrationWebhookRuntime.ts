@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import type { Pool } from 'pg';
-import { STELLAR_MAINNET_ORIGIN, STELLAR_TESTNET_ORIGIN } from '../../../../packages/stellar-core/src/deploymentOrigins.js';
+import { stellarWebOrigin } from '../../../../packages/stellar-core/src/deploymentOrigins.js';
 import { coordinationPool } from '../db/postgres.js';
 import { createPostgresSigningRequestStore } from '../db/postgresSigningRequestStore.js';
 import { createPostgresSorobanIntentStore } from '../db/postgresSorobanIntentStore.js';
@@ -10,6 +10,8 @@ import type { SorobanIntentPrivateDataStore } from './sorobanIntentPrivateDataSt
 import { dispatchIntegrationWebhookEvent } from './integrationWebhookDispatcher.js';
 import { CloudflareRelayIntegrationWebhookHttpTransport } from './cloudflareRelayIntegrationWebhookHttpTransport.js';
 import { NodeIntegrationWebhookHttpTransport } from './nodeIntegrationWebhookHttpTransport.js';
+import { integrationSorobanExecutionAvailable } from './sorobanIntentConfig.js';
+import { resolveRuntimeIntegrationCredential } from './integrationCredentialRegistry.js';
 import { createIntegrationWebhookPayloadBuilder } from './integrationWebhookPayload.js';
 
 const redactedRequestPrivateStore: RequestPrivateDataStore = {
@@ -25,7 +27,7 @@ const redactedSorobanPrivateStore: SorobanIntentPrivateDataStore = {
 };
 
 export function integrationWebhookReviewOrigin(network: 'public' | 'testnet'): string {
-  return network === 'public' ? STELLAR_MAINNET_ORIGIN : STELLAR_TESTNET_ORIGIN;
+  return stellarWebOrigin(network);
 }
 
 export function createRuntimeIntegrationWebhookPayloadBuilder(pool: Pool = coordinationPool()) {
@@ -43,6 +45,10 @@ export function createRuntimeIntegrationWebhookPayloadBuilder(pool: Pool = coord
     requests,
     intents,
     reviewOriginFor: integrationWebhookReviewOrigin,
+    executionAvailableFor: async (stored, serviceId) => {
+      const credential = await resolveRuntimeIntegrationCredential(blobIntegrationCredentialStore, serviceId);
+      return Boolean(credential && integrationSorobanExecutionAvailable(stored.network, stored.executionPolicy, credential.sorobanExecutionAccounts));
+    },
   });
 }
 

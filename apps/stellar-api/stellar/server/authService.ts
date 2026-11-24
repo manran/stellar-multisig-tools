@@ -455,7 +455,9 @@ export function authTokenFromRequest(request: Request): string {
   const cookie = request.headers.get('cookie') ?? '';
   for (const part of cookie.split(';')) {
     const [name, ...rest] = part.trim().split('=');
-    if (name === 'mst_auth') return decodeURIComponent(rest.join('='));
+    if (name === 'mst_auth') {
+      try { return decodeURIComponent(rest.join('=')); } catch { return ''; }
+    }
   }
   return '';
 }

@@ -18,7 +18,7 @@ import {
   normalizeIdempotencyKey,
 } from './boxService.js';
 import { createSigningRequestId } from './requestLocator.js';
-import { planSorobanIntentForStorage } from './sorobanIntentPlanningService.js';
+import { assertAgentSorobanPlanAccess, planSorobanIntentForStorage } from './sorobanIntentPlanningService.js';
 import { createStoredSorobanIntent } from './sorobanIntentService.js';
 import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';
 
@@ -144,6 +144,7 @@ export async function createAgentSorobanIntent(
       options.planningSource,
       options.planningDependencies,
     );
+    assertAgentSorobanPlanAccess(planned, credential.principal.address);
     const guardedStore: SorobanIntentStore = {
       ...intentStore,
       createIntent: async (value) => {

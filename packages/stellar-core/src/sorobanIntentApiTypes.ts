@@ -118,7 +118,7 @@ export interface IntegrationSorobanJobProjection {
   waitingFor?: string[];
   expiresAtLedger?: number;
   externalReference?: string;
-  reason?: 'authorization_blocked' | 'execution_failed';
+  reason?: 'authorization_blocked' | 'execution_failed' | 'execution_unavailable';
   execution?: {
     owner: 'external_service' | 'multisigtools';
     executor: string;

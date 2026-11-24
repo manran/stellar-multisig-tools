@@ -5,6 +5,10 @@ import type { StellarNetwork } from '../../../../packages/stellar-core/src/types
 
 const INTEGRATION_KEY_PREFIX = 'msi';
 const SERVICE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
+export function isValidIntegrationServiceId(value: unknown): value is string {
+  return typeof value === 'string' && value === value.trim() && SERVICE_ID_PATTERN.test(value);
+}
+
 const SECRET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
 const METHOD_PATTERN = /^[A-Za-z0-9_]{1,64}$/;

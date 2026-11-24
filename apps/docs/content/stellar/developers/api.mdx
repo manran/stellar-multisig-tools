@@ -60,6 +60,10 @@ Branch on stable error codes, not message text.
 | 400 | Invalid input or missing idempotency key | Fix the request; do not blind-retry. |
 | 401 | Credential missing or invalid | Refresh or replace the credential. |
 | 403 | Credential outside configured scope | Change scope or request. |
-| 409 | Idempotency/state/network conflict | Read current state before deciding. |
+| 409 | Idempotency/state/network/configuration conflict | Read current state or change configuration; do not blind-retry. |
+| 404 | Resource not found | Check the resource ID and deployment. |
+| 410 | Expired resource or grant | Obtain a new valid grant or resource. |
+| 413 | Request body too large | Reduce the request size. |
+| 415 | Unsupported media type | Send application/json. |
 | 429 | Rate limited | Retry with backoff. |
 | 503 | Dependency/storage unavailable | Retry with backoff and inspect current state. |

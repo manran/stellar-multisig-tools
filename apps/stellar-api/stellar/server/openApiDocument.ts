@@ -38,8 +38,8 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
       parameter('unlock_seconds', 'query', false, { type: 'integer', enum: [900, 3600, 28800] }, 'Requested session duration; defaults to 3600.'),
     );
   }
-  if (path === '/agent-grants' || path === '/agent-access') {
-    values.push(parameter('x-multisig-session-address', 'header', path === '/agent-access', { type: 'string', pattern: '^G[A-Z2-7]{55}$' }, 'Must match the Human session signer for challenges, approval, denial, and credential management.'));
+  if (['/agent-grants', '/agent-access', '/intent', '/request', '/payment-prepare', '/account-create-prepare'].includes(path)) {
+    values.push(parameter('x-multisig-session-address', 'header', path === '/agent-access', { type: 'string', pattern: '^G[A-Z2-7]{55}$' }, 'Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials.'));
   }
   if (path === '/agent-grants' && method === 'get') {
     values.push(
@@ -127,18 +127,17 @@ function security(path: string, method: string, access: HeadlessOperationAccess)
   if (path === '/agent-access') return [{ humanBearer: [] }, { humanSession: [] }];
   if (access === 'public') return [];
   if (path === '/intent') {
-    if (method === 'patch') return [{ agentBearer: [] }, { humanSession: [] }, { intentCapability: [] }];
-    if (method === 'get') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }, { intentCapability: [] }];
-    return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
+    if (method === 'patch') return [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { intentCapability: [] }];
+    if (method === 'get') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { intentCapability: [] }];
+    return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
   }
   if (path === '/integration-execution') return [{ integrationBearer: [] }];
   if (path === '/contracts' || path === '/inbox') return [{ agentBearer: [] }, { humanSession: [] }];
-  if (path === '/payment-prepare' || path === '/account-create-prepare') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
-  if (path === '/request' && method === 'put') return [{ integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
-  if (path === '/request' && (method === 'post' || method === 'get')) {
-    return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
-  }
-  return [{ agentBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
+  if (path === '/payment-prepare' || path === '/account-create-prepare') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
+  if (path === '/request' && method === 'put') return [{ integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
+  if (path === '/request' && method === 'post') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
+  if (path === '/request' && method === 'get') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
+  return [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
 }
 
 function transportOperationId(path: string, method: string, operations: readonly HeadlessOperationDescriptor[]): string {
@@ -170,7 +169,9 @@ function openApiPaths(): OpenApiObject {
         ? { '201': response('Created.', successSchema(path, method)) }
         : method === 'post' && path === '/agent-grants'
           ? { '200': response('Pairing status or decision.', successSchema(path, method)), '201': response('Pairing request created.', successSchema(path, method)) }
-          : { '200': response('Successful operation.', successSchema(path, method)) };
+          : method === 'put' && path === '/intent'
+            ? { '200': response('Successful operation.', successSchema(path, method)), '201': response('Browser authorization capability issued.', schema('BrowserAuthorizationIssueResult')) }
+            : { '200': response('Successful operation.', successSchema(path, method)) };
     const pathItem = (paths[path] ?? {}) as OpenApiObject;
     pathItem[method] = {
       operationId: transportOperationId(path, method, operations),
@@ -184,7 +185,13 @@ function openApiPaths(): OpenApiObject {
         '400': response('Invalid request.', schema('ApiError')),
         '401': response('Authentication required.', schema('ApiError')),
         '403': response('Access denied.', schema('ApiError')),
-        '409': response('State or deployment-network conflict.', schema('ApiError')),
+        '404': response('Resource not found.', schema('ApiError')),
+        '409': response('State or configuration conflict. Change the input, configuration or resource state before retrying.', schema('ApiError')),
+        '410': response('Resource or capability expired.', schema('ApiError')),
+        ...(request ? {
+          '413': response('Request body too large.', schema('ApiError')),
+          '415': response('Unsupported media type; use application/json.', schema('ApiError')),
+        } : {}),
         '429': response('Rate limited.', schema('ApiError')),
         '500': response('Internal error.', schema('ApiError')),
         '503': response('Dependency unavailable.', schema('ApiError')),
@@ -286,17 +293,18 @@ const components: OpenApiObject = {
       type: 'object',
       required: ['serviceId', 'label'],
       anyOf: [
-        { required: ['classicSourceAccounts'] },
-        { required: ['sorobanContracts'] },
+        { required: ['classicSourceAccounts'], properties: { classicSourceAccounts: { minItems: 1 } } },
+        { required: ['sorobanContracts'], properties: { sorobanContracts: { minItems: 1 } } },
       ],
       properties: {
         serviceId: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{0,39}$' },
         label: { type: 'string', minLength: 1, maxLength: 80 },
-        classicSourceAccounts: { type: 'array', minItems: 1, items: accountId },
+        enabled: { type: 'boolean', description: 'Optional compatibility field; self-service always creates an enabled profile.' },
+        networks: { type: 'array', items: stellarNetwork, description: 'Optional compatibility field; self-service always uses Testnet.' },
+        classicSourceAccounts: { type: 'array', items: accountId },
         classicExternalExecutionSourceAccounts: { type: 'array', items: accountId },
         sorobanContracts: {
           type: 'array',
-          minItems: 1,
           items: {
             type: 'object',
             required: ['contractId', 'methods'],
@@ -308,7 +316,7 @@ const components: OpenApiObject = {
                   {
                     type: 'object',
                     required: ['mode'],
-                    properties: { mode: { type: 'string', const: 'multisigtools' } },
+                    properties: { mode: { type: 'string', const: 'multisigtools', description: 'Requires runtime-config capabilities.sorobanManagedExecution for the selected network.' } },
                     additionalProperties: false,
                   },
                   {
@@ -379,8 +387,13 @@ const components: OpenApiObject = {
         fixedNetwork: { oneOf: [stellarNetwork, { type: 'null' }] },
         capabilities: {
           type: 'object',
-          required: ['classicManagedExecution'],
+          required: ['classicManagedExecution', 'sorobanManagedExecution'],
           properties: {
+            sorobanManagedExecution: {
+              type: 'object', required: ['testnet', 'public'],
+              properties: { testnet: { type: 'boolean' }, public: { type: 'boolean' } },
+              additionalProperties: false,
+            },
             classicManagedExecution: {
               type: 'object',
               required: ['testnet', 'public'],
@@ -648,7 +661,7 @@ const components: OpenApiObject = {
         waitingFor: { type: 'array', uniqueItems: true, items: { oneOf: [accountId, contractId] } },
         expiresAtLedger: { type: 'integer', minimum: 1 },
         externalReference: { type: 'string' },
-        reason: { type: 'string', enum: ['authorization_blocked', 'execution_failed'] },
+        reason: { type: 'string', enum: ['authorization_blocked', 'execution_failed', 'execution_unavailable'] },
         execution: {
           type: 'object',
           required: ['owner', 'executor', 'transactionHash', 'preparedAt', 'validUntil'],
@@ -1331,9 +1344,9 @@ const components: OpenApiObject = {
     },
     ProposalPatchInput: {
       oneOf: [
-        { type: 'object', required: ['signedXdr'], properties: { signedXdr: xdr }, additionalProperties: false },
-        { type: 'object', required: ['decision'], properties: { decision: { type: 'string', const: 'decline' } }, additionalProperties: false },
-        { type: 'object', required: ['retainActivity'], properties: { retainActivity: { type: 'boolean', const: true } }, additionalProperties: false },
+        { type: 'object', description: 'Requires valid signer authorization; Agent callers require Sign access.', required: ['signedXdr'], properties: { signedXdr: xdr }, additionalProperties: false, 'x-multisig-access': 'principal:sign' },
+        { type: 'object', description: 'Requires a Human signer session or an Agent credential with Write access.', required: ['decision'], properties: { decision: { type: 'string', const: 'decline' } }, additionalProperties: false, 'x-multisig-access': 'principal:write' },
+        { type: 'object', description: 'Human only: verified current signer session (bearer or cookie), while the Proposal is active. Agent and Integration credentials cannot retain Activity.', required: ['retainActivity'], properties: { retainActivity: { type: 'boolean', const: true } }, additionalProperties: false, 'x-multisig-access': 'human' },
       ],
     },
     SorobanRequestOrigin: {

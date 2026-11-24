@@ -21,6 +21,11 @@ const config = {
   issuer: 'https://stellar.multisig.tools/api/auth',
 };
 
+test('malformed contribution cookie is ignored rather than throwing', async () => {
+  const request = new Request('https://example.test', { headers: { cookie: 'mst_contribution=%zz' } });
+  assert.equal(await contributionGrantFromRequest(new MemoryAuthStore(), request, config), null);
+});
+
 test('contribution grant is signed, request-scoped, and expires after fifteen minutes', async () => {
   const store = new MemoryAuthStore();
   const signer = Keypair.random();

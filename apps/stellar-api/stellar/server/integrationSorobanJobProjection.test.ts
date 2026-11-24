@@ -106,6 +106,11 @@ test('projects ready authorization into one explicit next action', () => {
   assert.equal(job.state, 'ready');
   assert.deepEqual(job.nextActions, ['prepare_execution', 'cancel']);
 });
+test('legacy Intent with unavailable executor does not advertise prepare or refresh', () => {
+  const job = projectIntegrationSorobanJob({ stored: stored(), authorization: authorization('authorization_ready'), reviewUrl: REVIEW_URL, executionAvailable: false });
+  assert.equal(job.reason, 'execution_unavailable');
+  assert.deepEqual(job.nextActions, ['cancel']);
+});
 test('projects a current execution package as executing', () => {
   const job = projectIntegrationSorobanJob({
     stored: stored({ executionPolicy: { mode: 'external', executor: { address: 'GEXECUTOR', source: 'service_default' } } }),

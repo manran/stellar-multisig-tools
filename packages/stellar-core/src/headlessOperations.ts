@@ -28,7 +28,7 @@ export interface HeadlessOperationDescriptor {
 export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] = [
   {
     id: 'runtime.config.inspect', version: 1, method: 'GET', path: '/runtime-config',
-    access: 'public', effect: 'none', summary: 'Read the deployment-owned Stellar network policy.',
+    access: 'public', effect: 'none', summary: 'Read the deployment-owned Stellar network policy and Classic/Soroban managed execution availability.',
   },
   {
     id: 'signer.auth.challenge', version: 1, method: 'GET', path: '/auth',
@@ -76,7 +76,7 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
   },
   {
     id: 'contract.intent.create', version: 1, method: 'POST', path: '/intent',
-    access: 'principal:write', effect: 'coordination-state', summary: 'Create a source-free Soroban Intent and discover its authorization plan.',
+    access: 'principal:write', effect: 'coordination-state', summary: 'Create a source-free Soroban Intent and discover its authorization plan. An Agent Principal must be a current signer for at least one required authorizer unless no authorization is required.',
   },
   {
     id: 'integration.intent.create', version: 1, method: 'POST', path: '/intent',
@@ -201,6 +201,14 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
   {
     id: 'proposal.contribute', version: 1, method: 'PATCH', path: '/request',
     access: 'principal:sign', effect: 'coordination-state', summary: 'Add attributable Stellar authorization to a Signing Request.',
+  },
+  {
+    id: 'proposal.decline', version: 1, method: 'PATCH', path: '/request',
+    access: 'principal:write', effect: 'coordination-state', summary: 'Record a current signer decision to decline an active Proposal.',
+  },
+  {
+    id: 'proposal.activity.retain', version: 1, method: 'PATCH', path: '/request',
+    access: 'human', effect: 'private-state', summary: 'Retain an active Proposal in a verified Human signer Activity; Agent credentials cannot perform this operation.',
   },
   {
     id: 'proposal.submit', version: 1, method: 'PUT', path: '/request',

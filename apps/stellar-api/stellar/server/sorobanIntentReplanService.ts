@@ -1,6 +1,6 @@
 import { getSorobanIntentAuthorization, type SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
 import { compareSorobanEffects } from '../../../../packages/stellar-core/src/sorobanEffects.js';
-import { planSorobanIntentForStorage } from './sorobanIntentPlanningService.js';
+import { assertAgentSorobanPlanAccess, planSorobanIntentForStorage } from './sorobanIntentPlanningService.js';
 import {
   SorobanIntentStoreConflictError,
   type SorobanIntentStore,
@@ -63,6 +63,9 @@ export async function replanExpiredSorobanIntent(
     planningSource,
     options.planningDependencies,
   );
+  if (stored.creatorActor?.type === 'agent') {
+    assertAgentSorobanPlanAccess(planned, stored.creatorActor.principalAddress);
+  }
   if (authorization.status === 'authorization_ready' && stored.authorizationPlan.effects?.digest) {
     const effectsDiff = compareSorobanEffects(
       stored.authorizationPlan.effects,

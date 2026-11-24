@@ -28,7 +28,9 @@ curl -sS https://api-testnet.multisig.tools/stellar/operations
 curl -sS https://api-testnet.multisig.tools/stellar/openapi.json
 ```
 
-Agent Request creation currently uses exact transaction XDR. Semantic Integration payment creation is a separate `msi_*` capability.
+Agent Request creation currently uses exact transaction XDR. Semantic Integration payment creation is a separate `msi_*` capability. A personal Agent may create a Soroban Intent requiring authorization only if its Principal is a current eligible signer for at least one required authorizer. Calls requiring no authorization remain available. Unrelated signer credentials receive HTTP 403 (`principal_intent_access_denied`). Integration creation remains governed by its configured contract and method scope.
+
+Retaining a Proposal in Human Activity (`PATCH /request` with `retainActivity: true`) requires a verified human signer session; an Agent credential cannot perform this action. Human session bearer tokens are accepted alongside session cookies on the documented Request operations.
 
 ## Identity
 

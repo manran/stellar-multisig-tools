@@ -146,6 +146,7 @@ async function fixture() {
     },
     options: {
       planningSource: planningSource.publicKey(),
+      managedExecutor: executor.publicKey(),
       contractDependencies: { interfaceLoader: async () => loadedInterface() },
       planningDependencies: {
         accountLoader: loader,
@@ -286,6 +287,23 @@ test('contract executor policy selects its bound global executor and rejects an 
       && 'code' in cause
       && cause.code === 'integration_contract_executor_policy_conflict',
   );
+});
+
+test('Intent creation rejects unavailable managed or missing executor before AUTH is stored', async () => {
+  const f = await fixture();
+  for (const credential of [
+    { ...f.credential, sorobanContracts: [{ contractId: CONTRACT_ID, methods: ['transfer'], execution: { mode: 'multisigtools' as const } }] },
+    { ...f.credential, sorobanExecutionAccounts: [] },
+  ]) {
+    const store = new MemoryIntentStore();
+    await assert.rejects(() => createIntegrationSorobanIntent(store, credential, f.input, { ...f.options, managedExecutor: null }),
+      (cause: unknown) => cause instanceof Error && 'status' in cause && cause.status === 409 && 'code' in cause && cause.code === 'managed_executor_not_configured');
+    assert.equal(store.values.size, 0);
+  }
+  const store = new MemoryIntentStore();
+  const created = await createIntegrationSorobanIntent(store, f.credential, f.input, { ...f.options, managedExecutor: null });
+  await assert.rejects(() => resolveAndBindIntegrationSorobanExecutor(store, created.intent, f.credential, undefined, null),
+    (cause: unknown) => cause instanceof Error && 'status' in cause && cause.status === 409 && 'code' in cause && cause.code === 'managed_executor_not_configured');
 });
 
 test('contract can require MultiSigTools-managed execution and cannot be rebound to a Service executor', async () => {

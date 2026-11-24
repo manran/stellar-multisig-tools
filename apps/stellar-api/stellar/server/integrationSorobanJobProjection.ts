@@ -54,6 +54,7 @@ export function projectIntegrationSorobanJob({
   preparations = [],
   observations = [],
   reviewUrl,
+  executionAvailable = true,
   now = new Date(),
 }: {
   stored: StoredSorobanIntent;
@@ -61,6 +62,7 @@ export function projectIntegrationSorobanJob({
   preparations?: readonly StoredSorobanIntentExecutionPreparation[];
   observations?: readonly StoredSorobanIntentExecutionObservation[];
   reviewUrl: string;
+  executionAvailable?: boolean;
   now?: Date;
 }): IntegrationSorobanJobProjection {
   const currentPreps = currentPreparations(stored, preparations);
@@ -81,7 +83,8 @@ export function projectIntegrationSorobanJob({
   else if (authorization.status === 'awaiting_authorization') state = 'waiting_for_authorization';
   else state = latestPreparation && !preparationExpired ? 'executing' : 'ready';
 
-  const nextActions: IntegrationSorobanJobProjection['nextActions'] = state === 'ready'
+  const executionBlocked = !executionAvailable && (state === 'ready' || state === 'waiting_for_authorization');
+  const nextActions: IntegrationSorobanJobProjection['nextActions'] = executionBlocked ? ['cancel'] : state === 'ready'
     ? preparationExpired ? ['refresh_execution', 'cancel'] : ['prepare_execution', 'cancel']
     : state === 'executing' && !managed
       ? ['submit_execution', 'reconcile_execution', 'refresh_execution', 'cancel']
@@ -105,6 +108,7 @@ export function projectIntegrationSorobanJob({
     ...(state === 'waiting_for_authorization' ? { waitingFor: waitingFor(authorization) } : {}),
     ...(expiry !== undefined ? { expiresAtLedger: expiry } : {}),
     ...(stored.privateContext?.externalReference ? { externalReference: stored.privateContext.externalReference } : {}),
+    ...(executionBlocked ? { reason: 'execution_unavailable' as const } : {}),
     ...(authorization.status === 'blocked' ? { reason: 'authorization_blocked' as const } : {}),
     ...(latestObservation && !latestObservation.successful ? { reason: 'execution_failed' as const } : {}),
     ...(latestPreparation ? {

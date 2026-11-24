@@ -15,6 +15,7 @@ import { createAgentSorobanIntent } from '../server/agentSorobanIntentService.js
 import { projectSorobanAgentTask } from '../server/agentTaskProjection.js';
 import {
   IntegrationCredentialServiceError,
+  type ConfiguredIntegrationCredential,
   integrationCallerForCredential,
 } from '../server/integrationCredentialService.js';
 import {
@@ -44,7 +45,9 @@ import { projectSorobanIntentEvidence } from '../server/sorobanIntentEvidence.js
 import { projectIntegrationSorobanJob } from '../server/integrationSorobanJobProjection.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
-import { configuredSorobanManagedExecutor, configuredSorobanPlanningSource } from '../server/sorobanIntentConfig.js';
+import { configuredSorobanManagedExecutor, configuredSorobanPlanningSource, integrationSorobanExecutionAvailable } from '../server/sorobanIntentConfig.js';
+import { SorobanSimulationError } from '../../../../packages/stellar-core/src/sorobanRpc.js';
+import { sorobanReviewUrl } from '../../../../packages/stellar-core/src/deploymentOrigins.js';
 import { SorobanIntentPlanningError } from '../server/sorobanIntentPlanningService.js';
 import { SorobanIntentServiceError } from '../server/sorobanIntentService.js';
 import { replanExpiredSorobanIntent, SorobanIntentReplanServiceError } from '../server/sorobanIntentReplanService.js';
@@ -115,6 +118,9 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof BrowserAuthorizationStorageUnavailableError
   ) {
     return json({ error: cause.message, code: cause.code }, cause.status);
+  }
+  if (cause instanceof SorobanSimulationError) {
+    return json({ error: cause.message, code: 'soroban_simulation_' + cause.kind }, cause.kind === 'invalid' || cause.kind === 'unsupported' ? 400 : 503);
   }
   if (cause instanceof SorobanIntentPlanningError) {
     const status = cause.code === 'source_account_auth_unsupported' || cause.code === 'contract_account_auth_unsupported' ? 409 : 503;
@@ -238,7 +244,7 @@ export async function GET(request: Request): Promise<Response> {
           access.stored,
           access.authorization,
           access.browserCapability,
-          integrationReviewUrl(request, access.stored.id),
+          sorobanReviewUrl(access.stored.network, access.stored.id),
         ),
       });
     }
@@ -254,7 +260,7 @@ export async function GET(request: Request): Promise<Response> {
       authorization: access.authorization,
       evidence: projectSorobanIntentEvidence(access.stored, contributions, preparations, observations),
       ...(access.integrationCredential ? {
-        job: integrationJob(request, access.stored, access.authorization, preparations, observations),
+        job: integrationJob(access.integrationCredential, access.stored, access.authorization, preparations, observations),
       } : {}),
       ...(access.agent ? {
         task: agentTask(
@@ -272,16 +278,8 @@ export async function GET(request: Request): Promise<Response> {
   }
 }
 
-function integrationReviewUrl(request: Request, id: string): string {
-  const url = new URL(request.url);
-  url.pathname = '/a';
-  url.search = '';
-  url.hash = id;
-  return url.toString();
-}
-
 function integrationJob(
-  request: Request,
+  credential: ConfiguredIntegrationCredential,
   stored: Parameters<typeof projectIntegrationSorobanJob>[0]['stored'],
   authorization: Parameters<typeof projectIntegrationSorobanJob>[0]['authorization'],
   preparations: Parameters<typeof projectIntegrationSorobanJob>[0]['preparations'] = [],
@@ -289,12 +287,13 @@ function integrationJob(
 ) {
   return projectIntegrationSorobanJob({
     stored, authorization, preparations, observations,
-    reviewUrl: integrationReviewUrl(request, stored.id),
+    reviewUrl: sorobanReviewUrl(stored.network, stored.id),
+    executionAvailable: integrationSorobanExecutionAvailable(stored.network, stored.executionPolicy, credential.sorobanExecutionAccounts),
   });
 }
 
 async function loadIntegrationJob(
-  request: Request,
+  credential: ConfiguredIntegrationCredential,
   stored: Parameters<typeof projectIntegrationSorobanJob>[0]['stored'],
   authorization: Parameters<typeof projectIntegrationSorobanJob>[0]['authorization'],
 ) {
@@ -303,7 +302,7 @@ async function loadIntegrationJob(
     sorobanIntentStore.listExecutionPreparations?.(stored.id) ?? Promise.resolve([]),
     sorobanIntentStore.listExecutionObservations?.(stored.id) ?? Promise.resolve([]),
   ]);
-  return integrationJob(request, latestStored ?? stored, authorization, preparations, observations);
+  return integrationJob(credential, latestStored ?? stored, authorization, preparations, observations);
 }
 
 function agentTask(
@@ -464,7 +463,7 @@ export async function POST(request: Request): Promise<Response> {
         replayed: result.replayed,
         intent: result.intent,
         authorization,
-        job: integrationJob(request, result.intent, authorization),
+        job: integrationJob(integrationCredential, result.intent, authorization),
       }, result.replayed ? 200 : 201);
     }
 
@@ -591,7 +590,7 @@ export async function PATCH(request: Request): Promise<Response> {
           access.stored,
           result.authorization,
           access.browserCapability,
-          integrationReviewUrl(request, access.stored.id),
+          sorobanReviewUrl(access.stored.network, access.stored.id),
         ),
       });
     }
@@ -619,6 +618,10 @@ export async function PUT(request: Request): Promise<Response> {
     assertCoordinationWritesEnabled();
     const access = await storedIntentAccess(request, 'write');
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    if (access.integrationCredential && ['issue_browser_authorization', 'replan', 'prepare_execution', 'refresh_execution'].includes(String(body.action ?? 'prepare_execution'))
+      && !integrationSorobanExecutionAvailable(access.stored.network, access.stored.executionPolicy, access.integrationCredential.sorobanExecutionAccounts)) {
+      throw new BoxServiceError('No available Soroban execution route. Configure an allowed executor before collecting authorization or preparing execution.', 409, 'managed_executor_not_configured');
+    }
     if (body.action === 'issue_browser_authorization') {
       if (!access.integrationCredential) {
         throw new SorobanBrowserAuthorizationServiceError(
@@ -646,7 +649,7 @@ export async function PUT(request: Request): Promise<Response> {
           access.stored,
           access.authorization,
           issued.record,
-          integrationReviewUrl(request, access.stored.id),
+          sorobanReviewUrl(access.stored.network, access.stored.id),
         ),
       }, 201);
     }
@@ -657,7 +660,7 @@ export async function PUT(request: Request): Promise<Response> {
         typeof body.transactionHash === 'string' ? body.transactionHash : '',
       );
       const job = access.integrationCredential
-        ? await loadIntegrationJob(request, access.stored, access.authorization)
+        ? await loadIntegrationJob(access.integrationCredential, access.stored, access.authorization)
         : undefined;
       const task = access.agent
         ? await loadAgentTask(access.stored, access.authorization, access.agent)
@@ -689,7 +692,7 @@ export async function PUT(request: Request): Promise<Response> {
       );
       const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, access.id);
       const job = access.integrationCredential
-        ? await loadIntegrationJob(request, result.intent, authorization)
+        ? await loadIntegrationJob(access.integrationCredential, result.intent, authorization)
         : undefined;
       const task = access.agent
         ? await loadAgentTask(result.intent, authorization, access.agent)
@@ -733,7 +736,7 @@ export async function PUT(request: Request): Promise<Response> {
         { authorization: access.authorization },
       );
       const job = access.integrationCredential
-        ? await loadIntegrationJob(request, result.intent, result.authorization)
+        ? await loadIntegrationJob(access.integrationCredential, result.intent, result.authorization)
         : undefined;
       const task = access.agent
         ? await loadAgentTask(result.intent, result.authorization, access.agent)
@@ -828,7 +831,7 @@ export async function PUT(request: Request): Promise<Response> {
       );
     }
     const job = access.integrationCredential
-      ? await loadIntegrationJob(request, access.stored, access.authorization)
+      ? await loadIntegrationJob(access.integrationCredential, access.stored, access.authorization)
       : undefined;
     const task = access.agent
       ? await loadAgentTask(access.stored, access.authorization, access.agent)

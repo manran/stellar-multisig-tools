@@ -7,12 +7,14 @@ import type { ConfiguredIntegrationCredential } from './integrationCredentialSer
 import { integrationCallerForCredential } from './integrationCredentialService.js';
 import { BoxServiceError, normalizeExternalReference, normalizeIdempotencyKey } from './boxService.js';
 import { encodeSigningRequestId } from './requestLocator.js';
+import { integrationSorobanExecutionAvailable } from './sorobanIntentConfig.js';
 import { planSorobanIntentForStorage } from './sorobanIntentPlanningService.js';
 import { createStoredSorobanIntent } from './sorobanIntentService.js';
 import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';
 
 interface IntegrationSorobanIntentOptions {
   planningSource: string;
+  managedExecutor?: string | null;
   now?: Date;
   contractDependencies?: Parameters<typeof buildContractIntent>[1];
   planningDependencies?: Parameters<typeof planSorobanIntentForStorage>[2];
@@ -192,7 +194,7 @@ export async function resolveAndBindIntegrationSorobanExecutor(
     if (!managedExecutor || !isValidStellarAccountId(managedExecutor)) {
       throw new BoxServiceError(
         'No Service executor is bound and MultiSigTools managed execution is not configured for this network.',
-        503,
+        409,
         'managed_executor_not_configured',
       );
     }
@@ -266,6 +268,9 @@ export async function createIntegrationSorobanIntent(
   }
 
   const executionPolicy = integrationSorobanExecutionPolicyForCreation(credential, input.network, built.contractId, requestedExecutor);
+  if (!integrationSorobanExecutionAvailable(input.network, executionPolicy, credential.sorobanExecutionAccounts, options.managedExecutor)) {
+    throw new BoxServiceError('No available Soroban execution route. Configure an allowed executor before collecting authorization.', 409, 'managed_executor_not_configured');
+  }
   const planned = await planSorobanIntentForStorage(
     built.intent,
     options.planningSource,

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Keypair } from '@stellar/stellar-sdk/base';
+import { Keypair, StrKey } from '@stellar/stellar-sdk/base';
 import type {
   IntegrationCredentialStore,
   StoredIntegrationCredential,
@@ -51,6 +51,37 @@ test('Testnet Integration self-service forces Testnet and enabled while reusing 
   assert.equal(stored?.enabled, true);
 });
 
+
+test('self-service cannot create a Soroban profile with no available execution route', async () => {
+  const store = new MemoryStore();
+  const env = 'STELLAR_SOROBAN_MANAGED_EXECUTOR_TESTNET';
+  const previous = process.env[env];
+  delete process.env[env];
+  const contractId = StrKey.encodeContract(new Uint8Array(32).fill(1));
+  const executor = Keypair.random().publicKey();
+  try {
+    for (const [execution, accounts] of [
+      [{ mode: 'multisigtools' }, [executor]],
+      [undefined, []],
+    ] as const) {
+      await assert.rejects(() => createTestnetIntegration(store, {
+        serviceId: 'unavailable', label: 'Unavailable',
+        sorobanContracts: [{ contractId, methods: ['transfer'], execution }],
+        sorobanExecutionAccounts: accounts,
+      }), (cause: unknown) => cause instanceof Error && 'status' in cause && cause.status === 409 && 'code' in cause && cause.code === 'managed_executor_not_configured');
+      assert.equal(store.records.size, 0);
+    }
+    const created = await createTestnetIntegration(store, {
+      serviceId: 'external-ready', label: 'External ready',
+      sorobanContracts: [{ contractId, methods: ['transfer'], execution: { mode: 'external', executor } }],
+      sorobanExecutionAccounts: [executor],
+    });
+    assert.equal(created.service.sorobanContracts[0].execution?.mode, 'external');
+  } finally {
+    if (previous === undefined) delete process.env[env];
+    else process.env[env] = previous;
+  }
+});
 
 test('a self-service MSI authenticates on fixed Testnet without operator administration', async () => {
   const previousNetwork = process.env.VITE_STELLAR_DEPLOYMENT_NETWORK;

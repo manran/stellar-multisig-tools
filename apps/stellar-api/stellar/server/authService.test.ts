@@ -5,6 +5,7 @@ import type { StellarNetwork } from '../../../../packages/stellar-core/src/types
 import type { AuthStore, StoredAuthServerKey, StoredRedeemedChallenge } from './authStore.js';
 import {
   AuthServiceError,
+  authTokenFromRequest,
   createAuthChallenge,
   exchangeAuthChallenge,
   exchangeAuthMessageChallenge,
@@ -13,6 +14,11 @@ import {
   resolveUnlockTtlSeconds,
   verifyAuthToken,
 } from './authService.js';
+
+test('malformed URL-encoded session cookie is unauthenticated, not an exception', () => {
+  const request = new Request('https://example.test', { headers: { cookie: 'mst_auth=%zz' } });
+  assert.equal(authTokenFromRequest(request), '');
+});
 
 const SEP53_PREFIX = Buffer.from('Stellar Signed Message:\n', 'utf8');
 

@@ -343,7 +343,7 @@ export async function reserveClassicManagedChannel(
   if (baselineKeypairs.length === 0) {
     throw new ClassicManagedChannelServiceError(
       'MultiSigTools-managed Classic execution is not configured for this network.',
-      503,
+      409,
       'managed_classic_execution_unavailable',
     );
   }

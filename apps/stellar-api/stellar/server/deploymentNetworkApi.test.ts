@@ -37,6 +37,7 @@ test('runtime config exposes the fixed Testnet deployment contract', async () =>
     fixedNetwork: 'testnet',
     capabilities: {
       classicManagedExecution: { testnet: false, public: false },
+      sorobanManagedExecution: { testnet: false, public: false },
     },
   });
 });
@@ -51,6 +52,7 @@ test('runtime config exposes managed Classic capability without exposing channel
   const body = await response.json() as Record<string, unknown>;
   assert.deepEqual(body.capabilities, {
     classicManagedExecution: { testnet: true, public: false },
+    sorobanManagedExecution: { testnet: false, public: false },
   });
   assert.doesNotMatch(JSON.stringify(body), /S[A-Z2-7]{55}/);
 });
@@ -65,6 +67,7 @@ test('Mainnet managed Classic stays disabled until the explicit deployment flag 
   assert.equal(disabled.status, 200);
   assert.deepEqual((await disabled.json()).capabilities, {
     classicManagedExecution: { testnet: false, public: false },
+    sorobanManagedExecution: { testnet: false, public: false },
   });
 
   process.env[classicChannelEnabledVariable] = 'true';
@@ -72,6 +75,7 @@ test('Mainnet managed Classic stays disabled until the explicit deployment flag 
   assert.equal(enabled.status, 200);
   assert.deepEqual((await enabled.json()).capabilities, {
     classicManagedExecution: { testnet: false, public: true },
+    sorobanManagedExecution: { testnet: false, public: false },
   });
 });
 

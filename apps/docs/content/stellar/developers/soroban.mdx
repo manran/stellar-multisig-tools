@@ -5,6 +5,10 @@ description: Create semantic contract Intents, collect AUTH, and keep execution 
 
 Soroban Integration starts from contract + method + arguments. MultiSig Tools plans current authorization requirements, keeps detached AUTH separate from the transaction shell, and prepares execution only after authorization is ready.
 
+## Choose an available executor
+
+Inspect `GET /runtime-config` before creating a profile. When `capabilities.sorobanManagedExecution.testnet` is false, choose external execution and configure at least one allowed G-account executor in `sorobanExecutionAccounts`. An explicitly selected executor must belong to that pool. A profile or new Intent without an available execution route is rejected with HTTP 409 (`managed_executor_not_configured`) before collecting AUTH. Existing Intents with unavailable execution report `execution_unavailable` in their job projection; do not retry preparation until the execution configuration is corrected.
+
 ## Create the Intent
 
 ```bash
@@ -39,5 +43,7 @@ Use a C address for `contractId`. For a contract argument declared as `MuxedAddr
 ## Browser authorization
 
 The owning Integration Service may issue a short-lived capability bound to one service, Intent, AuthorizationPlan revision/digest, signer, exact browser origin, and expiry.
+
+Use the returned `hostedReviewUrl` for human review. Its origin is the network's Hosted website, not the API origin.
 
 The browser can inspect its signer-specific challenge and contribute authorization. It cannot create arbitrary Intents, cancel/replan, change execution ownership, or become a Stellar signer without valid wallet cryptographic evidence.

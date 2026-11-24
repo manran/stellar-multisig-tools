@@ -14,6 +14,17 @@ import { analyzeKnownSorobanContractAuthorizationEntries } from '../../../../pac
 import { initializeSorobanContractAccountAuthorizationWindow } from '../../../../packages/stellar-core/src/sorobanCustomAuthorization.js';
 import { simulateSorobanTransaction } from '../../../../packages/stellar-core/src/sorobanRpc.js';
 
+import { AgentCredentialServiceError } from './agentCredentialService.js';
+
+export function assertAgentSorobanPlanAccess(
+  planned: { authorizationPlan: SorobanAuthorizationPlan; discoverySignerKeys: readonly string[] },
+  principalAddress: string,
+): void {
+  if (planned.authorizationPlan.authorizationEntriesXdr.length > 0 && !planned.discoverySignerKeys.includes(principalAddress)) {
+    throw new AgentCredentialServiceError('The Agent Principal is not a current signer for any required Soroban authorizer.', 403, 'principal_intent_access_denied');
+  }
+}
+
 export class SorobanIntentPlanningError extends Error {
   constructor(message: string, readonly code: string) {
     super(message);
