@@ -116,6 +116,11 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.equal(requestCreate.operationId, 'proposal.create.integration.request.create');
   assert.equal(requestSubmit.operationId, 'proposal.submit.integration.request.submit');
   assert.deepEqual(requestSubmit.security, [{ integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }]);
+  const inbox = paths['/inbox'].get as JsonObject;
+  assert.equal(inbox.operationId, 'signer.inbox.list');
+  assert.deepEqual(inbox.security, [{ agentBearer: [] }, { humanSession: [] }]);
+  assert.deepEqual(inbox['x-multisig-effects'], ['none']);
+  assert.ok(((paths['/agent-grants'].post as JsonObject).responses as JsonObject)['201']);
   assert.equal(paths['/preparation'], undefined);
 
   const components = document.components as JsonObject;
@@ -232,7 +237,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(schemas.ProposalCreateInput.required, ['network']);
   assert.deepEqual(schemas.ProposalCreateInput.oneOf, [
     { required: ['xdr'] },
-    { required: ['payment'], description: 'Semantic Classic payment creation is available to Integration Service callers. When the Treasury uses MultiSigTools-managed execution, MST supplies the transaction source, sequence, fee and submission while the Treasury remains the Payment operation source and authorization authority.' },
+    { required: ['payment'], description: 'Semantic Classic payment creation is available to Integration Service callers. For MST-managed semantic execution, runtime capabilities.classicManagedExecution must be true for the selected network. Otherwise prepare an unsigned payment with integration.classic.payment.prepare and create a Request using its xdr, or explicitly configure external execution.' },
   ]);
 });
 

@@ -88,6 +88,7 @@ function requestBody(path: string, method: string): OpenApiObject | undefined {
 
 function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/runtime-config') return schema('RuntimeConfigResult');
+  if (path === '/inbox') return schema('SignerInboxResult');
   if (path === '/agent-grants') return schema('AgentGrantResult');
   if (path === '/integration-testnet') return schema('TestnetIntegrationCreateResult');
   if (path === '/integration-execution') return schema('IntegrationExecutionInspectResult');
@@ -116,7 +117,7 @@ function security(path: string, method: string, access: HeadlessOperationAccess)
     return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
   }
   if (path === '/integration-execution') return [{ integrationBearer: [] }];
-  if (path === '/contracts') return [{ agentBearer: [] }, { humanSession: [] }];
+  if (path === '/contracts' || path === '/inbox') return [{ agentBearer: [] }, { humanSession: [] }];
   if (path === '/payment-prepare' || path === '/account-create-prepare') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
   if (path === '/request' && method === 'put') return [{ integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
   if (path === '/request' && (method === 'post' || method === 'get')) {
@@ -152,7 +153,9 @@ function openApiPaths(): OpenApiObject {
         }
       : method === 'post' && path === '/integration-testnet'
         ? { '201': response('Created.', successSchema(path, method)) }
-        : { '200': response('Successful operation.', successSchema(path, method)) };
+        : method === 'post' && path === '/agent-grants'
+          ? { '200': response('Pairing status or decision.', successSchema(path, method)), '201': response('Pairing request created.', successSchema(path, method)) }
+          : { '200': response('Successful operation.', successSchema(path, method)) };
     const pathItem = (paths[path] ?? {}) as OpenApiObject;
     pathItem[method] = {
       operationId: transportOperationId(path, method, operations),
@@ -1268,7 +1271,7 @@ const components: OpenApiObject = {
       required: ['network'],
       oneOf: [
         { required: ['xdr'] },
-        { required: ['payment'], description: 'Semantic Classic payment creation is available to Integration Service callers. When the Treasury uses MultiSigTools-managed execution, MST supplies the transaction source, sequence, fee and submission while the Treasury remains the Payment operation source and authorization authority.' },
+        { required: ['payment'], description: 'Semantic Classic payment creation is available to Integration Service callers. For MST-managed semantic execution, runtime capabilities.classicManagedExecution must be true for the selected network. Otherwise prepare an unsigned payment with integration.classic.payment.prepare and create a Request using its xdr, or explicitly configure external execution.' },
       ],
       properties: {
         network: stellarNetwork,
@@ -1323,6 +1326,20 @@ const components: OpenApiObject = {
       },
       additionalProperties: false,
     },
+    SignerInboxResult: {
+      type: 'object',
+      required: ['address', 'network', 'actor', 'pending_count', 'action_count', 'requests'],
+      properties: {
+        address: accountId,
+        network: stellarNetwork,
+        actor: { type: 'string', enum: ['agent', 'human'] },
+        pending_count: { type: 'integer', minimum: 0 },
+        action_count: { type: 'integer', minimum: 0 },
+        requests: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        tasks: { type: 'array', items: schema('AgentTask'), description: 'Present for Agent callers; correlate each task id with a Request id.' },
+      },
+      additionalProperties: true,
+    },
     ProposalResult: {
       type: 'object',
       required: ['request'],
@@ -1355,7 +1372,7 @@ export function createOpenApiDocument(
     info: {
       title: 'MultiSigTools Headless Operations',
       version: '1.0.0',
-      description: 'Composable Stellar coordination operations for Human, signer Agent, bot, script, wallet, plugin, MCP, CLI, and scoped external-service consumers. Building or preparing XDR never grants signer authority. MultiSigTools submission remains Human-only; Integration-owned work may designate an external executor.',
+      description: 'Composable Stellar coordination operations for Human, signer Agent, bot, script, wallet, plugin, MCP, CLI, and scoped external-service consumers. Building or preparing XDR never grants signer authority. Signer Agent credentials cannot directly submit. Integration-owned Requests may be automatically submitted at quorum, retried by their Integration, or designated for external execution.',
     },
     servers: [{ url: origin }],
     paths: openApiPaths(),

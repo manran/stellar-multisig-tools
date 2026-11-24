@@ -43,7 +43,24 @@ node scripts/qa/hostedTestnetLifecycle.mjs --live          # 2-of-3 Human lifecy
 node scripts/qa/hostedTestnetLifecycle.mjs --live --coordination # ID-only Ask/remind, no emails
 node scripts/qa/hostedTestnetLifecycle.mjs --live --proposer    # Delegated payment, revocation, signer E2E
 node scripts/qa/hostedTestnetLifecycle.mjs --live --agent  # scoped Agent signer lifecycle
+node scripts/qa/hostedTestnetLifecycle.mjs --integration https://stellar-testnet.multisig.tools/ # strict read-only discovery
+node scripts/qa/hostedTestnetLifecycle.mjs --live --integration https://stellar-testnet.multisig.tools/ # MSI + two MSA signers
 ```
+
+The Integration variant discovers its business operation paths and access levels
+from the public site's API catalog, registry and OpenAPI. It creates a scoped
+MSI, chooses the runtime-supported payment path, and pairs two separate signer
+MSAs. Each signer discovers its task in Inbox, reviews exact payment XDR, and
+contributes its own signature. It verifies idempotency, source restrictions,
+permission isolation, quorum submission, canonical ledger evidence, and MSA
+revocation. It uses only a new self-paying Testnet Treasury; MSI secrets and
+wallet keys are never persisted. The test is deterministic contract-driven
+integration QA, not a standalone language-model evaluation.
+
+Verified strict hosted MSI + MSA execution on 2026-11-24: Request
+`1NF9H1P88F9M8HTF`, ledger `5893921`, transaction
+`b86cf1ca0fbb348fcf0f30b3e6f8f939bca004f6a7afaff4de8745e0f8382776`. Both MSA
+credentials were revoked after automatic quorum submission.
 
 The live mode always uses `api-testnet.multisig.tools/stellar`, the Testnet
 Horizon and Friendbot. It creates one **ephemeral** Stellar account and applies
@@ -52,9 +69,12 @@ The hosted PostgreSQL Request then receives two separate signer contributions,
 a duplicate (which must not count), an Inbox check, and final submission.
 The smoke checks the confirmed ledger and resulting manage-data value, closed
 share-link privacy, verified signer history and retained Activity. Optional
-`--agent` uses an API credential for one signer: the signing key remains in
-the Testnet client; the credential can contribute but not broadcast, its
-real Agent actor must appear in Activity, and revocation must block reuse.
+`--agent` requests a device grant without credentials, checks pending status and
+rejects session-only approval, then uses a fresh signer wallet signature to approve.
+Only the Agent can exchange its private device code, exactly once, for an `msa_*`
+credential. The signing key remains in the Testnet client; the credential can
+contribute but not broadcast, its real Agent actor must appear in Activity, and
+revocation must block reuse.
 
 Only public transaction hashes, Testnet accounts, request IDs, and step
 timestamps appear in its output. It never saves private keys, JWT tokens or

@@ -159,6 +159,10 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'integration:write', effect: 'none', summary: 'Prepare a scoped external-service CreateAccount transaction without silently treating it as Payment.',
   },
   {
+    id: 'signer.inbox.list', version: 1, method: 'GET', path: '/inbox',
+    access: 'principal:read', effect: 'none', summary: 'Discover pending Classic signing Requests and typed Agent tasks for the authenticated signer.',
+  },
+  {
     id: 'proposal.create', version: 1, method: 'POST', path: '/request',
     access: 'principal:write', effect: 'coordination-state', summary: 'Create a Signing Request from exact transaction XDR.',
   },

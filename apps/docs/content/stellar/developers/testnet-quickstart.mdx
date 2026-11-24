@@ -26,14 +26,11 @@ curl -sS -X POST https://api-testnet.multisig.tools/stellar/integration-testnet 
     "serviceId": "my-testnet-app",
     "label": "My Testnet App",
     "classicSourceAccounts": ["GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"],
-    "classicExternalExecutionSourceAccounts": [],
-    "sorobanContracts": [],
-    "sorobanExecutionAccounts": [],
     "profile": { "authorizationExperience": "hosted" }
   }'
 ```
 
-Copy the returned one-time `msi_*` credential into your server-side secret store.
+Store the returned one-time `msi_*` credential directly in your server-side or Agent secret store.
 
 ## 2. Inspect the deployment
 
@@ -41,9 +38,30 @@ Copy the returned one-time `msi_*` credential into your server-side secret store
 curl -sS https://api-testnet.multisig.tools/stellar/runtime-config
 ```
 
-Verify that the runtime is fixed to Testnet.
+Verify that the runtime is fixed to Testnet. Inspect `capabilities.classicManagedExecution.testnet` before selecting the payment creation path. The prepared-XDR path below works without managed transaction-source channels.
 
-## 3. Create one semantic Classic Request
+## 3. Prepare and create a Classic Request
+
+If `capabilities.classicManagedExecution.testnet` is `false`, first prepare the exact unsigned payment with your Integration credential:
+
+```bash
+curl -sS -X POST https://api-testnet.multisig.tools/stellar/payment-prepare \
+  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"network":"testnet","sourceAccount":"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF","payments":[{"destination":"GDGV7V7UT3XDMQ3COT25VCQNJDW57WYPHSLFSAJEW2LLZDCDREWNAPXO","amount":"1","asset":{"type":"native"}}]}'
+```
+
+Create the Request with the returned `xdr` (not the semantic `payment` field):
+
+```bash
+curl -sS -X POST https://api-testnet.multisig.tools/stellar/request \
+  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: payroll-test-001" \
+  -d '{"network":"testnet","xdr":"<prepared-xdr>","externalReference":"payroll-test-001"}'
+```
+
+If managed execution is enabled, the following alternative creates the semantic Request directly. Choose one path, not both.
 
 ```bash
 curl -sS -X POST https://api-testnet.multisig.tools/stellar/request \
@@ -77,7 +95,7 @@ https://stellar-testnet.multisig.tools/s#<request-id>
 
 The `#` fragment contains the Request ID. The site reads it in the browser; `?request=...` does **not** open a Proposal. Testnet is selected by the site address, not by a `network` query parameter.
 
-Each Treasury signer opens the Proposal, reviews the transaction, and signs with their own Stellar wallet. When the required authorization is complete, an authorized participant can confirm submission and open the [transaction receipt](/stellar/start/sign-a-proposal#after-submission).
+Each Treasury signer opens the Proposal, reviews the transaction, and signs with their own Stellar wallet. When the required authorization is complete, MST-managed Integration Requests can submit automatically. An authorized participant can confirm submission or retry if necessary and open the [transaction receipt](/stellar/start/sign-a-proposal#after-submission).
 
 ## 5. Read canonical status
 

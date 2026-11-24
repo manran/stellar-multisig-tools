@@ -6,13 +6,16 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { Account, BASE_FEE, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
 
-const API = 'https://api-testnet.multisig.tools/stellar';
+const TESTNET_API = 'https://api-testnet.multisig.tools/stellar';
+let API = TESTNET_API;
 const HORIZON = 'https://horizon-testnet.stellar.org';
 const FAUCET = 'https://friendbot.stellar.org';
 const LIVE = process.argv.includes('--live');
 const AGENT = process.argv.includes('--agent');
 const COORDINATION = process.argv.includes('--coordination');
 const PROPOSER = process.argv.includes('--proposer');
+const INTEGRATION = process.argv.includes('--integration');
+const ALLOW_UNDISCOVERED_INBOX = process.argv.includes('--allow-undiscovered-inbox');
 const now = () => new Date().toISOString();
 const trace = [];
 function record(step, extra = {}) {
@@ -83,6 +86,44 @@ function humanHeaders(address, token) {
 function cookieHeaders(token) { return { Cookie: 'mst_auth=' + encodeURIComponent(token) }; }
 function requestHeaders(id, capability, extra = {}) {
   return { 'x-multisig-request-id': id, ...(capability ? { 'x-multisig-capability': capability } : {}), ...extra };
+}
+
+async function pairAgent(bob, label, grantPath = '/agent-grants') {
+    const bobToken = await unlock(bob);
+    const signerHeaders = { ...cookieHeaders(bobToken), 'x-multisig-session-address': bob.publicKey() };
+    const grant = await call(grantPath, 'POST', {
+      action: 'request', label, access: 'sign', network: 'testnet',
+    }, {}, 201);
+    check(grant.verificationUri === 'https://stellar-testnet.multisig.tools/agent-access?grant=' + grant.requestId
+      && typeof grant.deviceCode === 'string' && grant.deviceCode.startsWith('mgd_'), 'Invalid pairing response');
+    const poll = { action: 'poll', deviceCode: grant.deviceCode };
+    const pending = await call(grantPath, 'POST', poll);
+    check(pending.status === 'authorization_pending' && !pending.apiKey, 'Credential issued before wallet approval');
+    record('agent-public-pairing-pending');
+    const unsignedApproval = await call(grantPath, 'POST', {
+      action: 'approve', requestId: grant.requestId,
+    }, signerHeaders, 403);
+    check(unsignedApproval.code === 'approval_signature_required', 'Login session bypassed fresh approval');
+    record('agent-session-only-approval-denied');
+    const challenge = await call(grantPath + '?id=' + grant.requestId + '&challenge=1', 'GET', undefined, signerHeaders);
+    check(challenge.signer === bob.publicKey() && challenge.access === 'sign'
+      && challenge.message.includes(grant.userCode), 'Pairing challenge does not match Agent request');
+    const approval = TransactionBuilder.fromXdr(challenge.transaction, Networks.TESTNET);
+    check(approval.operations[0]?.source === bob.publicKey(), 'Pairing approval signer mismatch');
+    approval.sign(bob);
+    const approved = await call(grantPath, 'POST', {
+      action: 'approve', requestId: grant.requestId, mode: 'transaction', transaction: approval.toXDR(),
+    }, signerHeaders);
+    check(approved.status === 'approved' && !approved.apiKey, 'Human approval exposed Agent credential');
+    record('agent-fresh-wallet-approval');
+    const agent = await call(grantPath, 'POST', poll);
+    check(agent.status === 'approved' && typeof agent.apiKey === 'string'
+      && agent.apiKey.startsWith('msa_') && agent.credential?.access === 'sign',
+      'Agent credential was not issued');
+    const replay = await call(grantPath, 'POST', poll, {}, 409);
+    check(replay.code === 'already_exchanged' && !replay.apiKey, 'Device code was reusable');
+    record('agent-single-use-credential-exchange');
+    return { agent, bobToken };
 }
 
 /** Dedicated authorized non-signer G-wallet Testnet lifecycle. New disposable keys
@@ -228,7 +269,217 @@ async function proposerE2E() {
     proposerFunded: false, evidence: trace }, null, 2));
 }
 
+// Discover business operations from the published service contract. A fixed
+// Testnet origin is a safety boundary, not a source of operation paths.
+async function discoverIntegration() {
+  const site = new URL(process.argv.find((arg) => arg.startsWith('https://'))
+    || 'https://stellar-testnet.multisig.tools/');
+  const htmlResponse = await fetch(site, { signal: AbortSignal.timeout(20000) });
+  check(htmlResponse.ok, 'Cannot load public MST website');
+  const html = await htmlResponse.text();
+  const link = html.match(/<link\s+rel="api-catalog"\s+href="([^"]+)"/);
+  check(link, 'Website does not advertise an API catalog');
+  const catalogUrl = new URL(link[1], site);
+  check(catalogUrl.protocol === 'https:', 'Catalog must use HTTPS');
+  const catalogResponse = await fetch(catalogUrl, { signal: AbortSignal.timeout(20000) });
+  check(catalogResponse.ok, 'Cannot load API catalog');
+  const catalog = await readJson(catalogResponse);
+  const entry = catalog.linkset?.find((item) => item.anchor === TESTNET_API);
+  check(entry, 'No catalog entry for the isolated Testnet deployment');
+  const registryUrl = new URL(entry['service-meta'][0].href);
+  const openApiUrl = new URL(entry['service-desc'][0].href);
+  for (const url of [registryUrl, openApiUrl]) {
+    check(url.href.startsWith(TESTNET_API + '/'), 'Unexpected API documentation origin');
+  }
+  const [registryResponse, openApiResponse] = await Promise.all([
+    fetch(registryUrl, { signal: AbortSignal.timeout(20000) }),
+    fetch(openApiUrl, { signal: AbortSignal.timeout(20000) }),
+  ]);
+  check(registryResponse.ok && openApiResponse.ok, 'Cannot load operation registry or OpenAPI');
+  const [registry, openapi] = await Promise.all([readJson(registryResponse), readJson(openApiResponse)]);
+  check(registry.base === TESTNET_API && openapi.servers?.[0]?.url === TESTNET_API
+    && openapi['x-multisig-deployment-network'] === 'testnet', 'Discovery network mismatch');
+  API = registry.base;
+  const operation = (id, access, effect) => {
+    const item = registry.operations.find((candidate) => candidate.id === id);
+    check(item && item.access === access && item.effect === effect
+      && item.path.startsWith('/') && !item.path.startsWith('//')
+      && openapi.paths?.[item.path]?.[item.method.toLowerCase()]?.['x-multisig-operation-ids']?.includes(id),
+    'Missing or inconsistent published operation: ' + id);
+    return item;
+  };
+  const runtime = await call(operation('runtime.config.inspect', 'public', 'none').path);
+  check(runtime.fixedNetwork === 'testnet', 'Refusing non-Testnet deployment');
+  const create = operation('integration.testnet.create', 'public', 'private-state');
+  const prepare = operation('integration.classic.payment.prepare', 'integration:write', 'none');
+  const request = operation('integration.request.create', 'integration:write', 'coordination-state');
+  const inspect = operation('integration.request.inspect', 'integration:read', 'none');
+  const submit = operation('integration.request.submit', 'integration:write', 'network-submit');
+  const pair = operation('agent.grant.request', 'public', 'private-state');
+  const poll = operation('agent.grant.poll', 'public', 'private-state');
+  const approve = operation('agent.grant.approve', 'human', 'private-state');
+  check(pair.path === poll.path && pair.path === approve.path, 'Pairing transport differs');
+  const contribute = operation('proposal.contribute', 'principal:sign', 'coordination-state');
+  let inbox;
+  if (ALLOW_UNDISCOVERED_INBOX && !registry.operations.some((item) => item.id === 'signer.inbox.list')) {
+    // Explicit compatibility mode for the already deployed API while the
+    // discovery fix is awaiting deployment. Not a successful blind test.
+    console.log('GAP signer.inbox.list is missing from deployed discovery; using known Inbox path');
+    inbox = { path: '/inbox', method: 'GET' };
+  } else {
+    inbox = operation('signer.inbox.list', 'principal:read', 'none');
+  }
+  record('public-msi-msa-operation-discovery', { strict: !ALLOW_UNDISCOVERED_INBOX });
+  return { runtime, create, prepare, request, inspect, submit, pair, contribute, inbox };
+}
+
+async function integrationE2E() {
+  const ops = await discoverIntegration();
+  if (!LIVE) {
+    console.log('READ-ONLY integration discovery passed');
+    return;
+  }
+  const alice = Keypair.random();
+  const bob = Keypair.random();
+  const carol = Keypair.random();
+  const source = alice.publicKey();
+  await fund(source);
+  const account = await horizon('/accounts/' + source);
+  const setup = new TransactionBuilder(new Account(source, account.sequence), {
+    fee: BASE_FEE, networkPassphrase: Networks.TESTNET,
+  })
+    .addOperation(Operation.setOptions({ signer: { ed25519PublicKey: bob.publicKey(), weight: 1 } }))
+    .addOperation(Operation.setOptions({ signer: { ed25519PublicKey: carol.publicKey(), weight: 1 } }))
+    .addOperation(Operation.setOptions({ masterWeight: 1, lowThreshold: 2, medThreshold: 2, highThreshold: 2 }))
+    .setTimeout(120).build();
+  setup.sign(alice);
+  check((await submitXdr(setup.toXDR())).successful, 'Disposable Treasury setup failed');
+  record('integration-disposable-testnet-treasury', { account: source });
+
+  const serviceId = 'agent-qa-' + randomBytes(6).toString('hex');
+  const integration = await call(ops.create.path, ops.create.method, {
+    serviceId, label: 'Agent collaboration QA', classicSourceAccounts: [source],
+    profile: { authorizationExperience: 'hosted' },
+  }, {}, 201);
+  check(integration.apiKey?.startsWith('msi_') && integration.service?.serviceId === serviceId
+    && integration.service.networks?.length === 1 && integration.service.networks[0] === 'testnet',
+  'Testnet Integration credential not issued');
+  const serviceHeaders = { Authorization: 'Bearer ' + integration.apiKey };
+  record('msi-self-service-issued', { serviceId });
+
+  const payment = { sourceAccount: source, payments: [{
+    destination: source, amount: '1', asset: { type: 'native' },
+  }], memo: 'Agent collaboration QA', lifetimeSeconds: 3600 };
+  const scopeDenied = await call(ops.prepare.path, ops.prepare.method, {
+    ...payment, network: 'testnet', sourceAccount: bob.publicKey(),
+  }, serviceHeaders, 403);
+  check(scopeDenied.code === 'integration_classic_source_account_not_allowed', 'MSI escaped source scope');
+  record('msi-out-of-scope-payment-denied');
+
+  let input;
+  if (ops.runtime.capabilities?.classicManagedExecution?.testnet === true) {
+    input = { network: 'testnet', payment };
+    record('semantic-managed-payment-selected');
+  } else {
+    const prepared = await call(ops.prepare.path, ops.prepare.method, {
+      ...payment, network: 'testnet',
+    }, serviceHeaders);
+    check(prepared.xdr && prepared.network === 'testnet', 'Prepared payment missing');
+    input = { network: 'testnet', xdr: prepared.xdr };
+    record('prepared-xdr-fallback-selected');
+  }
+  const idempotencyHeaders = { ...serviceHeaders, 'Idempotency-Key': serviceId + '-payment' };
+  const created = await call(ops.request.path, ops.request.method, input, idempotencyHeaders, 201);
+  const requestId = created.request?.id;
+  check(requestId && created.request.status === 'awaiting_signatures', 'MSI could not create payment Request');
+  const replay = await call(ops.request.path, ops.request.method, input, idempotencyHeaders);
+  check(replay.request?.id === requestId && replay.replayed === true, 'MSI replay created another Request');
+  record('msi-idempotent-payment-created', { requestId });
+
+  const paired = [];
+  try {
+    const signerAgents = [
+      { signer: bob, label: 'QA signer Bob' },
+      { signer: carol, label: 'QA signer Carol' },
+    ];
+    for (const item of signerAgents) {
+      const pair = await pairAgent(item.signer, item.label, ops.pair.path);
+      paired.push({ ...item, ...pair });
+    }
+    const inboxDenied = await call(ops.inbox.path, ops.inbox.method, undefined, serviceHeaders, 401);
+    check(inboxDenied.code === 'invalid_agent_credential', 'MSI acquired signer Inbox access');
+    record('msi-signer-inbox-denied');
+
+    let final;
+    for (const [index, item] of paired.entries()) {
+      const agentHeaders = { Authorization: 'Bearer ' + item.agent.apiKey };
+      const inbox = await call(ops.inbox.path, ops.inbox.method, undefined, agentHeaders);
+      const discovered = inbox.tasks?.find((task) => task.id === requestId);
+      check(inbox.address === item.signer.publicKey() && inbox.actor === 'agent'
+        && discovered?.state === 'action_required'
+        && discovered.nextActions?.some((action) => action.code === 'contribute_signature' && action.available),
+      'Signer Agent did not independently discover payment task');
+      record('msa-inbox-task-discovered', { signer: index + 1 });
+      const headers = requestHeaders(discovered.id, '', agentHeaders);
+      const current = await call(ops.inspect.path, ops.inspect.method, undefined, headers);
+      const tx = TransactionBuilder.fromXdr(current.request.baseXdr, Networks.TESTNET);
+      const op = tx.operations[0];
+      check(tx.operations.length === 1 && op.type === 'payment' && (op.source || tx.source) === source
+        && op.destination === source && Number(op.amount) === 1 && op.asset.isNative(),
+      'Wallet review does not match authorized disposable payment');
+      check(Buffer.from(tx.hash()).toString('hex') === created.request.transactionHash, 'Request transaction changed');
+      if (index === 0) {
+        const deniedSubmit = await call(ops.submit.path, ops.submit.method, {}, headers, 403);
+        check(deniedSubmit.code === 'agent_submit_denied', 'MSA escaped submission boundary');
+        record('msa-direct-submit-denied');
+      }
+      tx.sign(item.signer);
+      if (index === 0) {
+        const deniedContribution = await call(ops.contribute.path, ops.contribute.method,
+          { signedXdr: tx.toXDR() }, requestHeaders(requestId, '', serviceHeaders), 403);
+        check(deniedContribution.code === 'integration_request_write_denied', 'MSI acquired signer contribution authority');
+        record('msi-signature-contribution-denied');
+      }
+      final = await call(ops.contribute.path, ops.contribute.method, { signedXdr: tx.toXDR() }, headers);
+      check(final.addedSignatureCount === 1, 'Verified signer contribution rejected');
+      if (index === 0) check(final.request.status === 'awaiting_signatures', 'Payment executed before quorum');
+      record('msa-wallet-signature-contributed', { signer: index + 1 });
+    }
+    if (final.request.status === 'ready') {
+      final = await call(ops.submit.path, ops.submit.method, {}, requestHeaders(requestId, '', serviceHeaders));
+      record('msi-authorized-submission-retry');
+    } else {
+      check(final.request.status === 'submitted', 'Quorum did not produce ready or submitted state');
+      record('mst-auto-submitted-at-quorum');
+    }
+    const canonical = await call(ops.inspect.path, ops.inspect.method, undefined, requestHeaders(requestId, '', serviceHeaders));
+    const receipt = canonical.request?.submission;
+    check(canonical.request.status === 'submitted' && receipt?.transactionHash === created.request.transactionHash,
+      'MSI did not receive canonical submission result');
+    const chain = await horizon('/transactions/' + receipt.transactionHash);
+    check(chain.successful && chain.hash === receipt.transactionHash && chain.ledger === receipt.ledger,
+      'Canonical status does not match Stellar ledger');
+    record('msi-canonical-ledger-confirmation', { requestId, ledger: chain.ledger, transactionHash: chain.hash });
+  } finally {
+    for (const item of paired) {
+      const revoked = await call('/agent-access', 'DELETE', {
+        credentialId: item.agent.credential.credentialId,
+      }, { ...cookieHeaders(item.bobToken), 'x-multisig-session-address': item.signer.publicKey() });
+      check(revoked.credential?.revokedAt, 'MSA cleanup failed');
+      const denied = await call(ops.inbox.path, ops.inbox.method, undefined, { Authorization: 'Bearer ' + item.agent.apiKey }, 401);
+      check(denied.code === 'agent_credential_revoked', 'Revoked Agent can still access Inbox');
+      record('msa-revocation-enforced');
+    }
+    // MSI has no self-revoke endpoint. This random Testnet-only service is
+    // scoped to the disposable Treasury; its secret and all test keys die
+    // with this process. Do not persist or print them.
+  }
+  console.log('LIVE MSI + MSA TESTNET E2E PASSED');
+  console.log(JSON.stringify({ evidence: trace }, null, 2));
+}
+
 async function main() {
+  if (INTEGRATION) return integrationE2E();
   const runtime = await call('/runtime-config');
   check(runtime.fixedNetwork === 'testnet', 'Refusing non-Testnet API deployment');
   record('isolated-testnet-runtime');
@@ -357,13 +608,9 @@ async function main() {
   let agentCredentialId = '';
   let bobToken = '';
   if (AGENT) {
-    bobToken = await unlock(bob);
-    const agent = await call('/agent-access', 'POST',
-      { label: 'MST hosted Testnet QA', access: 'sign' }, {
-        ...cookieHeaders(bobToken), 'x-multisig-session-address': bob.publicKey(),
-      }, 201);
-    check(typeof agent.apiKey === 'string' && agent.credential?.access === 'sign',
-      'Agent credential was not issued');
+    const paired = await pairAgent(bob, 'MST hosted Testnet QA');
+    const agent = paired.agent;
+    bobToken = paired.bobToken;
     agentApiKey = agent.apiKey;
     agentCredentialId = agent.credential.credentialId;
     record('agent-credential-created-for-signer');

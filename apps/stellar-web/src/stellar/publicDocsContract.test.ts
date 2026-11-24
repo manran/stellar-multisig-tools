@@ -71,7 +71,10 @@ test('Testnet quickstart is a bounded Classic Hosted path from credential to can
   assert.match(quickstart, /Create a Testnet Integration Profile/);
   assert.match(quickstart, /one-time `msi_\*` credential/);
   assert.match(quickstart, /Inspect the deployment/);
-  assert.match(quickstart, /Create one semantic Classic Request/);
+  assert.match(quickstart, /Prepare and create a Classic Request/);
+  assert.match(quickstart, /capabilities\.classicManagedExecution\.testnet/);
+  assert.match(quickstart, /payment-prepare/);
+  assert.match(quickstart, /<prepared-xdr>/);
   assert.match(quickstart, /Open Hosted review/);
   assert.match(quickstart, /Read canonical status/);
   assert.match(quickstart, /https:\/\/api-testnet\.multisig\.tools\/stellar/);

@@ -52,7 +52,7 @@ The request expires after **10 minutes**, and the device code is single-use. Eac
 
 **Manual alternative:** A signer can create a named credential directly in the Agent access UI. This uses the same wallet-confirmed grant and shows the secret once for copying into a secure store.
 
-**Service Integration (`msi_*`):** An application or automation service creates a Testnet-only Integration Profile using [the guided setup](https://stellar-testnet.multisig.tools/developers/integrations/new) or the [Testnet API quickstart](/stellar/developers/testnet-quickstart). The service owns business orchestration; the Treasury's authorized signers retain signer authority. An `msi_*` key does **not** act as a signer.
+**Service Integration (`msi_*`):** An application or automation service creates a Testnet-only Integration Profile using [the guided setup](https://stellar-testnet.multisig.tools/developers/integrations/new) or the [Testnet API quickstart](/stellar/developers/testnet-quickstart). The service owns business orchestration; the Treasury's authorized signers retain signer authority. An `msi_*` key does **not** act as a signer. Testnet self-service issues this credential directly after the Agent has the user's approval to create the profile. Mainnet provisioning is separate. Inspect the runtime execution capability before choosing semantic payment creation or prepared XDR.
 
 **Treasury Audit (`mta_*`):** Issued from Treasury settings for read-only Treasury Activity. It does not allow proposals, signing, or submission.
 
@@ -67,6 +67,10 @@ Never paste credentials into chat, URL parameters, public logs, or frontend scri
 5. Inspect canonical Request or Intent status after acting. Treat webhook events as notifications, not canonical transaction state.
 
 For a first end-to-end **Service Integration** payment, follow [Testnet quickstart](/stellar/developers/testnet-quickstart): create a Testnet Integration Profile, create a scoped Request, give signers the `/s#<request-id>` review link, then retrieve canonical status. Use actual funded Testnet addresses rather than the example fixtures.
+
+## 5. Coordinate two Agents
+
+The Service Agent creates the Request using `msi_*`. The Signer Agent uses `msa_*` with the `signer.inbox.list` operation to discover pending Classic tasks without receiving a private link. Match each task ID to its Request, inspect the exact XDR, and obtain the signer's authorization before contributing a signature. The Service Agent reads its own Request to track quorum and the final ledger result. MST-managed Integration Requests may submit automatically at quorum; direct submission by a signer Agent is forbidden.
 
 ## Boundaries
 
