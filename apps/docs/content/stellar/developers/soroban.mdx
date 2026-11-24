@@ -24,6 +24,10 @@ curl -sS -X POST https://api-testnet.multisig.tools/stellar/intent \
   }'
 ```
 
+## Protocol 30 addresses
+
+Use a C address for `contractId`. For a contract argument declared as `MuxedAddress`, the guided input accepts G, C, M and W addresses. A plain `Address` argument does not accept M or W. The W address is a contract destination plus a 64-bit routing ID, not a signing identity. MultiSig Tools preserves the full W address in the reviewed invocation and treats any change to the transfer or mint event's `to_muxed_id` as a change of destination requiring reauthorization. Classic and existing Soroban signer permissions are unchanged.
+
 ## Lifecycle
 
 1. Create the Intent inside the Integration Profile's allowed contract/method scope.

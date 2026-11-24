@@ -12,7 +12,7 @@
     "test:postgres": "tsx --test --test-concurrency=1 stellar/db/*.test.ts"
   },
   "dependencies": {
-    "@stellar/stellar-sdk": "^17.0.1",
+    "@stellar/stellar-sdk": "^17.4.0",
     "@vercel/blob": "^2.8.0",
     "@vercel/firewall": "1.2.5",
     "@vercel/functions": "^3.9.8",

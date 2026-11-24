@@ -19,7 +19,10 @@ interface Props {
 
 function fieldPlaceholder(input: ContractInputDescriptor): string {
   switch (input.kind) {
-    case 'address': return input.typeLabel.startsWith('Option<') ? 'Optional; leave blank for None, or enter G... / C...' : 'G... or C... address';
+    case 'address': {
+      const addressTypes = input.typeLabel.includes('MuxedAddress') ? 'G... / C... / M... / W...' : 'G... / C...';
+      return input.typeLabel.startsWith('Option<') ? `Optional; leave blank for None, or enter ${addressTypes}` : `${addressTypes} address`;
+    }
     case 'integer': return 'Base-10 integer';
     case 'bytesN': return input.bytesLength ? `${input.bytesLength * 2} hex characters` : 'Hex bytes';
     case 'bytes': return 'Hex bytes, optional 0x prefix';

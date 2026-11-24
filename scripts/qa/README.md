@@ -30,6 +30,20 @@ Each scenario prints PASS or FAIL. The output directory receives screenshots
 and `report.json`, including the checked commit, viewport, failures, and
 unexpected API calls. A failed check or unexpected API call returns exit code 1.
 
+## Protocol 30 compatibility smoke
+
+Run `npm test` for captured Protocol 29/30 ledger header decoding, W-address
+composition/review, and recipient ID change detection. For a live RPC check:
+
+```sh
+npx tsx scripts/qa/protocol30Compatibility.ts --live
+```
+
+This creates a disposable funded Testnet account and simulates a native asset
+contract transfer to a W address with the maximum uint64 ID. It verifies the
+full reviewed destination and the emitted `to_muxed_id`, without submitting
+the payment or saving private keys.
+
 ## Hosted Testnet transaction smoke
 
 The browser fixture above cannot prove the live API, durable PostgreSQL,

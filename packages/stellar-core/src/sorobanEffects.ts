@@ -166,6 +166,10 @@ function scValNumericValue(value: xdr.ScVal): bigint {
   throw new Error(`Unsupported numeric SCVal ${value.type}.`);
 }
 
+function isMuxedDestinationId(key: xdr.ScVal): boolean {
+  return (key.type === 'scvSymbol' || key.type === 'scvString') && scValToNative(key) === 'to_muxed_id';
+}
+
 function scValStructure(value: xdr.ScVal): unknown {
   if (isNumericScVal(value)) return { type: value.type, value: '*' };
   if (value.type === 'scvVec') {
@@ -176,7 +180,10 @@ function scValStructure(value: xdr.ScVal): unknown {
       type: value.type,
       entries: (value.map ?? []).map((entry) => ({
         key: entry.key.toXdr('base64'),
-        value: scValStructure(entry.val),
+        // CAP-67/84 route identity is not a tolerable numeric outcome change.
+        value: isMuxedDestinationId(entry.key)
+          ? { type: entry.val.type, xdr: entry.val.toXdr('base64') }
+          : scValStructure(entry.val),
       })),
     };
   }
@@ -189,7 +196,9 @@ function numericLeaves(value: xdr.ScVal, path = 'value'): Array<{ path: string; 
     return (value.vec ?? []).flatMap((item, index) => numericLeaves(item, `${path}[${index}]`));
   }
   if (value.type === 'scvMap') {
-    return (value.map ?? []).flatMap((entry, index) => numericLeaves(entry.val, `${path}{${index}}`));
+    return (value.map ?? []).flatMap((entry, index) => isMuxedDestinationId(entry.key)
+      ? []
+      : numericLeaves(entry.val, `${path}{${index}}`));
   }
   return [];
 }

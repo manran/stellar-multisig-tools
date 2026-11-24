@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@stellar/stellar-sdk": "^17.0.1"
+    "@stellar/stellar-sdk": "^17.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

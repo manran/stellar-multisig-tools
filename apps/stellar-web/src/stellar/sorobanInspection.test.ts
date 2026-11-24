@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   Account,
+  Address,
   Contract,
+  StrKey,
   Keypair,
   Networks,
   Operation,
@@ -90,6 +92,34 @@ test('inspects a Soroban contract call and keeps auth-entry evidence separate fr
   assert.equal(auth?.invocation?.type, 'execute');
   assert.match(auth?.invocation?.label ?? '', /^approve_invoice · C/);
   assert.deepEqual(auth?.invocation?.argumentPreviews, ['"invoice-42"', '0xcafe']);
+});
+
+test('Protocol 30 transaction review preserves the full W destination in the call and authorization tree', () => {
+  const source = Keypair.random();
+  const recipient = Address.muxedContract(Buffer.concat([StrKey.decodeContract(CONTRACT_ID), Buffer.alloc(8, 255)])).toString();
+  const invokeArgs = new xdr.InvokeContractArgs({
+    contractAddress: new Contract(CONTRACT_ID).address().toScAddress(),
+    functionName: 'transfer',
+    args: [Address.fromString(source.publicKey()).toScVal(), Address.fromString(recipient).toScVal(), nativeToScVal(100n, { type: 'i128' })],
+  });
+  const invocation = new xdr.SorobanAuthorizedInvocation({
+    function: xdr.SorobanAuthorizedFunction.sorobanAuthorizedFunctionTypeContractFn(invokeArgs),
+    subInvocations: [],
+  });
+  const authorization = new xdr.SorobanAuthorizationEntry({
+    credentials: xdr.SorobanCredentials.sorobanCredentialsSourceAccount(),
+    rootInvocation: invocation,
+  });
+  const tx = new TransactionBuilder(new Account(source.publicKey(), '1'), {
+    fee: '100', networkPassphrase: Networks.TESTNET,
+  }).addOperation(Operation.invokeHostFunction({
+    func: xdr.HostFunction.hostFunctionTypeInvokeContract(invokeArgs),
+    auth: [authorization],
+  })).setTimeout(TimeoutInfinite).build();
+  const inspection = inspectTransactionXdr(tx.toXdr(), 'testnet');
+  const soroban = inspection.operations[0].soroban;
+  assert.equal(soroban?.contractCall?.argumentPreviews[1], JSON.stringify(recipient));
+  assert.equal(soroban?.authorizationEntries[0]?.invocation?.argumentPreviews[1], JSON.stringify(recipient));
 });
 
 test('Soroban argument previews are deterministic and bounded', () => {
