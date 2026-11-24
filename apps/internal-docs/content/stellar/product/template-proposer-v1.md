@@ -10,6 +10,14 @@ can request a payment using a pre-approved **single-recipient Payment Template**
 The Treasury's current signers retain all on-chain authorization and submission control.
 This does **not** require a funded wallet, Team Workspace, or email login.
 
+## Current Testnet UI
+
+- The signer saves a payment Template in **New proposal → Create payment → Save as template**.
+- The owner grants or revokes proposer G-wallet permissions in **Templates** (`/templates`), not in New proposal. Revocation requires explicit confirmation.
+- A delegated wallet selects **Request payment**, enters amount and memo, reviews, and creates a Proposal. It does not acquire Treasury signing or submission authority.
+- **Connect wallet** selects the wallet; **Confirm wallet** opens wallet-scoped private Templates data. No MST account registration or Passkey is required.
+- After a confirmed submission, the Proposal offers one **View receipt** action. The Receipt's **Print or save PDF** action invokes browser printing.
+
 ## Permission model
 
 | Action | Template owner (current Treasury signer) | Delegated proposer wallet | Treasury signer |

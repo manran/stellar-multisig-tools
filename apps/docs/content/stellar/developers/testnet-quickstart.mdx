@@ -3,7 +3,7 @@ title: Testnet quickstart
 description: Run one Hosted Classic Request end to end on Testnet.
 ---
 
-Use the Testnet deployment to prove scope, authorization, execution, and status delivery before any Mainnet rollout.
+Use the Testnet deployment to prove scope, authorization, execution, and status delivery before any Mainnet rollout. Prepare a funded Testnet Treasury, an eligible signer wallet, and a valid destination. Replace the example G addresses below with your own Testnet addresses before running these requests.
 
 The public API base is:
 
@@ -72,10 +72,12 @@ The sample addresses are documentation fixtures, not funded accounts.
 Use the returned Request id:
 
 ```text
-https://stellar-testnet.multisig.tools/s?request=<request-id>&network=testnet
+https://stellar-testnet.multisig.tools/s#<request-id>
 ```
 
-Each Treasury signer still authorizes with their own Stellar wallet.
+The `#` fragment contains the Request ID. The site reads it in the browser; `?request=...` does **not** open a Proposal. Testnet is selected by the site address, not by a `network` query parameter.
+
+Each Treasury signer opens the Proposal, reviews the transaction, and signs with their own Stellar wallet. When the required authorization is complete, an authorized participant can confirm submission and open the [transaction receipt](/stellar/start/sign-a-proposal#after-submission).
 
 ## 5. Read canonical status
 

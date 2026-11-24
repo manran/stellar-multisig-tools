@@ -8,6 +8,13 @@ function doc(relativePath: string) {
 
 const developerIndex = doc('../../../docs/content/stellar/developers/index.mdx');
 const quickstart = doc('../../../docs/content/stellar/developers/testnet-quickstart.mdx');
+const templatesGuide = doc('../../../docs/content/stellar/transactions/templates.mdx');
+const templatesMeta = doc('../../../docs/content/stellar/transactions/meta.json');
+const paymentGuide = doc('../../../docs/content/stellar/transactions/payment.mdx');
+const signingGuide = doc('../../../docs/content/stellar/start/sign-a-proposal.mdx');
+const proposalView = doc('../RequestApp.tsx');
+const templatesView = doc('../TemplatesApp.tsx');
+const receiptView = doc('../TransactionReceiptApp.tsx');
 const classic = doc('../../../docs/content/stellar/developers/classic.mdx');
 const soroban = doc('../../../docs/content/stellar/developers/soroban.mdx');
 const apiDocs = doc('../../../docs/content/stellar/developers/api.mdx');
@@ -68,6 +75,21 @@ test('Testnet quickstart is a bounded Classic Hosted path from credential to can
   assert.match(quickstart, /Open Hosted review/);
   assert.match(quickstart, /Read canonical status/);
   assert.match(quickstart, /https:\/\/api-testnet\.multisig\.tools\/stellar/);
+});
+
+test('Testnet public guides match the shipped Proposal locator, Templates and receipt actions', () => {
+  assert.match(quickstart, /stellar-testnet\.multisig\.tools\/s#<request-id>/);
+  assert.doesNotMatch(quickstart, /\/s\?request=/);
+  assert.match(proposalView, /window\.location\.hash\.slice\(1\)/);
+  assert.match(templatesMeta, /"payment", "templates"/);
+  assert.match(templatesView, /title="Templates"/);
+  assert.match(templatesGuide, /Allow another wallet to request payments/);
+  assert.match(templatesGuide, /Request payment/);
+  assert.match(paymentGuide, /New proposal.*Create payment/);
+  assert.match(signingGuide, /View receipt/);
+  assert.match(signingGuide, /Print or save PDF/);
+  assert.match(receiptView, /Print or save PDF/);
+  assert.doesNotMatch(templatesGuide, /Create Passkey account/);
 });
 
 test('Agent docs keep signer Agent and Treasury Audit credentials distinct', () => {

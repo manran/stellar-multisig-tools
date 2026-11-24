@@ -73,9 +73,13 @@ Do not expose all of them as equal top-level choices.
 
 ### Phase A — entry unification
 
-`New proposal` starts with the common payment path. Less common account/protocol actions live under **More Stellar actions**, while Import XDR remains a direct technical entry for an already-built transaction. All transaction paths continue through the canonical Human flow:
+`New proposal` starts with the common payment path. Less common account/protocol actions live under **More transaction types**, while Import XDR remains a direct technical entry for an already-built transaction. All transaction paths continue through the canonical Human flow:
 
 `1 Prepare -> 2 Review -> 3 Sign -> 4 Submit -> 5 Done`
+
+### Templates: create versus manage
+
+`New proposal` may show saved Templates for starting a transaction, but must not expose proposer grant/revoke settings. The **Templates** workspace route (`/templates`) handles reuse and owner-only permission management. A granted G-wallet can request a payment without becoming a Treasury signer. Switching wallets immediately clears the previous wallet's private Template list.
 
 ### Phase B — composer convergence
 

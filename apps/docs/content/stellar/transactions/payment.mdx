@@ -3,17 +3,21 @@ title: Send a payment
 description: Prepare a normal Stellar payment and hand the reviewed transaction to the Proposal flow.
 ---
 
-Payment is the primary transaction flow: choose who pays, who receives, what asset moves, and how much. MultiSig Tools builds the transaction and sends it through Review before anyone signs.
+Payment is the primary transaction flow: choose which Treasury pays, the recipient, the asset, and the amount. Every transaction is reviewed before anyone signs.
 
-1. **Open New → Payment.** Choose the source account. In Treasury work, the Treasury can be preselected.
-2. **Enter recipient, asset, and amount.** Use a Stellar address or saved identity. Credit assets still require the destination trustline and receiving capacity.
-3. **Add context if needed.** A Stellar memo is public transaction data. Private Note is separate off-chain workflow context.
-4. **Choose transaction lifetime.** This controls how long the prepared transaction remains valid for signing and submission.
-5. **Review, then create the Proposal.** Review is the freeze point. After that, signers coordinate around the exact transaction rather than an editable payment form.
+1. **Open New proposal → Create payment.** If you started from a Treasury, its address may already be selected.
+2. **Enter recipient, asset, and amount.** Use a Stellar G address or saved contact. Credit assets require the destination to accept that asset.
+3. **Add context.** A Stellar memo is public. A Private Note is separate workspace information.
+4. **Choose the signing window.** This controls how long signers can authorize the prepared transaction.
+5. **Select Review payment.** Check the source, recipient, asset, amount, and effects.
+6. **Create the Proposal.** Invite signers from the Proposal or let them open it from Inbox. After the required signatures, an authorized participant can submit the transaction.
+7. **Check the receipt.** After confirmation, use **View receipt** to see the ledger and transaction hash.
 
-> **Review is the boundary**
->
-> Before Review you are editing a payment draft. After the handoff, the Proposal is about one exact Stellar transaction. Changing the payment means creating a different transaction.
+**Review is the boundary.** Before Review, you can change the payment draft. After the Proposal is created, any change to the transaction requires a new transaction and new signatures.
+
+## Reuse a payment with Templates
+
+From the payment form, select **Save as template** to save the source Treasury, recipients, assets, and signing window. Amount and memo are chosen for each request. Open **New proposal** to use a saved Template, or [Templates](/stellar/transactions/templates) to manage access. Template permission management is not part of the New proposal screen.
 
 ## Technical details
 
