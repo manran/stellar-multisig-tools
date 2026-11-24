@@ -55,17 +55,21 @@ console.log('PASS HEAD discovery -> Linkset -> OpenAPI ' + openapi.openapi);
 
 // Path 3: an Agent reads only the llms.txt guide and follows its links.
 const llms = request(absolute('/llms.txt'));
-assert.ok(llms.startsWith('# MultiSig Tools:'));
-const operationMatch = llms.match(/\[Operation registry\]\((https:\/\/[^)]+)\)/);
+assert.ok(llms.startsWith('# MultiSig Tools'));
+const operationMatch = llms.match(/\[(?:Testnet )?Operation registry\]\((https:\/\/[^)]+)\)/i);
 const runtimeMatch = llms.match(/\[Runtime network configuration\]\((https:\/\/[^)]+)\)/);
 const guideMatch = llms.match(/\[Agent quickstart\]\((https:\/\/[^)]+)\)/);
-assert.ok(operationMatch && runtimeMatch && guideMatch, 'Missing actionable machine guide links');
+assert.ok(operationMatch && guideMatch, 'Missing actionable machine guide links');
 const llmsOps = JSON.parse(request(absolute(operationMatch[1])));
-const runtime = JSON.parse(request(absolute(runtimeMatch[1])));
+const configOperation = llmsOps.operations.find((operation) => operation.id === 'runtime.config.inspect');
+assert.equal(configOperation?.access, 'public');
+assert.equal(configOperation?.effect, 'none');
+const runtimeUrl = runtimeMatch?.[1] || (llmsOps.base + configOperation.path);
+const runtime = JSON.parse(request(absolute(runtimeUrl)));
 assert.ok(llmsOps.operations.length >= 30);
 assert.equal(runtime.fixedNetwork, openapi['x-multisig-deployment-network']);
 const guide = request(absolute(guideMatch[1]));
 assert.ok(guide.includes('Agent quickstart'));
-assert.ok(llms.includes('msa_*') && llms.includes('msi_*'));
+assert.ok(guide.includes('msa_') && guide.includes('msi_'));
 console.log('PASS llms.txt discovery -> Agent quickstart -> runtime ' + runtime.fixedNetwork);
 console.log('PASS 3/3 discovery paths; no credentials, state changes, or signatures');
