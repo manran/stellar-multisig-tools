@@ -1,0 +1,56 @@
+---
+title: Agent quickstart
+description: Discover MST, inspect available operations, and request the right Testnet authority.
+---
+
+Start with the public [MST Testnet](https://stellar-testnet.multisig.tools). Agents can discover API capabilities **without a wallet or secret**. They need explicit authorization before taking action on someone's behalf.
+
+## 1. Discover the service
+
+The site publishes HTML `rel="api-catalog"` / `rel="service-desc"` links and an RFC 9727 API Catalog. You can also access its `llms.txt` file directly.
+
+```bash
+curl -fsSL https://stellar-testnet.multisig.tools/llms.txt
+curl -fsSL https://stellar-testnet.multisig.tools/.well-known/api-catalog
+curl -fsSL https://api-testnet.multisig.tools/stellar/operations
+curl -fsSL https://api-testnet.multisig.tools/stellar/openapi.json
+```
+
+The Catalog links to the existing Operations Registry and OpenAPI. The Registry is authoritative for the current operation IDs, methods, required access, and effects. Do not infer permissions from a page label.
+
+## 2. Verify network without credentials
+
+```bash
+curl -fsSL https://api-testnet.multisig.tools/stellar/runtime-config
+```
+
+Check `fixedNetwork` is `testnet`. **Stop if the network differs from the user's intended network.** Do not send credentials to a different origin.
+
+## 3. Choose who the Agent represents
+
+**Signer Agent (`msa_*`):** A human Stellar signer opens [Testnet Agent access](https://stellar-testnet.multisig.tools/agent-access), selects **Connect wallet**, confirms wallet control, and creates a named credential with the minimum required **Read**, **Write**, or **Sign** permission. The credential is shown once, can be revoked independently, and represents that signer Principal. It is not the wallet's private key. Sign scope still requires valid, independently verified Stellar signature evidence.
+
+**Service Integration (`msi_*`):** An application or automation service creates a Testnet-only Integration Profile using [the guided setup](https://stellar-testnet.multisig.tools/developers/integrations/new) or the [Testnet API quickstart](/stellar/developers/testnet-quickstart). The service owns business orchestration; the Treasury's authorized signers retain signer authority. An `msi_*` key does **not** act as a signer.
+
+**Treasury Audit (`mta_*`):** Issued from Treasury settings for read-only Treasury Activity. It does not allow proposals, signing, or submission.
+
+Never paste credentials into chat, URL parameters, public logs, or frontend scripts. Store secrets in the Agent's secure credential store.
+
+## 4. Plan the smallest authorized task
+
+1. Ask the human what task to perform and which Testnet Treasury or signer it concerns.
+2. Inspect the Registry's `access` and `effect` fields and read the relevant OpenAPI operation schema.
+3. Use public read-only operations first. Before an operation marked `private-state`, `coordination-state`, or `network-submit`, obtain explicit approval for that action.
+4. Authenticate with only the required credential. A Human signer must review and authorize the exact transaction with their wallet or separately controlled signing tool.
+5. Inspect canonical Request or Intent status after acting. Treat webhook events as notifications, not canonical transaction state.
+
+For a first end-to-end **Service Integration** payment, follow [Testnet quickstart](/stellar/developers/testnet-quickstart): create a Testnet Integration Profile, create a scoped Request, give signers the `/s#<request-id>` review link, then retrieve canonical status. Use actual funded Testnet addresses rather than the example fixtures.
+
+## Boundaries
+
+- Discovery is public; acquiring signer authority is not.
+- Agent `Sign` permission cannot generate Stellar private-key signatures on its own.
+- Signing and submitting remain separate operations; no automatic Mainnet transition exists.
+- The discovery catalog is not a remote MCP server or A2A Agent endpoint. WebMCP is experimental and is not required for this workflow.
+
+If discovery does not supply the information needed for an action, stop and consult the linked documentation or ask the user for permission and context. Do not guess API payloads.

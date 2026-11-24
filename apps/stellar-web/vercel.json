@@ -8,6 +8,21 @@
       "headers": { "x-vercel-enable-rewrite-caching": "0" }
     },
     {
+      "src": "/\\.well-known/api-catalog",
+      "headers": {
+        "Content-Type": "application/linkset+json; profile=\"https://www.rfc-editor.org/info/rfc9727\"",
+        "Link": "</.well-known/api-catalog>; rel=\"api-catalog\"; type=\"application/linkset+json\""
+      },
+      "continue": true
+    },
+    {
+      "src": "/",
+      "headers": {
+        "Link": "</.well-known/api-catalog>; rel=\"api-catalog\"; type=\"application/linkset+json\", </api/openapi.json>; rel=\"service-desc\"; type=\"application/vnd.oai.openapi+json\", <https://docs.multisig.tools/stellar/developers/agent-quickstart>; rel=\"service-doc\", </llms.txt>; rel=\"describedby\"; type=\"text/plain\""
+      },
+      "continue": true
+    },
+    {
       "src": "/(.*)",
       "has": [{ "type": "host", "value": "stellar-testnet.multisig.tools" }],
       "headers": { "X-Robots-Tag": "noindex" },

@@ -1,0 +1,19 @@
+# MultiSig Tools Stellar Documentation
+
+> Human and Agent guides for Stellar multisig transactions, Soroban authorization, and controlled execution.
+
+Start on Testnet. Public runtime discovery is available via the RFC 9727 API Catalog and the operation registry. Do not treat Agent credentials as signing private keys. Read scopes and network configuration before any state-changing call.
+
+## Agent integration
+
+- [Agent quickstart](https://docs.multisig.tools/stellar/developers/agent-quickstart): Read-only discovery, credential issuance, and first workflow.
+- [Agent API](https://docs.multisig.tools/stellar/developers/agent-api): Read, Write, Sign scopes and credential boundaries.
+- [Testnet quickstart](https://docs.multisig.tools/stellar/developers/testnet-quickstart): Hosted integration example.
+- [OpenAPI](https://api-testnet.multisig.tools/stellar/openapi.json): Machine-readable schemas.
+- [Operation registry](https://api-testnet.multisig.tools/stellar/operations): Authoritative operation metadata.
+- [API Catalog](https://stellar-testnet.multisig.tools/.well-known/api-catalog): RFC 9727 Linkset.
+
+## Human workflows
+
+- [Sign a Proposal](https://docs.multisig.tools/stellar/start/sign-a-proposal): Review, sign, submit, receipt.
+- [Templates](https://docs.multisig.tools/stellar/transactions/templates): Payment templates and delegated proposer permissions.
