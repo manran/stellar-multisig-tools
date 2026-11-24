@@ -31,6 +31,16 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
   if (path === '/integration-execution') {
     values.push(parameter('network', 'query', true, schema('StellarNetwork'), 'Must match both this deployment and the Integration credential scope.'));
   }
+  if (path === '/auth' && method === 'get') {
+    values.push(
+      parameter('account', 'query', false, { type: 'string', pattern: '^G[A-Z2-7]{55}$' }, 'Signer G address. Omit only to inspect current session.'),
+      parameter('network', 'query', false, schema('StellarNetwork'), 'Required for a challenge; must match the fixed deployment.'),
+      parameter('unlock_seconds', 'query', false, { type: 'integer', enum: [900, 3600, 28800] }, 'Requested session duration; defaults to 3600.'),
+    );
+  }
+  if (path === '/agent-grants' || path === '/agent-access') {
+    values.push(parameter('x-multisig-session-address', 'header', path === '/agent-access', { type: 'string', pattern: '^G[A-Z2-7]{55}$' }, 'Must match the Human session signer for challenges, approval, denial, and credential management.'));
+  }
   if (path === '/agent-grants' && method === 'get') {
     values.push(
       parameter('id', 'query', true, { type: 'string', pattern: '^[a-f0-9]{32}$' }, 'Pairing request ID, not the secret device code.'),
@@ -71,6 +81,8 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
 }
 
 function requestBody(path: string, method: string): OpenApiObject | undefined {
+  if (path === '/auth' && method === 'post') return body(schema('SignerAuthExchangeInput'));
+  if (path === '/agent-access' && method === 'delete') return body({ type: 'object', required: ['credentialId'], properties: { credentialId: { type: 'string', minLength: 1 } }, additionalProperties: false });
   if (path === '/agent-grants' && method === 'post') return body(schema('AgentGrantActionInput'));
   if (path === '/integration-testnet' && method === 'post') return body(schema('TestnetIntegrationCreateInput'));
   if (path === '/intent' && method === 'post') return body(schema('ContractIntentCreateInput'));
@@ -87,6 +99,8 @@ function requestBody(path: string, method: string): OpenApiObject | undefined {
 }
 
 function successSchema(path: string, method: string): OpenApiObject {
+  if (path === '/auth') return method === 'get' ? { oneOf: [schema('SignerAuthChallenge'), schema('SignerAuthStatus')] } : schema('SignerAuthSession');
+  if (path === '/agent-access') return schema('SignerAgentAccessResult');
   if (path === '/runtime-config') return schema('RuntimeConfigResult');
   if (path === '/inbox') return schema('SignerInboxResult');
   if (path === '/agent-grants') return schema('AgentGrantResult');
@@ -109,7 +123,8 @@ function successSchema(path: string, method: string): OpenApiObject {
 }
 
 function security(path: string, method: string, access: HeadlessOperationAccess): OpenApiObject[] {
-  if (path === '/agent-grants') return []; // action=approve/deny and GET challenge separately enforce Human session and fresh wallet proof.
+  if (path === '/agent-grants') return [{}, { humanBearer: [] }, { humanSession: [] }]; // Public actions need no session; challenge/approve/deny require Human session.
+  if (path === '/agent-access') return [{ humanBearer: [] }, { humanSession: [] }];
   if (access === 'public') return [];
   if (path === '/intent') {
     if (method === 'patch') return [{ agentBearer: [] }, { humanSession: [] }, { intentCapability: [] }];
@@ -194,7 +209,8 @@ const components: OpenApiObject = {
   securitySchemes: {
     agentBearer: { type: 'http', scheme: 'bearer', description: 'Signer Agent credential (msa_...). Human SEP-10 bearer sessions are also accepted where documented.' },
     integrationBearer: { type: 'http', scheme: 'bearer', description: 'Non-signer external service credential (msi_...). Deployment scope restricts networks, Classic source accounts, Soroban contracts/methods, and Soroban execution source accounts.' },
-    humanSession: { type: 'apiKey', in: 'cookie', name: 'mst_auth', description: 'Human SEP-10 session cookie.' },
+    humanSession: { type: 'apiKey', in: 'cookie', name: 'mst_auth', description: 'Human wallet-authenticated session cookie.' },
+    humanBearer: { type: 'http', scheme: 'bearer', description: 'Short-lived Human wallet session token from POST /auth. Separate from msa and msi credentials.' },
     requestCapability: { type: 'apiKey', in: 'header', name: 'x-multisig-capability', description: 'Private share capability paired with x-multisig-request-id.' },
     intentCapability: { type: 'apiKey', in: 'header', name: 'x-multisig-intent-capability', description: 'Short-lived signer/origin/current-plan Browser authorization capability (mic_...) paired with x-multisig-intent-id.' },
   },
@@ -210,6 +226,33 @@ const components: OpenApiObject = {
         requestStatus: { type: 'string' },
         details: { type: 'object', additionalProperties: true },
       },
+      additionalProperties: false,
+    },
+    SignerAuthChallenge: {
+      type: 'object', required: ['message', 'transaction', 'network', 'network_passphrase', 'signing_key', 'unlock_seconds'],
+      properties: { message: { type: 'string' }, transaction: xdr, network: stellarNetwork, network_passphrase: { type: 'string' }, signing_key: accountId, unlock_seconds: { type: 'integer' } },
+      additionalProperties: false,
+    },
+    SignerAuthExchangeInput: {
+      type: 'object', required: ['network'],
+      properties: { network: stellarNetwork, mode: { type: 'string', const: 'sep53' }, transaction: xdr, challenge: xdr, signature: { type: 'string' }, unlock_seconds: { type: 'integer', enum: [900, 3600, 28800] } },
+      oneOf: [{ required: ['transaction'], not: { required: ['mode'] } }, { required: ['mode', 'challenge', 'signature'] }],
+      description: 'Sign the exact sequence-zero challenge or SEP-53 message with the selected signer. Never broadcast the challenge or send a private key.',
+      additionalProperties: false,
+    },
+    SignerAuthSession: {
+      type: 'object', required: ['token', 'address', 'network', 'expires_at'],
+      properties: { token: { type: 'string' }, address: accountId, network: stellarNetwork, expires_at: { type: 'integer' } },
+      additionalProperties: false,
+    },
+    SignerAuthStatus: {
+      type: 'object', required: ['unlocked', 'authenticated'],
+      properties: { unlocked: { type: 'boolean' }, authenticated: { type: 'boolean' }, address: accountId, network: stellarNetwork, expires_at: { type: 'integer' } },
+      additionalProperties: false,
+    },
+    SignerAgentAccessResult: {
+      type: 'object', required: ['principal'],
+      properties: { principal: { type: 'object', additionalProperties: true }, credentials: { type: 'array', items: { type: 'object', additionalProperties: true } }, credential: { type: 'object', additionalProperties: true } },
       additionalProperties: false,
     },
     AgentGrantActionInput: {
@@ -234,6 +277,7 @@ const components: OpenApiObject = {
         requestId: { type: 'string' }, userCode: { type: 'string' }, label: { type: 'string' },
         access: { type: 'string', enum: ['read', 'write', 'sign'] }, network: { const: 'testnet' },
         deviceCode: { type: 'string' }, verificationUri: { type: 'string', format: 'uri' },
+        message: { type: 'string', description: 'Human-readable exact approval message.' }, transaction: xdr, signer: accountId,
         expiresAt: timestamp, intervalSeconds: { type: 'integer' }, apiKey: { type: 'string', description: 'Only once on successful poll after human wallet approval.' },
       },
       additionalProperties: true,

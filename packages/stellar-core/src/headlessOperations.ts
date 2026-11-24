@@ -31,8 +31,20 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'public', effect: 'none', summary: 'Read the deployment-owned Stellar network policy.',
   },
   {
+    id: 'signer.auth.challenge', version: 1, method: 'GET', path: '/auth',
+    access: 'public', effect: 'none', summary: 'Request a wallet authentication challenge for a signer address and network; a session requires a valid signature.',
+  },
+  {
+    id: 'signer.auth.exchange', version: 1, method: 'POST', path: '/auth',
+    access: 'public', effect: 'private-state', summary: 'Exchange a signer-approved SEP-10 challenge or SEP-53 message signature for a short-lived private Human session.',
+  },
+  {
     id: 'agent.grant.inspect', version: 1, method: 'GET', path: '/agent-grants',
-    access: 'public', effect: 'none', summary: 'Inspect a short-lived Testnet Agent pairing request; wallet consent challenge requires a Human session.',
+    access: 'public', effect: 'none', summary: 'Inspect a short-lived Testnet Agent pairing request without credentials.',
+  },
+  {
+    id: 'agent.grant.challenge', version: 1, method: 'GET', path: '/agent-grants',
+    access: 'human', effect: 'none', summary: 'Prepare the distinct Agent approval challenge with id and challenge=1, using a Human session and matching signer address header.',
   },
   {
     id: 'agent.grant.request', version: 1, method: 'POST', path: '/agent-grants',
@@ -45,6 +57,14 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
   {
     id: 'agent.grant.approve', version: 1, method: 'POST', path: '/agent-grants',
     access: 'human', effect: 'private-state', summary: 'Human signer approves or denies a request with a distinct wallet consent signature.',
+  },
+  {
+    id: 'agent.access.list', version: 1, method: 'GET', path: '/agent-access',
+    access: 'human', effect: 'none', summary: 'List the authenticated signer\'s Agent credential summaries; secrets are never returned.',
+  },
+  {
+    id: 'agent.access.revoke', version: 1, method: 'DELETE', path: '/agent-access',
+    access: 'human', effect: 'private-state', summary: 'Revoke one credential belonging to the authenticated signer using its credentialId.',
   },
   {
     id: 'integration.testnet.create', version: 1, method: 'POST', path: '/integration-testnet',

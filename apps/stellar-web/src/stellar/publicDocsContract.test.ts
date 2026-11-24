@@ -96,7 +96,8 @@ test('Testnet public guides match the shipped Proposal locator, Templates and re
 });
 
 test('Agent docs keep signer Agent and Treasury Audit credentials distinct', () => {
-  assert.match(agentDocs, /Agent credentials are created from the signer account/);
+  assert.match(agentDocs, /Agent credentials are issued through a signer-approved pairing/);
+  assert.match(agentDocs, /approve-with-an-independent-signing-tool/);
   assert.match(agentDocs, /`msa_\*`/);
   assert.match(agentDocs, /## Treasury Audit credentials/);
   assert.match(agentDocs, /separate from signer Agent credentials/);

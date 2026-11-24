@@ -196,6 +196,16 @@ export default function AgentAccessApp() {
     }
   }
 
+  async function connectSigner() {
+    setGrantError('');
+    try {
+      const selected = await connect();
+      if (!selected) setGrantError('Wallet connection cancelled. Choose a wallet to continue this request.');
+    } catch (cause) {
+      setGrantError(cause instanceof Error ? cause.message : 'Wallet connection failed. Try again or choose another wallet.');
+    }
+  }
+
   async function respondToIncomingGrant(action: 'approve' | 'deny') {
     if (!incomingGrant) return;
     setGrantBusy(true);
@@ -207,7 +217,9 @@ export default function AgentAccessApp() {
       setIncomingGrant({ ...incomingGrant, status: action === 'approve' ? 'approved' : 'denied' });
       if (action === 'approve') await loadCredentials();
     } catch (cause) {
-      if (!isWalletUserRejected(cause)) setGrantError(cause instanceof Error ? cause.message : 'Unable to respond to Agent request.');
+      setGrantError(isWalletUserRejected(cause)
+        ? 'Wallet approval cancelled. You can retry this request before it expires.'
+        : cause instanceof Error ? cause.message : 'Unable to respond to Agent request.');
     } finally {
       setGrantBusy(false);
     }
@@ -265,7 +277,8 @@ export default function AgentAccessApp() {
                       <button type="button" disabled={grantBusy} onClick={() => void respondToIncomingGrant('deny')} className="mst-action-secondary disabled:opacity-40">Deny</button>
                     </div>
                   )}
-                  {incomingGrant.status === 'pending' && !privateReady && <p className="mt-4 text-sm font-semibold">Connect and confirm your Testnet wallet below to approve or deny.</p>}
+                  {incomingGrant.status === 'pending' && <p role="status" className="mt-4 text-sm font-semibold">{!address ? 'Connect your Testnet wallet below.' : !privateReady ? 'Wallet selected. Confirm your identity below.' : grantBusy ? 'Waiting for your wallet approval…' : 'Wallet confirmed. Review and approve this request.'}</p>}
+                  {incomingGrant.status === 'pending' && <p className="mt-2 text-sm text-[var(--color-muted)]">Using a CLI or another signing tool? <a className="underline" href="https://docs.multisig.tools/stellar/developers/agent-quickstart#approve-with-an-independent-signing-tool" target="_blank" rel="noreferrer">Approve without a browser wallet</a>.</p>}
                   {incomingGrant.status === 'approved' && <p role="status" className="mt-4 text-sm font-semibold text-[var(--color-success)]">Approved. The agent may now complete pairing.</p>}
                   {incomingGrant.status === 'denied' && <p role="status" className="mt-4 text-sm font-semibold">Access denied.</p>}
                 </>
@@ -278,7 +291,8 @@ export default function AgentAccessApp() {
               <KeyRound className="h-8 w-8 text-neutral-400" />
               <h2 className="mt-5 text-3xl font-bold">Connect the signer</h2>
               <p className="mt-2 text-base leading-7 text-neutral-600 dark:text-neutral-300">Agent credentials belong to a signer identity, not to a Treasury.</p>
-              <button type="button" disabled={busy} onClick={() => void connect()} className="mst-action-primary mt-6 disabled:opacity-50">{busy ? 'Opening wallets…' : 'Connect wallet'}</button>
+              {!incomingGrantId && grantError && <p role="alert" className="mt-4 text-sm text-[var(--color-danger)]">{grantError}</p>}
+              <button type="button" disabled={busy} onClick={() => void connectSigner()} className="mst-action-primary mt-6 disabled:opacity-50">{busy ? 'Opening wallets…' : 'Connect wallet'}</button>
             </section>
           )}
 

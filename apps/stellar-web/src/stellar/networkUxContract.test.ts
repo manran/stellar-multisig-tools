@@ -78,7 +78,7 @@ test('networkless hardware follows the deployment/work-object network without pr
   assert.match(activity, /networkSource === 'application' && route\.network/);
   assert.match(accountControl, /fixedClientStellarDeploymentNetwork/);
   assert.match(accountControl, /network && !fixedDeploymentNetwork/);
-  assert.match(accountControl, /Hardware wallet network/);
+  assert.match(accountControl, /Signing network/);
   assert.match(accountControl, /selectNetworkContext\(candidate\)/);
 });
 

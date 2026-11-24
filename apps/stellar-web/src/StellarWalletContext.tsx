@@ -9,6 +9,7 @@ import {
   isWalletAuthEntrySigningUnsupported,
   isWalletMessageSigningUnsupported,
   isWalletSelectionCancelled,
+  isWalletSelectionInProgress,
   signAuthEntryWithWallet,
   signMessageWithWallet,
   signTransactionWithWallet,
@@ -186,7 +187,7 @@ export function StellarWalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshWalletIdentity = useCallback(async (): Promise<WalletIdentity | null> => {
-    if (autoIdentitySuppressedRef.current) return null;
+    if (autoIdentitySuppressedRef.current || isWalletSelectionInProgress()) return null;
     try {
       const identity = await getConnectedWalletIdentity();
       applyWalletIdentity(identity);
@@ -262,7 +263,7 @@ export function StellarWalletProvider({ children }: { children: ReactNode }) {
     let retryTimer: number | null = null;
 
     void subscribeWalletIdentity((identity) => {
-      if (disposed) return;
+      if (disposed || isWalletSelectionInProgress()) return;
       if (identity && autoIdentitySuppressedRef.current) return;
       consecutiveReadFailures = 0;
       applyWalletIdentity(identity);
@@ -272,11 +273,11 @@ export function StellarWalletProvider({ children }: { children: ReactNode }) {
     });
 
     const refreshQuietly = () => {
-      if (disposed || refreshInFlight || document.visibilityState !== 'visible' || autoIdentitySuppressedRef.current) return;
+      if (disposed || refreshInFlight || document.visibilityState !== 'visible' || autoIdentitySuppressedRef.current || isWalletSelectionInProgress()) return;
       refreshInFlight = true;
       void refreshWalletIdentity()
         .then((identity) => {
-          if (disposed) return;
+          if (disposed || isWalletSelectionInProgress()) return;
           if (identity) {
             consecutiveReadFailures = 0;
             return;

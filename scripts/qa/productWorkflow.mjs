@@ -101,7 +101,13 @@ export function StellarWalletProvider({ children }) {
     ...identity, busy: false, authBusy: false, error: '', authError: '',
     networkSource: 'wallet', sessionExpiresAt: null, unlockExpiresAt: Date.now() + 3600000,
     accountMenuOpen, setAccountMenuOpen,
-    connect: async () => { calls.push('connect'); return identity.address; },
+    connect: async () => {
+      calls.push('connect');
+      if (window.__MST_QA_CONNECT_FAILURE__) throw new Error('Wallet connection failed. Choose another wallet.');
+      const address = identity.address || window.__MST_QA_DEFAULT_ADDRESS__;
+      apply({ address, sessionAddress: address, network: 'testnet', sessionNetwork: 'testnet' });
+      return address;
+    },
     signIn: async () => {
       calls.push('signIn');
       const address = identity.address || window.__MST_QA_DEFAULT_ADDRESS__;
@@ -120,6 +126,7 @@ export function StellarWalletProvider({ children }) {
     sign: async (xdr, network) => { calls.push('sign'); return window.__MST_QA_SIGN__({ xdr, network, address: identity.address }); },
     approveAgentGrant: async (message, transaction, network) => {
       calls.push('approveAgentGrant');
+      if (window.__MST_QA_CANCEL_GRANT__) throw new Error('The user rejected this request.');
       if (network !== 'testnet' || !message.includes('Agent')) throw new Error('Agent approval challenge mismatch.');
       return { mode: 'sep53', signature: 'qa_wallet_signed' };
     },
@@ -738,6 +745,37 @@ try {
         assert.equal(state.agentGrantPolls, 0, 'Human browser never fetches a remote Agent device credential');
         assert.equal(await page.getByText('Copy this credential now').count(), 0);
         await snapshot(page, 'agent-pairing-approved', width);
+      });
+
+      await run('agent-pairing-recover-wallet', width, {
+        wallet: walletState('', false), state: { agentPending: {
+          requestId: '1234567890abcdef1234567890abcdef', userCode: 'ABCD-2345', label: 'Recovery agent',
+          access: 'sign', network: 'testnet', status: 'pending', expiresAt: expiry, deviceCode: 'mgd_fixture_secret',
+        } },
+      }, async ({ page, state }) => {
+        await page.goto(origin + '/agent-access?grant=1234567890abcdef1234567890abcdef');
+        await visible(page, 'Recovery agent');
+        await page.evaluate(() => { window.__MST_QA_CONNECT_FAILURE__ = true; });
+        await page.getByRole('main').getByRole('button', { name: 'Connect wallet', exact: true }).click();
+        await visible(page, 'Wallet connection failed. Choose another wallet.');
+        await visible(page, 'Approve without a browser wallet', 'link');
+        await visible(page, 'ABCD-2345');
+        assert.equal(state.agentGrantApprovals, 0);
+        await page.evaluate(() => { window.__MST_QA_CONNECT_FAILURE__ = false; });
+        await page.getByRole('main').getByRole('button', { name: 'Connect wallet', exact: true }).click();
+        await visible(page, 'Wallet selected. Confirm your identity below.');
+        await page.getByRole('button', { name: 'Unlock Agent access' }).click();
+        await visible(page, 'Wallet confirmed. Review and approve this request.');
+        await page.evaluate(() => { window.__MST_QA_CANCEL_GRANT__ = true; });
+        await page.getByRole('button', { name: 'Approve in wallet' }).click();
+        await visible(page, 'Wallet approval cancelled. You can retry this request before it expires.');
+        assert.equal(state.agentGrantApprovals, 0);
+        await page.evaluate(() => { window.__MST_QA_CANCEL_GRANT__ = false; });
+        await page.getByRole('button', { name: 'Approve in wallet' }).click();
+        await visible(page, 'Approved. The agent may now complete pairing.');
+        assert.equal(state.agentGrantApprovals, 1);
+        assert.equal(state.agentGrantPolls, 0);
+        await snapshot(page, 'agent-pairing-recovered', width);
       });
 
       await run('agent-access-confirmed-revoke', width, {}, async ({ page, state }) => {

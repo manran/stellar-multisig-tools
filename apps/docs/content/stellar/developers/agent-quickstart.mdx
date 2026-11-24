@@ -50,6 +50,25 @@ The response contains `verificationUri`, `userCode`, `deviceCode` and `intervalS
 
 The request expires after **10 minutes**, and the device code is single-use. Each renewal or different scope requires another approval. The human can revoke access on [Agent access](https://stellar-testnet.multisig.tools/agent-access).
 
+### Approve with an independent signing tool
+
+Browser wallets are optional. A signer who controls a Stellar CLI, hardware wallet, or separate signing service can use the same two signed challenges. Do this on the **signer side**, not in an untrusted requesting Agent. Never share a private key, device code, or Human session token with the requesting Agent.
+
+Use the fixed Testnet API base above. After the Agent has sent the verification link and code, obtain its public request ID from the link. The signer checks the request preview and explicitly approves the exact name, permission and code.
+
+1. Request a session challenge: `GET /auth?account=SIGNER_G_ADDRESS&network=testnet&unlock_seconds=3600` (operation signer.auth.challenge).
+2. Inspect the returned network, signing_key, message and transaction. Verify the sequence-zero SEP-10 XDR, server signature, signer operation source, web_auth_domain and expiry against the Testnet workspace. Ask the signer to sign the exact challenge XDR with their independent tool. Preserve the server signature. Never broadcast a challenge.
+3. Exchange the signed challenge: `POST /auth` with `{"network":"testnet","unlock_seconds":3600,"transaction":"SIGNED_CHALLENGE_XDR"}` (signer.auth.exchange). Verify the returned address and network. Keep its short-lived token private on the signer side.
+4. With Authorization: Bearer HUMAN_SESSION_TOKEN and X-MultiSig-Session-Address: SIGNER_G_ADDRESS, `GET /agent-grants?id=REQUEST_ID&challenge=1` (agent.grant.challenge). Verify the signer, permission, verification code and human-readable message. Inspect the separate sequence-zero approval XDR, server signature and exact consent message commitment. Ask the signer to approve and sign this new challenge. This is not payment approval.
+5. `POST /agent-grants` with the same two headers and `{"action":"approve","requestId":"REQUEST_ID","mode":"transaction","transaction":"SIGNED_APPROVAL_XDR"}`. A successful response is `{"status":"approved"}`; the Agent itself exchanges its private device code for the msa credential. A session alone cannot approve.
+6. To revoke, the signer uses the same session headers with `DELETE /agent-access` and `{"credentialId":"CREDENTIAL_ID"}`. `GET /agent-access` lists credential IDs and scopes, not secrets.
+
+For message-signing tools that implement SEP-53, the auth exchange also accepts mode=sep53, challenge (the original XDR) and signature (base64); the grant approval accepts mode=sep53 and a fresh base64 signature of the returned approval message. Do not use a generic raw message signature or a private key as the proof.
+
+The Stellar transaction signature for a subsequent payment is separate again: inspect the exact Request baseXdr, obtain the signer's approval of that payment, sign it locally, and send signedXdr through proposal.contribute. The msa credential never signs for you.
+
+If browser wallet connection fails, return to the same verification link and choose another wallet, or use this independent signing flow while the request is pending. If the request expires, ask the Agent to begin a new pairing.
+
 **Manual alternative:** A signer can create a named credential directly in the Agent access UI. This uses the same wallet-confirmed grant and shows the secret once for copying into a secure store.
 
 **Service Integration (`msi_*`):** An application or automation service creates a Testnet-only Integration Profile using [the guided setup](https://stellar-testnet.multisig.tools/developers/integrations/new) or the [Testnet API quickstart](/stellar/developers/testnet-quickstart). The service owns business orchestration; the Treasury's authorized signers retain signer authority. An `msi_*` key does **not** act as a signer. Testnet self-service issues this credential directly after the Agent has the user's approval to create the profile. Mainnet provisioning is separate. Inspect the runtime execution capability before choosing semantic payment creation or prepared XDR.

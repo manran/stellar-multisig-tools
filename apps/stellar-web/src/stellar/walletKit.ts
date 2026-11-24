@@ -3,6 +3,12 @@ import type { StellarNetwork } from '../../../../packages/stellar-core/src/types
 
 let initialized = false;
 let hardwareModulesLoaded = false;
+let walletSelectionPending = false;
+let walletSelectionVersion = 0;
+
+export function isWalletSelectionInProgress(): boolean {
+  return walletSelectionPending;
+}
 
 const HARDWARE_WALLET_MODULE_TYPE = 'HW_WALLET';
 const LEDGER_WALLET_ID = 'LEDGER';
@@ -103,6 +109,16 @@ function isHardwareWalletModule(module: { moduleType?: unknown }): boolean {
   return module.moduleType === HARDWARE_WALLET_MODULE_TYPE;
 }
 
+// Popup wallets require interaction to read an address and do not expose a
+// network. Use the explicit Kit selection and the application network.
+export function isPopupWalletModule(module: { productId?: unknown }): boolean {
+  return module.productId === 'albedo' || module.productId === 'xbull';
+}
+
+function usesApplicationNetwork(module: { moduleType?: unknown; productId?: unknown }): boolean {
+  return isHardwareWalletModule(module) || isPopupWalletModule(module);
+}
+
 function isLedgerWalletModule(module: { productId?: unknown }): boolean {
   return module.productId === LEDGER_WALLET_ID;
 }
@@ -117,9 +133,9 @@ function setKitNetworkContext(
 async function currentWalletNetwork(
   kit: Awaited<ReturnType<typeof loadKit>>,
 ): Promise<{ network: StellarNetwork; networkSource: WalletNetworkSource }> {
-  if (isHardwareWalletModule(kit.selectedModule)) {
-    // Ledger/Trezor do not expose a network. This is Wallets Kit application
-    // context, which defaults to Mainnet until a page/transaction binds it.
+  if (usesApplicationNetwork(kit.selectedModule)) {
+    // Ledger/Trezor and Albedo/xBull do not expose a wallet network. The
+    // page/transaction binds the Kit's application network.
     const { selectedNetwork } = await import('@creit.tech/stellar-wallets-kit/state');
     return { network: networkFromPassphrase(selectedNetwork.value), networkSource: 'application' };
   }
@@ -184,31 +200,49 @@ export function isWalletAuthEntrySigningUnsupported(cause: unknown): boolean {
 }
 
 export async function connectWalletIdentity(preferredNetwork?: StellarNetwork): Promise<WalletIdentity> {
-  const kit = await loadKit(true);
-  if (preferredNetwork) setKitNetworkContext(kit, preferredNetwork);
-  const { address } = await kit.authModal();
-  if (!address) throw new Error('No Stellar account was selected.');
-  return {
-    address,
-    ...await currentWalletNetwork(kit),
-  };
+  if (walletSelectionPending) throw new Error('Finish the current wallet selection first.');
+  walletSelectionPending = true;
+  walletSelectionVersion += 1;
+  try {
+    const kit = await loadKit(true);
+    const { activeAddress, selectedModuleId, selectedNetwork } = await import('@creit.tech/stellar-wallets-kit/state');
+    const previous = { address: activeAddress.value, module: selectedModuleId.value, network: selectedNetwork.value };
+    try {
+      if (preferredNetwork) setKitNetworkContext(kit, preferredNetwork);
+      const { address } = await kit.authModal();
+      if (!address) throw new Error('No Stellar account was selected.');
+      return { address, ...await currentWalletNetwork(kit) };
+    } catch (cause) {
+      // Kit selects the module before its popup returns a public key. Restore
+      // the previous pair on failure instead of pairing an old address with it.
+      selectedModuleId.value = previous.module;
+      activeAddress.value = previous.address;
+      selectedNetwork.value = previous.network;
+      throw cause;
+    }
+  } finally {
+    walletSelectionPending = false;
+  }
 }
 
 export async function getConnectedWalletIdentity(preferredNetwork?: StellarNetwork): Promise<WalletIdentity> {
+  if (walletSelectionPending) throw new Error('Wallet selection is in progress.');
+  const selectionVersion = walletSelectionVersion;
   const kit = await loadKit();
-  const hardware = isHardwareWalletModule(kit.selectedModule);
-  if (hardware && preferredNetwork) setKitNetworkContext(kit, preferredNetwork);
+  const applicationNetwork = usesApplicationNetwork(kit.selectedModule);
+  if (applicationNetwork && preferredNetwork) setKitNetworkContext(kit, preferredNetwork);
 
-  // Software wallets are refreshed from their provider so account/network changes
-  // outside this page are observed. Hardware accounts are selected explicitly in
-  // the Kit modal; re-querying a USB device on every focus event would be intrusive.
-  const addressPromise = hardware
+  // Only silently readable wallets are refreshed from their provider. Both
+  // hardware and popup wallets require an explicit account selection; focus
+  // events must not open another wallet window or overwrite that selection.
+  const addressPromise = applicationNetwork
     ? kit.getAddress()
     : kit.selectedModule.getAddress({ skipRequestAccess: true });
   const [{ address }, networkContext] = await Promise.all([
     addressPromise,
     currentWalletNetwork(kit),
   ]);
+  if (walletSelectionPending || selectionVersion !== walletSelectionVersion) throw new Error('Wallet selection changed.');
   if (!address) throw new Error('No Stellar wallet is currently connected.');
   return { address, ...networkContext };
 }
@@ -221,6 +255,7 @@ export async function subscribeWalletIdentity(
   let active = true;
 
   const refresh = () => {
+    if (walletSelectionPending) return;
     void getConnectedWalletIdentity()
       .then((identity) => {
         if (active) listener(identity);
@@ -296,7 +331,7 @@ export async function signTransactionWithWallet(
   address: string,
 ): Promise<string> {
   const kit = await loadKit();
-  if (isHardwareWalletModule(kit.selectedModule)) setKitNetworkContext(kit, network);
+  if (usesApplicationNetwork(kit.selectedModule)) setKitNetworkContext(kit, network);
   const signingOptions = {
     networkPassphrase: networkPassphrase(network),
     address,

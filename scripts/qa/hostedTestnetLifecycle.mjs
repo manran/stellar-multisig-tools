@@ -15,6 +15,7 @@ const AGENT = process.argv.includes('--agent');
 const COORDINATION = process.argv.includes('--coordination');
 const PROPOSER = process.argv.includes('--proposer');
 const INTEGRATION = process.argv.includes('--integration');
+const EXTERNAL = process.argv.includes('--external');
 const ALLOW_UNDISCOVERED_INBOX = process.argv.includes('--allow-undiscovered-inbox');
 const now = () => new Date().toISOString();
 const trace = [];
@@ -69,8 +70,8 @@ async function submitXdr(xdr) {
     body: new URLSearchParams({ tx: xdr }),
   });
 }
-async function unlock(signer) {
-  const challenge = await call('/auth?account=' + encodeURIComponent(signer.publicKey()) + '&network=testnet');
+async function unlock(signer, authPath = '/auth') {
+  const challenge = await call(authPath + '?account=' + encodeURIComponent(signer.publicKey()) + '&network=testnet&unlock_seconds=3600');
   const tx = TransactionBuilder.fromXdr(challenge.transaction, Networks.TESTNET);
   check(tx.source === challenge.signing_key, 'Challenge source is not the server');
   check(tx.operations[0]?.source === signer.publicKey(), 'Challenge signer mismatch');
@@ -88,9 +89,9 @@ function requestHeaders(id, capability, extra = {}) {
   return { 'x-multisig-request-id': id, ...(capability ? { 'x-multisig-capability': capability } : {}), ...extra };
 }
 
-async function pairAgent(bob, label, grantPath = '/agent-grants') {
-    const bobToken = await unlock(bob);
-    const signerHeaders = { ...cookieHeaders(bobToken), 'x-multisig-session-address': bob.publicKey() };
+async function pairAgent(bob, label, grantPath = '/agent-grants', authPath = '/auth') {
+    const bobToken = await unlock(bob, authPath);
+    const signerHeaders = humanHeaders(bob.publicKey(), bobToken);
     const grant = await call(grantPath, 'POST', {
       action: 'request', label, access: 'sign', network: 'testnet',
     }, {}, 201);
@@ -315,10 +316,15 @@ async function discoverIntegration() {
   const request = operation('integration.request.create', 'integration:write', 'coordination-state');
   const inspect = operation('integration.request.inspect', 'integration:read', 'none');
   const submit = operation('integration.request.submit', 'integration:write', 'network-submit');
+  const auth = operation('signer.auth.challenge', 'public', 'none');
+  const exchange = operation('signer.auth.exchange', 'public', 'private-state');
+  check(auth.path === exchange.path, 'Signer auth transport differs');
+  const grantChallenge = operation('agent.grant.challenge', 'human', 'none');
+  const revoke = operation('agent.access.revoke', 'human', 'private-state');
   const pair = operation('agent.grant.request', 'public', 'private-state');
   const poll = operation('agent.grant.poll', 'public', 'private-state');
   const approve = operation('agent.grant.approve', 'human', 'private-state');
-  check(pair.path === poll.path && pair.path === approve.path, 'Pairing transport differs');
+  check(pair.path === poll.path && pair.path === approve.path && pair.path === grantChallenge.path, 'Pairing transport differs');
   const contribute = operation('proposal.contribute', 'principal:sign', 'coordination-state');
   let inbox;
   if (ALLOW_UNDISCOVERED_INBOX && !registry.operations.some((item) => item.id === 'signer.inbox.list')) {
@@ -330,7 +336,7 @@ async function discoverIntegration() {
     inbox = operation('signer.inbox.list', 'principal:read', 'none');
   }
   record('public-msi-msa-operation-discovery', { strict: !ALLOW_UNDISCOVERED_INBOX });
-  return { runtime, create, prepare, request, inspect, submit, pair, contribute, inbox };
+  return { runtime, create, prepare, request, inspect, submit, pair, contribute, inbox, auth, revoke };
 }
 
 async function integrationE2E() {
@@ -359,6 +365,7 @@ async function integrationE2E() {
   const serviceId = 'agent-qa-' + randomBytes(6).toString('hex');
   const integration = await call(ops.create.path, ops.create.method, {
     serviceId, label: 'Agent collaboration QA', classicSourceAccounts: [source],
+    ...(EXTERNAL ? { classicExternalExecutionSourceAccounts: [source] } : {}),
     profile: { authorizationExperience: 'hosted' },
   }, {}, 201);
   check(integration.apiKey?.startsWith('msi_') && integration.service?.serviceId === serviceId
@@ -377,7 +384,7 @@ async function integrationE2E() {
   record('msi-out-of-scope-payment-denied');
 
   let input;
-  if (ops.runtime.capabilities?.classicManagedExecution?.testnet === true) {
+  if (!EXTERNAL && ops.runtime.capabilities?.classicManagedExecution?.testnet === true) {
     input = { network: 'testnet', payment };
     record('semantic-managed-payment-selected');
   } else {
@@ -403,7 +410,7 @@ async function integrationE2E() {
       { signer: carol, label: 'QA signer Carol' },
     ];
     for (const item of signerAgents) {
-      const pair = await pairAgent(item.signer, item.label, ops.pair.path);
+      const pair = await pairAgent(item.signer, item.label, ops.pair.path, ops.auth.path);
       paired.push({ ...item, ...pair });
     }
     const inboxDenied = await call(ops.inbox.path, ops.inbox.method, undefined, serviceHeaders, 401);
@@ -429,8 +436,8 @@ async function integrationE2E() {
       'Wallet review does not match authorized disposable payment');
       check(Buffer.from(tx.hash()).toString('hex') === created.request.transactionHash, 'Request transaction changed');
       if (index === 0) {
-        const deniedSubmit = await call(ops.submit.path, ops.submit.method, {}, headers, 403);
-        check(deniedSubmit.code === 'agent_submit_denied', 'MSA escaped submission boundary');
+        const deniedSubmit = await call(ops.submit.path, ops.submit.method, {}, headers, EXTERNAL ? 409 : 403);
+        check(deniedSubmit.code === (EXTERNAL ? 'external_executor_required' : 'agent_submit_denied'), 'MSA escaped submission boundary');
         record('msa-direct-submit-denied');
       }
       tx.sign(item.signer);
@@ -445,14 +452,25 @@ async function integrationE2E() {
       if (index === 0) check(final.request.status === 'awaiting_signatures', 'Payment executed before quorum');
       record('msa-wallet-signature-contributed', { signer: index + 1 });
     }
-    if (final.request.status === 'ready') {
+    if (EXTERNAL) {
+      check(final.request.status === 'ready', 'External Request did not stay ready at quorum');
+      const refused = await call(ops.submit.path, ops.submit.method, {}, requestHeaders(requestId, '', serviceHeaders), 409);
+      check(refused.code === 'external_executor_required', 'MST attempted to submit externally owned Request');
+      const externalReceipt = await submitXdr(final.request.mergedXdr);
+      check(externalReceipt.successful && externalReceipt.hash === created.request.transactionHash, 'External submission did not match Request');
+      record('external-executor-submitted-exact-xdr', { ledger: externalReceipt.ledger });
+    } else if (final.request.status === 'ready') {
       final = await call(ops.submit.path, ops.submit.method, {}, requestHeaders(requestId, '', serviceHeaders));
       record('msi-authorized-submission-retry');
     } else {
       check(final.request.status === 'submitted', 'Quorum did not produce ready or submitted state');
       record('mst-auto-submitted-at-quorum');
     }
-    const canonical = await call(ops.inspect.path, ops.inspect.method, undefined, requestHeaders(requestId, '', serviceHeaders));
+    let canonical = await call(ops.inspect.path, ops.inspect.method, undefined, requestHeaders(requestId, '', serviceHeaders));
+    for (let retry = 0; EXTERNAL && canonical.request.status !== 'submitted' && retry < 5; retry++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      canonical = await call(ops.inspect.path, ops.inspect.method, undefined, requestHeaders(requestId, '', serviceHeaders));
+    }
     const receipt = canonical.request?.submission;
     check(canonical.request.status === 'submitted' && receipt?.transactionHash === created.request.transactionHash,
       'MSI did not receive canonical submission result');
@@ -462,9 +480,9 @@ async function integrationE2E() {
     record('msi-canonical-ledger-confirmation', { requestId, ledger: chain.ledger, transactionHash: chain.hash });
   } finally {
     for (const item of paired) {
-      const revoked = await call('/agent-access', 'DELETE', {
+      const revoked = await call(ops.revoke.path, ops.revoke.method, {
         credentialId: item.agent.credential.credentialId,
-      }, { ...cookieHeaders(item.bobToken), 'x-multisig-session-address': item.signer.publicKey() });
+      }, humanHeaders(item.signer.publicKey(), item.bobToken));
       check(revoked.credential?.revokedAt, 'MSA cleanup failed');
       const denied = await call(ops.inbox.path, ops.inbox.method, undefined, { Authorization: 'Bearer ' + item.agent.apiKey }, 401);
       check(denied.code === 'agent_credential_revoked', 'Revoked Agent can still access Inbox');

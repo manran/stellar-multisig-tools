@@ -17,7 +17,15 @@ The Hosted Human review surface remains:
 https://stellar-testnet.multisig.tools
 ```
 
-## 1. Create a Testnet Integration Profile
+## 1. Inspect the deployment
+
+```bash
+curl -fsS https://api-testnet.multisig.tools/stellar/runtime-config
+```
+
+Verify `fixedNetwork=testnet` and inspect `capabilities.classicManagedExecution.testnet`. Choose managed semantic payment only when that capability is true. Otherwise use prepared XDR. Decide whether MST or your service owns final submission before creating the profile.
+
+## 2. Create a Testnet Integration Profile
 
 ```bash
 curl -sS -X POST https://api-testnet.multisig.tools/stellar/integration-testnet \
@@ -32,13 +40,7 @@ curl -sS -X POST https://api-testnet.multisig.tools/stellar/integration-testnet 
 
 Store the returned one-time `msi_*` credential directly in your server-side or Agent secret store.
 
-## 2. Inspect the deployment
-
-```bash
-curl -sS https://api-testnet.multisig.tools/stellar/runtime-config
-```
-
-Verify that the runtime is fixed to Testnet. Inspect `capabilities.classicManagedExecution.testnet` before selecting the payment creation path. The prepared-XDR path below works without managed transaction-source channels.
+The default profile lets MST submit the authorized Request. To own final submission yourself, include the same Treasury in `classicExternalExecutionSourceAccounts` when creating the profile. The prepared-XDR path below works without managed transaction-source channels.
 
 ## 3. Prepare and create a Classic Request
 
@@ -104,5 +106,7 @@ curl -sS https://api-testnet.multisig.tools/stellar/request \
   -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
   -H "X-MultiSig-Request-Id: <request-id>"
 ```
+
+For an externally executed Request, wait for `request.status=ready`, then submit its exact `request.mergedXdr` using Stellar Testnet Horizon `POST /transactions` with form field `tx`. Do not submit with MST's Request PUT operation. Check the returned transaction hash and ledger against `request.transactionHash`; GET the canonical MST Request again after confirmation. MST observes the matching on-chain transaction and records the submission. If the first GET still reports ready or stale, retry after Horizon reflects the confirmed account sequence; never create a second payment to resolve uncertainty.
 
 If a webhook is configured, treat it as a wake-up signal: verify the signature, deduplicate the event id, then GET current canonical state before acting.
