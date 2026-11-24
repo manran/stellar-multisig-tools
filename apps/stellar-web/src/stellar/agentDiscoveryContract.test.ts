@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -64,14 +64,16 @@ for (const network of ['testnet', 'public'] as const) {
   });
 }
 
-test('Agent generation fails closed without network configuration in a Vercel deployment', () => {
+test('Other Vercel projects do not generate incorrect Stellar network discovery', () => {
   const output = mkdtempSync(join(tmpdir(), 'mst-agent-no-network-'));
   try {
     const env: NodeJS.ProcessEnv = { ...process.env, VERCEL: '1' };
     delete env.VITE_STELLAR_DEPLOYMENT_NETWORK;
     const result = spawnSync(process.execPath, [generator, output], { env, encoding: 'utf8' });
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /VITE_STELLAR_DEPLOYMENT_NETWORK/);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /Agent discovery omitted/);
+    assert.equal(existsSync(join(output, '.well-known/api-catalog')), false);
+    assert.equal(existsSync(join(output, 'llms.txt')), false);
   } finally {
     rmSync(output, { force: true, recursive: true });
   }

@@ -11,8 +11,13 @@ import {
 
 const network = process.env.VITE_STELLAR_DEPLOYMENT_NETWORK
   || (process.env.VERCEL ? '' : 'testnet');
+// Directory builds run the root workspace build but do not deploy Stellar Web.
+if (!network && process.env.VERCEL) {
+  console.log('Agent discovery omitted: this project has no Stellar deployment network.');
+  process.exit(0);
+}
 if (!['testnet', 'public'].includes(network)) {
-  throw new Error('Set VITE_STELLAR_DEPLOYMENT_NETWORK to testnet or public before deployment.');
+  throw new Error('Set VITE_STELLAR_DEPLOYMENT_NETWORK to testnet or public.');
 }
 
 const origin = network === 'testnet'
