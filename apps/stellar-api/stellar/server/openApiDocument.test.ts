@@ -176,10 +176,10 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   for (const name of ['ContractIntentCreateResult', 'ContractIntentInspectResult', 'ContractIntentExecutionResult', 'ContractIntentExecutionReconcileResult', 'ContractIntentReplanResult', 'ContractIntentCancelResult']) {
     assert.ok((schemas[name].properties as JsonObject).job);
   }
-  assert.deepEqual(schemas.AgentTask.required, ['version', 'id', 'kind', 'network', 'state', 'nextActions']);
-  assert.deepEqual((schemas.AgentTask.properties as JsonObject).state, {
-    type: 'string', enum: ['action_required', 'waiting', 'completed', 'expired', 'failed', 'cancelled'],
-  });
+  assert.deepEqual(schemas.AgentTask.required, ['version', 'id', 'kind', 'network', 'state', 'signatureRequired', 'nextActions']);
+  assert.equal(((schemas.AgentTask.properties as JsonObject).signatureRequired as JsonObject).type, 'boolean');
+  assert.equal(((schemas.SignerInboxResult.properties as JsonObject).signature_required_count as JsonObject).type, 'integer');
+  assert.deepEqual(((schemas.AgentTask.properties as JsonObject).state as JsonObject).enum, ['action_required', 'waiting', 'completed', 'expired', 'failed', 'cancelled']);
   const agentTaskAction = (((schemas.AgentTask.properties as JsonObject).nextActions as JsonObject).items as JsonObject);
   assert.deepEqual(agentTaskAction.required, ['code', 'requiredAccess', 'available']);
   for (const name of ['ContractIntentCreateResult', 'ContractIntentInspectResult', 'ContractIntentContributionResult', 'ContractIntentExecutionResult', 'ContractIntentExecutionReconcileResult', 'ContractIntentReplanResult', 'ContractIntentCancelResult', 'ProposalResult']) {

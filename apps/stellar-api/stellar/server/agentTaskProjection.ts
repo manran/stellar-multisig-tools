@@ -38,16 +38,17 @@ export function projectClassicAgentTask({
 }): AgentTaskProjection {
   let state: AgentTaskProjection['state'];
   let nextActions: AgentTaskAction[] = [];
+  const signatureRequired = request.status === 'awaiting_signatures' && !hasSigned && !declined;
 
   if (request.status === 'submitted') state = 'completed';
   else if (request.status === 'expired') state = 'expired';
   else if (request.status === 'stale' || request.status === 'blocked') state = 'failed';
-  else if (request.status === 'awaiting_signatures' && !hasSigned && !declined) {
-    state = 'action_required';
+  else if (signatureRequired) {
     nextActions = [
       action('contribute_signature', 'sign', credentialAccess),
       action('decline', 'write', credentialAccess),
     ];
+    state = nextActions.some((item) => item.available) ? 'action_required' : 'waiting';
   } else state = 'waiting';
 
   return {
@@ -56,6 +57,7 @@ export function projectClassicAgentTask({
     kind: 'classic_transaction',
     network: request.network,
     state,
+    signatureRequired,
     nextActions,
     ...(request.expiresAt ? { expiresAt: request.expiresAt } : {}),
     ...(request.submission ? {
@@ -166,6 +168,10 @@ export function projectSorobanAgentTask({
     nextActions = [...nextActions, action('cancel', 'write', credentialAccess)];
   }
 
+  const signatureRequired = state === 'action_required'
+    && authorization.status === 'awaiting_authorization' && needsPrincipalAuthorization;
+  if (state === 'action_required' && !nextActions.some((item) => item.available)) state = 'waiting';
+
   const expiry = earliestExpiry(authorization);
   return {
     version: 1,
@@ -173,6 +179,7 @@ export function projectSorobanAgentTask({
     kind: 'soroban_contract',
     network: stored.network,
     state,
+    signatureRequired,
     nextActions,
     ...(authorization.status === 'awaiting_authorization' ? { waitingFor: unresolvedAuthorizers(authorization) } : {}),
     ...(expiry !== undefined ? { expiresAtLedger: expiry } : {}),

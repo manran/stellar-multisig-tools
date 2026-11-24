@@ -61,9 +61,8 @@ export async function GET(request: Request): Promise<Response> {
         intents,
       });
     }
-    // Machine callers receive the same verified Request list plus typed next tasks.
-    // A task action can be unavailable to a Read/Write credential without
-    // implying a different on-chain signer or permission.
+    // Separate the signer's pending signatures from actions the current
+    // Agent credential can perform. Read Agents can notify their signer.
     const tasks = await Promise.all(requests.map(async (item) => {
       const declined = item.status === 'awaiting_signatures' && signingRequestStore.listActivityEvents
         ? (await signingRequestStore.listActivityEvents(item.id)).some((event) =>
@@ -82,6 +81,7 @@ export async function GET(request: Request): Promise<Response> {
       actor: context.actor,
       pending_count: requests.length,
       action_count: tasks.filter((task) => task.state === 'action_required').length,
+      signature_required_count: tasks.filter((task) => task.signatureRequired).length,
       requests,
       tasks,
     });

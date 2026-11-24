@@ -29,7 +29,10 @@ export interface AgentTaskProjection {
   id: string;
   kind: 'classic_transaction' | 'soroban_contract';
   network: StellarNetwork;
+  /** Work the current credential can act on; read-only pending work is waiting. */
   state: AgentTaskState;
+  /** The represented signer has not yet authorized this pending work, irrespective of Agent scope. */
+  signatureRequired: boolean;
   nextActions: AgentTaskAction[];
   waitingFor?: string[];
   expiresAt?: string;

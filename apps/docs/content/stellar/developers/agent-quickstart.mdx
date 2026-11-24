@@ -91,6 +91,12 @@ For a first end-to-end **Service Integration** payment, follow [Testnet quicksta
 
 The Service Agent creates the Request using `msi_*`. The Signer Agent uses `msa_*` with the `signer.inbox.list` operation to discover pending Classic tasks without receiving a private link. Match each task ID to its Request, inspect the exact XDR, and obtain the signer's authorization before contributing a signature. The Service Agent reads its own Request to track quorum and the final ledger result. MST-managed Integration Requests may submit automatically at quorum; direct submission by a signer Agent is forbidden.
 
+### Monitor a signer's Inbox with Read access
+
+A personal Agent can request a Read credential and check `GET /inbox` without permission to sign, decline, or change proposals. `signature_required_count` counts pending signatures for the represented signer. Use each task's `signatureRequired` flag to identify the requests to bring to that person's attention. `action_count` counts tasks with an action available to the current Agent credential; for Read it is zero, even when the signer has pending work. `state: waiting` does not mean that no signature is needed.
+
+Notify the human through the Agent's own notification channel, with the pending Request summary and a link to the signer's [Testnet Inbox](https://stellar-testnet.multisig.tools/inbox). Do not expose credentials or private transaction details outside that person's authorized channel. Deduplicate notifications by Request ID and stop reminding when `signatureRequired` becomes false or the Request leaves Inbox. Check on demand or at the user's chosen interval; this is not a webhook subscription. The human reviews and signs with their own wallet. Read access is sufficient for this monitoring task; do not request Sign access just to send reminders.
+
 ## Boundaries
 
 - Discovery is public; acquiring signer authority is not.

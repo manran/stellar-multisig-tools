@@ -89,11 +89,11 @@ function requestHeaders(id, capability, extra = {}) {
   return { 'x-multisig-request-id': id, ...(capability ? { 'x-multisig-capability': capability } : {}), ...extra };
 }
 
-async function pairAgent(bob, label, grantPath = '/agent-grants', authPath = '/auth') {
+async function pairAgent(bob, label, grantPath = '/agent-grants', authPath = '/auth', access = 'sign') {
     const bobToken = await unlock(bob, authPath);
     const signerHeaders = humanHeaders(bob.publicKey(), bobToken);
     const grant = await call(grantPath, 'POST', {
-      action: 'request', label, access: 'sign', network: 'testnet',
+      action: 'request', label, access, network: 'testnet',
     }, {}, 201);
     check(grant.verificationUri === 'https://stellar-testnet.multisig.tools/agent-access?grant=' + grant.requestId
       && typeof grant.deviceCode === 'string' && grant.deviceCode.startsWith('mgd_'), 'Invalid pairing response');
@@ -107,7 +107,7 @@ async function pairAgent(bob, label, grantPath = '/agent-grants', authPath = '/a
     check(unsignedApproval.code === 'approval_signature_required', 'Login session bypassed fresh approval');
     record('agent-session-only-approval-denied');
     const challenge = await call(grantPath + '?id=' + grant.requestId + '&challenge=1', 'GET', undefined, signerHeaders);
-    check(challenge.signer === bob.publicKey() && challenge.access === 'sign'
+    check(challenge.signer === bob.publicKey() && challenge.access === access
       && challenge.message.includes(grant.userCode), 'Pairing challenge does not match Agent request');
     const approval = TransactionBuilder.fromXdr(challenge.transaction, Networks.TESTNET);
     check(approval.operations[0]?.source === bob.publicKey(), 'Pairing approval signer mismatch');
@@ -119,7 +119,7 @@ async function pairAgent(bob, label, grantPath = '/agent-grants', authPath = '/a
     record('agent-fresh-wallet-approval');
     const agent = await call(grantPath, 'POST', poll);
     check(agent.status === 'approved' && typeof agent.apiKey === 'string'
-      && agent.apiKey.startsWith('msa_') && agent.credential?.access === 'sign',
+      && agent.apiKey.startsWith('msa_') && agent.credential?.access === access,
       'Agent credential was not issued');
     const replay = await call(grantPath, 'POST', poll, {}, 409);
     check(replay.code === 'already_exchanged' && !replay.apiKey, 'Device code was reusable');
@@ -413,17 +413,30 @@ async function integrationE2E() {
       const pair = await pairAgent(item.signer, item.label, ops.pair.path, ops.auth.path);
       paired.push({ ...item, ...pair });
     }
+    // A separate, least-privilege personal Agent represents Bob, but may only notify him.
+    const monitor = await pairAgent(bob, 'QA personal Inbox monitor', ops.pair.path, ops.auth.path, 'read');
+    paired.push({ signer: bob, ...monitor });
+    const monitorHeaders = { Authorization: 'Bearer ' + monitor.agent.apiKey };
+    const monitorInbox = await call(ops.inbox.path, ops.inbox.method, undefined, monitorHeaders);
+    const pendingSignature = monitorInbox.tasks?.find((task) => task.signatureRequired);
+    check(monitorInbox.address === bob.publicKey() && monitorInbox.signature_required_count === 1 && monitorInbox.action_count === 0
+      && pendingSignature?.id === requestId && pendingSignature.state === 'waiting'
+      && pendingSignature.nextActions.every((action) => !action.available), 'Read Agent cannot distinguish pending signature from executable actions');
+    const monitorRequest = await call(ops.inspect.path, ops.inspect.method, undefined, requestHeaders(pendingSignature.id, '', monitorHeaders));
+    check(monitorRequest.task?.signatureRequired === true && monitorRequest.task.state === 'waiting', 'Read Agent Request projection disagrees with Inbox');
+    record('msa-read-monitor-discovers-signature-without-action');
     const inboxDenied = await call(ops.inbox.path, ops.inbox.method, undefined, serviceHeaders, 401);
     check(inboxDenied.code === 'invalid_agent_credential', 'MSI acquired signer Inbox access');
     record('msi-signer-inbox-denied');
 
     let final;
-    for (const [index, item] of paired.entries()) {
+    for (const [index, item] of paired.filter((item) => item.agent.credential.access === 'sign').entries()) {
       const agentHeaders = { Authorization: 'Bearer ' + item.agent.apiKey };
       const inbox = await call(ops.inbox.path, ops.inbox.method, undefined, agentHeaders);
       const discovered = inbox.tasks?.find((task) => task.id === requestId);
       check(inbox.address === item.signer.publicKey() && inbox.actor === 'agent'
-        && discovered?.state === 'action_required'
+        && inbox.signature_required_count === 1 && inbox.action_count === 1
+        && discovered?.state === 'action_required' && discovered.signatureRequired === true
         && discovered.nextActions?.some((action) => action.code === 'contribute_signature' && action.available),
       'Signer Agent did not independently discover payment task');
       record('msa-inbox-task-discovered', { signer: index + 1 });
@@ -442,6 +455,9 @@ async function integrationE2E() {
       }
       tx.sign(item.signer);
       if (index === 0) {
+        const monitorDenied = await call(ops.contribute.path, ops.contribute.method, { signedXdr: tx.toXDR() }, requestHeaders(requestId, '', monitorHeaders), 403);
+        check(monitorDenied.code === 'agent_access_denied', 'Read Agent acquired signature contribution authority');
+        record('msa-read-monitor-signature-contribution-denied');
         const deniedContribution = await call(ops.contribute.path, ops.contribute.method,
           { signedXdr: tx.toXDR() }, requestHeaders(requestId, '', serviceHeaders), 403);
         check(deniedContribution.code === 'integration_request_write_denied', 'MSI acquired signer contribution authority');
@@ -449,7 +465,14 @@ async function integrationE2E() {
       }
       final = await call(ops.contribute.path, ops.contribute.method, { signedXdr: tx.toXDR() }, headers);
       check(final.addedSignatureCount === 1, 'Verified signer contribution rejected');
-      if (index === 0) check(final.request.status === 'awaiting_signatures', 'Payment executed before quorum');
+      if (index === 0) {
+        check(final.request.status === 'awaiting_signatures', 'Payment executed before quorum');
+        const refreshed = await call(ops.inbox.path, ops.inbox.method, undefined, monitorHeaders);
+        const signedTask = refreshed.tasks?.find((task) => task.id === requestId);
+        check(refreshed.signature_required_count === 0 && refreshed.action_count === 0 && signedTask?.signatureRequired === false
+          && signedTask.state === 'waiting', 'Read Agent still sees pending signature after its human signed');
+        record('msa-read-monitor-clears-reminder-after-signature');
+      }
       record('msa-wallet-signature-contributed', { signer: index + 1 });
     }
     if (EXTERNAL) {

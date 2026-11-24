@@ -48,15 +48,46 @@ function authorization(
   };
 }
 
+test('Read Agent can discover a pending signature without an executable task', () => {
+  const task = projectClassicAgentTask({
+    request: classic('awaiting_signatures'), credentialAccess: 'read', hasSigned: false,
+  });
+  assert.equal(task.state, 'waiting');
+  assert.equal(task.signatureRequired, true);
+  assert.deepEqual(task.nextActions, [
+    { code: 'contribute_signature', requiredAccess: 'sign', available: false },
+    { code: 'decline', requiredAccess: 'write', available: false },
+  ]);
+});
+
 test('Classic Agent Task reports Principal action separately from credential capability', () => {
   const task = projectClassicAgentTask({
     request: classic('awaiting_signatures'), credentialAccess: 'write', hasSigned: false,
   });
   assert.equal(task.state, 'action_required');
+  assert.equal(task.signatureRequired, true);
   assert.deepEqual(task.nextActions, [
     { code: 'contribute_signature', requiredAccess: 'sign', available: false },
     { code: 'decline', requiredAccess: 'write', available: true },
   ]);
+});
+
+test('Sign Agent can act on a pending signature', () => {
+  const task = projectClassicAgentTask({
+    request: classic('awaiting_signatures'), credentialAccess: 'sign', hasSigned: false,
+  });
+  assert.equal(task.state, 'action_required');
+  assert.equal(task.signatureRequired, true);
+  assert.equal(task.nextActions.find((item) => item.code === 'contribute_signature')?.available, true);
+});
+
+test('Classic Agent Task does not notify a signer who declined', () => {
+  const task = projectClassicAgentTask({
+    request: classic('awaiting_signatures'), credentialAccess: 'read', hasSigned: false, declined: true,
+  });
+  assert.equal(task.state, 'waiting');
+  assert.equal(task.signatureRequired, false);
+  assert.deepEqual(task.nextActions, []);
 });
 
 test('Classic Agent Task waits after this Principal has already signed', () => {
@@ -64,6 +95,7 @@ test('Classic Agent Task waits after this Principal has already signed', () => {
     request: classic('awaiting_signatures'), credentialAccess: 'sign', hasSigned: true,
   });
   assert.equal(task.state, 'waiting');
+  assert.equal(task.signatureRequired, false);
   assert.deepEqual(task.nextActions, []);
 });
 test('Classic Agent Task projects confirmed submission as completed', () => {
@@ -74,6 +106,7 @@ test('Classic Agent Task projects confirmed submission as completed', () => {
   };
   const task = projectClassicAgentTask({ request, credentialAccess: 'read', hasSigned: true });
   assert.equal(task.state, 'completed');
+  assert.equal(task.signatureRequired, false);
   assert.deepEqual(task.result, { transactionHash: DIGEST, ledger: 42, successful: true });
 });
 
@@ -82,11 +115,22 @@ test('Soroban Agent Task exposes required Sign access without granting it', () =
     stored: stored(), authorization: authorization('awaiting_authorization'),
     credentialAccess: 'read', principalAddress: PRINCIPAL,
   });
-  assert.equal(task.state, 'action_required');
+  assert.equal(task.state, 'waiting');
+  assert.equal(task.signatureRequired, true);
   assert.deepEqual(task.waitingFor, [OTHER]);
   assert.deepEqual(task.nextActions, [
     { code: 'contribute_authorization', requiredAccess: 'sign', available: false },
   ]);
+});
+
+test('Soroban Sign Agent sees an executable authorization task', () => {
+  const task = projectSorobanAgentTask({
+    stored: stored(), authorization: authorization('awaiting_authorization'),
+    credentialAccess: 'sign', principalAddress: PRINCIPAL,
+  });
+  assert.equal(task.state, 'action_required');
+  assert.equal(task.signatureRequired, true);
+  assert.equal(task.nextActions[0]?.available, true);
 });
 
 test('Soroban Agent Task tells a Write Agent to prepare after authorization', () => {
@@ -95,6 +139,7 @@ test('Soroban Agent Task tells a Write Agent to prepare after authorization', ()
     credentialAccess: 'write', principalAddress: PRINCIPAL,
   });
   assert.equal(task.state, 'action_required');
+  assert.equal(task.signatureRequired, false);
   assert.deepEqual(task.nextActions, [
     { code: 'prepare_execution', requiredAccess: 'write', available: true },
   ]);

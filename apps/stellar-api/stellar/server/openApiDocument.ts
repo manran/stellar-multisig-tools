@@ -676,13 +676,14 @@ const components: OpenApiObject = {
     },
     AgentTask: {
       type: 'object',
-      required: ['version', 'id', 'kind', 'network', 'state', 'nextActions'],
+      required: ['version', 'id', 'kind', 'network', 'state', 'signatureRequired', 'nextActions'],
       properties: {
         version: operationVersion,
         id: { type: 'string', minLength: 1 },
         kind: { type: 'string', enum: ['classic_transaction', 'soroban_contract'] },
         network: stellarNetwork,
-        state: { type: 'string', enum: ['action_required', 'waiting', 'completed', 'expired', 'failed', 'cancelled'] },
+        state: { type: 'string', enum: ['action_required', 'waiting', 'completed', 'expired', 'failed', 'cancelled'], description: 'action_required means a required task action is available to the current credential; read-only pending work is waiting.' },
+        signatureRequired: { type: 'boolean', description: 'This signer still has a pending signature or authorization decision, independently of the credential scope. A Read Agent can use this signal to notify the signer.' },
         nextActions: {
           type: 'array',
           items: {
@@ -1378,7 +1379,8 @@ const components: OpenApiObject = {
         network: stellarNetwork,
         actor: { type: 'string', enum: ['agent', 'human'] },
         pending_count: { type: 'integer', minimum: 0 },
-        action_count: { type: 'integer', minimum: 0 },
+        action_count: { type: 'integer', minimum: 0, description: 'For Agent callers, the number of tasks with state action_required that the current credential can act on.' },
+        signature_required_count: { type: 'integer', minimum: 0, description: 'For Agent callers, the number of returned tasks with signatureRequired=true, regardless of scope.' },
         requests: { type: 'array', items: { type: 'object', additionalProperties: true } },
         tasks: { type: 'array', items: schema('AgentTask'), description: 'Present for Agent callers; correlate each task id with a Request id.' },
       },
