@@ -167,7 +167,6 @@ function NewTransactionChoices() {
           </div>
         </details>
 
-        <p className="mt-5 text-sm text-neutral-500 dark:text-neutral-400">Nothing is signed or submitted from this screen. The next step is always Review.</p>
       </div>
     </main>
   );

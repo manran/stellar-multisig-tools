@@ -148,13 +148,13 @@ export default function TransactionReceiptApp() {
   return <StellarWorkspaceShell active="activity" networkContext={snapshot?.network ?? requestedNetwork ?? network}>
     <main className="transaction-evidence-page px-4 py-7 sm:px-6 lg:px-8 lg:py-8"><div className="mx-auto max-w-5xl">
       <div className="transaction-evidence-screen-controls">
-        <a href={backHref} className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black dark:text-neutral-300 dark:hover:text-white"><ArrowLeft className="h-4 w-4" />{backLabel}</a>
+        <a href={backHref} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-neutral-600 hover:text-black dark:text-neutral-300 dark:hover:text-white"><ArrowLeft className="h-4 w-4" />{backLabel}</a>
       </div>
       {snapshot && <div className="transaction-evidence-screen-only mb-6"><WorkflowProgress current="done" /></div>}
       <div className="transaction-evidence-human-heading transaction-evidence-heading mt-5 flex flex-wrap items-end justify-between gap-4 border-b border-black/10 pb-5 dark:border-white/10">
-        <div><h1 className="text-3xl font-bold tracking-tight">Transaction receipt</h1><p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">Human-readable receipt with your authorized workspace context.</p></div>
+        <div><h1 className="text-3xl font-bold tracking-tight">Transaction receipt</h1><p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">Transaction details, signatures, and ledger confirmation.</p></div>
         {snapshot && <div className="transaction-evidence-screen-controls">
-          <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"><Printer className="h-4 w-4" />Export evidence PDF</button>
+          <button type="button" onClick={() => window.print()} className="mst-action-secondary"><Printer className="h-4 w-4" />Print or save PDF</button>
         </div>}
       </div>
       {networkMismatch && <div className="mt-5 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">This link is for {requestedNetwork === 'testnet' ? 'Testnet' : 'Mainnet'}, but the connected wallet is using {connectedNetwork === 'testnet' ? 'Testnet' : 'Mainnet'}.</div>}

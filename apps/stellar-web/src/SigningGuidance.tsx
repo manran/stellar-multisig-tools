@@ -399,7 +399,7 @@ export default function SigningGuidance({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] opacity-40">Signatures</div>
-          <h2 className="mt-2 text-2xl font-bold">{authorizationComplete ? 'All required signatures are present' : readOnlyProposer ? 'Waiting for Treasury signatures' : walletAlreadySigned ? 'Waiting for other signatures' : walletCanSign ? 'Sign this proposal' : 'Who needs to sign?'}</h2>
+          <h2 className="mt-2 text-2xl font-bold">{authorizationComplete ? 'All required signatures are present' : readOnlyProposer ? 'Waiting for Treasury signatures' : walletAlreadySigned ? 'Waiting for other signatures' : walletCanSign ? 'Sign with your wallet' : 'Who needs to sign?'}</h2>
           {!authorizationComplete && !hasAuthorizationError && walletAlreadySigned && (
             <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">
               {remainingSignatureCopy}

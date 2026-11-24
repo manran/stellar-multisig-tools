@@ -156,7 +156,7 @@ export default function StellarDashboardApp() {
       <main className="mst-workbench-page">
         <div className="mx-auto max-w-6xl">
           <PageHeader
-            eyebrow={<span className={accentText}>{testnet ? 'Testnet workspace' : 'Your workspace'}</span>}
+            eyebrow={<span className={accentText}>Your workspace</span>}
             title="Overview"
             description="Your current work, in one place."
           />

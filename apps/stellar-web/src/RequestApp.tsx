@@ -1,3 +1,4 @@
+/* Hallmark · pre-emit critique: P5 H4 E5 S5 R5 V4 */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
@@ -25,6 +26,7 @@ import TransactionAuthorizationResults from './TransactionAuthorizationResults';
 import TransactionInspectorSummary from './TransactionInspectorSummary';
 import XdrQrCode from './XdrQrCode';
 import { horizonTransactionUrl } from '../../../packages/stellar-core/src/horizon';
+import { fixedClientStellarDeploymentNetwork } from '../../../packages/stellar-core/src/deploymentNetwork';
 import { isWalletUserRejected } from './stellar/walletKit';
 import type { PrivateCommitmentRecord } from '../../../packages/stellar-core/src/privateCommitment';
 import type { PrivateNoteRevision } from '../../../packages/stellar-core/src/privateNote';
@@ -258,7 +260,7 @@ export default function RequestApp() {
   const [contributionMessage, setContributionMessage] = useState('');
   const [contributionGrantExpiresAt, setContributionGrantExpiresAt] = useState<number | null>(null);
   const [copied, setCopied] = useState<'link' | 'xdr' | null>(null);
-  const [focusSection, setFocusSection] = useState<'review' | 'signatures' | 'submission' | 'issue' | null>(navigation.focusSignerFollowup ? 'signatures' : null);
+  const [focusSection, setFocusSection] = useState<'review' | 'signatures' | 'submission' | 'confirmation' | 'issue' | null>(navigation.focusSignerFollowup ? 'signatures' : null);
   const [pendingRetention, setPendingRetention] = useState<{ id: string; address: string } | null>(null);
   const {
     address: walletAddress,
@@ -305,6 +307,7 @@ export default function RequestApp() {
     ? proposalWorkflowStage(snapshot.status, { reviewComplete, signaturesComplete })
     : 'sign';
   const requestNetwork = snapshot?.network ?? closedCapability?.network ?? null;
+  const deploymentNetwork = fixedClientStellarDeploymentNetwork();
   const privateReadyForRequest = Boolean(privateUnlocked && requestNetwork && walletNetwork === requestNetwork);
   const isDelegatedProposer = Boolean(snapshot?.proposerAddress && walletAddress === snapshot.proposerAddress
     && privateReadyForRequest && walletSigningState !== 'can_sign' && walletSigningState !== 'signed');
@@ -697,6 +700,7 @@ export default function RequestApp() {
         ...(acceptedEffectsDigest ? { body: JSON.stringify({ acceptedEffectsDigest }) } : {}),
       }));
       if (!await applySnapshot(body.request)) return;
+      if (body.request.status === 'submitted') setFocusSection('confirmation');
       if (
         body.request.status === 'submitted'
         && inspection?.operations.some((operation) => operation.type === 'setOptions' && operation.threshold === 'high')
@@ -916,11 +920,11 @@ export default function RequestApp() {
           {snapshot && inspection && (
             <div className="mst-proposal-workbench space-y-5">
               {returnTarget && (
-                <a href={returnTarget.href} className="inline-flex text-sm font-semibold text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white">← {returnTarget.label}</a>
+                <a href={returnTarget.href} className="inline-flex min-h-11 items-center text-sm font-semibold text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white">← {returnTarget.label}</a>
               )}
 
               <PageHeader
-                eyebrow={<div className="flex flex-wrap items-center gap-2"><span className="text-[var(--color-muted)]">Proposal</span><RequestStatusBadge status={snapshot.status} /><NetworkFact network={snapshot.network} /></div>}
+                eyebrow={<div className="flex flex-wrap items-center gap-2"><span className="text-[var(--color-muted)]">Proposal</span><RequestStatusBadge status={snapshot.status} />{(!deploymentNetwork || deploymentNetwork !== snapshot.network) && <NetworkFact network={snapshot.network} />}</div>}
                 title={proposalDescription?.title ?? 'Proposal'}
                 description={proposalDescription?.summary}
                 meta={<><span className="font-mono">ID {displayRequestId(snapshot.id)}</span>{!['submitted', 'expired', 'stale', 'blocked'].includes(snapshot.status) && <span>Signing closes <time dateTime={snapshot.expiresAt}>{new Date(snapshot.expiresAt).toLocaleString()}</time></span>}</>}
@@ -938,7 +942,32 @@ export default function RequestApp() {
                 }
               />
 
-              {nextStep && (
+              {snapshot.submission && (
+                <section id="proposal-confirmation" tabIndex={-1} aria-label="Transaction confirmed" className="scroll-mt-24 rounded-[var(--radius-panel)] border border-[var(--color-success)] bg-[var(--color-paper-2)] p-4 focus-visible:outline-2 focus-visible:outline-[var(--color-focus)] sm:p-6">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-[var(--color-success)]" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-[var(--color-success)]">Transaction confirmed</p>
+                      <h2 className="mt-1 text-xl font-bold text-[var(--color-ink)]">Confirmed on Stellar</h2>
+                      <p className="mt-2 text-sm text-[var(--color-ink-2)]">Ledger {snapshot.submission.ledger.toLocaleString()} · {new Date(snapshot.submission.submittedAt).toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <ActionButton onClick={() => void openTransactionReceipt()}>View receipt</ActionButton>
+                    {!returnTarget && <a href={stellarHref('/inbox')} className="inline-flex min-h-11 items-center text-sm font-semibold text-[var(--color-action)]">Back to Inbox</a>}
+                  </div>
+                  <details className="mt-4 border-t border-[var(--color-rule)] pt-3">
+                    <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-[var(--color-ink-2)]">Transaction ID and network records</summary>
+                    <p className="mt-2 break-all font-mono text-xs text-[var(--color-muted)]">{snapshot.submission.transactionHash}</p>
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm font-semibold">
+                      <a href={horizonTransactionUrl(snapshot.submission.transactionHash, snapshot.network)} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-[var(--color-action)]">View network record</a>
+                      <a href={stellarExpertTransactionUrl(snapshot.submission.transactionHash, snapshot.network)} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-[var(--color-action)]">View on StellarExpert</a>
+                    </div>
+                  </details>
+                </section>
+              )}
+
+              {nextStep && !(snapshot.status === 'submitted' && snapshot.submission) && (
                 <section aria-label="Current proposal step" className="mst-proposal-task">
                   <div className="mst-proposal-task__text">
                     <p className="mst-proposal-task__label">{nextStep.heading}</p>
@@ -946,8 +975,8 @@ export default function RequestApp() {
                     <p className="mst-proposal-task__detail">{nextStep.detail}</p>
                   </div>
                   <div className="mst-proposal-task__actions">
-                    <ActionButton variant={nextStep.heading === 'Next step' && nextStep.action.target !== 'signatures' ? 'primary' : 'secondary'} onClick={openCurrentStep}>{nextStep.action.target === 'signatures' && walletSigningState === 'can_sign' ? 'Go to signing' : nextStep.action.label}</ActionButton>
-                    {walletAlreadySigned && <a href={stellarHref('/inbox')} className="mst-proposal-task__back">Back to Inbox</a>}
+                    <ActionButton variant={nextStep.heading === 'Next step' && nextStep.action.target === 'review' ? 'primary' : 'secondary'} onClick={openCurrentStep}>{nextStep.action.target === 'signatures' && walletSigningState === 'can_sign' ? 'Go to signing' : nextStep.action.label}</ActionButton>
+                    {walletAlreadySigned && !returnTarget && <a href={stellarHref('/inbox')} className="mst-proposal-task__back">Back to Inbox</a>}
                   </div>
                 </section>
               )}
@@ -1121,20 +1150,6 @@ export default function RequestApp() {
                   {snapshot.status === 'waiting_preconditions' && (
                     <section id="proposal-issue" tabIndex={-1} className="scroll-mt-24 rounded-2xl border border-[var(--color-warning)] p-5 text-sm focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]">
                       <div className="flex gap-3"><CircleAlert className="h-5 w-5 shrink-0 text-amber-500" /><div><div className="font-semibold">Signatures are complete, but this transaction is still waiting.</div><div className="mt-1 opacity-65">{snapshot.statusDetail}</div></div></div>
-                    </section>
-                  )}
-
-                  {snapshot.submission && (
-                    <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.08] p-5">
-                      <div className="flex items-center gap-2 font-semibold text-emerald-800 dark:text-emerald-200"><CheckCircle2 className="h-5 w-5" />Transaction confirmed</div>
-                      <div className="mt-2 text-sm opacity-65">Confirmed in ledger {snapshot.submission.ledger} · {new Date(snapshot.submission.submittedAt).toLocaleString()}</div>
-                      <div className="mt-2 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{snapshot.submission.transactionHash}</div>
-                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm font-semibold">
-                        <button type="button" onClick={() => void openTransactionReceipt()} className="underline decoration-black/20 underline-offset-4 dark:decoration-white/20">Transaction receipt</button>
-                        <a href={horizonTransactionUrl(snapshot.submission.transactionHash, snapshot.network)} target="_blank" rel="noreferrer" className="underline decoration-black/20 underline-offset-4 dark:decoration-white/20">View network record</a>
-                        <a href={stellarExpertTransactionUrl(snapshot.submission.transactionHash, snapshot.network)} target="_blank" rel="noreferrer" className="underline decoration-black/20 underline-offset-4 dark:decoration-white/20">View on StellarExpert</a>
-                      </div>
-                      <a href={stellarHref('/inbox')} className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-[var(--color-action)]">Continue to Inbox</a>
                     </section>
                   )}
 

@@ -311,6 +311,23 @@ async function fixturePage(width, options = {}) {
       }
       assert.equal(request.headers()['x-multisig-request-id'], requestId);
       if (request.method() === 'GET') {
+        if (url.searchParams.get('view') === 'history') {
+          return json({
+            request: state.request,
+            context: {},
+            history: {
+              activity: {
+                requestId: state.request.id, network: state.request.network,
+                transactionHash: state.request.transactionHash, baseXdr: state.request.baseXdr,
+                createdAt: state.request.createdAt, expiresAt: state.request.expiresAt,
+                accountIds: [addresses.source],
+                events: [{ version: 1, eventId: 'qa-confirmed', requestId: state.request.id,
+                  type: 'transaction_confirmed', occurredAt: now, ledger: 123456 }],
+              },
+              sourceAnalyses: [],
+            },
+          });
+        }
         state.requestGetCount++;
         if (state.requestGetResponse) {
           const reply = state.requestGetResponse(request);
@@ -441,6 +458,8 @@ try {
         await page.goto(origin + '/');
         await visible(page, 'Overview', 'heading');
         await visible(page, 'Needs your attention');
+        assert.equal(await page.getByText('Testnet workspace', { exact: true }).count(), 0,
+          'Overview should not repeat the fixed Testnet badge in its title');
         await snapshot(page, 'overview', width);
         if (width === 375) {
           const more = page.getByRole('button', { name: 'More workspace tools' });
@@ -498,6 +517,27 @@ try {
     }
 
     if (width === 375 || width === 1280) {
+      await run('inbox-proposal-return-navigation', width, {
+        state: { request: { ...requestFixture('awaiting_signatures', ['alice']), creatorAddress: addresses.alice } },
+      }, async ({ page }) => {
+        await page.goto(origin + '/inbox');
+        await visible(page, 'Inbox', 'heading');
+        const row = page.locator('.mst-inbox-item').filter({ hasText: 'November supplier payment' }).first();
+        await row.waitFor({ state: 'visible' });
+        await row.click();
+        if (width === 1280) {
+          await page.getByRole('button', { name: 'Follow up with signers', exact: true }).click();
+        }
+        await visible(page, 'Your signature is recorded', 'heading');
+        assert.equal(await page.getByRole('link', { name: /Back to Inbox/ }).count(), 1,
+          'Inbox navigation must offer one contextual return action');
+        const backBounds = await page.getByRole('link', { name: /Back to Inbox/ }).boundingBox();
+        assert.ok(backBounds && backBounds.height >= 44, 'Proposal back link must be touch-friendly');
+        await page.getByRole('link', { name: /Back to Inbox/ }).click();
+        await visible(page, 'Inbox', 'heading');
+        assert.equal(new URL(page.url()).pathname, '/inbox');
+      });
+
       await run('treasury-proposal-shortcut', width, {}, async ({ page }) => {
         await page.goto(origin + '/treasury');
         await page.getByRole('button', { name: 'Add to Treasuries' }).waitFor({ state: 'visible' });
@@ -518,6 +558,10 @@ try {
         assert.equal(href.searchParams.get('account'), addresses.source);
         assert.equal(href.searchParams.get('network'), 'testnet');
         await snapshot(page, 'treasury-workbench', width);
+        await proposal.click();
+        await visible(page, 'New proposal', 'heading');
+        assert.equal(new URL(page.url()).searchParams.get('account'), addresses.source,
+          'Treasury to New must preserve source-account context');
       });
 
       if (width === 375) {
@@ -831,6 +875,8 @@ try {
     await run('inbox-progress', width, {}, async ({ page }) => {
       await page.goto(`${origin}/inbox`);
       await visible(page, 'November supplier payment');
+      assert.equal(await page.locator('.mst-inbox-page-header').getByText('Testnet', { exact: true }).count(), 0,
+        'Inbox should use the fixed network badge already shown in the site header');
       const card = page.locator('.mst-inbox-list .mst-inbox-item').first();
       await card.getByText('Signer follow-up', { exact: true }).waitFor({ state: 'visible' });
       await card.getByText('Awaiting signature').waitFor({ state: 'visible' });
@@ -999,6 +1045,10 @@ try {
       await page.getByRole('button', { name: 'Continue to signatures', exact: true }).click();
       await visible(page, 'Your signature is needed', 'heading');
       await visible(page, 'Go to signing', 'button');
+      await visible(page, 'Sign with your wallet', 'heading');
+      const taskSize = await page.locator('.mst-proposal-task h2').evaluate((node) => parseFloat(getComputedStyle(node).fontSize));
+      const pageTitleSize = await page.locator('.mst-page-title').evaluate((node) => parseFloat(getComputedStyle(node).fontSize));
+      assert.ok(taskSize < pageTitleSize, 'Current step is secondary to the proposal title');
       await visible(page, 'Approval power required');
       await visible(page, '2 / 3');
       await visible(page, 'Needs 1 more approval power');
@@ -1158,6 +1208,10 @@ try {
       await page.goto(`${origin}/s#${requestId}`);
       await visible(page, 'Submit transaction', 'button');
       await visible(page, 'Submit this transaction to Stellar Testnet?');
+      assert.ok((await page.getByRole('button', { name: 'View submission details' }).getAttribute('class') || '').includes('bg-[var(--color-paper)]'),
+        'Submission jump must be secondary to the actual Submit action');
+      assert.equal(await page.locator('.mst-page-header').getByText('Testnet', { exact: true }).count(), 0,
+        'Fixed deployment network should not appear twice in the Proposal header');
       assert.equal(await page.getByRole('heading', { name: 'All required signatures are present' }).count(), 0, 'Ready Proposal must not repeat the authorization heading');
       assert.equal(await page.getByText('Authorization complete', { exact: true }).count(), 1, 'Ready Proposal must show authorization status only once');
       await page.getByRole('button', { name: 'Review details', exact: true }).click();
@@ -1167,8 +1221,35 @@ try {
       await snapshot(page, 'proposal-ready', width);
       await page.getByRole('button', { name: 'Submit transaction', exact: true }).click();
       await visible(page, 'Confirmed on Stellar', 'heading');
+      await page.waitForFunction(() => document.activeElement?.id === 'proposal-confirmation');
+      const confirmationBounds = await page.locator('#proposal-confirmation').boundingBox();
+      assert.ok(confirmationBounds && confirmationBounds.y >= 0 && confirmationBounds.y < page.viewportSize().height,
+        'Submitting must bring the confirmed result into the viewport');
       assert.equal(state.submitCount, 1, 'Final Submit issues exactly one PUT');
+      assert.equal(await page.getByRole('heading', { name: 'Confirmed on Stellar' }).count(), 1,
+        'Confirmed status must have one heading');
+      assert.equal(await page.getByRole('region', { name: 'Current proposal step' }).count(), 0,
+        'Completed proposal must not show a duplicate next-step panel');
+      const confirmation = page.getByRole('region', { name: 'Transaction confirmed' });
+      assert.equal(await confirmation.count(), 1);
+      assert.equal(await confirmation.getByRole('button', { name: 'View receipt' }).count(), 1);
+      assert.equal(await confirmation.getByRole('link', { name: 'Back to Inbox' }).count(), 1);
+      const networkRecords = confirmation.getByText('Transaction ID and network records');
+      await networkRecords.waitFor({ state: 'visible' });
       await snapshot(page, 'proposal-confirmed', width);
+      await confirmation.getByRole('button', { name: 'View receipt' }).click();
+      await visible(page, 'Transaction receipt', 'heading');
+      await visible(page, 'Confirmed on Stellar');
+      const printButton = page.getByRole('button', { name: 'Print or save PDF' });
+      await printButton.waitFor({ state: 'visible' });
+      const printBounds = await printButton.boundingBox();
+      assert.ok(printBounds && printBounds.height >= 44, 'Receipt print/PDF action must be touch-friendly');
+      const receiptBackBounds = await page.getByRole('link', { name: 'Back to transaction' }).boundingBox();
+      assert.ok(receiptBackBounds && receiptBackBounds.height >= 44, 'Receipt return link must be touch-friendly');
+      await snapshot(page, 'proposal-receipt', width);
+      await page.getByRole('link', { name: 'Back to transaction' }).click();
+      await visible(page, 'Confirmed on Stellar', 'heading');
+      assert.equal(new URL(page.url()).pathname, '/s', 'Receipt back link returns to the original proposal');
     });
   }
 

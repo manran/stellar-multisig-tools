@@ -21,6 +21,7 @@ import { intentAuthorizationWindowLabel, intentViewerActionNeedsAction, intentVi
 import type { InboxSorobanIntentSnapshot } from '../../../packages/stellar-core/src/sorobanIntentApiTypes';
 import type { InboxRequestDescription } from './stellar/inboxRequestPresentation';
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
+import { fixedClientStellarDeploymentNetwork } from '../../../packages/stellar-core/src/deploymentNetwork';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
 import { isWalletUserRejected } from './stellar/walletKit';
 
@@ -323,6 +324,7 @@ export default function InboxApp() {
 
   const selectedRequest = visibleRequests.find((request) => request.id === selectedId) ?? null;
   const selectedDescription = selectedRequest ? descriptions.get(selectedRequest.id) ?? null : null;
+  const fixedDeploymentNetwork = fixedClientStellarDeploymentNetwork();
   const signerLabel = (address: string) => labelFor(address, 'signer') || shortAddress(address);
   return (
     <StellarWorkspaceShell active={view === 'needs' ? 'inbox' : view}>
@@ -342,7 +344,7 @@ export default function InboxApp() {
             <PageHeader
               title="Inbox"
               description="Act on what needs you. Follow the rest without opening each proposal."
-              meta={data ? <><NetworkBadge network={unlockedNetwork} /><span>{data.pending_count} open {data.pending_count === 1 ? 'work item' : 'work items'}</span></> : <NetworkBadge network={unlockedNetwork} />}
+              meta={data ? <>{!fixedDeploymentNetwork && <NetworkBadge network={unlockedNetwork} />}<span>{data.pending_count} open {data.pending_count === 1 ? 'work item' : 'work items'}</span></> : !fixedDeploymentNetwork ? <NetworkBadge network={unlockedNetwork} /> : undefined}
               actions={<ActionButton variant="secondary" disabled={loading || authBusy || walletBusy} onClick={() => void loadInbox()} aria-label="Refresh inbox" aria-busy={loading}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">{loading ? 'Refreshing…' : 'Refresh'}</span></ActionButton>}
             />
             </div>
@@ -393,7 +395,7 @@ export default function InboxApp() {
                       <button key={intent.id} type="button" onClick={() => openIntentDetails(intent)} className="mst-inbox-item group px-1 sm:px-2">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <StatusBadge tone={action.tone}>{action.label}</StatusBadge>
-                          <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400"><NetworkBadge network={intent.network} /><span>{intentAuthorizationWindowLabel(intent)}</span></div>
+                          <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">{(!fixedDeploymentNetwork || fixedDeploymentNetwork !== intent.network) && <NetworkBadge network={intent.network} />}<span>{intentAuthorizationWindowLabel(intent)}</span></div>
                         </div>
                         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                           <div className="min-w-0"><h2 className="text-lg font-bold">Soroban Intent</h2><p className="mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{action.detail}</p><div className="mt-2 font-mono text-xs text-neutral-400">Created by {intent.creatorAddress ? shortAddress(intent.creatorAddress) : (intent.creatorActor?.label ?? intent.creatorActor?.id ?? 'external service')}</div></div>
