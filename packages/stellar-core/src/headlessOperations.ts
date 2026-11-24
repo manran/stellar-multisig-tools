@@ -31,6 +31,22 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'public', effect: 'none', summary: 'Read the deployment-owned Stellar network policy.',
   },
   {
+    id: 'agent.grant.inspect', version: 1, method: 'GET', path: '/agent-grants',
+    access: 'public', effect: 'none', summary: 'Inspect a short-lived Testnet Agent pairing request; wallet consent challenge requires a Human session.',
+  },
+  {
+    id: 'agent.grant.request', version: 1, method: 'POST', path: '/agent-grants',
+    access: 'public', effect: 'private-state', summary: 'Start a short-lived Agent pairing and receive a one-time device secret.',
+  },
+  {
+    id: 'agent.grant.poll', version: 1, method: 'POST', path: '/agent-grants',
+    access: 'public', effect: 'private-state', summary: 'Exchange the approved one-time device secret for the signer Agent credential exactly once.',
+  },
+  {
+    id: 'agent.grant.approve', version: 1, method: 'POST', path: '/agent-grants',
+    access: 'human', effect: 'private-state', summary: 'Human signer approves or denies a request with a distinct wallet consent signature.',
+  },
+  {
     id: 'integration.testnet.create', version: 1, method: 'POST', path: '/integration-testnet',
     access: 'public', effect: 'private-state', summary: 'Create an immediately active Testnet-only Integration Profile and receive its msi credential once.',
   },

@@ -40,6 +40,7 @@ interface StellarWalletContextValue {
   alignNetworkContext: (network: StellarNetwork) => Promise<void>;
   selectNetworkContext: (network: StellarNetwork) => Promise<void>;
   sign: (xdr: string, network: StellarNetwork) => Promise<string>;
+  approveAgentGrant: (message: string, challengeXdr: string, network: StellarNetwork) => Promise<{ mode: 'sep53'; signature: string } | { mode: 'transaction'; transaction: string }>;
   signAuthEntry: (preimageXdr: string, network: StellarNetwork) => Promise<{ signatureBase64: string; signerAddress: string }>;
   accountMenuOpen: boolean;
   setAccountMenuOpen: (open: boolean) => void;
@@ -395,6 +396,25 @@ export function StellarWalletProvider({ children }: { children: ReactNode }) {
     }
   }, [resolveWalletIdentity]);
 
+  const approveAgentGrant = useCallback(async (message: string, challengeXdr: string, grantNetwork: StellarNetwork) => {
+    setBusy(true);
+    setError('');
+    try {
+      const identity = await resolveWalletIdentity(grantNetwork);
+      if (identity.network !== grantNetwork) throw new Error('Select a wallet on the pairing request network.');
+      try {
+        const signature = await signMessageWithWallet(message, grantNetwork, identity.address);
+        return { mode: 'sep53' as const, signature };
+      } catch (cause) {
+        if (!isWalletMessageSigningUnsupported(cause)) throw cause;
+        const transaction = await signTransactionWithWallet(challengeXdr, grantNetwork, identity.address);
+        return { mode: 'transaction' as const, transaction };
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [resolveWalletIdentity]);
+
   const signAuthEntry = useCallback(async (preimageXdr: string, authorizationNetwork: StellarNetwork) => {
     setBusy(true);
     setError('');
@@ -546,6 +566,7 @@ export function StellarWalletProvider({ children }: { children: ReactNode }) {
       alignNetworkContext,
       selectNetworkContext,
       sign,
+      approveAgentGrant,
       signAuthEntry,
       accountMenuOpen,
       setAccountMenuOpen,

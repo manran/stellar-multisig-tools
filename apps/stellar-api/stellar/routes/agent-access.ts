@@ -6,10 +6,9 @@ import { AuthServiceError, requirePrivateWorkspaceSession } from '../server/auth
 import {
   AgentCredentialServiceError,
   agentCredentialSummary,
-  createSignerAgentCredential,
   revokeSignerAgentCredential,
 } from '../server/agentCredentialService.js';
-import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
+import { RequestBodyError, readJsonObjectBody } from '../server/requestBody.js';
 import { noStoreJson } from '../server/httpResponse.js';
 import {
   beforeFirstDurableWrite,
@@ -80,23 +79,13 @@ export async function GET(request: Request): Promise<Response> {
   }
 }
 
-export async function POST(request: Request): Promise<Response> {
-  try {
-    const [{ session, principal }, body] = await Promise.all([
-      authorizedPrincipal(request),
-      readJsonObjectBody(request, MAX_BODY_BYTES),
-    ]);
-    const created = await createSignerAgentCredential(
-      agentStoreWithAdminQuota(request, principal),
-      principal,
-      body.label,
-      body.access,
-      session.address,
-    );
-    return noStoreJson({ principal, ...created }, 201);
-  } catch (cause) {
-    return errorResponse(cause);
-  }
+export async function POST(): Promise<Response> {
+  // A private workspace session is not consent for a reusable Agent credential.
+  // Use /agent-grants and a new wallet signature bound to the exact grant.
+  return noStoreJson({
+    error: 'Approve a new Agent pairing with your wallet before issuing credentials.',
+    code: 'agent_approval_required',
+  }, 403);
 }
 
 export async function DELETE(request: Request): Promise<Response> {

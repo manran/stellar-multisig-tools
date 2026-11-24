@@ -118,6 +118,11 @@ export function StellarWalletProvider({ children }) {
     lock: async () => apply({ privateUnlocked: false, unlockedAddress: '', unlockedNetwork: null }),
     clear: () => apply({ address: '', sessionAddress: '', privateUnlocked: false, unlockedAddress: '', unlockedNetwork: null }),
     sign: async (xdr, network) => { calls.push('sign'); return window.__MST_QA_SIGN__({ xdr, network, address: identity.address }); },
+    approveAgentGrant: async (message, transaction, network) => {
+      calls.push('approveAgentGrant');
+      if (network !== 'testnet' || !message.includes('Agent')) throw new Error('Agent approval challenge mismatch.');
+      return { mode: 'sep53', signature: 'qa_wallet_signed' };
+    },
     signAuthEntry: async () => { throw new Error('Soroban wallet signing is not part of this fixture.'); },
     refreshSession: async () => {}, alignNetworkContext: async () => {}, selectNetworkContext: async () => {},
   };
@@ -181,6 +186,7 @@ async function fixturePage(width, options = {}) {
     requestAccess: { shareable: false, activityBound: true }, requestGetResponse: null, horizonAccount: null,
     inviteContacts: false, assignments: [], notifications: [],
     agentCredentials: [agentFixture()], agentRevokeCount: 0, agentCreates: [],
+    agentPending: null, agentGrantApprovals: 0, agentGrantPolls: 0,
     contactSaveCount: 0, contactSaveStatus: 200, addressEntries: null,
     ...options.state,
   };
@@ -248,20 +254,62 @@ async function fixturePage(width, options = {}) {
         ...(state.inviteContacts && name !== 'alice' ? { notificationEmail: name + '@example.org' } : {}),
       })) });
     }
+    if (url.pathname === '/api/agent-grants') {
+      if (request.method() === 'GET') {
+        assert.ok(state.agentPending, 'Missing Agent pairing fixture.');
+        if (url.searchParams.get('challenge') === '1') {
+          assert.equal(request.headers()['x-multisig-session-address'], addresses.alice);
+          return json({ ...state.agentPending,
+            message: 'MultiSig Tools: Approve Agent ' + state.agentPending.label,
+            transaction: 'qa-non-submittable-agent-approval',
+            signer: addresses.alice });
+        }
+        return json(state.agentPending);
+      }
+      const body = request.postDataJSON();
+      if (body.action === 'request') {
+        assert.equal(body.network, 'testnet');
+        assert.ok(['read', 'write', 'sign'].includes(body.access));
+        state.agentCreates.push({ label: body.label, access: body.access });
+        state.agentPending = {
+          requestId: '1234567890abcdef1234567890abcdef',
+          userCode: 'ABCD-2345',
+          label: body.label, access: body.access, network: 'testnet',
+          status: 'pending', expiresAt: expiry,
+          deviceCode: 'mgd_fixture_secret',
+          verificationUri: 'https://stellar-testnet.multisig.tools/agent-access?grant=1234567890abcdef1234567890abcdef',
+        };
+        return json(state.agentPending, 201);
+      }
+      if (body.action === 'approve') {
+        assert.equal(body.mode, 'sep53');
+        assert.equal(body.signature, 'qa_wallet_signed');
+        assert.equal(body.requestId, state.agentPending.requestId);
+        assert.equal(request.headers()['x-multisig-session-address'], addresses.alice);
+        state.agentGrantApprovals++;
+        state.agentPending = { ...state.agentPending, status: 'approved' };
+        return json({ status: 'approved' });
+      }
+      if (body.action === 'deny') {
+        state.agentPending = { ...state.agentPending, status: 'denied' };
+        return json({ status: 'denied' });
+      }
+      if (body.action === 'poll') {
+        assert.equal(body.deviceCode, state.agentPending.deviceCode);
+        state.agentGrantPolls++;
+        assert.equal(state.agentPending.status, 'approved', 'A credential is never returned before approval.');
+        const credential = { ...agentFixture(),
+          credentialId: 'qa-agent-' + (state.agentCreates.length + 1),
+          label: state.agentPending.label, access: state.agentPending.access, prefix: 'msa_qa_new_01' };
+        state.agentCredentials = [...state.agentCredentials, credential];
+        return json({ status: 'approved', credential, apiKey: 'msa_qa_one_time_credential_secret' });
+      }
+      throw new Error('Unexpected Agent grant action: ' + body.action);
+    }
     if (url.pathname === '/api/agent-access') {
       assert.equal(request.headers()['x-multisig-session-address'], addresses.alice);
       if (request.method() === 'GET') return json({ credentials: state.agentCredentials });
-      if (request.method() === 'POST') {
-        const body = request.postDataJSON();
-        assert.ok(['read', 'write', 'sign'].includes(body.access));
-        state.agentCreates.push(body);
-        const credential = {
-          ...agentFixture(), credentialId: 'qa-agent-' + (state.agentCreates.length + 1),
-          label: body.label, access: body.access, prefix: 'mstqa_new_01',
-        };
-        state.agentCredentials = [...state.agentCredentials, credential];
-        return json({ credential, apiKey: 'qa_one_time_credential_secret' });
-      }
+      if (request.method() === 'POST') return json({ code: 'agent_approval_required' }, 403);
       if (request.method() === 'DELETE') {
         const { credentialId } = request.postDataJSON();
         state.agentRevokeCount++;
@@ -670,6 +718,28 @@ try {
         });
       }
 
+      await run('agent-pairing-explicit-wallet-approval', width, {
+        state: { agentPending: {
+          requestId: '1234567890abcdef1234567890abcdef',
+          userCode: 'ABCD-2345',
+          label: 'Research agent', access: 'read', network: 'testnet',
+          status: 'pending', expiresAt: expiry, deviceCode: 'mgd_fixture_secret',
+        } },
+      }, async ({ page, state }) => {
+        await page.goto(origin + '/agent-access?grant=1234567890abcdef1234567890abcdef');
+        await visible(page, 'An agent is requesting access', 'heading');
+        await visible(page, 'Research agent');
+        await visible(page, 'ABCD-2345');
+        assert.equal(state.agentGrantApprovals, 0);
+        await snapshot(page, 'agent-pairing-pending', width);
+        await page.getByRole('button', { name: 'Approve in wallet' }).click();
+        await visible(page, 'Approved. The agent may now complete pairing.');
+        assert.equal(state.agentGrantApprovals, 1);
+        assert.equal(state.agentGrantPolls, 0, 'Human browser never fetches a remote Agent device credential');
+        assert.equal(await page.getByText('Copy this credential now').count(), 0);
+        await snapshot(page, 'agent-pairing-approved', width);
+      });
+
       await run('agent-access-confirmed-revoke', width, {}, async ({ page, state }) => {
         await page.goto(origin + '/agent-access');
         await page.getByRole('heading', { name: /Current agents/ }).waitFor({ state: 'visible' });
@@ -687,12 +757,14 @@ try {
         await snapshot(page, 'agents-workbench', width);
         await page.getByRole('button', { name: /^Write\b/ }).click();
         await page.getByRole('textbox', { name: 'Agent name' }).fill('Operations bot');
-        await page.getByRole('button', { name: 'Create credential' }).click();
+        await page.getByRole('button', { name: 'Approve and create' }).click();
         await visible(page, 'Copy this credential now');
-        await visible(page, 'qa_one_time_credential_secret');
+        await visible(page, 'msa_qa_one_time_credential_secret');
         assert.deepEqual(state.agentCreates, [{ label: 'Operations bot', access: 'write' }]);
+        assert.equal(state.agentGrantApprovals, 1, 'Issuing msa requires a separate wallet grant');
+        assert.equal(state.agentGrantPolls, 1, 'Device secret is redeemed exactly once');
         await page.getByRole('button', { name: 'Done', exact: true }).click();
-        assert.equal(await page.getByText('qa_one_time_credential_secret').count(), 0);
+        assert.equal(await page.getByText('msa_qa_one_time_credential_secret').count(), 0);
       });
     }
 

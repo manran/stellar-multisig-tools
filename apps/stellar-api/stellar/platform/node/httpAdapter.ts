@@ -5,6 +5,7 @@ import * as accountCreatePrepare from '../../routes/account-create-prepare.js';
 import * as activity from '../../routes/activity.js';
 import * as addressBook from '../../routes/address-book.js';
 import * as agentAccess from '../../routes/agent-access.js';
+import * as agentGrants from '../../routes/agent-grants.js';
 import * as auth from '../../routes/auth.js';
 import * as contractCall from '../../routes/contract-call.js';
 import * as contractInterface from '../../routes/contract-interface.js';
@@ -37,6 +38,7 @@ const routes: Record<string, RouteModule> = {
   activity,
   'address-book': addressBook,
   'agent-access': agentAccess,
+  'agent-grants': agentGrants,
   auth,
   'contract-call': contractCall,
   'contract-interface': contractInterface,

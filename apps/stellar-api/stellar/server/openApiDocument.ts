@@ -31,6 +31,12 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
   if (path === '/integration-execution') {
     values.push(parameter('network', 'query', true, schema('StellarNetwork'), 'Must match both this deployment and the Integration credential scope.'));
   }
+  if (path === '/agent-grants' && method === 'get') {
+    values.push(
+      parameter('id', 'query', true, { type: 'string', pattern: '^[a-f0-9]{32}$' }, 'Pairing request ID, not the secret device code.'),
+      parameter('challenge', 'query', false, { type: 'string', const: '1' }, 'Wallet approval challenge; requires a matching Human session.'),
+    );
+  }
   if (path === '/contract-interface') {
     values.push(
       parameter('network', 'query', true, schema('StellarNetwork'), 'Must match this deployment.'),
@@ -65,6 +71,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
 }
 
 function requestBody(path: string, method: string): OpenApiObject | undefined {
+  if (path === '/agent-grants' && method === 'post') return body(schema('AgentGrantActionInput'));
   if (path === '/integration-testnet' && method === 'post') return body(schema('TestnetIntegrationCreateInput'));
   if (path === '/intent' && method === 'post') return body(schema('ContractIntentCreateInput'));
   if (path === '/intent' && method === 'patch') return body(schema('ContractIntentContributionInput'));
@@ -81,6 +88,7 @@ function requestBody(path: string, method: string): OpenApiObject | undefined {
 
 function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/runtime-config') return schema('RuntimeConfigResult');
+  if (path === '/agent-grants') return schema('AgentGrantResult');
   if (path === '/integration-testnet') return schema('TestnetIntegrationCreateResult');
   if (path === '/integration-execution') return schema('IntegrationExecutionInspectResult');
   if (path === '/contract-interface') return schema('ContractInterfaceResult');
@@ -100,6 +108,7 @@ function successSchema(path: string, method: string): OpenApiObject {
 }
 
 function security(path: string, method: string, access: HeadlessOperationAccess): OpenApiObject[] {
+  if (path === '/agent-grants') return []; // action=approve/deny and GET challenge separately enforce Human session and fresh wallet proof.
   if (access === 'public') return [];
   if (path === '/intent') {
     if (method === 'patch') return [{ agentBearer: [] }, { humanSession: [] }, { intentCapability: [] }];
@@ -199,6 +208,32 @@ const components: OpenApiObject = {
         details: { type: 'object', additionalProperties: true },
       },
       additionalProperties: false,
+    },
+    AgentGrantActionInput: {
+      description: 'Device pairing: request returns a one-time deviceCode; poll exchanges it after human approval. Approve requires a matching Human wallet session AND a fresh wallet signature bound to the exact grant.',
+      oneOf: [
+        { type: 'object', required: ['action', 'label', 'access', 'network'],
+          properties: { action: { const: 'request' }, label: { type: 'string', minLength: 1, maxLength: 80 }, access: { type: 'string', enum: ['read', 'write', 'sign'] }, network: { const: 'testnet' } }, additionalProperties: false },
+        { type: 'object', required: ['action', 'deviceCode'],
+          properties: { action: { const: 'poll' }, deviceCode: { type: 'string', pattern: '^mgd_' } }, additionalProperties: false },
+        { type: 'object', required: ['action', 'requestId', 'mode'],
+          properties: { action: { const: 'approve' }, requestId: { type: 'string', pattern: '^[a-f0-9]{32}$' },
+            mode: { type: 'string', enum: ['sep53', 'transaction'] }, signature: { type: 'string' }, transaction: xdr }, additionalProperties: false },
+        { type: 'object', required: ['action', 'requestId'],
+          properties: { action: { const: 'deny' }, requestId: { type: 'string', pattern: '^[a-f0-9]{32}$' } }, additionalProperties: false },
+      ],
+    },
+    AgentGrantResult: {
+      type: 'object',
+      description: 'A pairing preview, pending/denied status, one-time device code, or once-only msa credential. Never forward deviceCode or apiKey to a browser approval URL.',
+      properties: {
+        status: { type: 'string', enum: ['pending', 'approved', 'denied', 'authorization_pending', 'access_denied'] },
+        requestId: { type: 'string' }, userCode: { type: 'string' }, label: { type: 'string' },
+        access: { type: 'string', enum: ['read', 'write', 'sign'] }, network: { const: 'testnet' },
+        deviceCode: { type: 'string' }, verificationUri: { type: 'string', format: 'uri' },
+        expiresAt: timestamp, intervalSeconds: { type: 'integer' }, apiKey: { type: 'string', description: 'Only once on successful poll after human wallet approval.' },
+      },
+      additionalProperties: true,
     },
     TestnetIntegrationCreateInput: {
       type: 'object',

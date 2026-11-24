@@ -28,7 +28,29 @@ Check `fixedNetwork` is `testnet`. **Stop if the network differs from the user's
 
 ## 3. Choose who the Agent represents
 
-**Signer Agent (`msa_*`):** A human Stellar signer opens [Testnet Agent access](https://stellar-testnet.multisig.tools/agent-access), selects **Connect wallet**, confirms wallet control, and creates a named credential with the minimum required **Read**, **Write**, or **Sign** permission. The credential is shown once, can be revoked independently, and represents that signer Principal. It is not the wallet's private key. Sign scope still requires valid, independently verified Stellar signature evidence.
+**Signer Agent (`msa_*`):** A human signer explicitly authorizes the Agent. A valid login session alone cannot mint a credential; each grant needs a fresh wallet signature bound to that Agent's name, scope, Testnet network and request ID. The Agent receives a one-time token when the user approves. The credential can be revoked independently and never contains a signing key.
+
+### Pair an Agent with a Testnet signer
+
+The Agent calls the public pairing endpoint without prior credentials:
+
+```bash
+curl -fsS https://api-testnet.multisig.tools/stellar/agent-grants \
+  -H 'Content-Type: application/json' \
+  -d '{"action":"request","label":"My Agent","access":"read","network":"testnet"}'
+```
+
+The response contains `verificationUri`, `userCode`, `deviceCode` and `intervalSeconds`. **Store `deviceCode` privately**: it is the secret needed to claim the credential. Send only the verification URL and display code to the human. Never add the device code to a URL, prompt log, or browser page.
+
+1. The human opens `verificationUri` at [Testnet Agent access](https://stellar-testnet.multisig.tools/agent-access).
+2. The human checks the **Agent**, **Permission**, **Testnet** and **Verification code** against the Agent's request.
+3. They connect and confirm their wallet, then select **Approve in wallet**. A fresh SEP-53 message or a non-submittable Stellar approval XDR explicitly binds the scope to this request. **Deny** ends the request without granting a credential.
+4. The Agent polls the endpoint with `{"action":"poll","deviceCode":"<private-device-code>"}` at the advised interval. `authorization_pending` means wait; `access_denied` means stop.
+5. When approved, one poll returns an `msa_*` credential **once**. Store it in the Agent's secret manager and use it as `Authorization: Bearer msa_...` for authorized operations.
+
+The request expires after **10 minutes**, and the device code is single-use. Each renewal or different scope requires another approval. The human can revoke access on [Agent access](https://stellar-testnet.multisig.tools/agent-access).
+
+**Manual alternative:** A signer can create a named credential directly in the Agent access UI. This uses the same wallet-confirmed grant and shows the secret once for copying into a secure store.
 
 **Service Integration (`msi_*`):** An application or automation service creates a Testnet-only Integration Profile using [the guided setup](https://stellar-testnet.multisig.tools/developers/integrations/new) or the [Testnet API quickstart](/stellar/developers/testnet-quickstart). The service owns business orchestration; the Treasury's authorized signers retain signer authority. An `msi_*` key does **not** act as a signer.
 

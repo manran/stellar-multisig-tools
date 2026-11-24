@@ -87,13 +87,23 @@ async function walkFiles(directory: string, relative = ''): Promise<string[]> {
 async function filesystemPut(
   pathname: string,
   body: string | Uint8Array | ArrayBuffer | Blob,
+  options?: Parameters<typeof vercelPut>[2],
 ): Promise<{ pathname: string; url: string; downloadUrl: string }> {
   const target = filePath(pathname);
   const directory = path.dirname(target);
   await fs.mkdir(directory, { recursive: true });
   const temporary = path.join(directory, `.${path.basename(target)}.${randomUUID()}.tmp`);
   await fs.writeFile(temporary, await bodyBytes(body), { mode: 0o600 });
-  await fs.rename(temporary, target);
+  if (options?.allowOverwrite === false) {
+    // Atomic create-only: rename would silently overwrite a previously consumed grant.
+    try {
+      await fs.link(temporary, target);
+    } finally {
+      await fs.rm(temporary, { force: true });
+    }
+  } else {
+    await fs.rename(temporary, target);
+  }
   return { pathname, url: `file://${target}`, downloadUrl: `file://${target}` };
 }
 
@@ -140,7 +150,7 @@ export async function put(
   body: string | Uint8Array | ArrayBuffer | Blob,
   options?: Parameters<typeof vercelPut>[2],
 ) {
-  if (storageMode() === 'filesystem') return filesystemPut(pathname, body);
+  if (storageMode() === 'filesystem') return filesystemPut(pathname, body, options);
   return vercelPut(pathname, body, options);
 }
 
