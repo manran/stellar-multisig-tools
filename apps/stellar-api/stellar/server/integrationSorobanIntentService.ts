@@ -136,15 +136,18 @@ function assertReplayMatches(
   credential: ConfiguredIntegrationCredential,
   input: { network: StellarNetwork; intentDigest: string; externalReference?: string; requestedExecutor?: string },
 ): void {
-  const storedRequestedExecutor = stored.executionPolicy?.executor?.source === 'intent'
-    ? stored.executionPolicy.executor.address
-    : undefined;
+  const binding = stored.executionPolicy?.executor;
+  const storedRequestedExecutor = binding?.source === 'intent' ? binding.address : undefined;
+  // A matching explicitly supplied contract-policy executor is equivalent to
+  // letting that immutable policy choose it. Late binding must not alter replay identity.
+  const requestedExecutor = binding?.source === 'contract_policy' && input.requestedExecutor === binding.address
+    ? undefined : input.requestedExecutor;
   if (
     stored.network !== input.network
     || stored.intent.intentDigest !== input.intentDigest
     || stored.integration?.serviceId !== credential.serviceId
     || stored.integration.correlationId !== input.externalReference
-    || storedRequestedExecutor !== input.requestedExecutor
+    || storedRequestedExecutor !== requestedExecutor
   ) {
     throw new BoxServiceError(
       'Idempotency key is already bound to a different Integration Intent.',
@@ -192,6 +195,9 @@ export async function resolveAndBindIntegrationSorobanExecutor(
     executionPolicy = { mode: 'external', executor };
   } else {
     if (!managedExecutor || !isValidStellarAccountId(managedExecutor)) {
+      if (stored.executionPolicy?.mode !== 'multisigtools' && credential.sorobanExecutionAccounts.length > 0) {
+        throw new BoxServiceError('Choose an allowed executor and provide it in the prepare_execution request.', 400, 'executor_required');
+      }
       throw new BoxServiceError(
         'No Service executor is bound and MultiSigTools managed execution is not configured for this network.',
         409,

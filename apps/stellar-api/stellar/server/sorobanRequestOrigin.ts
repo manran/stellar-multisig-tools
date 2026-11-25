@@ -1,7 +1,7 @@
 import type { SorobanRequestOrigin } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { isValidSigningRequestId } from './requestLocator.js';
-import type { SorobanIntentStore } from './sorobanIntentStore.js';
+import { successfulSorobanExecution, type SorobanIntentStore } from './sorobanIntentStore.js';
 
 export class SorobanRequestOriginError extends Error {
   constructor(message: string, readonly status: number, readonly code: string) {
@@ -21,6 +21,12 @@ export async function verifySorobanRequestOrigin(
   const intent = await store.getIntent(intentId);
   if (!intent || intent.network !== input.network) {
     throw new SorobanRequestOriginError('No matching Soroban Intent exists on this network.', 409, 'soroban_intent_origin_mismatch');
+  }
+  if (intent.cancellation) {
+    throw new SorobanRequestOriginError('This Soroban Intent is cancelled.', 409, 'intent_cancelled');
+  }
+  if (successfulSorobanExecution(await (store.listExecutionObservations?.(intentId) ?? Promise.resolve([])))) {
+    throw new SorobanRequestOriginError('This Soroban Intent has already executed successfully.', 409, 'intent_already_executed');
   }
   if (intent.executionPolicy?.mode === 'external') {
     throw new SorobanRequestOriginError('This Soroban Intent is reserved for external execution and cannot enter a MultiSigTools Proposal.', 409, 'external_executor_required');

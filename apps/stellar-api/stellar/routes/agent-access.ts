@@ -9,6 +9,7 @@ import {
   revokeSignerAgentCredential,
 } from '../server/agentCredentialService.js';
 import { RequestBodyError, readJsonObjectBody } from '../server/requestBody.js';
+import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import { noStoreJson } from '../server/httpResponse.js';
 import {
   beforeFirstDurableWrite,
@@ -23,7 +24,7 @@ const MAX_BODY_BYTES = 16 * 1024;
 
 function errorResponse(cause: unknown): Response {
   if (cause instanceof RequestBodyError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
-  if (cause instanceof AuthServiceError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
+  if (cause instanceof AuthServiceError || cause instanceof DeploymentNetworkPolicyError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
   if (cause instanceof AgentCredentialServiceError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
   if (cause instanceof SemanticRateLimitError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
   if (cause instanceof RequestStorageUnavailableError) return noStoreJson({ error: cause.message, code: 'storage_not_configured' }, 503);
@@ -38,6 +39,7 @@ async function authorizedPrincipal(request: Request) {
     authConfigForRequest(request),
     'Unlock this wallet to manage Agent access.',
   );
+  assertDeploymentNetwork(session.network);
   const selectedAddress = privateSessionAddressFromRequest(request);
   if (!selectedAddress || selectedAddress !== session.address) {
     throw new AgentCredentialServiceError('Agent access session does not match the selected wallet.', 401, 'session_identity_mismatch');

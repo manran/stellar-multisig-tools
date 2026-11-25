@@ -303,7 +303,20 @@ test('Intent creation rejects unavailable managed or missing executor before AUT
   const store = new MemoryIntentStore();
   const created = await createIntegrationSorobanIntent(store, f.credential, f.input, { ...f.options, managedExecutor: null });
   await assert.rejects(() => resolveAndBindIntegrationSorobanExecutor(store, created.intent, f.credential, undefined, null),
-    (cause: unknown) => cause instanceof Error && 'status' in cause && cause.status === 409 && 'code' in cause && cause.code === 'managed_executor_not_configured');
+    (cause: unknown) => cause instanceof Error && 'status' in cause && cause.status === 400 && 'code' in cause && cause.code === 'executor_required');
+});
+
+test('explicit contract-policy executor is replayable and a different executor still conflicts', async () => {
+  const f = await fixture();
+  const store = new MemoryIntentStore();
+  const executor = f.executor.publicKey();
+  const credential = { ...f.credential, sorobanContracts: [{ contractId: CONTRACT_ID, methods: ['transfer'], execution: { mode: 'external' as const, executor } }] };
+  const input = { ...f.input, executor };
+  const first = await createIntegrationSorobanIntent(store, credential, input, f.options);
+  const replay = await createIntegrationSorobanIntent(store, credential, input, f.options);
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.intent.id, first.intent.id);
+  await assert.rejects(() => createIntegrationSorobanIntent(store, credential, { ...input, executor: f.from.publicKey() }, f.options), { code: 'idempotency_conflict' });
 });
 
 test('contract can require MultiSigTools-managed execution and cannot be rebound to a Service executor', async () => {

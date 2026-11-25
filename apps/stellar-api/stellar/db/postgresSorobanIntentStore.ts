@@ -184,6 +184,15 @@ async function cancelled(client: PoolClient, id: string): Promise<boolean> {
   return result.rowCount === 1;
 }
 
+/** Called only while holding the Intent parent row lock, shared with receipt writes. */
+async function assertNotExecuted(client: PoolClient, id: string): Promise<void> {
+  const result = await client.query(
+    'SELECT 1 FROM mst_stellar.soroban_execution_observations WHERE intent_id = $1 AND successful = true LIMIT 1',
+    [id],
+  );
+  if (result.rowCount) throw new SorobanIntentStoreConflictError('intent_already_executed');
+}
+
 async function syncSigners(
   client: PoolClient,
   value: Pick<StoredSorobanIntent, 'id' | 'network' | 'discoverySignerKeys'>,
@@ -204,6 +213,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
     private readonly pool: Pool = coordinationPool(),
     private readonly privateStore: SorobanIntentPrivateDataStore = blobSorobanIntentPrivateDataStore,
     private readonly emitOutbox = true,
+    private readonly historicalImport = false,
   ) {}
 
   async createIntent(value: StoredSorobanIntent): Promise<void> {
@@ -270,6 +280,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
       if (!row) return;
       if (await cancelled(client, value.id)) return;
 
+      await assertNotExecuted(client, value.id);
       const nextRevision = currentRevision(value);
       if (nextRevision > row.authorization_plan_revision) {
         const previous = value.authorizationPlanHistory
@@ -282,7 +293,8 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
         ) {
           throw new SorobanIntentStoreConflictError('authorization_plan_changed');
         }
-      } else if (nextRevision < row.authorization_plan_revision) {
+      } else if (nextRevision < row.authorization_plan_revision
+        || value.authorizationPlan.authorizationPlanDigest !== row.authorization_plan.authorizationPlanDigest) {
         throw new SorobanIntentStoreConflictError('authorization_plan_changed');
       }
 
@@ -365,16 +377,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
         };
       }
 
-      const successful = await client.query(
-        `SELECT 1
-           FROM mst_stellar.soroban_execution_observations
-          WHERE intent_id = $1 AND successful = true
-          LIMIT 1`,
-        [id],
-      );
-      if (successful.rowCount) {
-        throw new SorobanIntentStoreConflictError('intent_already_executed');
-      }
+      await assertNotExecuted(client, id);
 
       await client.query(
         `INSERT INTO mst_stellar.soroban_intent_cancellations (
@@ -414,6 +417,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
       );
       if (existing.rows[0]) return existing.rows[0].execution_policy;
       if (await cancelled(client, id)) return executionPolicy;
+      await assertNotExecuted(client, id);
 
       await client.query(
         `INSERT INTO mst_stellar.soroban_execution_bindings (intent_id, execution_policy)
@@ -465,6 +469,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
     await withPostgresTransaction(this.pool, async (client) => {
       const parent = await lockParent(client, id);
       if (!parent || await cancelled(client, id)) return;
+      if (!this.historicalImport) await assertNotExecuted(client, id);
       const revision = contribution.authorizationPlanRevision ?? 1;
       const digest = contribution.authorizationPlanDigest ?? planDigestForRevision(parent, revision);
       if (!digest) throw new Error(`AuthorizationPlan revision ${revision} is unavailable for this contribution.`);
@@ -543,6 +548,15 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
     await withPostgresTransaction(this.pool, async (client) => {
       const parent = await lockParent(client, id);
       if (!parent || await cancelled(client, id)) return;
+      if (!this.historicalImport) {
+        await assertNotExecuted(client, id);
+        if (value.authorizationPlanRevision !== parent.authorization_plan_revision
+          || value.authorizationPlanDigest !== parent.authorization_plan.authorizationPlanDigest) {
+          throw new SorobanIntentStoreConflictError('authorization_plan_changed');
+        }
+      } else if (planDigestForRevision(parent, value.authorizationPlanRevision) !== value.authorizationPlanDigest) {
+        throw new SorobanIntentStoreConflictError('authorization_plan_changed');
+      }
       const inserted = await client.query(
         `INSERT INTO mst_stellar.soroban_execution_preparations (
            intent_id, authorization_plan_revision, authorization_plan_digest,
@@ -685,7 +699,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
 export function createPostgresSorobanIntentStore(
   pool: Pool = coordinationPool(),
   privateStore: SorobanIntentPrivateDataStore = blobSorobanIntentPrivateDataStore,
-  options: { emitOutbox?: boolean } = {},
+  options: { emitOutbox?: boolean; historicalImport?: boolean } = {},
 ): SorobanIntentStore {
-  return new PostgresSorobanIntentStore(pool, privateStore, options.emitOutbox ?? true);
+  return new PostgresSorobanIntentStore(pool, privateStore, options.emitOutbox ?? true, options.historicalImport === true);
 }

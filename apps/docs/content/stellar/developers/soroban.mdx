@@ -9,6 +9,10 @@ Soroban Integration starts from contract + method + arguments. MultiSig Tools pl
 
 Inspect `GET /runtime-config` before creating a profile. When `capabilities.sorobanManagedExecution.testnet` is false, choose external execution and configure at least one allowed G-account executor in `sorobanExecutionAccounts`. An explicitly selected executor must belong to that pool. A profile or new Intent without an available execution route is rejected with HTTP 409 (`managed_executor_not_configured`) before collecting AUTH. Existing Intents with unavailable execution report `execution_unavailable` in their job projection; do not retry preparation until the execution configuration is corrected.
 
+If the returned execution policy has no bound executor, supply an allowed `executor` when calling `prepare_execution`. When no managed executor is available, omitting this selection returns HTTP 400 (`executor_required`).
+
+A successful observed execution is terminal for the Intent, even if the receipt refers to an earlier authorization revision. Preparation, re-planning and new authorization writes are then rejected with HTTP 409 (`intent_already_executed`). Reconciliation remains available for already released transactions.
+
 ## Create the Intent
 
 ```bash

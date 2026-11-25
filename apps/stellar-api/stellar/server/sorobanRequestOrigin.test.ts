@@ -48,6 +48,23 @@ test('verified Soroban Request origin is derived from durable preparation, not c
   });
 });
 
+test('Proposal handoff rejects completed or cancelled Soroban Intents', async () => {
+  const f = fixture();
+  const input = { intentId: f.intent.id, network: 'testnet' as const, transactionHash: 'ab'.repeat(32) };
+  f.store.listExecutionObservations = async () => [{
+    version: 1, transactionHash: 'cd'.repeat(32), authorizationPlanDigest: 'plan-1',
+    authorizationPlanRevision: 1, executionSource: 'GEXECUTOR', ledger: 124, successful: true,
+    observedAt: '2026-09-16T01:02:00.000Z',
+  }];
+  await assert.rejects(() => verifySorobanRequestOrigin(f.store, input), { code: 'intent_already_executed' });
+  f.store.listExecutionObservations = async () => [];
+  f.intent.cancellation = {
+    version: 1, cancelledAt: '2026-09-16T01:02:00.000Z',
+    authorizationPlanDigest: 'plan-2', authorizationPlanRevision: 2,
+  };
+  await assert.rejects(() => verifySorobanRequestOrigin(f.store, input), { code: 'intent_cancelled' });
+});
+
 test('Soroban Request origin rejects wrong transaction, stale plan, and external-only Intent', async () => {
   const f = fixture();
   await assert.rejects(

@@ -98,6 +98,26 @@ export interface StoredSorobanIntent {
   cancellation?: StoredSorobanIntentCancellation;
 }
 
+/** A verified successful execution is terminal for the business Intent, even
+ * when the receipt belongs to an older AuthorizationPlan revision. */
+export function successfulSorobanExecution(observations: readonly StoredSorobanIntentExecutionObservation[]) {
+  return observations.filter((item) => item.successful)
+    .sort((a, b) => a.ledger - b.ledger || a.transactionHash.localeCompare(b.transactionHash))[0];
+}
+
+export async function assertSorobanIntentNotExecuted(store: SorobanIntentStore, id: string): Promise<void> {
+  if (successfulSorobanExecution(await (store.listExecutionObservations?.(id) ?? Promise.resolve([])))) {
+    throw new SorobanIntentStoreConflictError('intent_already_executed');
+  }
+}
+
+export function assertCurrentSorobanPlan(stored: StoredSorobanIntent | null, expected: StoredSorobanIntent): void {
+  if (!stored || (stored.authorizationPlanRevision ?? 1) !== (expected.authorizationPlanRevision ?? 1)
+    || stored.authorizationPlan.authorizationPlanDigest !== expected.authorizationPlan.authorizationPlanDigest) {
+    throw new SorobanIntentStoreConflictError('authorization_plan_changed');
+  }
+}
+
 export interface SorobanIntentStore {
   createIntent(value: StoredSorobanIntent): Promise<void>;
   getIntent(id: string): Promise<StoredSorobanIntent | null>;

@@ -84,6 +84,11 @@ test('inbox falls back to the legacy scan when signer index lookup is unavailabl
   assert.equal(legacyScans, 1);
 });
 
+test('a failed signer index without a fallback cannot report an empty Inbox', async () => {
+  const store = baseStore({ async listRequestsByDiscoverySubjects() { throw new Error('index unavailable'); } });
+  await assert.rejects(() => listSignerInbox(store, 'G'.padEnd(56, 'S'), { network: 'testnet' }), /index unavailable/);
+});
+
 test('Human Inbox action projection recognizes the current signer signature and decline evidence', async () => {
   const { Account, Asset, Keypair, Networks, Operation, TransactionBuilder } = await import('@stellar/stellar-sdk');
   const signer = Keypair.random();

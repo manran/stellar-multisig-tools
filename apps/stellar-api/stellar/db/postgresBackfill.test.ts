@@ -314,7 +314,7 @@ test('backfill is resumable, hash-verifies both protocols, drops legacy projecti
     coordinationPool(), requestPrivate, { emitOutbox: false },
   );
   const targetIntents = createPostgresSorobanIntentStore(
-    coordinationPool(), intentPrivate, { emitOutbox: false },
+    coordinationPool(), intentPrivate, { emitOutbox: false, historicalImport: true },
   );
 
   const first = await backfillCoordinationData({

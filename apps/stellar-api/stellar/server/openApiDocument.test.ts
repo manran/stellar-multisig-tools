@@ -63,6 +63,15 @@ test('OpenAPI covers every catalog transport and business operation exactly once
   assert.ok(references.every((name) => Object.hasOwn(schemas, name)));
 });
 
+test('workspace discovery distinguishes signer, human and Treasury audit access', () => {
+  const doc = createOpenApiDocument();
+  const paths = doc.paths as Record<string, JsonObject>;
+  assert.deepEqual((paths['/treasuries'].get as JsonObject).security, [{ agentBearer: [] }]);
+  assert.deepEqual((paths['/address-book'].get as JsonObject).security, [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }]);
+  assert.deepEqual((paths['/activity'].get as JsonObject).security, [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { treasuryAuditBearer: [] }]);
+  assert.ok(((paths['/intent'].put as JsonObject).responses as JsonObject)['502']);
+});
+
 test('OpenAPI describes the public Contract composition without UI state', () => {
   const document = createOpenApiDocument();
   const paths = document.paths as Record<string, JsonObject>;

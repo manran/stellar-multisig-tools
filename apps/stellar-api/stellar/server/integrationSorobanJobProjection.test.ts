@@ -179,6 +179,20 @@ test('projects confirmed execution into a compact result', () => {
   assert.deepEqual(job.nextActions, []);
   assert.deepEqual(job.result, { transactionHash: 'c'.repeat(64), ledger: 460, successful: true });
 });
+test('a late receipt for any prior revision wins over later failure or authorization expiry', () => {
+  const job = projectIntegrationSorobanJob({
+    stored: stored({ authorizationPlanRevision: 2, authorizationPlan: { authorizationPlanDigest: 'd'.repeat(64) } as StoredSorobanIntent['authorizationPlan'] }),
+    authorization: authorization('expired'),
+    preparations: [preparation(1), { ...preparation(2), transactionHash: 'e'.repeat(64) }],
+    observations: [observation(true), { ...observation(false), authorizationPlanRevision: 2, authorizationPlanDigest: 'd'.repeat(64), transactionHash: 'e'.repeat(64), observedAt: '2026-09-17T00:30:00.000Z' }],
+    reviewUrl: REVIEW_URL,
+  });
+  assert.equal(job.state, 'completed');
+  assert.deepEqual(job.nextActions, []);
+  assert.equal(job.result?.successful, true);
+  assert.equal(job.execution?.transactionHash, job.result?.transactionHash);
+});
+
 test('projects expiry as an explicit replan action', () => {
   const job = projectIntegrationSorobanJob({
     stored: stored(),

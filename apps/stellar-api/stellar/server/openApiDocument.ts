@@ -28,6 +28,14 @@ const parameter = (
 
 function operationParameters(path: string, method: string): OpenApiObject[] {
   const values: OpenApiObject[] = [];
+  if (path === '/activity') {
+    values.push(
+      parameter('view', 'query', false, { type: 'string', const: 'work' }, 'Use work for unified personal Classic and Soroban Activity. Omit for Classic history.'),
+      parameter('account', 'query', false, { type: 'string', pattern: '^G[A-Z2-7]{55}$' }, 'Optional Treasury account. An Audit credential is bound to its own Treasury.'),
+      parameter('request', 'query', false, { type: 'string' }, 'Optional Classic Request id for detail.'),
+      parameter('cursor', 'query', false, { type: 'string' }, 'Opaque nextCursor from the previous page.'),
+    );
+  }
   if (path === '/integration-execution') {
     values.push(parameter('network', 'query', true, schema('StellarNetwork'), 'Must match both this deployment and the Integration credential scope.'));
   }
@@ -93,6 +101,8 @@ function requestBody(path: string, method: string): OpenApiObject | undefined {
   if (path === '/contracts' && (method === 'put' || method === 'delete')) return body(schema('ContractWorkspaceInput'));
   if (path === '/payment-prepare' && method === 'post') return body(schema('ClassicPaymentPrepareInput'));
   if (path === '/account-create-prepare' && method === 'post') return body(schema('ClassicCreateAccountPrepareInput'));
+  if (path === '/address-book' && method === 'put') return body(schema('ContactSaveInput'));
+  if (path === '/address-book' && method === 'delete') return body(schema('ContactDeleteInput'));
   if (path === '/request' && method === 'post') return body(schema('ProposalCreateInput'));
   if (path === '/request' && method === 'patch') return body(schema('ProposalPatchInput'));
   return undefined;
@@ -103,6 +113,9 @@ function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/agent-access') return schema('SignerAgentAccessResult');
   if (path === '/runtime-config') return schema('RuntimeConfigResult');
   if (path === '/inbox') return schema('SignerInboxResult');
+  if (path === '/activity') return schema('SignerActivityResult');
+  if (path === '/treasuries') return schema('SignerTreasuriesResult');
+  if (path === '/address-book') return schema(method === 'get' ? 'ContactListResult' : method === 'put' ? 'ContactSaveResult' : 'ContactDeleteResult');
   if (path === '/agent-grants') return schema('AgentGrantResult');
   if (path === '/integration-testnet') return schema('TestnetIntegrationCreateResult');
   if (path === '/integration-execution') return schema('IntegrationExecutionInspectResult');
@@ -132,7 +145,9 @@ function security(path: string, method: string, access: HeadlessOperationAccess)
     return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
   }
   if (path === '/integration-execution') return [{ integrationBearer: [] }];
-  if (path === '/contracts' || path === '/inbox') return [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
+  if (path === '/treasuries') return [{ agentBearer: [] }];
+  if (path === '/activity') return [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { treasuryAuditBearer: [] }];
+  if (['/contracts', '/inbox', '/address-book'].includes(path)) return [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
   if (path === '/payment-prepare' || path === '/account-create-prepare') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
   if (path === '/request' && method === 'put') return [{ integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
   if (path === '/request' && method === 'post') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
@@ -194,6 +209,7 @@ function openApiPaths(): OpenApiObject {
         } : {}),
         '429': response('Rate limited.', schema('ApiError')),
         '500': response('Internal error.', schema('ApiError')),
+        '502': response('Upstream service returned an invalid or unavailable response.', schema('ApiError')),
         '503': response('Dependency unavailable.', schema('ApiError')),
       },
       'x-multisig-operation-ids': operations.map((item) => item.id),
@@ -216,6 +232,7 @@ const components: OpenApiObject = {
   securitySchemes: {
     agentBearer: { type: 'http', scheme: 'bearer', description: 'Signer Agent credential (msa_...). Human SEP-10 bearer sessions are also accepted where documented.' },
     integrationBearer: { type: 'http', scheme: 'bearer', description: 'Non-signer external service credential (msi_...). Deployment scope restricts networks, Classic source accounts, Soroban contracts/methods, and Soroban execution source accounts.' },
+    treasuryAuditBearer: { type: 'http', scheme: 'bearer', description: 'Treasury Audit credential (mta_...), read-only Activity for its one bound Treasury; no personal signer workspace access.' },
     humanSession: { type: 'apiKey', in: 'cookie', name: 'mst_auth', description: 'Human wallet-authenticated session cookie.' },
     humanBearer: { type: 'http', scheme: 'bearer', description: 'Short-lived Human wallet session token from POST /auth. Separate from msa and msi credentials.' },
     requestCapability: { type: 'apiKey', in: 'header', name: 'x-multisig-capability', description: 'Private share capability paired with x-multisig-request-id.' },
@@ -1382,6 +1399,57 @@ const components: OpenApiObject = {
         execution: schema('RequestExecution'),
         sorobanOrigin: schema('SorobanRequestOrigin'),
       },
+      additionalProperties: false,
+    },
+    ContactDeleteInput: {
+      type: 'object', required: ['address', 'subject_type'],
+      properties: { address: accountId, subject_type: { type: 'string', enum: ['account', 'signer'] } },
+      additionalProperties: false,
+    },
+    ContactSaveInput: {
+      type: 'object', required: ['address', 'subject_type', 'label'],
+      properties: {
+        address: accountId, subject_type: { type: 'string', enum: ['account', 'signer'] },
+        label: { type: 'string', minLength: 1, maxLength: 64 },
+        notification_email: { type: ['string', 'null'], maxLength: 254, description: 'Optional private contact metadata. Null or empty clears the email; omit to leave it unchanged.' },
+      },
+      additionalProperties: false,
+    },
+    Contact: {
+      type: 'object', required: ['address', 'subject_type', 'label', 'created_at', 'updated_at'],
+      properties: {
+        address: accountId, subject_type: { type: 'string', enum: ['account', 'signer'] },
+        label: { type: 'string' }, notification_email: { type: 'string' }, created_at: timestamp, updated_at: timestamp,
+      }, additionalProperties: false,
+    },
+    ContactListResult: { type: 'object', required: ['address', 'entries'], properties: { address: accountId, entries: { type: 'array', items: schema('Contact') } }, additionalProperties: false },
+    ContactSaveResult: { type: 'object', required: ['entry'], properties: { entry: schema('Contact') }, additionalProperties: false },
+    ContactDeleteResult: { type: 'object', required: ['deleted'], properties: { deleted: { type: 'boolean', const: true } }, additionalProperties: false },
+    SignerTreasuriesResult: {
+      type: 'object', required: ['principal', 'treasuries'],
+      properties: {
+        principal: schema('Principal'),
+        treasuries: { type: 'array', items: {
+          type: 'object', required: ['accountId', 'thresholds', 'signers'],
+          properties: {
+            accountId, name: { type: 'string' },
+            thresholds: { type: 'object', required: ['low', 'medium', 'high'], properties: { low: { type: 'integer' }, medium: { type: 'integer' }, high: { type: 'integer' } } },
+            signers: { type: 'array', items: { type: 'object', required: ['key', 'type', 'weight'], properties: { key: { type: 'string' }, type: { type: 'string' }, weight: { type: 'integer' } } } },
+          },
+        } },
+      },
+      additionalProperties: false,
+    },
+    SignerActivityResult: {
+      type: 'object', required: ['network', 'actor'],
+      properties: {
+        address: accountId, network: stellarNetwork, actor: { type: 'string', enum: ['human', 'agent', 'treasury_audit'] }, accountId,
+        items: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        item: { type: 'object', additionalProperties: true },
+        workItems: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        nextCursor: { type: 'string' },
+      },
+      anyOf: [{ required: ['items'] }, { required: ['workItems'] }],
       additionalProperties: false,
     },
     SignerInboxResult: {

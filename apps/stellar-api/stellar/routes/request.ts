@@ -349,6 +349,9 @@ async function authorizeRequest(
   const session = machineCaller ? null : await verifiedSignerSessionFromRequest(blobAuthStore, request, stored.network);
   const contributionGrant = await contributionGrantFromRequest(blobAuthStore, request, config);
   if (integrationCredential) {
+    if (!integrationCredential.networks.includes(stored.network)) {
+      throw new SigningRequestServiceError('This Integration credential is not permitted on this network.', 403, 'integration_network_not_allowed');
+    }
     if (stored.integration?.serviceId !== integrationCredential.serviceId) {
       throw new SigningRequestServiceError(
         'This Integration credential does not own this Request.',

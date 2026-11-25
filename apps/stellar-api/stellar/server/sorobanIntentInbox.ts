@@ -101,19 +101,16 @@ async function pendingSorobanIntents(
   if (!store.listIntentsBySigner) return [];
   const records = (await store.listIntentsBySigner(network, address)).filter((stored) => stored.network === network);
   const values = await Promise.all(records.map(async (stored) => {
-    try {
-      const [authorization, preparations, observations] = await Promise.all([
-        getSorobanIntentAuthorization(store, stored.id, options),
-        store.listExecutionPreparations?.(stored.id) ?? Promise.resolve([]),
-        store.listExecutionObservations?.(stored.id) ?? Promise.resolve([]),
-      ]);
-      if (!isLiveParticipant(stored, address, authorization)) return null;
-      const executionState = executionEvidenceState(preparations, observations);
-      if (executionState === 'confirmed' || authorization.status === 'cancelled') return null;
-      return { stored, authorization, preparations, observations, executionFailed: executionState === 'failed' };
-    } catch {
-      return null;
-    }
+    const observations = await (store.listExecutionObservations?.(stored.id) ?? Promise.resolve([]));
+    if (observations.some((item) => item.successful) || stored.cancellation) return null;
+    const [authorization, preparations] = await Promise.all([
+      getSorobanIntentAuthorization(store, stored.id, options),
+      store.listExecutionPreparations?.(stored.id) ?? Promise.resolve([]),
+    ]);
+    if (!isLiveParticipant(stored, address, authorization)) return null;
+    const executionState = executionEvidenceState(preparations, observations);
+    if (executionState === 'confirmed' || authorization.status === 'cancelled') return null;
+    return { stored, authorization, preparations, observations, executionFailed: executionState === 'failed' };
   }));
   return values
     .filter((value): value is NonNullable<typeof value> => value !== null)

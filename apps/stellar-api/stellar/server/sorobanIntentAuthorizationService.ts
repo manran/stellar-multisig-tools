@@ -17,7 +17,7 @@ import {
 } from '../../../../packages/stellar-core/src/sorobanCustomAuthorization.js';
 import { authorizationEntriesFromPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
 import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
-import type { SorobanIntentStore, StoredSorobanIntentAuthorizationContribution } from './sorobanIntentStore.js';
+import { assertSorobanIntentNotExecuted, type SorobanIntentStore, type StoredSorobanIntentAuthorizationContribution } from './sorobanIntentStore.js';
 
 export type SorobanIntentAuthorizationStatus =
   | 'awaiting_authorization'
@@ -289,6 +289,7 @@ export async function contributeSorobanIntentAuthorization(
   if (!isValidStellarAccountId(input.signerAddress)) {
     throw new SorobanIntentAuthorizationServiceError('A valid Stellar signer address is required.', 400, 'invalid_signer');
   }
+  await assertSorobanIntentNotExecuted(store, id);
   const before = await getSorobanIntentAuthorization(store, id, options);
   const target = before.authorizers.find((item) => item.entryIndex === input.entryIndex);
   if (target?.signerEvidence.some((signer) => signer.publicKey === input.signerAddress)) {
@@ -371,5 +372,6 @@ export async function contributeSorobanIntentAuthorization(
       'intent_cancelled',
     );
   }
+  await assertSorobanIntentNotExecuted(store, id);
   return { authorization: await getSorobanIntentAuthorization(store, id, options), added: true };
 }

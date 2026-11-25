@@ -152,6 +152,16 @@ test('Intent Inbox treats discovery as candidates and revalidates live signer au
   assert.equal(creatorInbox[0]?.viewerAction, 'waiting');
 });
 
+test('dependency failure does not turn a pending Soroban Inbox into an empty success', async () => {
+  const f = await fixture();
+  await assert.rejects(() => listAgentSorobanInbox(f.store, f.signer.publicKey(), 'testnet', 'read', {
+    ...f.options, networkParametersLoader: async () => { throw new Error('RPC unavailable'); },
+  }), /RPC unavailable/);
+  await assert.rejects(() => listSorobanIntentInbox(f.store, f.signer.publicKey(), 'testnet', {
+    ...f.options, accountLoader: async () => { throw new Error('Horizon unavailable'); },
+  }), /Horizon unavailable/);
+});
+
 test('Read and Sign Agents discover the same current Soroban authorization, with different actions', async () => {
   const f = await fixture();
   const address = f.signer.publicKey();

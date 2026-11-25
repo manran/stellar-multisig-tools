@@ -1,4 +1,4 @@
-import { loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
+import { AccountNotFoundError, loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
 import type { StellarNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
 import type { ActivityCoordinationEvent } from '../../../../packages/stellar-core/src/activityTypes.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
@@ -35,8 +35,9 @@ async function discoveryCandidates(
   } else {
     try {
       signers = await store.listRequestsByDiscoverySubjects(network, [], address);
-    } catch {
-      signers = store.listRequests ? await store.listRequests() : [];
+    } catch (cause) {
+      if (!store.listRequests) throw cause;
+      signers = await store.listRequests();
     }
   }
   return [...new Map([...signers, ...proposer].map((item) => [item.id, item])).values()];
@@ -80,8 +81,11 @@ export async function listSignerInbox(
           request.network,
           cachedAccountLoader,
         );
-      } catch {
-        return null;
+      } catch (cause) {
+        // A deleted source account is not a live authorization subject. A
+        // failed dependency lookup is not evidence that no task exists.
+        if (cause instanceof AccountNotFoundError) return null;
+        throw cause;
       }
       if (!authorized) return null;
 

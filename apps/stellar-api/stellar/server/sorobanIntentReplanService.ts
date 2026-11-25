@@ -3,6 +3,7 @@ import { compareSorobanEffects } from '../../../../packages/stellar-core/src/sor
 import { assertAgentSorobanPlanAccess, planSorobanIntentForStorage } from './sorobanIntentPlanningService.js';
 import {
   SorobanIntentStoreConflictError,
+  assertSorobanIntentNotExecuted,
   type SorobanIntentStore,
   type StoredSorobanIntent,
 } from './sorobanIntentStore.js';
@@ -38,6 +39,7 @@ export async function replanExpiredSorobanIntent(
   if (!stored) {
     throw new SorobanIntentReplanServiceError('Soroban Intent not found.', 404, 'intent_not_found');
   }
+  await assertSorobanIntentNotExecuted(store, id);
   const authorization = options.authorization ?? await getSorobanIntentAuthorization(
     store,
     id,
@@ -50,9 +52,12 @@ export async function replanExpiredSorobanIntent(
       'intent_cancelled',
     );
   }
+  if (authorization.authorizationPlanDigest !== stored.authorizationPlan.authorizationPlanDigest) {
+    throw new SorobanIntentReplanServiceError('Reload the current authorization plan before re-planning.', 409, 'authorization_plan_changed');
+  }
   if (authorization.status !== 'expired' && authorization.status !== 'authorization_ready') {
     throw new SorobanIntentReplanServiceError(
-      'Soroban authorization can be refreshed only after expiration or after execution detects a structural effects change.',
+      'Soroban authorization can be refreshed only after expiration or after execution detects an effects change requiring fresh authorization.',
       409,
       'intent_replan_not_allowed',
     );
@@ -71,9 +76,12 @@ export async function replanExpiredSorobanIntent(
       stored.authorizationPlan.effects,
       planned.authorizationPlan.effects,
     );
-    if (!effectsDiff.requiresReauthorization) {
+    const requiresRefresh = stored.integration
+      ? stored.authorizationPlan.effects.digest !== planned.authorizationPlan.effects?.digest
+      : effectsDiff.requiresReauthorization;
+    if (!requiresRefresh) {
       throw new SorobanIntentReplanServiceError(
-        'Fresh planning did not produce a structural simulation-effects change. Keep the current authorization plan.',
+        'Fresh planning did not produce a simulation-effects change requiring new authorization. Keep the current authorization plan.',
         409,
         'intent_replan_not_needed',
       );
@@ -108,6 +116,7 @@ export async function replanExpiredSorobanIntent(
     );
   }
 
+  await assertSorobanIntentNotExecuted(store, id);
   const supersededAt = (options.now ?? new Date()).toISOString();
   const revision = currentRevision(stored);
   const updated: StoredSorobanIntent = {
@@ -154,6 +163,7 @@ export async function replanExpiredSorobanIntent(
       'authorization_plan_changed',
     );
   }
+  await assertSorobanIntentNotExecuted(store, id);
   return {
     intent: updated,
     authorization: await getSorobanIntentAuthorization(

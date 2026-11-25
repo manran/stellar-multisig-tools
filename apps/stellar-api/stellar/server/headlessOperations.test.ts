@@ -25,7 +25,8 @@ test('runtime policy and contract vertical slice are available to every transpor
   assert.equal(byId.get('integration.intent.browser.inspect')?.access, 'browser:read');
   assert.equal(byId.get('integration.intent.browser.contribute')?.access, 'browser:sign');
   assert.equal(byId.get('contract.intent.execution.prepare')?.method, 'PUT');
-  assert.equal(byId.get('contract.intent.execution.prepare')?.effect, 'none');
+  assert.equal(byId.get('contract.intent.execution.prepare')?.effect, 'coordination-state');
+  assert.equal(byId.get('integration.intent.execution.prepare')?.effect, 'coordination-state');
   assert.equal(byId.get('contract.intent.execution.reconcile')?.method, 'PUT');
   assert.equal(byId.get('contract.intent.execution.reconcile')?.access, 'principal:write');
   assert.equal(byId.get('contract.intent.execution.reconcile')?.effect, 'coordination-state');

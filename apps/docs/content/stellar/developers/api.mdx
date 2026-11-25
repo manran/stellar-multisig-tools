@@ -66,4 +66,5 @@ Branch on stable error codes, not message text.
 | 413 | Request body too large | Reduce the request size. |
 | 415 | Unsupported media type | Send application/json. |
 | 429 | Rate limited | Retry with backoff. |
+| 502 | Upstream interface or network response unavailable | Inspect the input and retry with backoff if temporary. |
 | 503 | Dependency/storage unavailable | Retry with backoff and inspect current state. |

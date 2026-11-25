@@ -1,5 +1,6 @@
 import type { IntegrationSorobanJobProjection } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
+import { successfulSorobanExecution } from './sorobanIntentStore.js';
 import type {
   StoredSorobanIntent,
   StoredSorobanIntentExecutionObservation,
@@ -67,8 +68,10 @@ export function projectIntegrationSorobanJob({
 }): IntegrationSorobanJobProjection {
   const currentPreps = currentPreparations(stored, preparations);
   const currentResults = currentObservations(stored, observations);
-  const latestPreparation = latestBy(currentPreps, (item) => item.preparedAt);
-  const latestObservation = latestBy(currentResults, (item) => item.observedAt);
+  const latestObservation = successfulSorobanExecution(observations) ?? latestBy(currentResults, (item) => item.observedAt);
+  const latestPreparation = latestObservation?.successful
+    ? latestBy(preparations.filter((item) => item.transactionHash === latestObservation.transactionHash), (item) => item.preparedAt)
+    : latestBy(currentPreps, (item) => item.preparedAt);
   const managed = stored.executionPolicy?.executor?.source === 'multisigtools_managed';
   const preparationExpired = Boolean(
     latestPreparation?.validUntil
@@ -116,7 +119,7 @@ export function projectIntegrationSorobanJob({
     ...(latestPreparation ? {
       execution: {
         owner: managed ? 'multisigtools' as const : 'external_service' as const,
-        executor: stored.executionPolicy?.executor?.address ?? latestPreparation.executionSource,
+        executor: latestPreparation.executionSource,
         transactionHash: latestPreparation.transactionHash,
         preparedAt: latestPreparation.preparedAt,
         validUntil: latestPreparation.validUntil,

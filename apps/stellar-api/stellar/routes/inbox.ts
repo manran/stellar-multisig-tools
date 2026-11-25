@@ -73,6 +73,6 @@ export async function GET(request: Request): Promise<Response> {
     if (cause instanceof AuthServiceError || cause instanceof CallerAuthenticationError || cause instanceof DeploymentNetworkPolicyError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
     if (cause instanceof RequestStorageUnavailableError) return noStoreJson({ error: cause.message, code: 'storage_not_configured' }, 503);
     console.error('Inbox API error', cause);
-    return noStoreJson({ error: 'Signer inbox is temporarily unavailable.', code: 'internal_error' }, 500);
+    return noStoreJson({ error: 'Unable to establish the current Inbox state. Retry before treating any tasks as cleared.', code: 'inbox_unavailable' }, 503);
   }
 }

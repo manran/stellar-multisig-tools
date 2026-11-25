@@ -5,6 +5,7 @@ import type {
 } from '../../../../packages/stellar-core/src/agentTaskTypes.js';
 import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
+import { successfulSorobanExecution } from './sorobanIntentStore.js';
 import type {
   StoredSorobanIntent,
   StoredSorobanIntentExecutionObservation,
@@ -128,7 +129,8 @@ export function projectSorobanAgentTask({
   now?: Date;
 }): AgentTaskProjection {
   const latestPreparation = latestBy(currentPreparations(stored, preparations), (item) => item.preparedAt);
-  const latestObservation = latestBy(currentObservations(stored, observations), (item) => item.observedAt);
+  const latestObservation = successfulSorobanExecution(observations)
+    ?? latestBy(currentObservations(stored, observations), (item) => item.observedAt);
   const preparationExpired = Boolean(
     latestPreparation?.validUntil
     && Date.parse(latestPreparation.validUntil) <= now.getTime(),
@@ -186,7 +188,7 @@ export function projectSorobanAgentTask({
     state,
     signatureRequired,
     nextActions,
-    ...(authorization.status === 'awaiting_authorization' ? { waitingFor: unresolvedAuthorizers(authorization) } : {}),
+    ...(state !== 'completed' && authorization.status === 'awaiting_authorization' ? { waitingFor: unresolvedAuthorizers(authorization) } : {}),
     ...(expiry !== undefined ? { expiresAtLedger: expiry } : {}),
     ...(latestObservation ? {
       result: {

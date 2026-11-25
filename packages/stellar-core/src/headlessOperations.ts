@@ -5,6 +5,7 @@ export type HeadlessOperationAccess =
   | 'principal:sign'
   | 'integration:read'
   | 'integration:write'
+  | 'treasury:audit'
   | 'browser:read'
   | 'browser:sign'
   | 'human';
@@ -104,11 +105,11 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
   },
   {
     id: 'contract.intent.execution.prepare', version: 1, method: 'PUT', path: '/intent',
-    access: 'principal:write', effect: 'none', summary: 'Late-bind an execution source, compare enforcing effects with reviewed evidence, and prepare the final unsigned Soroban transaction.',
+    access: 'principal:write', effect: 'coordination-state', summary: 'Late-bind an execution source, compare enforcing effects with reviewed evidence, and prepare the final unsigned Soroban transaction.',
   },
   {
     id: 'integration.intent.execution.prepare', version: 1, method: 'PUT', path: '/intent',
-    access: 'integration:write', effect: 'none', summary: 'Resolve the Integration executor, enforce reviewed effects, and prepare or refresh the final unsigned Soroban execution package.',
+    access: 'integration:write', effect: 'coordination-state', summary: 'Resolve the Integration executor, enforce reviewed effects, and prepare or refresh the final unsigned Soroban execution package.',
   },
   {
     id: 'contract.intent.execution.reconcile', version: 1, method: 'PUT', path: '/intent',
@@ -181,6 +182,30 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
   {
     id: 'signer.inbox.list', version: 1, method: 'GET', path: '/inbox',
     access: 'principal:read', effect: 'none', summary: 'Discover pending Classic Requests and Soroban Intents for the authenticated signer. signature_required_count and task.signatureRequired identify signatures to notify the signer about; action_count counts tasks actionable by this credential.',
+  },
+  {
+    id: 'signer.contacts.list', version: 1, method: 'GET', path: '/address-book',
+    access: 'principal:read', effect: 'none', summary: 'Read private saved contacts and optional notification email metadata belonging to this signer.',
+  },
+  {
+    id: 'signer.contacts.save', version: 1, method: 'PUT', path: '/address-book',
+    access: 'principal:write', effect: 'private-state', summary: 'Save a signer-owned contact alias or notification email. Contacts do not confer signing authority.',
+  },
+  {
+    id: 'signer.contacts.delete', version: 1, method: 'DELETE', path: '/address-book',
+    access: 'principal:write', effect: 'private-state', summary: 'Remove a contact alias from this signer workspace.',
+  },
+  {
+    id: 'signer.treasuries.list', version: 1, method: 'GET', path: '/treasuries',
+    access: 'principal:read', effect: 'none', summary: 'Discover shared-control Treasuries for an MSA signer, with current thresholds and signer weights.',
+  },
+  {
+    id: 'signer.activity.list', version: 1, method: 'GET', path: '/activity',
+    access: 'principal:read', effect: 'none', summary: 'Read personal retained Activity, including unified Classic and Soroban work with view=work, or authorized Treasury Activity.',
+  },
+  {
+    id: 'treasury.audit.activity.list', version: 1, method: 'GET', path: '/activity',
+    access: 'treasury:audit', effect: 'none', summary: 'Read only the Treasury Activity bound to an MTA Audit credential; personal work and other Treasuries are denied.',
   },
   {
     id: 'proposal.create', version: 1, method: 'POST', path: '/request',

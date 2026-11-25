@@ -81,6 +81,8 @@ import {
 
 const MAX_BODY_BYTES = 64 * 1024;
 const METHODS = 'GET, POST, PATCH, PUT, OPTIONS';
+import { SorobanIntentStoreConflictError, assertSorobanIntentNotExecuted } from '../server/sorobanIntentStore.js';
+
 const sorobanIntentStore = runtimeSorobanIntentStore();
 const INTENT_ID_HEADER = 'x-multisig-intent-id';
 const INTENT_CAPABILITY_HEADER = 'x-multisig-intent-capability';
@@ -98,6 +100,9 @@ export async function OPTIONS(): Promise<Response> {
 }
 
 function errorResponse(cause: unknown): Response {
+  if (cause instanceof SorobanIntentStoreConflictError) {
+    return json({ error: cause.code === 'intent_already_executed' ? 'This Soroban Intent has already executed successfully.' : 'Reload the current authorization plan.', code: cause.code }, 409);
+  }
   if (cause instanceof SorobanIntentExecutionServiceError || cause instanceof SorobanIntentExecutionReconciliationServiceError) {
     return json({ error: cause.message, code: cause.code, ...(cause.details ? { details: cause.details } : {}) }, cause.status);
   }
@@ -156,8 +161,6 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
   const session = machineCaller || browserCapabilityToken
     ? null
     : await verifiedSignerSessionFromRequest(blobAuthStore, request, stored.network);
-  const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, id);
-
   if (browserCapabilityToken) {
     if (required === 'write') {
       throw new SorobanBrowserAuthorizationServiceError(
@@ -166,6 +169,7 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
         'browser_capability_write_denied',
       );
     }
+    const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, id);
     const browserCapability = await authenticateSorobanBrowserAuthorizationCapability(
       runtimeSorobanBrowserAuthorizationStore(),
       stored,
@@ -188,6 +192,9 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
   }
 
   if (integrationCredential) {
+    if (!integrationCredential.networks.includes(stored.network)) {
+      throw new SorobanIntentAuthorizationServiceError('This Integration credential is not permitted on this network.', 403, 'integration_network_not_allowed');
+    }
     if (stored.integration?.serviceId !== integrationCredential.serviceId) {
       throw new SorobanIntentAuthorizationServiceError(
         'This Integration credential does not own this Soroban Intent.',
@@ -202,6 +209,7 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
         'integration_intent_sign_denied',
       );
     }
+    const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, id);
     return { id, integrationCredential, agent: null, session: null, browserCapability: null, stored, authorization, address: undefined };
   }
 
@@ -218,6 +226,7 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
     );
   }
 
+  const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, id);
   const address = agent?.principal.address ?? session!.address;
   const participant = stored.creatorAddress === address || authorization.authorizers.some(
     (authorizer) => authorizer.activeSigners.some((signer) => signer.publicKey === address),
@@ -463,7 +472,7 @@ export async function POST(request: Request): Promise<Response> {
         replayed: result.replayed,
         intent: result.intent,
         authorization,
-        job: integrationJob(integrationCredential, result.intent, authorization),
+        job: await loadIntegrationJob(integrationCredential, result.intent, authorization),
       }, result.replayed ? 200 : 201);
     }
 
@@ -509,12 +518,7 @@ export async function POST(request: Request): Promise<Response> {
         replayed: result.replayed,
         intent: result.intent,
         authorization,
-        task: agentTask(
-          result.intent,
-          authorization,
-          agent.access,
-          agent.principal.address,
-        ),
+        task: await loadAgentTask(result.intent, authorization, agent),
       }, result.replayed ? 200 : 201);
     }
 
@@ -618,6 +622,7 @@ export async function PUT(request: Request): Promise<Response> {
     assertCoordinationWritesEnabled();
     const access = await storedIntentAccess(request, 'write');
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    if (body.action !== 'cancel' && body.action !== 'reconcile_execution') await assertSorobanIntentNotExecuted(sorobanIntentStore, access.id);
     if (access.integrationCredential && ['issue_browser_authorization', 'replan', 'prepare_execution', 'refresh_execution'].includes(String(body.action ?? 'prepare_execution'))
       && !integrationSorobanExecutionAvailable(access.stored.network, access.stored.executionPolicy, access.integrationCredential.sorobanExecutionAccounts)) {
       throw new BoxServiceError('No available Soroban execution route. Configure an allowed executor before collecting authorization or preparing execution.', 409, 'managed_executor_not_configured');

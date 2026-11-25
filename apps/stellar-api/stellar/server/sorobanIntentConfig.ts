@@ -36,7 +36,7 @@ export function integrationSorobanExecutionAvailable(
   if (policy?.executor && policy.executor.source !== 'multisigtools_managed') {
     return allowedExecutors.includes(policy.executor.address);
   }
-  if (policy?.mode !== 'multisigtools' && allowedExecutors.length > 0) return true;
+  if (!policy?.executor && policy?.mode !== 'multisigtools' && allowedExecutors.length > 0) return true;
   const managed = managedExecutor === undefined ? configuredSorobanManagedExecutor(network) : managedExecutor;
   return Boolean(managed && (!policy?.executor || policy.executor.address === managed));
 }

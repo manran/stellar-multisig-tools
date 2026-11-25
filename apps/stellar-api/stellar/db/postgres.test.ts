@@ -39,12 +39,13 @@ test('PostgreSQL connection normalization preserves local URLs and pins weak TLS
 test('coordination migration is repeatable through the migration runner', {
   skip: !TEST_URL || !RESET_ALLOWED,
 }, async () => {
-  assert.deepEqual(await applyCoordinationMigrations(), ['0001_coordination', '0002_private_context_flags', '0003_outbox_leases', '0004_webhook_delivery_history', '0005_browser_authorization_capabilities', '0006_classic_managed_channel_leases', '0007_classic_managed_channel_index', '0008_classic_managed_channel_creator_monitor', '0009_reusable_templates', '0010_request_assignments']);
+  const expected = ['0001_coordination', '0002_private_context_flags', '0003_outbox_leases', '0004_webhook_delivery_history', '0005_browser_authorization_capabilities', '0006_classic_managed_channel_leases', '0007_classic_managed_channel_index', '0008_classic_managed_channel_creator_monitor', '0009_reusable_templates', '0010_request_assignments', '0011_human_notifications', '0012_human_notification_reminders', '0013_human_notification_provider_events', '0014_request_assignment_viewed', '0015_template_reminder_skips', '0016_template_proposers'];
+  assert.deepEqual(await applyCoordinationMigrations(), expected);
   assert.deepEqual(await applyCoordinationMigrations(), []);
   const rows = await coordinationPool().query<{ version: string }>(
     'SELECT version FROM mst_stellar.schema_migrations ORDER BY version',
   );
-  assert.deepEqual(rows.rows.map((row) => row.version), ['0001_coordination', '0002_private_context_flags', '0003_outbox_leases', '0004_webhook_delivery_history', '0005_browser_authorization_capabilities', '0006_classic_managed_channel_leases', '0007_classic_managed_channel_index', '0008_classic_managed_channel_creator_monitor', '0009_reusable_templates', '0010_request_assignments']);
+  assert.deepEqual(rows.rows.map((row) => row.version), expected);
 });
 
 test('business mutation and outbox insertion share one rollback boundary', {

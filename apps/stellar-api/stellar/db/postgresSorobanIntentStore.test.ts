@@ -294,6 +294,47 @@ test('cancellation is write-once, blocks new coordination writes, but still allo
   assert.equal(loaded?.cancellation?.cancelledAt, cancellation.cancelledAt);
 });
 
+test('successful observation is terminal under the same parent lock used by all runtime writes', {
+  skip: !TEST_URL || !RESET_ALLOWED,
+}, async () => {
+  const store = createPostgresSorobanIntentStore(coordinationPool(), new MemoryPrivateStore());
+  const value = stored('PGINTENT00000005');
+  await store.createIntent(value);
+  const preparation = {
+    version: 1 as const, transactionHash: TX_HASH,
+    authorizationPlanDigest: PLAN_ONE, authorizationPlanRevision: 1,
+    executionSource: 'GEXECUTOR', transactionSequence: '9', validUntil: null,
+    latestLedger: 123, effectsDigest: emptySorobanEffectsSnapshot().digest,
+    effectsAccepted: false, preparedAt: '2026-09-18T01:03:00.000Z',
+  };
+  await store.putExecutionPreparation!(value.id, preparation);
+  const revised = {
+    ...value, authorizationPlanRevision: 2, authorizationPlan: plan(PLAN_TWO),
+    authorizationPlanHistory: [{ revision: 1, authorizationPlan: value.authorizationPlan, supersededAt: '2026-09-18T01:04:00.000Z' }],
+  };
+  await store.updateIntent(revised);
+  await assert.rejects(() => store.updateIntent({ ...revised, authorizationPlan: plan('e'.repeat(64)) }), { code: 'authorization_plan_changed' });
+  await assert.rejects(() => store.putExecutionPreparation!(value.id, preparation), { code: 'authorization_plan_changed' });
+  // A receipt for an earlier plan must still close the business Intent.
+  await store.putExecutionObservation!(value.id, {
+    version: 1, transactionHash: TX_HASH, authorizationPlanDigest: PLAN_ONE,
+    authorizationPlanRevision: 1, executionSource: 'GEXECUTOR', ledger: 456,
+    successful: true, observedAt: '2026-09-18T01:07:00.000Z',
+  });
+  await assert.rejects(() => store.updateIntent(revised), { code: 'intent_already_executed' });
+  await assert.rejects(() => store.putExecutionPreparation!(value.id, {
+    ...preparation, authorizationPlanRevision: 2, authorizationPlanDigest: PLAN_TWO,
+    transactionHash: 'e'.repeat(64),
+  }), { code: 'intent_already_executed' });
+  await assert.rejects(() => store.putContribution(value.id, {
+    version: 1, digest: 'late-auth', entryIndex: 0, signerAddress: 'GSIGNER',
+    signatureBase64: 'fixture', authorizationPlanDigest: PLAN_TWO,
+    authorizationPlanRevision: 2, receivedAt: '2026-09-18T01:08:00.000Z',
+  }), { code: 'intent_already_executed' });
+  assert.equal((await store.listExecutionPreparations!(value.id)).length, 1);
+  assert.deepEqual(await store.listContributions(value.id), []);
+});
+
 test('successful execution observed before cancellation wins the cancellation race', {
   skip: !TEST_URL || !RESET_ALLOWED,
 }, async () => {
