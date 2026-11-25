@@ -307,7 +307,6 @@ test('successful observation is terminal under the same parent lock used by all 
     latestLedger: 123, effectsDigest: emptySorobanEffectsSnapshot().digest,
     effectsAccepted: false, preparedAt: '2026-09-18T01:03:00.000Z',
   };
-  await store.putExecutionPreparation!(value.id, preparation);
   const revised = {
     ...value, authorizationPlanRevision: 2, authorizationPlan: plan(PLAN_TWO),
     authorizationPlanHistory: [{ revision: 1, authorizationPlan: value.authorizationPlan, supersededAt: '2026-09-18T01:04:00.000Z' }],
@@ -315,6 +314,8 @@ test('successful observation is terminal under the same parent lock used by all 
   await store.updateIntent(revised);
   await assert.rejects(() => store.updateIntent({ ...revised, authorizationPlan: plan('e'.repeat(64)) }), { code: 'authorization_plan_changed' });
   await assert.rejects(() => store.putExecutionPreparation!(value.id, preparation), { code: 'authorization_plan_changed' });
+  const historical = createPostgresSorobanIntentStore(coordinationPool(), new MemoryPrivateStore(), { historicalImport: true, emitOutbox: false });
+  await historical.putExecutionPreparation!(value.id, preparation);
   // A receipt for an earlier plan must still close the business Intent.
   await store.putExecutionObservation!(value.id, {
     version: 1, transactionHash: TX_HASH, authorizationPlanDigest: PLAN_ONE,
@@ -333,6 +334,43 @@ test('successful observation is terminal under the same parent lock used by all 
   }), { code: 'intent_already_executed' });
   assert.equal((await store.listExecutionPreparations!(value.id)).length, 1);
   assert.deepEqual(await store.listContributions(value.id), []);
+});
+
+test('concurrent preparations and replanning fail closed until the previous hash is resolved', {
+  skip: !TEST_URL || !RESET_ALLOWED,
+}, async () => {
+  const store = createPostgresSorobanIntentStore(coordinationPool(), new MemoryPrivateStore());
+  const value = stored('PGINTENT00000006');
+  await store.createIntent(value);
+  const prepared = {
+    version: 1 as const, transactionHash: TX_HASH,
+    authorizationPlanDigest: PLAN_ONE, authorizationPlanRevision: 1,
+    executionSource: 'GEXECUTOR', transactionSequence: '9', validUntil: '2026-09-18T02:00:00.000Z',
+    latestLedger: 123, effectsDigest: emptySorobanEffectsSnapshot().digest,
+    effectsAccepted: false, preparedAt: '2026-09-18T01:03:00.000Z',
+  };
+  const attempts = await Promise.allSettled([
+    store.putExecutionPreparation!(value.id, prepared),
+    store.putExecutionPreparation!(value.id, { ...prepared, transactionHash: 'b'.repeat(64) }),
+  ]);
+  assert.equal(attempts.filter((result) => result.status === 'fulfilled').length, 1);
+  const rejected = attempts.find((result) => result.status === 'rejected');
+  assert.equal(rejected?.reason.code, 'intent_execution_outcome_unknown');
+  const [first] = await store.listExecutionPreparations!(value.id);
+  const revised = {
+    ...value, authorizationPlanRevision: 2, authorizationPlan: plan(PLAN_TWO),
+    authorizationPlanHistory: [{ revision: 1, authorizationPlan: value.authorizationPlan, supersededAt: '2026-09-18T01:04:00.000Z' }],
+  };
+  await assert.rejects(() => store.updateIntent(revised), { code: 'intent_execution_outcome_unknown' });
+  const proof = { oldestLedger: 123, latestLedger: 500, latestLedgerClosedAt: '2026-09-18T02:00:05.000Z', checkedAt: '2026-09-18T02:00:06.000Z' };
+  await assert.rejects(() => store.recordExecutionNonInclusion!(value.id, first.transactionHash, { ...proof, oldestLedger: 124 }), { code: 'intent_execution_outcome_unknown' });
+  await assert.rejects(() => store.recordExecutionNonInclusion!(value.id, first.transactionHash, { ...proof, latestLedgerClosedAt: prepared.validUntil }), { code: 'intent_execution_outcome_unknown' });
+  await store.recordExecutionNonInclusion!(value.id, first.transactionHash, proof);
+  assert.deepEqual((await store.listExecutionPreparations!(value.id))[0].nonInclusionProof, proof);
+  assert.deepEqual(await store.listExecutionObservations!(value.id), []);
+  await store.updateIntent(revised);
+  await store.putExecutionPreparation!(value.id, { ...prepared, authorizationPlanRevision: 2, authorizationPlanDigest: PLAN_TWO, transactionHash: 'e'.repeat(64), preparedAt: '2026-09-18T02:01:00.000Z' });
+  assert.equal((await store.listExecutionPreparations!(value.id)).length, 2);
 });
 
 test('successful execution observed before cancellation wins the cancellation race', {

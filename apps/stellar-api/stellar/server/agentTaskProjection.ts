@@ -5,7 +5,7 @@ import type {
 } from '../../../../packages/stellar-core/src/agentTaskTypes.js';
 import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
-import { successfulSorobanExecution } from './sorobanIntentStore.js';
+import { successfulSorobanExecution, unresolvedSorobanPreparations } from './sorobanIntentStore.js';
 import type {
   StoredSorobanIntent,
   StoredSorobanIntentExecutionObservation,
@@ -131,10 +131,7 @@ export function projectSorobanAgentTask({
   const latestPreparation = latestBy(currentPreparations(stored, preparations), (item) => item.preparedAt);
   const latestObservation = successfulSorobanExecution(observations)
     ?? latestBy(currentObservations(stored, observations), (item) => item.observedAt);
-  const preparationExpired = Boolean(
-    latestPreparation?.validUntil
-    && Date.parse(latestPreparation.validUntil) <= now.getTime(),
-  );
+  const unresolved = unresolvedSorobanPreparations(preparations, observations);
   const canCancel = !stored.integration && stored.creatorAddress === principalAddress;
   const needsPrincipalAuthorization = authorization.authorizers.some((authorizer) =>
     !authorizer.ready
@@ -144,8 +141,11 @@ export function projectSorobanAgentTask({
   let state: AgentTaskProjection['state'];
   let nextActions: AgentTaskAction[] = [];
   if (latestObservation?.successful) state = 'completed';
+  else if (unresolved.length) {
+    state = stored.cancellation ? 'cancelled' : 'action_required';
+    nextActions = [action('reconcile_execution', 'write', credentialAccess)];
+  }
   else if (stored.cancellation || authorization.status === 'cancelled') state = 'cancelled';
-  else if (latestObservation && !latestObservation.successful) state = 'failed';
   else if (authorization.status === 'expired') {
     state = 'expired';
     if (!stored.integration) {
@@ -160,20 +160,20 @@ export function projectSorobanAgentTask({
     }
   } else if (stored.integration) {
     state = 'waiting';
-  } else if (!latestPreparation || preparationExpired) {
+  } else {
     state = 'action_required';
     nextActions = [action(
-      preparationExpired ? 'refresh_execution' : 'prepare_execution',
+      latestPreparation ? 'refresh_execution' : 'prepare_execution',
       'write',
       credentialAccess,
     )];
-  } else state = 'waiting';
+  }
 
   if (canCancel && state !== 'completed' && state !== 'cancelled') {
     nextActions = [...nextActions, action('cancel', 'write', credentialAccess)];
   }
 
-  const signatureRequired = state === 'action_required'
+  const signatureRequired = state === 'action_required' && !unresolved.length
     && authorization.status === 'awaiting_authorization' && needsPrincipalAuthorization;
   const hasAvailableAction = nextActions.some((item) => item.available);
   if (state === 'action_required' && !hasAvailableAction) state = 'waiting';
@@ -188,7 +188,8 @@ export function projectSorobanAgentTask({
     state,
     signatureRequired,
     nextActions,
-    ...(state !== 'completed' && authorization.status === 'awaiting_authorization' ? { waitingFor: unresolvedAuthorizers(authorization) } : {}),
+    ...(state !== 'completed' && unresolved.length ? { unresolvedTransactionHashes: unresolved.map((item) => item.transactionHash) } : {}),
+    ...(state !== 'completed' && !unresolved.length && authorization.status === 'awaiting_authorization' ? { waitingFor: unresolvedAuthorizers(authorization) } : {}),
     ...(expiry !== undefined ? { expiresAtLedger: expiry } : {}),
     ...(latestObservation ? {
       result: {

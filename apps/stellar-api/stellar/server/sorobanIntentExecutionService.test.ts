@@ -198,7 +198,7 @@ test('execution refuses to materialize before detached AUTH is ready', async () 
 });
 
 
-test('execution can be rematerialized with a fresh source sequence without changing detached AUTH', async () => {
+test('execution can be rematerialized only after the previous attempt is resolved', async () => {
   const f = fixture();
   const source = Keypair.random();
   const store = new MemoryIntentStore(f.stored);
@@ -211,6 +211,8 @@ test('execution can be rematerialized with a fresh source sequence without chang
   };
   const first = await prepareSorobanIntentExecution(store, f.stored.id, source.publicKey(), options);
   sequence = '8';
+  await assert.rejects(() => prepareSorobanIntentExecution(store, f.stored.id, source.publicKey(), options), (cause: unknown) => (cause as { code?: string }).code === 'intent_execution_outcome_unknown');
+  store.preparations[0].nonInclusionProof = { oldestLedger: 1, latestLedger: 200, latestLedgerClosedAt: new Date(Date.parse(first.validUntil!) + 1000).toISOString(), checkedAt: new Date(Date.parse(first.validUntil!) + 2000).toISOString() };
   const second = await prepareSorobanIntentExecution(store, f.stored.id, source.publicKey(), options);
   assert.equal(first.transactionSequence, '8');
   assert.equal(second.transactionSequence, '9');

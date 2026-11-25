@@ -4,6 +4,7 @@ import { assertAgentSorobanPlanAccess, planSorobanIntentForStorage } from './sor
 import {
   SorobanIntentStoreConflictError,
   assertSorobanIntentNotExecuted,
+  assertSorobanExecutionResolved,
   type SorobanIntentStore,
   type StoredSorobanIntent,
 } from './sorobanIntentStore.js';
@@ -39,7 +40,7 @@ export async function replanExpiredSorobanIntent(
   if (!stored) {
     throw new SorobanIntentReplanServiceError('Soroban Intent not found.', 404, 'intent_not_found');
   }
-  await assertSorobanIntentNotExecuted(store, id);
+  await assertSorobanExecutionResolved(store, id);
   const authorization = options.authorization ?? await getSorobanIntentAuthorization(
     store,
     id,
@@ -116,7 +117,7 @@ export async function replanExpiredSorobanIntent(
     );
   }
 
-  await assertSorobanIntentNotExecuted(store, id);
+  await assertSorobanExecutionResolved(store, id);
   const supersededAt = (options.now ?? new Date()).toISOString();
   const revision = currentRevision(stored);
   const updated: StoredSorobanIntent = {

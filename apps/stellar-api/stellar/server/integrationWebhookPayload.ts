@@ -178,7 +178,7 @@ export function createIntegrationWebhookPayloadBuilder(input: {
   const loadClassic = input.loadClassicSnapshot
     ?? ((store, stored) => getSigningRequestForStoredRequest(store, stored));
   const loadAuthorization = input.loadSorobanAuthorization
-    ?? ((store, id) => getSorobanIntentAuthorization(store, id));
+    ?? ((store, id) => getSorobanIntentAuthorization(store, id, { terminalReceiptOnly: true }));
   const now = input.now ?? (() => new Date());
 
   return {
@@ -218,7 +218,7 @@ export function createIntegrationWebhookPayloadBuilder(input: {
         observations,
         input.reviewOriginFor(stored.network),
         now(),
-        await input.executionAvailableFor?.(stored, record.serviceId) ?? true,
+        observations.some((item) => item.successful) || (await input.executionAvailableFor?.(stored, record.serviceId) ?? true),
       );
       return integrationWebhookEnvelope(
         record,

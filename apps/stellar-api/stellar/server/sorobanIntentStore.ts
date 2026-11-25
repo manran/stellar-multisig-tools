@@ -9,7 +9,8 @@ import type { StellarNetwork } from '../../../../packages/stellar-core/src/types
 
 export type SorobanIntentStoreConflictCode =
   | 'authorization_plan_changed'
-  | 'intent_already_executed';
+  | 'intent_already_executed'
+  | 'intent_execution_outcome_unknown';
 
 export class SorobanIntentStoreConflictError extends Error {
   constructor(readonly code: SorobanIntentStoreConflictCode) {
@@ -36,6 +37,13 @@ export interface StoredSorobanIntentAuthorizationContribution {
   submittedBy?: AgentActorProvenance;
 }
 
+export interface SorobanExecutionNonInclusionProof {
+  oldestLedger: number;
+  latestLedger: number;
+  latestLedgerClosedAt: string;
+  checkedAt: string;
+}
+
 export interface StoredSorobanIntentExecutionPreparation {
   version: 1;
   transactionHash: string;
@@ -50,6 +58,7 @@ export interface StoredSorobanIntentExecutionPreparation {
   preparedAt: string;
   preparedByAddress?: string;
   preparedBy?: MachineCallerProvenance;
+  nonInclusionProof?: SorobanExecutionNonInclusionProof;
 }
 
 export interface StoredSorobanIntentExecutionObservation {
@@ -111,6 +120,33 @@ export async function assertSorobanIntentNotExecuted(store: SorobanIntentStore, 
   }
 }
 
+/** A released hash remains potentially executable until a receipt or verified
+ * non-inclusion resolves it. An older authorization revision is not an exception. */
+export function unresolvedSorobanPreparations(
+  preparations: readonly StoredSorobanIntentExecutionPreparation[],
+  observations: readonly StoredSorobanIntentExecutionObservation[],
+): StoredSorobanIntentExecutionPreparation[] {
+  const observed = new Set(observations.map((item) => item.transactionHash));
+  const pending = new Map<string, StoredSorobanIntentExecutionPreparation>();
+  for (const item of preparations) {
+    if (observed.has(item.transactionHash) || item.nonInclusionProof) continue;
+    const prior = pending.get(item.transactionHash);
+    if (!prior || item.latestLedger < prior.latestLedger) pending.set(item.transactionHash, item);
+  }
+  return [...pending.values()].sort((a, b) => a.preparedAt.localeCompare(b.preparedAt));
+}
+
+export async function assertSorobanExecutionResolved(store: SorobanIntentStore, id: string): Promise<void> {
+  const [preparations, observations] = await Promise.all([
+    store.listExecutionPreparations?.(id) ?? Promise.resolve([]),
+    store.listExecutionObservations?.(id) ?? Promise.resolve([]),
+  ]);
+  if (successfulSorobanExecution(observations)) throw new SorobanIntentStoreConflictError('intent_already_executed');
+  if (unresolvedSorobanPreparations(preparations, observations).length) {
+    throw new SorobanIntentStoreConflictError('intent_execution_outcome_unknown');
+  }
+}
+
 export function assertCurrentSorobanPlan(stored: StoredSorobanIntent | null, expected: StoredSorobanIntent): void {
   if (!stored || (stored.authorizationPlanRevision ?? 1) !== (expected.authorizationPlanRevision ?? 1)
     || stored.authorizationPlan.authorizationPlanDigest !== expected.authorizationPlan.authorizationPlanDigest) {
@@ -129,6 +165,7 @@ export interface SorobanIntentStore {
   putContribution(id: string, contribution: StoredSorobanIntentAuthorizationContribution): Promise<void>;
   listExecutionPreparations?(id: string): Promise<StoredSorobanIntentExecutionPreparation[]>;
   putExecutionPreparation?(id: string, preparation: StoredSorobanIntentExecutionPreparation): Promise<void>;
+  recordExecutionNonInclusion?(id: string, transactionHash: string, proof: SorobanExecutionNonInclusionProof): Promise<void>;
   listExecutionObservations?(id: string): Promise<StoredSorobanIntentExecutionObservation[]>;
   getExecutionObservation?(id: string, transactionHash: string): Promise<StoredSorobanIntentExecutionObservation | null>;
   putExecutionObservation?(id: string, observation: StoredSorobanIntentExecutionObservation): Promise<void>;

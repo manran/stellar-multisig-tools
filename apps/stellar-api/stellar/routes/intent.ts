@@ -2,6 +2,7 @@ import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js'
 import { blobAuthStore } from '../server/blobAuthStore.js';
 import {
   BrowserAuthorizationStorageUnavailableError,
+  coordinationStorageMode,
   runtimeSorobanBrowserAuthorizationStore,
   runtimeSorobanIntentStore,
   withSorobanIntentCreate,
@@ -101,7 +102,7 @@ export async function OPTIONS(): Promise<Response> {
 
 function errorResponse(cause: unknown): Response {
   if (cause instanceof SorobanIntentStoreConflictError) {
-    return json({ error: cause.code === 'intent_already_executed' ? 'This Soroban Intent has already executed successfully.' : 'Reload the current authorization plan.', code: cause.code }, 409);
+    return json({ error: cause.code === 'intent_already_executed' ? 'This Soroban Intent has already executed successfully.' : cause.code === 'intent_execution_outcome_unknown' ? 'Reconcile all previously prepared transaction hashes before creating a new execution package or authorization plan.' : 'Reload the current authorization plan.', code: cause.code }, 409);
   }
   if (cause instanceof SorobanIntentExecutionServiceError || cause instanceof SorobanIntentExecutionReconciliationServiceError) {
     return json({ error: cause.message, code: cause.code, ...(cause.details ? { details: cause.details } : {}) }, cause.status);
@@ -209,7 +210,7 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
         'integration_intent_sign_denied',
       );
     }
-    const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, id);
+    const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, id, { terminalReceiptOnly: true });
     return { id, integrationCredential, agent: null, session: null, browserCapability: null, stored, authorization, address: undefined };
   }
 
@@ -226,8 +227,8 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
     );
   }
 
-  const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, id);
   const address = agent?.principal.address ?? session!.address;
+  const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, id, { terminalReceiptOnly: stored.creatorAddress === address });
   const participant = stored.creatorAddress === address || authorization.authorizers.some(
     (authorizer) => authorizer.activeSigners.some((signer) => signer.publicKey === address),
   );
@@ -297,7 +298,7 @@ function integrationJob(
   return projectIntegrationSorobanJob({
     stored, authorization, preparations, observations,
     reviewUrl: sorobanReviewUrl(stored.network, stored.id),
-    executionAvailable: integrationSorobanExecutionAvailable(stored.network, stored.executionPolicy, credential.sorobanExecutionAccounts),
+    executionAvailable: observations?.some((item) => item.successful) || integrationSorobanExecutionAvailable(stored.network, stored.executionPolicy, credential.sorobanExecutionAccounts),
   });
 }
 
@@ -465,7 +466,7 @@ export async function POST(request: Request): Promise<Response> {
         },
         { planningSource: configuredSorobanPlanningSource(network) },
       );
-      const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, result.intent.id);
+      const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, result.intent.id, { terminalReceiptOnly: true });
       return json({
         operation: 'contract.intent.create',
         version: 1,
@@ -511,7 +512,7 @@ export async function POST(request: Request): Promise<Response> {
         },
         { planningSource: configuredSorobanPlanningSource(network) },
       );
-      const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, result.intent.id);
+      const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, result.intent.id, { terminalReceiptOnly: true });
       return json({
         operation: 'contract.intent.create',
         version: 1,
@@ -676,6 +677,8 @@ export async function PUT(request: Request): Promise<Response> {
         transactionHash: result.transactionHash,
         observed: result.observed,
         replayed: result.replayed,
+        outcome: result.outcome,
+        ...(result.nonInclusionProof ? { nonInclusionProof: result.nonInclusionProof } : {}),
         ...(result.observation ? { observation: result.observation } : {}),
         ...(job ? { job } : {}),
         ...(task ? { task } : {}),
@@ -712,6 +715,9 @@ export async function PUT(request: Request): Promise<Response> {
         ...(job ? { job } : {}),
         ...(task ? { task } : {}),
       });
+    }
+    if (coordinationStorageMode() !== 'postgres') {
+      throw new SorobanIntentExecutionServiceError('Safe execution preparation and re-planning require PostgreSQL coordination storage.', 503, 'intent_execution_evidence_unavailable');
     }
     const integrationOwnedExecution = Boolean(access.stored.integration);
     if (integrationOwnedExecution && !access.integrationCredential) {

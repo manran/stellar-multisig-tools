@@ -48,6 +48,7 @@ export type SorobanIntentEvidenceEventType =
   | 'authorization_added'
   | 'authorization_plan_revised'
   | 'execution_prepared'
+  | 'execution_not_included'
   | 'execution_confirmed'
   | 'execution_failed';
 
@@ -82,7 +83,7 @@ export interface SorobanIntentAuthorizationSnapshot {
   intentDigest: string;
   authorizationPlanDigest: string;
   executionBinding: 'detached';
-  status: 'awaiting_authorization' | 'authorization_ready' | 'expired' | 'blocked' | 'cancelled';
+  status: 'awaiting_authorization' | 'authorization_ready' | 'expired' | 'blocked' | 'cancelled' | 'completed';
   statusDetail?: string;
   authorizationEntriesXdr: string[];
   contributionCount: number;
@@ -94,6 +95,7 @@ export type IntegrationJobState =
   | 'waiting_for_authorization'
   | 'ready'
   | 'executing'
+  | 'execution_unknown'
   | 'completed'
   | 'expired'
   | 'failed'
@@ -118,7 +120,8 @@ export interface IntegrationSorobanJobProjection {
   waitingFor?: string[];
   expiresAtLedger?: number;
   externalReference?: string;
-  reason?: 'authorization_blocked' | 'execution_failed' | 'execution_unavailable';
+  reason?: 'authorization_blocked' | 'execution_failed' | 'execution_unavailable' | 'execution_outcome_unknown';
+  unresolvedTransactionHashes?: string[];
   execution?: {
     owner: 'external_service' | 'multisigtools';
     executor: string;
@@ -186,6 +189,8 @@ export interface SorobanIntentExecutionReconciliationResponse {
   observed: boolean;
   replayed: boolean;
   observation?: SorobanIntentExecutionObservation;
+  outcome: 'unknown' | 'not_included' | 'failed' | 'successful';
+  nonInclusionProof?: { oldestLedger: number; latestLedger: number; latestLedgerClosedAt: string; checkedAt: string };
   job?: IntegrationSorobanJobProjection;
   task?: AgentTaskProjection;
 }

@@ -9,6 +9,7 @@ import type { SorobanIntentPrivateDataStore } from '../server/sorobanIntentPriva
 import {
   SorobanIntentStoreConflictError,
   type SorobanIntentStore,
+  type SorobanExecutionNonInclusionProof,
   type StoredSorobanAuthorizationPlanRevision,
   type StoredSorobanIntent,
   type StoredSorobanIntentAuthorizationContribution,
@@ -193,6 +194,20 @@ async function assertNotExecuted(client: PoolClient, id: string): Promise<void> 
   if (result.rowCount) throw new SorobanIntentStoreConflictError('intent_already_executed');
 }
 
+/** Same parent row lock serializes new execution packages, re-plans and receipts. */
+async function assertExecutionResolved(client: PoolClient, id: string): Promise<void> {
+  await assertNotExecuted(client, id);
+  const result = await client.query(
+    `SELECT 1 FROM mst_stellar.soroban_execution_preparations p
+       WHERE p.intent_id = $1 AND p.non_inclusion_proof IS NULL
+         AND NOT EXISTS (SELECT 1 FROM mst_stellar.soroban_execution_observations o
+                         WHERE o.intent_id = p.intent_id AND o.transaction_hash = p.transaction_hash)
+       LIMIT 1`,
+    [id],
+  );
+  if (result.rowCount) throw new SorobanIntentStoreConflictError('intent_execution_outcome_unknown');
+}
+
 async function syncSigners(
   client: PoolClient,
   value: Pick<StoredSorobanIntent, 'id' | 'network' | 'discoverySignerKeys'>,
@@ -283,6 +298,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
       await assertNotExecuted(client, value.id);
       const nextRevision = currentRevision(value);
       if (nextRevision > row.authorization_plan_revision) {
+        if (!this.historicalImport) await assertExecutionResolved(client, value.id);
         const previous = value.authorizationPlanHistory
           ?.find((item) => item.revision === nextRevision - 1);
         if (
@@ -518,10 +534,11 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
       prepared_at: Date | string;
       prepared_by_address: string | null;
       prepared_by: MachineCallerProvenance | null;
+      non_inclusion_proof: SorobanExecutionNonInclusionProof | null;
     }>(
       `SELECT transaction_hash, authorization_plan_digest, authorization_plan_revision,
               execution_source, transaction_sequence, valid_until, latest_ledger,
-              effects_digest, effects_accepted, prepared_at, prepared_by_address, prepared_by
+              effects_digest, effects_accepted, prepared_at, prepared_by_address, prepared_by, non_inclusion_proof
          FROM mst_stellar.soroban_execution_preparations
         WHERE intent_id = $1
         ORDER BY prepared_at, transaction_hash`,
@@ -541,6 +558,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
       preparedAt: iso(row.prepared_at),
       ...(row.prepared_by_address ? { preparedByAddress: row.prepared_by_address } : {}),
       ...(row.prepared_by ? { preparedBy: row.prepared_by } : {}),
+      ...(row.non_inclusion_proof ? { nonInclusionProof: row.non_inclusion_proof } : {}),
     }));
   }
 
@@ -549,7 +567,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
       const parent = await lockParent(client, id);
       if (!parent || await cancelled(client, id)) return;
       if (!this.historicalImport) {
-        await assertNotExecuted(client, id);
+        await assertExecutionResolved(client, id);
         if (value.authorizationPlanRevision !== parent.authorization_plan_revision
           || value.authorizationPlanDigest !== parent.authorization_plan.authorizationPlanDigest) {
           throw new SorobanIntentStoreConflictError('authorization_plan_changed');
@@ -562,10 +580,10 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
            intent_id, authorization_plan_revision, authorization_plan_digest,
            transaction_hash, execution_source, transaction_sequence, valid_until,
            latest_ledger, effects_digest, effects_accepted, prepared_at,
-           prepared_by_address, prepared_by
+           prepared_by_address, prepared_by, non_inclusion_proof
          ) VALUES (
            $1, $2, $3, $4, $5, $6, $7,
-           $8, $9, $10, $11, $12, $13
+           $8, $9, $10, $11, $12, $13, $14
          )
          ON CONFLICT (intent_id, prepared_at, transaction_hash) DO NOTHING`,
         [
@@ -582,6 +600,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
           value.preparedAt,
           value.preparedByAddress ?? null,
           value.preparedBy ?? null,
+          this.historicalImport ? value.nonInclusionProof ?? null : null,
         ],
       );
       if (this.emitOutbox && inserted.rowCount && parent.integration_service_id) {
@@ -592,6 +611,37 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
           changeKey: `prepared:${value.authorizationPlanRevision}:${value.transactionHash}`,
           change: 'execution_prepared',
           occurredAt: value.preparedAt,
+        });
+      }
+    });
+  }
+
+  async recordExecutionNonInclusion(id: string, transactionHash: string, proof: SorobanExecutionNonInclusionProof): Promise<void> {
+    await withPostgresTransaction(this.pool, async (client) => {
+      const parent = await lockParent(client, id);
+      if (!parent) throw new Error('Intent not found.');
+      await assertNotExecuted(client, id);
+      const rows = await client.query<{ valid_until: Date | string | null; latest_ledger: string }>(
+        'SELECT valid_until, latest_ledger FROM mst_stellar.soroban_execution_preparations WHERE intent_id = $1 AND transaction_hash = $2',
+        [id, transactionHash],
+      );
+      if (!rows.rowCount || !Number.isSafeInteger(proof.oldestLedger) || proof.oldestLedger <= 0
+        || !Number.isSafeInteger(proof.latestLedger) || !Number.isFinite(Date.parse(proof.latestLedgerClosedAt))
+        || rows.rows.some((row) => !row.valid_until || Date.parse(iso(row.valid_until)) >= Date.parse(proof.latestLedgerClosedAt)
+          || Number(row.latest_ledger) < proof.oldestLedger || Number(row.latest_ledger) >= proof.latestLedger)) {
+        throw new SorobanIntentStoreConflictError('intent_execution_outcome_unknown');
+      }
+      const updated = await client.query(
+        `UPDATE mst_stellar.soroban_execution_preparations SET non_inclusion_proof = $3
+           WHERE intent_id = $1 AND transaction_hash = $2 AND non_inclusion_proof IS NULL
+             AND NOT EXISTS (SELECT 1 FROM mst_stellar.soroban_execution_observations o
+                             WHERE o.intent_id = $1 AND o.transaction_hash = $2)`,
+        [id, transactionHash, proof],
+      );
+      if (updated.rowCount && this.emitOutbox && parent.integration_service_id) {
+        await enqueueCoordinationChange(client, {
+          serviceId: parent.integration_service_id, resourceKind: 'soroban_intent', resourceId: id,
+          changeKey: `not-included:${transactionHash}`, change: 'execution_not_included', occurredAt: proof.checkedAt,
         });
       }
     });

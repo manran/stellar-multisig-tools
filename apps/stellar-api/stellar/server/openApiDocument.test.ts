@@ -184,7 +184,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(schemas.ContractIntentInspectResult.required, ['operation', 'version', 'intent', 'authorization', 'evidence']);
   assert.deepEqual(schemas.IntegrationSorobanJob.required, ['version', 'id', 'kind', 'network', 'state', 'nextActions', 'reviewUrl']);
   assert.deepEqual((schemas.IntegrationSorobanJob.properties as JsonObject).state, {
-    type: 'string', enum: ['waiting_for_authorization', 'ready', 'executing', 'completed', 'expired', 'failed', 'cancelled'],
+    type: 'string', enum: ['waiting_for_authorization', 'ready', 'executing', 'execution_unknown', 'completed', 'expired', 'failed', 'cancelled'],
   });
   assert.deepEqual(((schemas.IntegrationSorobanJob.properties as JsonObject).nextActions as JsonObject).items, {
     type: 'string', enum: ['prepare_execution', 'submit_execution', 'reconcile_execution', 'refresh_execution', 'replan', 'cancel'],
@@ -206,7 +206,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
     'version', 'eventId', 'type', 'occurredAt', 'authorizationPlanDigest', 'authorizationPlanRevision',
   ]);
   assert.deepEqual((schemas.SorobanIntentEvidenceEvent.properties as JsonObject).type, {
-    type: 'string', enum: ['intent_created', 'intent_cancelled', 'authorization_added', 'authorization_plan_revised', 'execution_prepared', 'execution_confirmed', 'execution_failed'],
+    type: 'string', enum: ['intent_created', 'intent_cancelled', 'authorization_added', 'authorization_plan_revised', 'execution_prepared', 'execution_not_included', 'execution_confirmed', 'execution_failed'],
   });
   assert.deepEqual(schemas.ContractIntentContributionInput.required, ['entryIndex', 'signatureBase64']);
   assert.deepEqual(schemas.ContractIntentCancelInput.required, ['action']);
@@ -233,7 +233,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.ok((schemas.SorobanIntentExecutionPreparation.properties as JsonObject).effects);
   assert.ok((schemas.SorobanIntentExecutionPreparation.properties as JsonObject).preparedAt);
   assert.deepEqual(schemas.ContractIntentExecutionReconcileInput.required, ['action', 'transactionHash']);
-  assert.deepEqual(schemas.ContractIntentExecutionReconcileResult.required, ['operation', 'version', 'transactionHash', 'observed', 'replayed']);
+  assert.deepEqual(schemas.ContractIntentExecutionReconcileResult.required, ['operation', 'version', 'transactionHash', 'observed', 'replayed', 'outcome']);
   assert.deepEqual(schemas.SorobanIntentExecutionObservation.required, ['version', 'transactionHash', 'authorizationPlanDigest', 'authorizationPlanRevision', 'executionSource', 'ledger', 'successful', 'observedAt']);
   assert.deepEqual(schemas.SorobanEffectsDiff.required, ['version', 'kind', 'severity', 'requiresExplicitReview', 'requiresReauthorization', 'expectedDigest', 'currentDigest', 'structureChanged', 'maxChangeBasisPoints', 'numericChanges']);
   assert.deepEqual(schemas.ContractIntentReplanInput.required, ['action']);

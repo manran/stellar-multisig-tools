@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   reconcileSorobanIntentExecution,
+  probeSorobanExecution,
   SorobanIntentExecutionReconciliationServiceError,
 } from './sorobanIntentExecutionReconciliationService.js';
 import type {
@@ -54,6 +55,9 @@ class MemoryIntentStore implements SorobanIntentStore {
   async putContribution() { throw new Error('not used'); }
   async listExecutionPreparations() { return this.preparations; }
   async putExecutionPreparation() { throw new Error('not used'); }
+  async recordExecutionNonInclusion(_id: string, hash: string, proof: NonNullable<StoredSorobanIntentExecutionPreparation['nonInclusionProof']>) {
+    for (const item of this.preparations) if (item.transactionHash === hash) item.nonInclusionProof = proof;
+  }
   async listExecutionObservations() { return [...this.observations.values()]; }
   async getExecutionObservation(_id: string, hash: string) { return this.observations.get(hash) ?? null; }
   async putExecutionObservation(_id: string, observation: StoredSorobanIntentExecutionObservation) {
@@ -67,6 +71,7 @@ test('reconciliation returns not observed without creating durable evidence', as
     now: new Date('2026-09-16T10:02:00.000Z'),
   });
   assert.equal(result.observed, false);
+  assert.equal(result.outcome, 'unknown');
   assert.equal(result.replayed, false);
   assert.equal(store.observations.size, 0);
 });
@@ -112,6 +117,47 @@ test('reconciliation records a failed ledger result without calling it confirmed
   assert.equal(result.observed, true);
   assert.equal(result.observation?.successful, false);
   assert.equal((await store.getExecutionObservation(store.stored.id, transactionHash))?.ledger, 3333);
+});
+
+test('non-inclusion requires ingested history covering the entire validity window', async () => {
+  const end = Date.parse(preparation().validUntil!) / 1000;
+  for (const [oldest, priorClose, lookupOldest, expected] of [
+    [1234, end + 1, 1234, true],
+    [1235, end + 1, 1234, false],
+    [1234, end + 1, 1235, false],
+    [1234, end, 1234, false],
+    [1234, end - 1, 1234, false],
+  ] as const) {
+    const methods: string[] = [];
+    const fakeFetch: typeof fetch = async (_url, init) => {
+      const { method } = JSON.parse(String(init?.body));
+      methods.push(method);
+      return Response.json({ result: method === 'getHealth'
+        ? { status: 'healthy', oldestLedger: oldest, latestLedger: 2000, latestLedgerCloseTime: String(priorClose) }
+        : { status: 'NOT_FOUND', oldestLedger: lookupOldest, latestLedger: 2001, latestLedgerCloseTime: String(end + 5) } });
+    };
+    const result = await probeSorobanExecution(preparation(), 'testnet', fakeFetch);
+    assert.equal(Boolean(result.proof), expected);
+    assert.deepEqual(methods, ['getHealth', 'getTransaction']);
+  }
+});
+
+test('verified non-inclusion is durable and replays without a live lookup', async () => {
+  const store = new MemoryIntentStore();
+  const proof = { oldestLedger: 1234, latestLedger: 2001, latestLedgerClosedAt: '2026-09-16T10:11:00.000Z', checkedAt: '2026-09-16T10:11:01.000Z' };
+  const result = await reconcileSorobanIntentExecution(store, store.stored.id, transactionHash, {
+    transactionLoader: async () => null,
+    rpcProbe: async () => ({ proof }),
+  });
+  assert.equal(result.outcome, 'not_included');
+  assert.equal(result.observed, false);
+  assert.deepEqual(result.nonInclusionProof, proof);
+  assert.equal(store.observations.size, 0);
+  const replay = await reconcileSorobanIntentExecution(store, store.stored.id, transactionHash, {
+    transactionLoader: async () => { throw new Error('offline'); },
+  });
+  assert.equal(replay.outcome, 'not_included');
+  assert.equal(replay.replayed, true);
 });
 
 test('reconciliation refuses a hash that was never released as a persisted preparation', async () => {

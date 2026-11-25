@@ -15,6 +15,7 @@ export type AgentTaskActionCode =
   | 'decline'
   | 'prepare_execution'
   | 'refresh_execution'
+  | 'reconcile_execution'
   | 'replan'
   | 'cancel';
 
@@ -35,6 +36,7 @@ export interface AgentTaskProjection {
   signatureRequired: boolean;
   nextActions: AgentTaskAction[];
   waitingFor?: string[];
+  unresolvedTransactionHashes?: string[];
   expiresAt?: string;
   expiresAtLedger?: number;
   result?: {

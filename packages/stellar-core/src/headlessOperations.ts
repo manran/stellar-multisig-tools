@@ -109,15 +109,15 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
   },
   {
     id: 'integration.intent.execution.prepare', version: 1, method: 'PUT', path: '/intent',
-    access: 'integration:write', effect: 'coordination-state', summary: 'Resolve the Integration executor, enforce reviewed effects, and prepare or refresh the final unsigned Soroban execution package.',
+    access: 'integration:write', effect: 'coordination-state', summary: 'Resolve the Integration executor, enforce reviewed effects, and prepare or refresh the final unsigned Soroban execution package only after prior hashes are resolved.',
   },
   {
     id: 'contract.intent.execution.reconcile', version: 1, method: 'PUT', path: '/intent',
-    access: 'principal:write', effect: 'coordination-state', summary: 'Independently verify a persisted Soroban execution preparation against Stellar and retain the observed ledger result.',
+    access: 'principal:write', effect: 'coordination-state', summary: 'Independently verify a persisted Soroban execution preparation against Stellar and retain the observed ledger result or verified non-inclusion.',
   },
   {
     id: 'integration.intent.execution.reconcile', version: 1, method: 'PUT', path: '/intent',
-    access: 'integration:write', effect: 'coordination-state', summary: 'Independently verify an Integration-owned Soroban execution preparation against Stellar and retain the observed ledger result.',
+    access: 'integration:write', effect: 'coordination-state', summary: 'Independently verify an Integration-owned Soroban execution preparation against Stellar and retain the observed ledger result or verified non-inclusion.',
   },
   {
     id: 'contract.intent.replan', version: 1, method: 'PUT', path: '/intent',

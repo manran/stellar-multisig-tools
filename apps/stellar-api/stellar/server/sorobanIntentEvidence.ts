@@ -108,6 +108,14 @@ export function projectSorobanIntentEvidence(
     });
   }
 
+  for (const preparation of preparations) {
+    if (preparation.nonInclusionProof && !observations.some((item) => item.transactionHash === preparation.transactionHash)) {
+      events.push({ version: 1, eventId: `execution-not-included-${preparation.preparedAt}-${preparation.transactionHash}`, type: 'execution_not_included', occurredAt: preparation.nonInclusionProof.checkedAt,
+        authorizationPlanDigest: preparation.authorizationPlanDigest, authorizationPlanRevision: preparation.authorizationPlanRevision,
+        executionSource: preparation.executionSource, transactionHash: preparation.transactionHash, latestLedger: preparation.nonInclusionProof.latestLedger });
+    }
+  }
+
   for (const observation of observations) {
     events.push({
       version: 1,
@@ -132,6 +140,7 @@ export function projectSorobanIntentEvidence(
     intent_cancelled: 4,
     execution_confirmed: 5,
     execution_failed: 5,
+    execution_not_included: 5,
   };
   return events.sort((left, right) =>
     left.occurredAt.localeCompare(right.occurredAt)

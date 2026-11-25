@@ -144,7 +144,7 @@ test('Soroban Agent Task tells a Write Agent to prepare after authorization', ()
     { code: 'prepare_execution', requiredAccess: 'write', available: true },
   ]);
 });
-test('Soroban Agent Task refreshes a stale prepared package instead of suggesting submit', () => {
+test('Soroban Agent Task reconciles a stale prepared package before refresh', () => {
   const task = projectSorobanAgentTask({
     stored: stored(), authorization: authorization('authorization_ready', true),
     credentialAccess: 'write', principalAddress: PRINCIPAL,
@@ -158,7 +158,7 @@ test('Soroban Agent Task refreshes a stale prepared package instead of suggestin
   });
   assert.equal(task.state, 'action_required');
   assert.deepEqual(task.nextActions, [
-    { code: 'refresh_execution', requiredAccess: 'write', available: true },
+    { code: 'reconcile_execution', requiredAccess: 'write', available: true },
   ]);
 });
 

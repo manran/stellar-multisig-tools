@@ -1,6 +1,6 @@
 import type { IntegrationSorobanJobProjection } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
-import { successfulSorobanExecution } from './sorobanIntentStore.js';
+import { successfulSorobanExecution, unresolvedSorobanPreparations } from './sorobanIntentStore.js';
 import type {
   StoredSorobanIntent,
   StoredSorobanIntentExecutionObservation,
@@ -69,37 +69,36 @@ export function projectIntegrationSorobanJob({
   const currentPreps = currentPreparations(stored, preparations);
   const currentResults = currentObservations(stored, observations);
   const latestObservation = successfulSorobanExecution(observations) ?? latestBy(currentResults, (item) => item.observedAt);
+  const unresolved = unresolvedSorobanPreparations(preparations, observations);
   const latestPreparation = latestObservation?.successful
     ? latestBy(preparations.filter((item) => item.transactionHash === latestObservation.transactionHash), (item) => item.preparedAt)
-    : latestBy(currentPreps, (item) => item.preparedAt);
+    : latestBy(unresolved, (item) => item.preparedAt) ?? latestBy(currentPreps, (item) => item.preparedAt);
   const managed = stored.executionPolicy?.executor?.source === 'multisigtools_managed';
-  const preparationExpired = Boolean(
-    latestPreparation?.validUntil
-    && Date.parse(latestPreparation.validUntil) <= now.getTime(),
-  );
+  const preparationExpired = !latestPreparation?.validUntil || !(Date.parse(latestPreparation.validUntil) > now.getTime());
+  const currentUnresolvedPackage = unresolved.length === 1
+    && latestPreparation?.authorizationPlanRevision === currentRevision(stored)
+    && latestPreparation.authorizationPlanDigest === stored.authorizationPlan.authorizationPlanDigest;
   let state: IntegrationSorobanJobProjection['state'];
   if (latestObservation?.successful) state = 'completed';
   else if (stored.cancellation || authorization.status === 'cancelled') state = 'cancelled';
-  else if (latestObservation && !latestObservation.successful) state = 'failed';
+  else if (unresolved.length) state = preparationExpired || !currentUnresolvedPackage || authorization.status !== 'authorization_ready' ? 'execution_unknown' : 'executing';
   else if (authorization.status === 'expired') state = 'expired';
   else if (authorization.status === 'blocked') state = 'failed';
   else if (authorization.status === 'awaiting_authorization') state = 'waiting_for_authorization';
-  else state = latestPreparation && !preparationExpired ? 'executing' : 'ready';
+  else state = latestObservation && !latestObservation.successful ? 'failed' : 'ready';
 
-  const executionBlocked = !executionAvailable && ['ready', 'waiting_for_authorization', 'expired', 'executing'].includes(state);
-  const nextActions: IntegrationSorobanJobProjection['nextActions'] = executionBlocked
-    ? state === 'executing' ? ['reconcile_execution', 'cancel'] : ['cancel']
-    : state === 'ready'
-    ? preparationExpired ? ['refresh_execution', 'cancel'] : ['prepare_execution', 'cancel']
-    : state === 'executing' && !managed
-      ? ['submit_execution', 'reconcile_execution', 'refresh_execution', 'cancel']
-      : state === 'executing'
-        ? ['cancel']
-        : state === 'expired'
-          ? ['replan', 'cancel']
-          : state === 'waiting_for_authorization' || state === 'failed'
-            ? ['cancel']
-            : [];
+  const executionBlocked = !executionAvailable && ['ready', 'waiting_for_authorization', 'expired', 'executing', 'execution_unknown', 'failed'].includes(state);
+  const canSubmit = executionAvailable && !managed && state === 'executing' && unresolved.length === 1
+    && latestPreparation?.authorizationPlanRevision === currentRevision(stored)
+    && latestPreparation.authorizationPlanDigest === stored.authorizationPlan.authorizationPlanDigest;
+  const nextActions: IntegrationSorobanJobProjection['nextActions'] = state === 'completed' ? []
+    : unresolved.length ? [...(canSubmit ? ['submit_execution' as const] : []), 'reconcile_execution', ...(state === 'cancelled' ? [] : ['cancel' as const])]
+    : state === 'cancelled' ? []
+    : executionBlocked ? ['cancel']
+    : state === 'ready' || (state === 'failed' && authorization.status === 'authorization_ready')
+      ? [latestPreparation ? 'refresh_execution' : 'prepare_execution', 'cancel']
+      : state === 'expired' ? ['replan', 'cancel']
+      : ['cancel'];
 
   const expiry = expiresAtLedger(authorization);
   return {
@@ -111,11 +110,13 @@ export function projectIntegrationSorobanJob({
     nextActions,
     reviewUrl,
     ...(state === 'waiting_for_authorization' ? { waitingFor: waitingFor(authorization) } : {}),
+    ...(state !== 'completed' && unresolved.length ? { unresolvedTransactionHashes: unresolved.map((item) => item.transactionHash) } : {}),
     ...(expiry !== undefined ? { expiresAtLedger: expiry } : {}),
     ...(stored.privateContext?.externalReference ? { externalReference: stored.privateContext.externalReference } : {}),
     ...(executionBlocked ? { reason: 'execution_unavailable' as const } : {}),
     ...(authorization.status === 'blocked' ? { reason: 'authorization_blocked' as const } : {}),
-    ...(latestObservation && !latestObservation.successful ? { reason: 'execution_failed' as const } : {}),
+    ...(state !== 'completed' && unresolved.length ? { reason: 'execution_outcome_unknown' as const } : {}),
+    ...(state === 'failed' && latestObservation && !latestObservation.successful ? { reason: 'execution_failed' as const } : {}),
     ...(latestPreparation ? {
       execution: {
         owner: managed ? 'multisigtools' as const : 'external_service' as const,

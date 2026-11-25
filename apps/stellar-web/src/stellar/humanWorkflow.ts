@@ -58,6 +58,7 @@ export function sorobanAuthorizationStatusPresentation(
     case 'expired': return { label: 'Authorization expired', tone: 'danger' };
     case 'blocked': return { label: 'Authorization blocked', tone: 'danger' };
     case 'cancelled': return { label: 'Intent cancelled', tone: 'neutral' };
+    case 'completed': return { label: 'Transaction confirmed', tone: 'success' };
   }
 }
 

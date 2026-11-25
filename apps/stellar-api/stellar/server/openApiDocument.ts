@@ -652,7 +652,7 @@ const components: OpenApiObject = {
         intentDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
         authorizationPlanDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
         executionBinding: { type: 'string', const: 'detached' },
-        status: { type: 'string', enum: ['awaiting_authorization', 'authorization_ready', 'expired', 'blocked', 'cancelled'] },
+        status: { type: 'string', enum: ['awaiting_authorization', 'authorization_ready', 'expired', 'blocked', 'cancelled', 'completed'] },
         statusDetail: { type: 'string' },
         authorizationEntriesXdr: { type: 'array', items: { type: 'string' } },
         contributionCount: { type: 'integer', minimum: 0 },
@@ -668,7 +668,7 @@ const components: OpenApiObject = {
         id: { type: 'string', minLength: 1 },
         kind: { type: 'string', const: 'soroban_contract' },
         network: stellarNetwork,
-        state: { type: 'string', enum: ['waiting_for_authorization', 'ready', 'executing', 'completed', 'expired', 'failed', 'cancelled'] },
+        state: { type: 'string', enum: ['waiting_for_authorization', 'ready', 'executing', 'execution_unknown', 'completed', 'expired', 'failed', 'cancelled'] },
         nextActions: {
           type: 'array',
           uniqueItems: true,
@@ -678,7 +678,8 @@ const components: OpenApiObject = {
         waitingFor: { type: 'array', uniqueItems: true, items: { oneOf: [accountId, contractId] } },
         expiresAtLedger: { type: 'integer', minimum: 1 },
         externalReference: { type: 'string' },
-        reason: { type: 'string', enum: ['authorization_blocked', 'execution_failed', 'execution_unavailable'] },
+        reason: { type: 'string', enum: ['authorization_blocked', 'execution_failed', 'execution_unavailable', 'execution_outcome_unknown'] },
+        unresolvedTransactionHashes: { type: 'array', uniqueItems: true, items: { type: 'string', pattern: '^[0-9a-f]{64}$' }, description: 'Reconcile every unresolved prepared hash before preparing or replanning.' },
         execution: {
           type: 'object',
           required: ['owner', 'executor', 'transactionHash', 'preparedAt', 'validUntil'],
@@ -720,7 +721,7 @@ const components: OpenApiObject = {
             type: 'object',
             required: ['code', 'requiredAccess', 'available'],
             properties: {
-              code: { type: 'string', enum: ['contribute_signature', 'contribute_authorization', 'decline', 'prepare_execution', 'refresh_execution', 'replan', 'cancel'] },
+              code: { type: 'string', enum: ['contribute_signature', 'contribute_authorization', 'decline', 'prepare_execution', 'refresh_execution', 'reconcile_execution', 'replan', 'cancel'] },
               requiredAccess: { type: 'string', enum: ['write', 'sign'] },
               available: { type: 'boolean' },
             },
@@ -730,6 +731,7 @@ const components: OpenApiObject = {
         waitingFor: { type: 'array', uniqueItems: true, items: { oneOf: [accountId, contractId] } },
         expiresAt: timestamp,
         expiresAtLedger: { type: 'integer', minimum: 1 },
+        unresolvedTransactionHashes: { type: 'array', uniqueItems: true, items: { type: 'string', pattern: '^[0-9a-f]{64}$' } },
         result: {
           type: 'object',
           required: ['transactionHash', 'ledger', 'successful'],
@@ -749,7 +751,7 @@ const components: OpenApiObject = {
       properties: {
         version: operationVersion,
         eventId: { type: 'string', minLength: 1 },
-        type: { type: 'string', enum: ['intent_created', 'intent_cancelled', 'authorization_added', 'authorization_plan_revised', 'execution_prepared', 'execution_confirmed', 'execution_failed'] },
+        type: { type: 'string', enum: ['intent_created', 'intent_cancelled', 'authorization_added', 'authorization_plan_revised', 'execution_prepared', 'execution_not_included', 'execution_confirmed', 'execution_failed'] },
         occurredAt: timestamp,
         actorAddress: accountId,
         actor: { type: 'object', additionalProperties: true },
@@ -842,7 +844,7 @@ const components: OpenApiObject = {
         authorizationPlanDigest: { type: 'string', minLength: 1 },
         authorizationPlanRevision: { type: 'integer', minimum: 1 },
         signerAddress: accountId,
-        status: { type: 'string', enum: ['awaiting_authorization', 'authorization_ready', 'expired', 'blocked', 'cancelled'] },
+        status: { type: 'string', enum: ['awaiting_authorization', 'authorization_ready', 'expired', 'blocked', 'cancelled', 'completed'] },
         expiresAt: timestamp,
         challenges: { type: 'array', items: schema('BrowserAuthorizationChallenge') },
         hostedReviewUrl: { type: 'string', format: 'uri' },
@@ -900,7 +902,7 @@ const components: OpenApiObject = {
         { required: ['action'] },
       ],
       properties: {
-        action: { type: 'string', enum: ['prepare_execution', 'refresh_execution'], description: 'prepare_execution materializes the current execution package. refresh_execution deliberately materializes a fresh package after a lost, stale, or failed prior attempt. Both reuse the already-bound executor.' },
+        action: { type: 'string', enum: ['prepare_execution', 'refresh_execution'], description: 'Prepare an execution package. Refresh is allowed only after every previous hash has a verified failed receipt or proven non-inclusion. A lost response, timeout, or local expiry is not proof.' },
         executor: { ...accountId, description: 'Preferred executor field. Integration callers may omit it when the Intent already snapshotted an executor. If unresolved, providing it binds the executor for this Intent.' },
         executionSource: { ...accountId, deprecated: true, description: 'Legacy alias for executor.' },
         acceptedEffectsDigest: { type: 'string', pattern: '^[0-9a-f]{64}$', description: 'Explicit acceptance of the exact current effects digest after reviewing a critical numeric-only diff. Structural changes cannot be accepted here and require a fresh authorization-plan revision. Integration Services cannot use this field.' },
@@ -1003,13 +1005,15 @@ const components: OpenApiObject = {
     },
     ContractIntentExecutionReconcileResult: {
       type: 'object',
-      required: ['operation', 'version', 'transactionHash', 'observed', 'replayed'],
+      required: ['operation', 'version', 'transactionHash', 'observed', 'replayed', 'outcome'],
       properties: {
         operation: { type: 'string', const: 'contract.intent.execution.reconcile' },
         version: operationVersion,
         transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
         observed: { type: 'boolean' },
         replayed: { type: 'boolean' },
+        outcome: { type: 'string', enum: ['unknown', 'not_included', 'failed', 'successful'] },
+        nonInclusionProof: { type: 'object', required: ['oldestLedger', 'latestLedger', 'latestLedgerClosedAt', 'checkedAt'], properties: { oldestLedger: { type: 'integer', minimum: 1 }, latestLedger: { type: 'integer', minimum: 1 }, latestLedgerClosedAt: timestamp, checkedAt: timestamp }, additionalProperties: false },
         observation: schema('SorobanIntentExecutionObservation'),
         job: schema('IntegrationSorobanJob'),
         task: schema('AgentTask'),
