@@ -4,6 +4,7 @@ import {
   TransactionBuilder,
   hash,
   inspectAuthEntry,
+  StrKey,
   xdr,
 } from '@stellar/stellar-sdk/base';
 import type { SorobanIntent } from './sorobanIntent.js';
@@ -54,6 +55,13 @@ export function authorizationEntriesFromPlan(
 ): xdr.SorobanAuthorizationEntry[] {
   return plan.authorizationEntriesXdr.map((value) =>
     xdr.SorobanAuthorizationEntry.fromXdr(value, 'base64'));
+}
+
+/** Discovery subjects only; live signer weights must still be checked. */
+export function sorobanPlanAuthorizerAccounts(plan: SorobanAuthorizationPlan): string[] {
+  return [...new Set(authorizationEntriesFromPlan(plan)
+    .map((entry) => inspectAuthEntry(entry).address)
+    .filter((address): address is string => Boolean(address && StrKey.isValidEd25519PublicKey(address))))].sort();
 }
 
 export function createSorobanAuthorizationPlan(

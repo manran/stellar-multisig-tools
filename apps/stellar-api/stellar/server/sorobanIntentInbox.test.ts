@@ -194,6 +194,31 @@ test('Read and Sign Agents discover the same current Soroban authorization, with
   assert.equal(after.intents[0].status, 'authorization_ready');
 });
 
+test('Human and Agent Inbox reconcile a released package before any new action', async () => {
+  const f = await fixture();
+  const address = f.signer.publicKey();
+  const prep = {
+    version: 1 as const, transactionHash: 'ab'.repeat(32), authorizationPlanDigest: f.stored.authorizationPlan.authorizationPlanDigest,
+    authorizationPlanRevision: 1, executionSource: address, transactionSequence: '1',
+    validUntil: '2026-09-14T10:05:00.000Z', latestLedger: 100, effectsDigest: 'cd'.repeat(32),
+    effectsAccepted: true, preparedAt: '2026-09-14T10:01:00.000Z',
+  };
+  await f.store.putExecutionPreparation(f.stored.id, prep);
+  const human = await listSorobanIntentInbox(f.store, address, 'testnet', f.options);
+  const agent = await listAgentSorobanInbox(f.store, address, 'testnet', 'sign', f.options);
+  assert.equal(human[0].viewerAction, 'reconcile_execution');
+  assert.deepEqual(human[0].unresolvedTransactionHashes, [prep.transactionHash]);
+  assert.equal(agent.tasks[0].signatureRequired, false);
+  assert.deepEqual(agent.tasks[0].nextActions.map((item) => item.code), ['reconcile_execution']);
+  await f.store.updateIntent({ ...f.stored, cancellation: { version: 1, cancelledAt: '2026-09-14T10:02:00.000Z',
+    authorizationPlanDigest: prep.authorizationPlanDigest, authorizationPlanRevision: 1 } });
+  assert.equal((await listSorobanIntentInbox(f.store, f.creator.publicKey(), 'testnet', f.options))[0]?.viewerAction, 'reconcile_execution');
+  f.store.preparations.set(f.stored.id, [{ ...prep, nonInclusionProof: {
+    oldestLedger: 1, latestLedger: 300, latestLedgerClosedAt: '2026-09-14T10:06:00.000Z', checkedAt: '2026-09-14T10:06:01.000Z',
+  } }]);
+  assert.deepEqual(await listSorobanIntentInbox(f.store, f.creator.publicKey(), 'testnet', f.options), []);
+});
+
 test('ready and blocked Intent states project to execution and attention actions', () => {
   const base = {
     id: 'N'.repeat(16),

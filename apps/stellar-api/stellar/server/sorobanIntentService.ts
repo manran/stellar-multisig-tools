@@ -38,6 +38,7 @@ export async function createStoredSorobanIntent(
     authorizationPlan: SorobanAuthorizationPlan;
     creatorAddress?: string;
     creatorActor?: MachineCallerProvenance;
+    creationInputHash?: string;
     discoverySignerKeys?: string[];
     integration?: SorobanIntentIntegrationContext;
     executionPolicy?: ExecutionPolicy;
@@ -83,6 +84,7 @@ export async function createStoredSorobanIntent(
     createdAt,
     ...(input.creatorAddress ? { creatorAddress: input.creatorAddress } : {}),
     ...(input.creatorActor ? { creatorActor: input.creatorActor } : {}),
+    ...(input.creationInputHash ? { creationInputHash: input.creationInputHash } : {}),
     discoverySignerKeys: [...new Set([...(input.creatorAddress ? [input.creatorAddress] : []), ...(input.discoverySignerKeys ?? [])])].sort(),
     ...(input.integration ? { integration: input.integration } : {}),
     ...(input.executionPolicy ? { executionPolicy: input.executionPolicy } : {}),

@@ -11,11 +11,11 @@ description: "Counterexample-driven review of Agent First discovery, history and
 
 | ID | Priority | Finding | Status |
 | --- | --- | --- | --- |
-| HR-01 | P0 | New eligible signer can be missing from Inbox after signer rotation | Open |
-| HR-02 | P1 | Classic Inbox silently truncates; no complete enumeration contract | Open |
-| HR-03 | P1 | Human and Agent disagree about recovery action for one unresolved Intent | Open |
-| HR-04 | P1 | An already-created semantic Intent cannot be replayed when ABI lookup fails | Open |
-| HR-05 | P1 | Replanning can remove a proven historical participant from Soroban Activity discovery | Open |
+| HR-01 | P0 | New eligible signer can be missing from Inbox after signer rotation | Regression verified; live acceptance pending |
+| HR-02 | P1 | Classic Inbox silently truncates; no complete enumeration contract | Regression verified; live acceptance pending |
+| HR-03 | P1 | Human and Agent disagree about recovery action for one unresolved Intent | Regression verified; live acceptance pending |
+| HR-04 | P1 | An already-created semantic Intent cannot be replayed when ABI lookup fails | Regression verified; live acceptance pending |
+| HR-05 | P1 | Replanning can remove a proven historical participant from Soroban Activity discovery | Regression verified; live acceptance pending |
 
 ### HR-01 — live authority vs discovery membership
 
@@ -64,3 +64,13 @@ description: "Counterexample-driven review of Agent First discovery, history and
 - Public Testnet RPC read-only probes returned `getHealth` fields `oldestLedger`, `latestLedger`, `latestLedgerCloseTime` and `getTransaction` NOT_FOUND coverage fields. This checks the previous recovery implementation's real response shape; it does not establish full history coverage, fee-bump behavior, or a live recovery result.
 - Reviewed source, fixture behavior, docs and persistence boundaries. No business code, database, runtime deployment or Mainnet was changed during this review.
 - Real Soroban full-lifecycle acceptance and independent black-box retest remain open. Complete the five fixes and repeat the review. Do not infer that all possible defects have been found.
+
+## Follow-up: repairs and verification
+
+- HR-01: discover current authorizer accounts with fresh reverse lookup, then apply live signer checks. PostgreSQL migration 0021 adds and backfills the Soroban authorizer index.
+- HR-02: combined Classic/Soroban keyset pagination, explicit completeness and page counts; Human Inbox and Dashboard collect all pages or report an error. Enumeration is live, not an atomic snapshot.
+- HR-03: Human Inbox, Agent and detail view prioritize unresolved execution reconciliation. Preparation and contribution guards reject unresolved or stale work.
+- HR-04: persist normalized accepted-input fingerprints and check durable replay before ABI lookup. Legacy records without fingerprints retain typed-digest verification and may still require ABI. Pending authorization still requires live state.
+- HR-05: PostgreSQL history candidates include the creator and proven contributors independently of current signer discovery. Historical visibility does not grant signing authority.
+- Verification on the repaired working tree: 971 unit/service tests, 39 isolated PostgreSQL tests, 104 browser scenarios; API, web and public documentation builds passed. The 101-request pagination fixture returned 50 + 50 + 1. Browser report recorded zero failed scenarios, unexpected requests or page errors.
+- Scope: Testnet PostgreSQL. Legacy Blob records have no offline authorizer-index backfill. Mainnet is unchanged. Independent black-box acceptance and real Soroban lifecycle remain open.

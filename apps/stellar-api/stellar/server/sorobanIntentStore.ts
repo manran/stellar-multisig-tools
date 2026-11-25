@@ -100,11 +100,18 @@ export interface StoredSorobanIntent {
   createdAt: string;
   creatorAddress?: string;
   creatorActor?: MachineCallerProvenance;
+  /** Private idempotency evidence for an accepted semantic creation input. */
+  creationInputHash?: string;
   discoverySignerKeys: string[];
   integration?: SorobanIntentIntegrationContext;
   executionPolicy?: SorobanExecutionPolicy;
   privateContext?: SorobanIntentPrivateContext;
   cancellation?: StoredSorobanIntentCancellation;
+}
+
+export function publicSorobanIntent(stored: StoredSorobanIntent): Omit<StoredSorobanIntent, 'creationInputHash'> {
+  const { creationInputHash: _internal, ...intent } = stored;
+  return intent;
 }
 
 /** A verified successful execution is terminal for the business Intent, even
@@ -160,7 +167,8 @@ export interface SorobanIntentStore {
   updateIntent(value: StoredSorobanIntent): Promise<void>;
   cancelIntent?(id: string, cancellation: StoredSorobanIntentCancellation): Promise<{ cancellation: StoredSorobanIntentCancellation; created: boolean }>;
   bindExecutionPolicy?(id: string, executionPolicy: SorobanExecutionPolicy): Promise<SorobanExecutionPolicy>;
-  listIntentsBySigner?(network: StellarNetwork, signerAddress: string): Promise<StoredSorobanIntent[]>;
+  listIntentsBySigner?(network: StellarNetwork, signerAddress: string, authorizerAccounts?: string[]): Promise<StoredSorobanIntent[]>;
+  listIntentsByActivitySigner?(network: StellarNetwork, signerAddress: string): Promise<StoredSorobanIntent[]>;
   listContributions(id: string): Promise<StoredSorobanIntentAuthorizationContribution[]>;
   putContribution(id: string, contribution: StoredSorobanIntentAuthorizationContribution): Promise<void>;
   listExecutionPreparations?(id: string): Promise<StoredSorobanIntentExecutionPreparation[]>;

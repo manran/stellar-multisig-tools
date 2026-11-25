@@ -181,7 +181,7 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
   },
   {
     id: 'signer.inbox.list', version: 1, method: 'GET', path: '/inbox',
-    access: 'principal:read', effect: 'none', summary: 'Discover pending Classic Requests and Soroban Intents for the authenticated signer. signature_required_count and task.signatureRequired identify signatures to notify the signer about; action_count counts tasks actionable by this credential.',
+    access: 'principal:read', effect: 'none', summary: 'Discover pending Classic Requests and Soroban Intents for the authenticated signer. Follow nextCursor until complete=true; counts apply to the returned page. signatureRequired identifies signatures to notify the signer about; action_count counts tasks actionable by this credential.',
   },
   {
     id: 'signer.contacts.list', version: 1, method: 'GET', path: '/address-book',

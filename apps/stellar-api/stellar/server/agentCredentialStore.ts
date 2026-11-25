@@ -27,6 +27,7 @@ export interface StoredAgentIdempotencyClaim {
   principal: SignerPrincipalRef;
   idempotencyHash: string;
   payloadHash: string;
+  requestInputHash?: string;
   externalReference?: string;
   createdAt: string;
 }
@@ -36,6 +37,7 @@ export interface AgentCredentialStore {
   getCredential(credentialId: string): Promise<StoredSignerAgentCredential | null>;
   putCredential(credential: StoredSignerAgentCredential): Promise<void>;
   touchCredential(credentialId: string, usedAt: string): Promise<void>;
+  getIdempotency?(credentialId: string, idempotencyHash: string): Promise<StoredAgentIdempotencyClaim | null>;
   claimIdempotency(claim: StoredAgentIdempotencyClaim): Promise<{ claimed: boolean; claim: StoredAgentIdempotencyClaim }>;
   releaseIdempotency(claim: StoredAgentIdempotencyClaim): Promise<void>;
 }

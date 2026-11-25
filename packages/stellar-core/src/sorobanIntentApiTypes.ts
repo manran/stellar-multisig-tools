@@ -136,7 +136,7 @@ export interface IntegrationSorobanJobProjection {
   };
 }
 
-export type SorobanIntentViewerAction = 'sign' | 'route_execution' | 'waiting' | 'waiting_execution' | 'execution_failed' | 'attention' | 'cancelled';
+export type SorobanIntentViewerAction = 'sign' | 'route_execution' | 'waiting' | 'waiting_execution' | 'execution_failed' | 'reconcile_execution' | 'attention' | 'cancelled';
 
 export interface InboxSorobanIntentSnapshot {
   id: string;
@@ -149,6 +149,7 @@ export interface InboxSorobanIntentSnapshot {
   contributionCount: number;
   authorizers: SorobanGAccountAuthorizerStatus[];
   viewerAction: SorobanIntentViewerAction;
+  unresolvedTransactionHashes?: string[];
 }
 
 export interface SorobanIntentResponse {

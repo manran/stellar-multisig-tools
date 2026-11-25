@@ -6,6 +6,7 @@ import type { InboxRequestSnapshot } from '../../../../packages/stellar-core/src
 import { projectInboxViewerAction } from '../../../../packages/stellar-core/src/inboxPresentation.js';
 import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
 import { isValidSigningRequestId } from './requestLocator.js';
+import { compareInboxPageKeys, type InboxPageKey } from './inboxPage.js';
 import type { SigningRequestStore, StoredSigningRequest } from './requestStore.js';
 import { getSigningRequest } from './requestService.js';
 import { signerCanAccessTransaction, signerHasSignedTransaction } from './requestAccess.js';
@@ -18,6 +19,8 @@ interface InboxOptions {
   networkParametersLoader?: (network: StellarNetwork) => Promise<StellarNetworkParameters>;
   limit?: number;
   includeProposed?: boolean;
+  sourceAccountIds?: string[];
+  after?: InboxPageKey;
 }
 
 const REQUEST_SCAN_BATCH_SIZE = 6;
@@ -27,6 +30,7 @@ async function discoveryCandidates(
   address: string,
   network: StellarNetwork | undefined,
   includeProposed: boolean,
+  sourceAccountIds: string[],
 ): Promise<StoredSigningRequest[]> {
   const proposer = network && includeProposed ? await store.listRequestsByProposer?.(network, address) ?? [] : [];
   let signers: StoredSigningRequest[];
@@ -34,7 +38,7 @@ async function discoveryCandidates(
     signers = store.listRequests ? await store.listRequests() : [];
   } else {
     try {
-      signers = await store.listRequestsByDiscoverySubjects(network, [], address);
+      signers = await store.listRequestsByDiscoverySubjects(network, sourceAccountIds, address);
     } catch (cause) {
       if (!store.listRequests) throw cause;
       signers = await store.listRequests();
@@ -52,7 +56,7 @@ export async function listSignerInbox(
   const now = options.now ?? new Date();
   const accountLoader = options.accountLoader ?? loadAccount;
   const networkParametersLoader = options.networkParametersLoader ?? loadNetworkParameters;
-  const limit = Math.max(1, Math.min(options.limit ?? 50, 100));
+  const limit = Math.max(1, Math.min(options.limit ?? 50, 101));
   const accountCache = new Map<string, ReturnType<typeof loadAccount>>();
   const cachedAccountLoader: typeof loadAccount = (accountId, network) => {
     const key = `${network}:${accountId}`;
@@ -63,11 +67,12 @@ export async function listSignerInbox(
     return pending;
   };
 
-  const requests = (await discoveryCandidates(store, address, options.network, options.includeProposed !== false))
+  const requests = (await discoveryCandidates(store, address, options.network, options.includeProposed !== false, options.sourceAccountIds ?? []))
     .filter((request) => isValidSigningRequestId(request.id))
     .filter((request) => (!options.network || request.network === options.network))
     .filter((request) => new Date(request.expiresAt).getTime() > now.getTime())
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    .filter((item) => !options.after || compareInboxPageKeys({ kind: 'request', id: item.id, createdAt: item.createdAt }, options.after) > 0)
+    .sort((a, b) => compareInboxPageKeys({ ...a, kind: 'request' }, { ...b, kind: 'request' }));
 
   const visible: SigningRequestSnapshot[] = [];
   for (let index = 0; index < requests.length && visible.length < limit; index += REQUEST_SCAN_BATCH_SIZE) {

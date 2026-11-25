@@ -331,7 +331,7 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
     const ids = await this.pool.query<{ id: string }>(
       `SELECT id FROM mst_stellar.classic_requests
         WHERE network = $1 AND proposer_address = $2
-        ORDER BY created_at DESC, id DESC LIMIT 100`,
+        ORDER BY created_at DESC, id DESC`,
       [network, address],
     );
     const values = await Promise.all(ids.rows.map((row) => this.getRequest(row.id)));

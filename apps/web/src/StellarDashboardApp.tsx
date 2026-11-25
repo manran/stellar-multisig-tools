@@ -11,14 +11,7 @@ import { describeInboxRequest, inboxDeadlineLabel } from './stellar/inboxRequest
 import { intentAuthorizationWindowLabel, intentViewerActionNeedsAction, intentViewerActionPresentation } from './stellar/sorobanIntentPresentation';
 import type { InboxSorobanIntentSnapshot } from '../../../packages/stellar-core/src/sorobanIntentApiTypes';
 import { navigateWorkspace, stellarHref, stellarHrefWithSearch } from './workspaceNavigation';
-
-interface InboxCountResponse {
-  pending_count?: number;
-  action_count?: number;
-  action_counts?: InboxActionCounts;
-  requests?: InboxRequestSnapshot[];
-  intents?: InboxSorobanIntentSnapshot[];
-}
+import { loadCompleteHumanInbox } from '../../../packages/stellar-core/src/humanInboxClient';
 
 interface DashboardInboxSummary {
   pendingCount: number;
@@ -62,11 +55,7 @@ export default function StellarDashboardApp() {
       return () => { cancelled = true; };
     }
 
-    void fetch('/api/inbox', { cache: 'no-store' })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return await response.json() as InboxCountResponse;
-      })
+    void loadCompleteHumanInbox()
       .then((body) => {
         if (
           !cancelled

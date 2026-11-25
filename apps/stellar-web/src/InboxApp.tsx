@@ -24,6 +24,7 @@ import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
 import { fixedClientStellarDeploymentNetwork } from '../../../packages/stellar-core/src/deploymentNetwork';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
 import { isWalletUserRejected } from './stellar/walletKit';
+import { loadCompleteHumanInbox, InboxLoadError } from '../../../packages/stellar-core/src/humanInboxClient';
 
 interface InboxResponse {
   address: string;
@@ -229,18 +230,11 @@ export default function InboxApp() {
     setLoadError({ session, message: '', requiresVerification: false });
     let needsVerification = false;
     try {
-      const response = await fetch('/api/inbox', { cache: 'no-store', signal: controller.signal });
-      needsVerification = response.status === 401 || response.status === 403;
-      if (!controller.signal.aborted && needsVerification) setData(null);
-      const body = await response.json() as InboxResponse & { error?: string };
-      if (!response.ok) throw new Error(body.error || 'Unable to load your inbox.');
-      if (body.address !== unlockedAddress || body.network !== unlockedNetwork) {
-        needsVerification = true;
-        if (!controller.signal.aborted) setData(null);
-        throw new Error('The wallet session changed. Confirm your wallet and try again.');
-      }
+      const body = await loadCompleteHumanInbox({ address: unlockedAddress, network: unlockedNetwork }, controller.signal);
       if (!controller.signal.aborted) setData(body);
     } catch (cause) {
+      needsVerification = cause instanceof InboxLoadError && (cause.status === 401 || cause.status === 403);
+      if (!controller.signal.aborted && needsVerification) setData(null);
       if (!controller.signal.aborted) setLoadError({ session, message: cause instanceof Error ? cause.message : 'Unable to load your inbox.', requiresVerification: needsVerification });
     } finally {
       if (activeLoad.current === controller) {

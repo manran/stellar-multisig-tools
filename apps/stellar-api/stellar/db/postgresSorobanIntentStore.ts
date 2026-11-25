@@ -2,7 +2,7 @@ import type { Pool, PoolClient } from 'pg';
 import type { MachineCallerProvenance } from '../../../../packages/stellar-core/src/coordinationActorTypes.js';
 import type { SorobanExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
 import type { SorobanIntentIntegrationContext } from '../../../../packages/stellar-core/src/integrationTypes.js';
-import type { SorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import { sorobanPlanAuthorizerAccounts, type SorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
 import type { SorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
 import { blobSorobanIntentPrivateDataStore } from '../server/blobSorobanIntentPrivateDataStore.js';
 import type { SorobanIntentPrivateDataStore } from '../server/sorobanIntentPrivateDataStore.js';
@@ -30,6 +30,7 @@ interface IntentRow {
   created_at: Date | string;
   creator_address: string | null;
   creator_actor: MachineCallerProvenance | null;
+  creation_input_hash: string | null;
   integration_context: SorobanIntentIntegrationContext | null;
   external_reference: string | null;
   execution_policy: SorobanExecutionPolicy | null;
@@ -103,6 +104,7 @@ async function readIntent(
        i.created_at,
        i.creator_address,
        i.creator_actor,
+       i.creation_input_hash,
        i.integration_context,
        i.external_reference,
        i.execution_policy,
@@ -156,6 +158,7 @@ async function readIntent(
     createdAt: iso(row.created_at),
     ...(row.creator_address ? { creatorAddress: row.creator_address } : {}),
     ...(row.creator_actor ? { creatorActor: row.creator_actor } : {}),
+    ...(row.creation_input_hash ? { creationInputHash: row.creation_input_hash } : {}),
     discoverySignerKeys: signers,
     ...(row.integration_context ? { integration: row.integration_context } : {}),
     ...((row.bound_execution_policy ?? row.execution_policy)
@@ -210,8 +213,9 @@ async function assertExecutionResolved(client: PoolClient, id: string): Promise<
 
 async function syncSigners(
   client: PoolClient,
-  value: Pick<StoredSorobanIntent, 'id' | 'network' | 'discoverySignerKeys'>,
+  value: Pick<StoredSorobanIntent, 'id' | 'network' | 'discoverySignerKeys' | 'authorizationPlan'>,
 ): Promise<void> {
+  await client.query('UPDATE mst_stellar.soroban_intents SET authorizer_accounts = $2 WHERE id = $1', [value.id, sorobanPlanAuthorizerAccounts(value.authorizationPlan)]);
   await client.query('DELETE FROM mst_stellar.soroban_intent_signers WHERE intent_id = $1', [value.id]);
   if (value.discoverySignerKeys.length === 0) return;
   await client.query(
@@ -241,10 +245,10 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
            authorization_plan_revision, authorization_plan_history,
            created_at, creator_address, creator_actor,
            integration_service_id, integration_context, external_reference, execution_policy,
-           has_private_note
+           has_private_note, creation_input_hash
          ) VALUES (
            $1, $2, $3, $4, $5, $6, $7,
-           $8, $9, $10, $11, $12, $13, $14, $15
+           $8, $9, $10, $11, $12, $13, $14, $15, $16
          )`,
         [
           value.id,
@@ -262,6 +266,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
           value.privateContext?.externalReference ?? null,
           policy,
           Boolean(value.privateContext?.initialPrivateNote),
+          value.creationInputHash ?? null,
         ],
       );
       await syncSigners(client, value);
@@ -458,12 +463,26 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
     });
   }
 
-  async listIntentsBySigner(network: 'public' | 'testnet', signerAddress: string): Promise<StoredSorobanIntent[]> {
+  async listIntentsBySigner(network: 'public' | 'testnet', signerAddress: string, authorizerAccounts: string[] = []): Promise<StoredSorobanIntent[]> {
     const ids = await this.pool.query<{ intent_id: string }>(
-      `SELECT intent_id
-         FROM mst_stellar.soroban_intent_signers
-        WHERE network = $1 AND signer_address = $2
-        ORDER BY intent_id`,
+      `SELECT intent_id FROM mst_stellar.soroban_intent_signers WHERE network = $1 AND signer_address = $2
+       UNION SELECT id FROM mst_stellar.soroban_intents
+        WHERE network = $1 AND (authorizer_accounts && $3::text[]
+          OR (authorizer_accounts IS NULL AND cardinality($3::text[]) > 0))
+       ORDER BY intent_id`,
+      [network, signerAddress, authorizerAccounts],
+    );
+    const values = await Promise.all(ids.rows.map((row) => this.getIntent(row.intent_id)));
+    return values.filter((value): value is StoredSorobanIntent => Boolean(value));
+  }
+
+  async listIntentsByActivitySigner(network: 'public' | 'testnet', signerAddress: string): Promise<StoredSorobanIntent[]> {
+    const ids = await this.pool.query<{ intent_id: string }>(
+      `SELECT id AS intent_id FROM mst_stellar.soroban_intents WHERE network = $1 AND creator_address = $2
+       UNION SELECT c.intent_id FROM mst_stellar.soroban_auth_contributions c
+        JOIN mst_stellar.soroban_intents i ON i.id = c.intent_id
+        WHERE i.network = $1 AND c.signer_address = $2
+       ORDER BY intent_id`,
       [network, signerAddress],
     );
     const values = await Promise.all(ids.rows.map((row) => this.getIntent(row.intent_id)));
@@ -485,10 +504,13 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
     await withPostgresTransaction(this.pool, async (client) => {
       const parent = await lockParent(client, id);
       if (!parent || await cancelled(client, id)) return;
-      if (!this.historicalImport) await assertNotExecuted(client, id);
+      if (!this.historicalImport) await assertExecutionResolved(client, id);
       const revision = contribution.authorizationPlanRevision ?? 1;
       const digest = contribution.authorizationPlanDigest ?? planDigestForRevision(parent, revision);
       if (!digest) throw new Error(`AuthorizationPlan revision ${revision} is unavailable for this contribution.`);
+      if (!this.historicalImport && (revision !== parent.authorization_plan_revision || digest !== parent.authorization_plan.authorizationPlanDigest)) {
+        throw new SorobanIntentStoreConflictError('authorization_plan_changed');
+      }
 
       const inserted = await client.query(
         `INSERT INTO mst_stellar.soroban_auth_contributions (

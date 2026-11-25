@@ -53,7 +53,7 @@ function inboxFixture(owner = addresses.alice) {
     eventId, type, occurredAt: now, actorAddress: owner, subjectAddress, ...extra,
   });
   return {
-    address: owner, network: 'testnet', pending_count: 1, action_count: 0,
+    address: owner, network: 'testnet', complete: true, pending_count: 1, action_count: 0,
     action_counts: { actionRequired: 0, signatureNeeded: 0, readyToSubmit: 0, needsAttention: 0, waiting: 1, readyForExecutionRouting: 0 },
     intents: [],
     requests: [{
@@ -244,6 +244,11 @@ async function fixturePage(width, options = {}) {
     }
     if (url.pathname === '/api/inbox') {
       state.inboxGetCount++;
+      const cursor = url.searchParams.get('cursor');
+      if (cursor && state.inboxPages) {
+        const page = state.inboxPages[cursor];
+        return json(page?.status === 200 ? page.body : { error: 'Fixture inbox continuation failure.' }, page?.status ?? 400);
+      }
       return json(state.inboxStatus === 200 ? state.inbox : { error: 'Fixture inbox load failure.' }, state.inboxStatus);
     }
     if (url.pathname === '/api/address-book') {
@@ -1420,6 +1425,23 @@ try {
       assert.equal(await page.getByText("You're all caught up.", { exact: true }).count(), 0);
     });
   }
+
+  await run('inbox-complete-enumeration-and-failed-continuation', 375, {
+    state: { inbox: { ...inboxFixture(), complete: false, nextCursor: 'page-2' },
+      inboxPages: { 'page-2': { status: 503 } } },
+  }, async ({ page, state }) => {
+    await page.goto(`${origin}/inbox`);
+    await page.getByRole('alert').waitFor({ state: 'visible' });
+    assert.equal(await page.getByText('November supplier payment', { exact: true }).count(), 0);
+    assert.equal(await page.getByText("You're all caught up.", { exact: true }).count(), 0);
+    const other = { ...inboxFixture().requests[0], id: 'QA00000000000002',
+      template: { ...inboxFixture().requests[0].template, name: 'Second-page payment' } };
+    state.inboxPages['page-2'] = { status: 200, body: { ...inboxFixture(), requests: [other] } };
+    await page.getByRole('button', { name: 'Refresh inbox', exact: true }).click();
+    await visible(page, 'November supplier payment');
+    await visible(page, 'Second-page payment');
+    await visible(page, '2 open work items');
+  });
 
   await run('inbox-empty-filters', 375, { state: { inbox: { ...inboxFixture(), pending_count: 0, requests: [],
     action_counts: { actionRequired: 0, signatureNeeded: 0, readyToSubmit: 0, needsAttention: 0, waiting: 0, readyForExecutionRouting: 0 } } } }, async ({ page }) => {

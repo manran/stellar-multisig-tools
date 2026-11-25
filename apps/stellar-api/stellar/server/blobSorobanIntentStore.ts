@@ -3,6 +3,7 @@ import { withBlobStorage } from './blobRequestStore.js';
 import type { SorobanExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { isValidSigningRequestId } from './requestLocator.js';
+import { sorobanPlanAuthorizerAccounts } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
 import type {
   SorobanIntentStore,
   StoredSorobanIntent,
@@ -108,7 +109,7 @@ async function intentIdsForSigner(network: StellarNetwork, address: string): Pro
 export const blobSorobanIntentStore: SorobanIntentStore = {
   async createIntent(value) {
     await withBlobStorage(async () => {
-      await Promise.all(value.discoverySignerKeys.map((address) => put(
+      await Promise.all([...new Set([...value.discoverySignerKeys, ...sorobanPlanAuthorizerAccounts(value.authorizationPlan)])].map((address) => put(
         signerPath(value.network, address, value.id),
         JSON.stringify({ intentId: value.id }),
         { access: 'private', addRandomSuffix: false, allowOverwrite: true, contentType: 'application/json', cacheControlMaxAge: 60 },
@@ -128,7 +129,7 @@ export const blobSorobanIntentStore: SorobanIntentStore = {
 
   async updateIntent(value) {
     await withBlobStorage(async () => {
-      await Promise.all(value.discoverySignerKeys.map((address) => put(
+      await Promise.all([...new Set([...value.discoverySignerKeys, ...sorobanPlanAuthorizerAccounts(value.authorizationPlan)])].map((address) => put(
         signerPath(value.network, address, value.id),
         JSON.stringify({ intentId: value.id }),
         { access: 'private', addRandomSuffix: false, allowOverwrite: true, contentType: 'application/json', cacheControlMaxAge: 60 },
@@ -186,8 +187,8 @@ export const blobSorobanIntentStore: SorobanIntentStore = {
     return executionPolicy;
   },
 
-  async listIntentsBySigner(network, signerAddress) {
-    const ids = await intentIdsForSigner(network, signerAddress);
+  async listIntentsBySigner(network, signerAddress, authorizerAccounts = []) {
+    const ids = [...new Set((await Promise.all([...new Set([signerAddress, ...authorizerAccounts])].map((address) => intentIdsForSigner(network, address)))).flat())];
     const records = await Promise.all(ids.map((id) => readIntent(id)));
     return records.filter((record): record is StoredSorobanIntent => Boolean(record));
   },

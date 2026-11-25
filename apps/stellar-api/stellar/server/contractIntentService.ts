@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   contractArgumentsToScVals,
   contractCallHostFunction,
@@ -48,15 +49,14 @@ function normalizedArguments(value: unknown): Record<string, unknown> {
   }
   return Object.fromEntries(entries);
 }
-export async function buildContractIntent(
-  input: {
-    network: unknown;
-    contractId: unknown;
-    method: unknown;
-    arguments: unknown;
-  },
-  dependencies: { interfaceLoader?: InterfaceLoader } = {},
-): Promise<BuiltContractIntent> {
+interface ContractIntentInput {
+  network: unknown;
+  contractId: unknown;
+  method: unknown;
+  arguments: unknown;
+}
+
+export function normalizeContractIntentInput(input: ContractIntentInput) {
   const network = normalizedNetwork(input.network);
   const contractId = typeof input.contractId === 'string' ? input.contractId.trim() : '';
   const method = typeof input.method === 'string' ? input.method.trim() : '';
@@ -69,6 +69,22 @@ export async function buildContractIntent(
     throw new ContractIntentServiceError('A contract method is required.', 400, 'invalid_method');
   }
 
+  return { network, contractId, method, arguments: rawArguments };
+}
+
+/** Exact JSON value identity, independent of object member order or live ABI. */
+export function contractIntentInputHash(input: ReturnType<typeof normalizeContractIntentInput>, context: Record<string, unknown>): string {
+  const canonical = JSON.stringify({ version: 1, input, context }, (_key, value) =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, value[key]])) : value);
+  return createHash('sha256').update(canonical).digest('hex');
+}
+
+export async function buildContractIntent(
+  input: ContractIntentInput,
+  dependencies: { interfaceLoader?: InterfaceLoader } = {},
+): Promise<BuiltContractIntent> {
+  const { network, contractId, method, arguments: rawArguments } = normalizeContractIntentInput(input);
   let loaded: LoadedContractInterface;
   try {
     loaded = await (dependencies.interfaceLoader ?? loadContractInterface)(contractId, network);

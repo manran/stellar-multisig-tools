@@ -11,18 +11,8 @@ import { describeInboxRequest, inboxDeadlineLabel } from './stellar/inboxRequest
 import { inboxHasFailedSignerEmail } from './stellar/inboxSenderProgress';
 import { intentAuthorizationWindowLabel, intentViewerActionNeedsAction, intentViewerActionPresentation } from './stellar/sorobanIntentPresentation';
 import type { InboxSorobanIntentSnapshot } from '../../../packages/stellar-core/src/sorobanIntentApiTypes';
-import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
 import { navigateWorkspace, stellarHref, stellarHrefWithSearch } from './workspaceNavigation';
-
-interface InboxCountResponse {
-  address?: string;
-  network?: StellarNetwork;
-  pending_count?: number;
-  action_count?: number;
-  action_counts?: InboxActionCounts;
-  requests?: InboxRequestSnapshot[];
-  intents?: InboxSorobanIntentSnapshot[];
-}
+import { loadCompleteHumanInbox } from '../../../packages/stellar-core/src/humanInboxClient';
 
 interface DashboardInboxSummary {
   pendingCount: number;
@@ -71,11 +61,7 @@ export default function StellarDashboardApp() {
       return;
     }
     const controller = new AbortController();
-    void fetch('/api/inbox', { cache: 'no-store', signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return await response.json() as InboxCountResponse;
-      })
+    void loadCompleteHumanInbox({ address: unlockedAddress, network: unlockedNetwork }, controller.signal)
       .then((body) => {
         if (controller.signal.aborted) return;
         if (

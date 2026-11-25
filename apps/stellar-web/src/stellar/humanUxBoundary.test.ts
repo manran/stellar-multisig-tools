@@ -91,7 +91,7 @@ test('connected home switches to an actionable Dashboard without a first-use cho
   assert.match(home, /if \(sessionAddress\) return <StellarDashboardApp \/>/);
   assert.match(home, /fixedClientStellarDeploymentNetwork\(\) === 'testnet' \? <StellarTestnetLandingApp \/> : <StellarLandingApp \/>/);
   assert.match(main, /case 'home': Component = StellarHomeApp/);
-  assert.match(dashboard, /requests\?: InboxRequestSnapshot\[\]/);
+  assert.match(dashboard, /loadCompleteHumanInbox\(/);
   assert.match(dashboard, /inboxViewerActionNeedsAction/);
   assert.match(dashboard, /slice\(0, 3\)/);
   assert.match(dashboard, /navigateWorkspace\('\/request'/);

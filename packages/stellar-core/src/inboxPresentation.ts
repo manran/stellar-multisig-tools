@@ -80,7 +80,7 @@ export function summarizeInboxActions(
     } else if (intent.viewerAction === 'route_execution') {
       counts.actionRequired += 1;
       counts.readyForExecutionRouting += 1;
-    } else if (intent.viewerAction === 'execution_failed' || intent.viewerAction === 'attention') {
+    } else if (intent.viewerAction === 'execution_failed' || intent.viewerAction === 'reconcile_execution' || intent.viewerAction === 'attention') {
       counts.actionRequired += 1;
       counts.needsAttention += 1;
     } else {

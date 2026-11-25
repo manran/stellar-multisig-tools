@@ -197,7 +197,9 @@ test('Integration Intent is idempotent and exact contract/method scope fails clo
   const f = await fixture();
   const store = new MemoryIntentStore();
   const first = await createIntegrationSorobanIntent(store, f.credential, f.input, f.options);
-  const replay = await createIntegrationSorobanIntent(store, f.credential, f.input, f.options);
+  const offline = { ...f.options, contractDependencies: { interfaceLoader: async () => { throw new Error('ABI offline'); } } };
+  const replay = await createIntegrationSorobanIntent(store, f.credential, { ...f.input, arguments: Object.fromEntries(Object.entries(f.input.arguments).reverse()) }, offline);
+  await assert.rejects(() => createIntegrationSorobanIntent(store, f.credential, { ...f.input, arguments: { ...f.input.arguments, changed: true } }, offline), { code: 'idempotency_conflict' });
   assert.equal(replay.replayed, true);
   assert.equal(replay.intent.id, first.intent.id);
 

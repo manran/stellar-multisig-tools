@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
+import { Address, Contract, Keypair, xdr } from '@stellar/stellar-sdk/base';
 import type { SorobanExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
 import { emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import type { SorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
@@ -7,6 +8,8 @@ import type { SorobanIntent } from '../../../../packages/stellar-core/src/soroba
 import { applyCoordinationMigrations } from './migrate.js';
 import { closeCoordinationPool, coordinationPool } from './postgres.js';
 import { createPostgresSorobanIntentStore } from './postgresSorobanIntentStore.js';
+import { listSorobanIntentActivityItems } from '../server/sorobanIntentActivity.js';
+import { listSorobanIntentInbox } from '../server/sorobanIntentInbox.js';
 import type {
   SorobanIntentPrivateDataStore,
   StoredSorobanIntentPrivateData,
@@ -130,6 +133,39 @@ test('Postgres Soroban store round-trips coordination facts while private note s
   assert.doesNotMatch(JSON.stringify(outbox.rows), /secret operator note/);
 });
 
+test('authorizer subject backfill discovers a replacement live signer and preserves accepted input identity', {
+  skip: !TEST_URL || !RESET_ALLOWED,
+}, async () => {
+  const store = createPostgresSorobanIntentStore(coordinationPool(), new MemoryPrivateStore());
+  const account = Keypair.random().publicKey(), oldSigner = Keypair.random().publicKey(), replacement = Keypair.random().publicKey();
+  const contract = new Contract('CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE');
+  const entry = new xdr.SorobanAuthorizationEntry({
+    credentials: xdr.SorobanCredentials.sorobanCredentialsAddressV2(new xdr.SorobanAddressCredentials({
+      address: new Address(account).toScAddress(), nonce: xdr.Int64(42n), signatureExpirationLedger: 1000, signature: xdr.ScVal.scvVoid(),
+    })),
+    rootInvocation: new xdr.SorobanAuthorizedInvocation({
+      function: xdr.SorobanAuthorizedFunction.sorobanAuthorizedFunctionTypeContractFn(new xdr.InvokeContractArgs({
+        contractAddress: contract.address().toScAddress(), functionName: 'reserve', args: [],
+      })), subInvocations: [],
+    }),
+  });
+  const value = { ...stored('PGINTENT00000007'), discoverySignerKeys: [oldSigner],
+    authorizationPlan: { ...plan(PLAN_ONE), authorizationEntriesXdr: [entry.toXdr('base64')] }, creationInputHash: 'e'.repeat(64) };
+  await store.createIntent(value);
+  const pool = coordinationPool();
+  await pool.query('UPDATE mst_stellar.soroban_intents SET authorizer_accounts = NULL WHERE id = $1', [value.id]);
+  await applyCoordinationMigrations();
+  const indexed = await pool.query<{ authorizer_accounts: string[] }>('SELECT authorizer_accounts FROM mst_stellar.soroban_intents WHERE id = $1', [value.id]);
+  assert.deepEqual(indexed.rows[0].authorizer_accounts, [account]);
+  assert.equal((await store.getIntent(value.id))?.creationInputHash, value.creationInputHash);
+  const options = { sourceAccountIds: [account], accountLoader: async () => ({
+    accountId: account, sequence: '1', subentryCount: 1, numSponsoring: 0, numSponsored: 0,
+    thresholds: { low: 1, medium: 1, high: 1 }, signers: [{ key: replacement, type: 'ed25519_public_key' as const, weight: 1 }],
+  } as never), networkParametersLoader: async () => ({ ledgerSequence: 100, ledgerClosedAt: '2026-09-18T01:00:00.000Z', baseFeeInStroops: 100, baseReserveInStroops: 5000000 }) };
+  assert.equal((await listSorobanIntentInbox(store, replacement, 'testnet', options)).find((item) => item.id === value.id)?.viewerAction, 'sign');
+  assert.ok(!(await listSorobanIntentInbox(store, oldSigner, 'testnet', { ...options, sourceAccountIds: [] })).some((item) => item.id === value.id));
+});
+
 test('AUTH, replan, executor binding and execution evidence preserve deterministic facts and outbox ids', {
   skip: !TEST_URL || !RESET_ALLOWED,
 }, async () => {
@@ -168,6 +204,10 @@ test('AUTH, replan, executor binding and execution evidence preserve determinist
   const replanned = await store.getIntent(value.id);
   assert.equal(replanned?.authorizationPlanRevision, 2);
   assert.deepEqual(replanned?.discoverySignerKeys, ['GCREATOR', 'GNEWSIGNER']);
+  assert.ok(!(await store.listIntentsBySigner!('testnet', 'GSIGNER')).some((item) => item.id === value.id));
+  const history = await listSorobanIntentActivityItems(store, 'GSIGNER', 'testnet');
+  assert.ok(history.some((item) => item.intentId === value.id && item.evidence.some((event) => event.type === 'authorization_added' && event.actorAddress === 'GSIGNER')));
+  assert.ok(!JSON.stringify(history).includes('sensitive-auth-signature'));
 
   const policy: SorobanExecutionPolicy = {
     mode: 'external',
@@ -357,6 +397,9 @@ test('concurrent preparations and replanning fail closed until the previous hash
   const rejected = attempts.find((result) => result.status === 'rejected');
   assert.equal(rejected?.reason.code, 'intent_execution_outcome_unknown');
   const [first] = await store.listExecutionPreparations!(value.id);
+  const lateContribution = { version: 1 as const, digest: 'unresolved-auth', entryIndex: 0, signerAddress: 'GSIGNER',
+    signatureBase64: 'fixture', authorizationPlanDigest: PLAN_ONE, authorizationPlanRevision: 1, receivedAt: '2026-09-18T01:03:01.000Z' };
+  await assert.rejects(() => store.putContribution(value.id, lateContribution), { code: 'intent_execution_outcome_unknown' });
   const revised = {
     ...value, authorizationPlanRevision: 2, authorizationPlan: plan(PLAN_TWO),
     authorizationPlanHistory: [{ revision: 1, authorizationPlan: value.authorizationPlan, supersededAt: '2026-09-18T01:04:00.000Z' }],
@@ -369,6 +412,7 @@ test('concurrent preparations and replanning fail closed until the previous hash
   assert.deepEqual((await store.listExecutionPreparations!(value.id))[0].nonInclusionProof, proof);
   assert.deepEqual(await store.listExecutionObservations!(value.id), []);
   await store.updateIntent(revised);
+  await assert.rejects(() => store.putContribution(value.id, lateContribution), { code: 'authorization_plan_changed' });
   await store.putExecutionPreparation!(value.id, { ...prepared, authorizationPlanRevision: 2, authorizationPlanDigest: PLAN_TWO, transactionHash: 'e'.repeat(64), preparedAt: '2026-09-18T02:01:00.000Z' });
   assert.equal((await store.listExecutionPreparations!(value.id)).length, 2);
 });

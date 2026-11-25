@@ -82,7 +82,7 @@ import {
 
 const MAX_BODY_BYTES = 64 * 1024;
 const METHODS = 'GET, POST, PATCH, PUT, OPTIONS';
-import { SorobanIntentStoreConflictError, assertSorobanIntentNotExecuted } from '../server/sorobanIntentStore.js';
+import { SorobanIntentStoreConflictError, assertSorobanIntentNotExecuted, publicSorobanIntent } from '../server/sorobanIntentStore.js';
 
 const sorobanIntentStore = runtimeSorobanIntentStore();
 const INTENT_ID_HEADER = 'x-multisig-intent-id';
@@ -266,7 +266,7 @@ export async function GET(request: Request): Promise<Response> {
     return json({
       operation: 'contract.intent.inspect',
       version: 1,
-      intent: access.stored,
+      intent: publicSorobanIntent(access.stored),
       authorization: access.authorization,
       evidence: projectSorobanIntentEvidence(access.stored, contributions, preparations, observations),
       ...(access.integrationCredential ? {
@@ -471,7 +471,7 @@ export async function POST(request: Request): Promise<Response> {
         operation: 'contract.intent.create',
         version: 1,
         replayed: result.replayed,
-        intent: result.intent,
+        intent: publicSorobanIntent(result.intent),
         authorization,
         job: await loadIntegrationJob(integrationCredential, result.intent, authorization),
       }, result.replayed ? 200 : 201);
@@ -517,7 +517,7 @@ export async function POST(request: Request): Promise<Response> {
         operation: 'contract.intent.create',
         version: 1,
         replayed: result.replayed,
-        intent: result.intent,
+        intent: publicSorobanIntent(result.intent),
         authorization,
         task: await loadAgentTask(result.intent, authorization, agent),
       }, result.replayed ? 200 : 201);
@@ -709,7 +709,7 @@ export async function PUT(request: Request): Promise<Response> {
         operation: 'contract.intent.cancel',
         version: 1,
         replayed: result.replayed,
-        intent: result.intent,
+        intent: publicSorobanIntent(result.intent),
         authorization,
         cancellation: result.cancellation,
         ...(job ? { job } : {}),
@@ -755,7 +755,7 @@ export async function PUT(request: Request): Promise<Response> {
       return json({
         operation: 'contract.intent.replan',
         version: 1,
-        intent: result.intent,
+        intent: publicSorobanIntent(result.intent),
         authorization: result.authorization,
         previousAuthorizationPlanDigest: result.previousAuthorizationPlanDigest,
         authorizationPlanRevision: result.authorizationPlanRevision,

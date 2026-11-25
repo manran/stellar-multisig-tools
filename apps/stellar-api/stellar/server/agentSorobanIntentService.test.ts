@@ -36,6 +36,7 @@ class MemoryAgentStore implements AgentCredentialStore {
     const value = this.credentials.get(id);
     if (value) this.credentials.set(id, { ...value, lastUsedAt: usedAt });
   }
+  async getIdempotency(credentialId: string, hash: string) { return this.claims.get(`${credentialId}:${hash}`) ?? null; }
   async claimIdempotency(claim: StoredAgentIdempotencyClaim) {
     const key = `${claim.credentialId}:${claim.idempotencyHash}`;
     const existing = this.claims.get(key);
@@ -183,7 +184,9 @@ test('Agent Intent creation replays the same durable resource through existing i
   agents.credentials.set(key.credentialId, key);
   const options = { ...(await serviceOptions(false, key.principal.address)), idFactory: () => 'B'.repeat(16) };
   const first = await createAgentSorobanIntent(agents, intents, key, createInput, options);
-  const second = await createAgentSorobanIntent(agents, intents, key, createInput, options);
+  const offlineOptions = { ...options, contractDependencies: { interfaceLoader: async () => { throw new Error('ABI offline'); } } };
+  const second = await createAgentSorobanIntent(agents, intents, key, createInput, offlineOptions);
+  await assert.rejects(() => createAgentSorobanIntent(agents, intents, key, { ...createInput, arguments: { wallet: 'changed' } }, offlineOptions), { code: 'idempotency_conflict' });
   assert.equal(first.intent.id, 'B'.repeat(16));
   assert.equal(second.intent.id, first.intent.id);
   assert.equal(second.replayed, true);

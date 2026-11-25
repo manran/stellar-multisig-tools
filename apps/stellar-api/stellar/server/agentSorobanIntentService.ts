@@ -11,7 +11,7 @@ import type {
   StoredAgentIdempotencyClaim,
   StoredSignerAgentCredential,
 } from './agentCredentialStore.js';
-import { buildContractIntent } from './contractIntentService.js';
+import { buildContractIntent, contractIntentInputHash, normalizeContractIntentInput } from './contractIntentService.js';
 import {
   idempotencyHash,
   normalizeExternalReference,
@@ -92,12 +92,34 @@ export async function createAgentSorobanIntent(
   const now = options.now ?? new Date();
   const idemHash = idempotencyHash(normalizeIdempotencyKey(input.idempotencyKey));
   const externalReference = normalizeExternalReference(input.externalReference);
-  const built = await buildContractIntent({
-    network: input.network,
-    contractId: input.contractId,
-    method: input.method,
-    arguments: input.arguments,
-  }, options.contractDependencies);
+  const normalized = normalizeContractIntentInput(input);
+  const requestInputHash = contractIntentInputHash(normalized, {
+    externalReference: externalReference ?? null,
+    privateNote: input.privateNote ?? null,
+  });
+  const prior = await agentStore.getIdempotency?.(credential.credentialId, idemHash);
+  if (prior) {
+    if (prior.credentialId !== credential.credentialId || prior.operation !== 'intent.create'
+      || !sameSignerPrincipal(prior.principal, credential.principal)
+      || (prior.requestInputHash && prior.requestInputHash !== requestInputHash)) {
+      throw new AgentCredentialServiceError('Idempotency key is already bound to a different Soroban Intent.', 409, 'idempotency_conflict');
+    }
+    if (prior.requestInputHash) {
+      const existing = await intentStore.getIntent(prior.requestId);
+      if (existing) {
+        if (existing.creatorAddress !== credential.principal.address
+          || existing.creatorActor?.type !== 'agent' || existing.creatorActor.id !== credential.credentialId
+          || existing.network !== input.network || prior.payloadHash !== payloadHash({
+            network: existing.network, intentDigest: existing.intent.intentDigest, externalReference, privateNote: input.privateNote,
+          })) {
+          throw new AgentCredentialServiceError('Idempotency recovery found a different Soroban Intent at the reserved id.', 409, 'idempotency_conflict');
+        }
+        await agentStore.touchCredential(credential.credentialId, now.toISOString());
+        return { replayed: true, intent: existing };
+      }
+    }
+  }
+  const built = await buildContractIntent(normalized, options.contractDependencies);
   const claim: StoredAgentIdempotencyClaim = {
     version: 1,
     credentialId: credential.credentialId,
@@ -105,6 +127,7 @@ export async function createAgentSorobanIntent(
     requestId: options.idFactory?.() ?? createSigningRequestId(),
     principal: credential.principal,
     idempotencyHash: idemHash,
+    requestInputHash,
     payloadHash: payloadHash({
       network: input.network,
       intentDigest: built.intent.intentDigest,
@@ -122,6 +145,7 @@ export async function createAgentSorobanIntent(
       active.credentialId !== credential.credentialId
       || active.operation !== 'intent.create'
       || !sameSignerPrincipal(active.principal, credential.principal)
+      || (active.requestInputHash !== undefined && active.requestInputHash !== requestInputHash)
       || active.payloadHash !== claim.payloadHash
     ) {
       throw new AgentCredentialServiceError(

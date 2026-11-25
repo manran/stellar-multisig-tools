@@ -63,6 +63,66 @@ test('inbox uses signer-first discovery without Horizon reverse lookup', async (
   assert.deepEqual(discoveryArgs, ['public', [], signer]);
 });
 
+test('live authorizer-account subjects discover replacement signers without trusting the old index', async () => {
+  const { Account, Asset, Keypair, Networks, Operation, TransactionBuilder } = await import('@stellar/stellar-sdk');
+  const source = Keypair.random().publicKey(), oldSigner = Keypair.random().publicKey(), newSigner = Keypair.random().publicKey();
+  const tx = new TransactionBuilder(new Account(source, '1'), { fee: '100', networkPassphrase: Networks.TESTNET })
+    .addOperation(Operation.payment({ destination: oldSigner, asset: Asset.native(), amount: '1' })).setTimeout(3600).build();
+  const now = new Date();
+  const request: StoredSigningRequest = { version: 1, id: '0'.repeat(16), network: 'testnet',
+    baseXdr: tx.toXDR(), transactionHash: Buffer.from(tx.hash()).toString('hex'), createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime()+3600000).toISOString(), discoverySignerKeys: [oldSigner] };
+  const store = baseStore({
+    async listRequestsByDiscoverySubjects(_network, accounts, address) { return accounts.includes(source) || address === oldSigner ? [request] : []; },
+    async getRequest() { return request; }, async listContributions() { return []; }, async getSubmission() { return null; },
+  });
+  const options = { network: 'testnet' as const, now,
+    accountLoader: async () => ({ accountId: source, sequence: '1', subentryCount: 0, numSponsoring: 0, numSponsored: 0,
+      nativeBalance: '100', nativeSellingLiabilities: '0', balances: [], thresholds: { low: 1, medium: 2, high: 2 },
+      signers: [{ key: newSigner, type: 'ed25519_public_key' as const, weight: 1 }] }),
+    networkParametersLoader: async () => ({ ledgerSequence: 100, ledgerClosedAt: now.toISOString(), baseFeeInStroops: 100, baseReserveInStroops: 5000000 }),
+  };
+  assert.deepEqual((await listSignerInbox(store, newSigner, { ...options, sourceAccountIds: [source] })).map((item) => item.id), [request.id]);
+  assert.deepEqual(await listSignerInbox(store, oldSigner, options), []);
+});
+
+test('real Classic Inbox enumeration returns all 101 authorized requests in stable pages', async () => {
+  const { Account, Asset, Keypair, Networks, Operation, TransactionBuilder } = await import('@stellar/stellar-sdk');
+  const { encodeSigningRequestId } = await import('./requestLocator.js');
+  const { mergeInboxPage, inboxPageParameters } = await import('./inboxPage.js');
+  const source = Keypair.random().publicKey(), signer = Keypair.random().publicKey();
+  const now = new Date();
+  const tx = new TransactionBuilder(new Account(source, '1'), { fee: '100', networkPassphrase: Networks.TESTNET })
+    .addOperation(Operation.payment({ destination: signer, asset: Asset.native(), amount: '1' })).setTimeout(3600).build();
+  const records: StoredSigningRequest[] = Array.from({ length: 101 }, (_, i) => {
+    const bytes = Buffer.alloc(10); bytes.writeUInt32BE(i+1, 6);
+    return { version: 1, id: encodeSigningRequestId(bytes), network: 'testnet', baseXdr: tx.toXDR(),
+      transactionHash: Buffer.from(tx.hash()).toString('hex'), createdAt: now.toISOString(),
+      expiresAt: new Date(now.getTime()+3600000).toISOString() };
+  });
+  const store = baseStore({
+    async listRequestsByDiscoverySubjects() { return [...records, records[0]]; },
+    async getRequest(id) { return records.find((item) => item.id === id) ?? null; },
+    async listContributions() { return []; }, async getSubmission() { return null; },
+  });
+  const options = { network: 'testnet' as const, now, limit: 51,
+    accountLoader: async () => ({ accountId: source, sequence: '1', subentryCount: 0, numSponsoring: 0, numSponsored: 0,
+      nativeBalance: '100', nativeSellingLiabilities: '0', balances: [], thresholds: { low: 1, medium: 2, high: 2 },
+      signers: [{ key: signer, type: 'ed25519_public_key' as const, weight: 1 }] }),
+    networkParametersLoader: async () => ({ ledgerSequence: 100, ledgerClosedAt: now.toISOString(), baseFeeInStroops: 100, baseReserveInStroops: 5000000 }),
+  };
+  const pages: number[] = [], seen: string[] = [];
+  let after: import('./inboxPage.js').InboxPageKey | undefined;
+  for (;;) {
+    const page = mergeInboxPage(await listSignerInbox(store, signer, { ...options, after }), [], 50);
+    pages.push(page.requests.length); seen.push(...page.requests.map((item) => item.id));
+    if (page.complete) break;
+    after = inboxPageParameters(new URL('https://example.test/inbox?cursor='+page.nextCursor)).after;
+  }
+  assert.deepEqual(pages, [50, 50, 1]);
+  assert.deepEqual(seen, records.map((item) => item.id).sort((a,b) => b.localeCompare(a)));
+});
+
 test('inbox falls back to the legacy scan when signer index lookup is unavailable', async () => {
   let legacyScans = 0;
   const store = baseStore({

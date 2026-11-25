@@ -17,7 +17,7 @@ import {
 } from '../../../../packages/stellar-core/src/sorobanCustomAuthorization.js';
 import { authorizationEntriesFromPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
 import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
-import { successfulSorobanExecution, assertSorobanIntentNotExecuted, type SorobanIntentStore, type StoredSorobanIntentAuthorizationContribution } from './sorobanIntentStore.js';
+import { successfulSorobanExecution, assertSorobanIntentNotExecuted, assertSorobanExecutionResolved, type SorobanIntentStore, type StoredSorobanIntentAuthorizationContribution } from './sorobanIntentStore.js';
 
 export type SorobanIntentAuthorizationStatus =
   | 'awaiting_authorization'
@@ -308,6 +308,7 @@ export async function contributeSorobanIntentAuthorization(
   if (target?.signerEvidence.some((signer) => signer.publicKey === input.signerAddress)) {
     return { authorization: before, added: false };
   }
+  await assertSorobanExecutionResolved(store, id);
   if (before.status !== 'awaiting_authorization') {
     throw new SorobanIntentAuthorizationServiceError(
       'This Soroban Intent is not accepting more authorization signatures.',

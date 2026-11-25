@@ -19,6 +19,9 @@ Integration owners and Intent creators can inspect a persisted successful receip
 
 ## Create the Intent
 
+For new machine-created semantic Intents, replay the same accepted input and `Idempotency-Key` to recover the existing Intent without reloading its contract interface. Object member order does not matter; changed argument values or types, or changed business context, conflict. Legacy Intents and claims without an accepted-input fingerprint still use their original typed-digest verification, which may require the ABI. Reading current authorization for a pending Intent can still require live signer/ledger state. A stored successful receipt remains available independently of that state.
+
+
 ```bash
 curl -sS -X POST https://api-testnet.multisig.tools/stellar/intent \
   -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \

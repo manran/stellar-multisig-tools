@@ -28,6 +28,12 @@ const parameter = (
 
 function operationParameters(path: string, method: string): OpenApiObject[] {
   const values: OpenApiObject[] = [];
+  if (path === '/inbox') {
+    values.push(
+      parameter('limit', 'query', false, { type: 'integer', minimum: 1, maximum: 100, default: 50 }, 'Maximum combined Request and Intent tasks on this page.'),
+      parameter('cursor', 'query', false, { type: 'string' }, 'Opaque nextCursor from the previous Inbox page. Each page revalidates live signer access.'),
+    );
+  }
   if (path === '/activity') {
     values.push(
       parameter('view', 'query', false, { type: 'string', const: 'work' }, 'Use work for unified personal Classic and Soroban Activity. Omit for Classic history.'),
@@ -1458,13 +1464,15 @@ const components: OpenApiObject = {
     },
     SignerInboxResult: {
       type: 'object',
-      required: ['address', 'network', 'actor', 'pending_count', 'action_count', 'requests'],
+      required: ['address', 'network', 'actor', 'complete', 'pending_count', 'action_count', 'requests'],
       properties: {
         address: accountId,
         network: stellarNetwork,
         actor: { type: 'string', enum: ['agent', 'human'] },
-        pending_count: { type: 'integer', minimum: 0 },
-        action_count: { type: 'integer', minimum: 0, description: 'For Agent callers, the number of tasks with at least one nextAction whose available flag is true.' },
+        complete: { type: 'boolean', description: 'True on the last page of this live enumeration; not a point-in-time ledger snapshot.' },
+        nextCursor: { type: 'string', description: 'Present when complete is false. Continue before treating absent tasks as cleared.' },
+        pending_count: { type: 'integer', minimum: 0, description: 'Number of returned work items on this page.' },
+        action_count: { type: 'integer', minimum: 0, description: 'For Agent callers, the number of tasks on this page with at least one nextAction whose available flag is true.' },
         signature_required_count: { type: 'integer', minimum: 0, description: 'For Agent callers, the number of returned tasks with signatureRequired=true, regardless of scope.' },
         requests: { type: 'array', items: { type: 'object', additionalProperties: true } },
         intents: { type: 'array', items: { type: 'object', additionalProperties: true }, description: 'Pending Soroban Intents visible to the authenticated signer.' },
