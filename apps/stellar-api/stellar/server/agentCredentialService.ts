@@ -88,6 +88,7 @@ export async function createSignerAgentCredential(
   accessValue: unknown,
   createdBy: string,
   now = new Date(),
+  reservedCredentialId?: string,
 ): Promise<{ apiKey: string; credential: SignerAgentCredentialSummary }> {
   const activeCount = (await store.listCredentials(principal)).filter((item) => !item.revokedAt).length;
   if (activeCount >= MAX_ACTIVE_SIGNER_AGENT_CREDENTIALS) {
@@ -99,7 +100,10 @@ export async function createSignerAgentCredential(
   }
   const label = normalizeLabel(labelValue);
   const access = normalizeAgentAccess(accessValue);
-  const credentialId = randomBytes(CREDENTIAL_ID_BYTES).toString('base64url');
+  const credentialId = reservedCredentialId ?? randomBytes(CREDENTIAL_ID_BYTES).toString('base64url');
+  if (reservedCredentialId && (!/^[A-Za-z0-9_-]{12}$/.test(credentialId) || await store.getCredential(credentialId))) {
+    throw new AgentCredentialServiceError('Reserved Agent credential already exists.', 409, 'agent_credential_conflict');
+  }
   const secret = randomBytes(CREDENTIAL_SECRET_BYTES).toString('base64url');
   const apiKey = `${AGENT_KEY_PREFIX}_${credentialId}_${secret}`;
   const credential: StoredSignerAgentCredential = {

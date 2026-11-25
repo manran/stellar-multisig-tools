@@ -234,6 +234,19 @@ const contractId = { type: 'string', pattern: '^C[A-Z2-7]{55}$' };
 const accountId = { type: 'string', pattern: '^G[A-Z2-7]{55}$' };
 const timestamp = { type: 'string', format: 'date-time' };
 
+function grantPreviewSchema(extra: OpenApiObject = {}, required: string[] = []): OpenApiObject {
+  return {
+    type: 'object',
+    required: ['requestId', 'userCode', 'label', 'access', 'network', 'expiresAt', 'status', ...required],
+    properties: {
+      requestId: { type: 'string', pattern: '^[a-f0-9]{32}$' }, userCode: { type: 'string' }, label: { type: 'string' },
+      access: { enum: ['read', 'write', 'sign'] }, network: { const: 'testnet' },
+      expiresAt: timestamp, status: { enum: ['pending', 'approved', 'denied'] }, ...extra,
+    },
+    additionalProperties: false,
+  };
+}
+
 const components: OpenApiObject = {
   securitySchemes: {
     agentBearer: { type: 'http', scheme: 'bearer', description: 'Signer Agent credential (msa_...). Human SEP-10 bearer sessions are also accepted where documented.' },
@@ -286,31 +299,76 @@ const components: OpenApiObject = {
       additionalProperties: false,
     },
     AgentGrantActionInput: {
-      description: 'Device pairing: request returns a one-time deviceCode; poll exchanges it after human approval. Approve requires a matching Human wallet session AND a fresh wallet signature bound to the exact grant.',
+      oneOf: ['AgentGrantRequestInput', 'AgentGrantPollInput', 'AgentGrantApproveInput', 'AgentGrantDenyInput'].map(schema),
+    },
+    AgentGrantRequestInput: {
+      type: 'object', required: ['action', 'label', 'access', 'network'],
+      properties: { action: { const: 'request' }, label: { type: 'string', minLength: 1, maxLength: 80 }, access: { type: 'string', enum: ['read', 'write', 'sign'] }, network: { const: 'testnet' } },
+      additionalProperties: false,
+    },
+    AgentGrantPollInput: {
+      type: 'object', required: ['action', 'deviceCode'],
+      properties: { action: { const: 'poll' }, deviceCode: { type: 'string', pattern: '^mgd_[a-f0-9]{32}_[A-Za-z0-9_-]{43}$' } },
+      additionalProperties: false,
+    },
+    AgentGrantApproveInput: {
+      type: 'object', required: ['action', 'requestId', 'mode'],
+      properties: { action: { const: 'approve' }, requestId: { type: 'string', pattern: '^[a-f0-9]{32}$' },
+        mode: { type: 'string', enum: ['sep53', 'transaction'] }, signature: { type: 'string', minLength: 1 }, transaction: xdr },
       oneOf: [
-        { type: 'object', required: ['action', 'label', 'access', 'network'],
-          properties: { action: { const: 'request' }, label: { type: 'string', minLength: 1, maxLength: 80 }, access: { type: 'string', enum: ['read', 'write', 'sign'] }, network: { const: 'testnet' } }, additionalProperties: false },
-        { type: 'object', required: ['action', 'deviceCode'],
-          properties: { action: { const: 'poll' }, deviceCode: { type: 'string', pattern: '^mgd_' } }, additionalProperties: false },
-        { type: 'object', required: ['action', 'requestId', 'mode'],
-          properties: { action: { const: 'approve' }, requestId: { type: 'string', pattern: '^[a-f0-9]{32}$' },
-            mode: { type: 'string', enum: ['sep53', 'transaction'] }, signature: { type: 'string' }, transaction: xdr }, additionalProperties: false },
-        { type: 'object', required: ['action', 'requestId'],
-          properties: { action: { const: 'deny' }, requestId: { type: 'string', pattern: '^[a-f0-9]{32}$' } }, additionalProperties: false },
+        { required: ['signature'], properties: { mode: { const: 'sep53' } }, not: { required: ['transaction'] } },
+        { required: ['transaction'], properties: { mode: { const: 'transaction' } }, not: { required: ['signature'] } },
+      ],
+      additionalProperties: false,
+    },
+    AgentGrantDenyInput: {
+      type: 'object', required: ['action', 'requestId'],
+      properties: { action: { const: 'deny' }, requestId: { type: 'string', pattern: '^[a-f0-9]{32}$' } },
+      additionalProperties: false,
+    },
+    AgentGrantPreview: grantPreviewSchema(),
+    AgentGrantRequestResult: grantPreviewSchema({
+      status: { const: 'pending' },
+      deviceCode: { type: 'string', pattern: '^mgd_[a-f0-9]{32}_[A-Za-z0-9_-]{43}$' },
+      verificationUri: { type: 'string', format: 'uri' },
+      intervalSeconds: { type: 'integer', minimum: 1 },
+    }, ['deviceCode', 'verificationUri', 'intervalSeconds']),
+    AgentGrantChallengeResult: grantPreviewSchema({
+      status: { const: 'pending' },
+      message: { type: 'string', minLength: 1 }, transaction: xdr, signer: accountId,
+    }, ['message', 'transaction', 'signer']),
+    AgentGrantPollResult: {
+      oneOf: [
+        { type: 'object', required: ['status'], properties: { status: { enum: ['authorization_pending', 'access_denied'] } }, additionalProperties: false },
+        { type: 'object', required: ['status', 'apiKey', 'credential'],
+          properties: { status: { const: 'approved' }, apiKey: { type: 'string', pattern: '^msa_[A-Za-z0-9_-]{12}_[A-Za-z0-9_-]{43}$' }, credential: { type: 'object', required: ['credentialId', 'principal', 'access'], additionalProperties: true } }, additionalProperties: false },
       ],
     },
+    AgentGrantDecisionResult: {
+      type: 'object', required: ['status'], properties: { status: { enum: ['approved', 'denied'] } }, additionalProperties: false,
+    },
     AgentGrantResult: {
-      type: 'object',
-      description: 'A pairing preview, pending/denied status, one-time device code, or once-only msa credential. Never forward deviceCode or apiKey to a browser approval URL.',
+      description: 'Transport union. Use the per-operation contract to distinguish Human consent from successful credential delivery.',
+      oneOf: ['AgentGrantPreview', 'AgentGrantRequestResult', 'AgentGrantChallengeResult', 'AgentGrantPollResult', 'AgentGrantDecisionResult'].map(schema),
+    },
+    AgentGrantRecoveryError: {
+      type: 'object', required: ['error', 'code', 'details'],
       properties: {
-        status: { type: 'string', enum: ['pending', 'approved', 'denied', 'authorization_pending', 'access_denied'] },
-        requestId: { type: 'string' }, userCode: { type: 'string' }, label: { type: 'string' },
-        access: { type: 'string', enum: ['read', 'write', 'sign'] }, network: { const: 'testnet' },
-        deviceCode: { type: 'string' }, verificationUri: { type: 'string', format: 'uri' },
-        message: { type: 'string', description: 'Human-readable exact approval message.' }, transaction: xdr, signer: accountId,
-        expiresAt: timestamp, intervalSeconds: { type: 'integer' }, apiKey: { type: 'string', description: 'Only once on successful poll after human wallet approval.' },
-      },
-      additionalProperties: true,
+        error: { type: 'string' }, code: { enum: ['already_exchanged', 'exchange_outcome_unknown', 'grant_expired', 'agent_credential_limit_reached', 'agent_credential_conflict', 'agent_pairing_rate_limited'] },
+        details: { type: 'object', required: ['requestId', 'recoveryOperations'], properties: {
+          requestId: { type: 'string', pattern: '^[a-f0-9]{32}$' },
+          credentialId: { type: 'string', pattern: '^[A-Za-z0-9_-]{12}$' },
+          recoveryOperations: { type: 'array', items: { type: 'string' } },
+        }, additionalProperties: false },
+      }, additionalProperties: false,
+    },
+    TestnetIntegrationExistsError: {
+      type: 'object', required: ['error', 'code', 'details'],
+      properties: {
+        error: { type: 'string' }, code: { const: 'integration_service_exists' },
+        details: { type: 'object', required: ['serviceId', 'recovery'],
+          properties: { serviceId: { type: 'string' }, recovery: { const: 'new_service_id_or_authorized_operator_rotation' } }, additionalProperties: false },
+      }, additionalProperties: false,
     },
     TestnetIntegrationCreateInput: {
       type: 'object',
@@ -668,7 +726,7 @@ const components: OpenApiObject = {
     },
     IntegrationSorobanJob: {
       type: 'object',
-      required: ['version', 'id', 'kind', 'network', 'state', 'nextActions', 'reviewUrl'],
+      required: ['version', 'id', 'kind', 'network', 'state', 'nextActions', 'actionCalls', 'reviewUrl'],
       properties: {
         version: operationVersion,
         id: { type: 'string', minLength: 1 },
@@ -680,6 +738,10 @@ const components: OpenApiObject = {
           uniqueItems: true,
           items: { type: 'string', enum: ['prepare_execution', 'submit_execution', 'reconcile_execution', 'refresh_execution', 'replan', 'cancel'] },
         },
+        actionCalls: { type: 'object', description: 'Resolve each offered action by operationId and bodyDefaults. External submission is not an MST API call; use the exact prepared and authorized XDR matching transactionHash.', additionalProperties: { oneOf: [
+          { type: 'object', required: ['operationId', 'bodyDefaults'], properties: { operationId: { type: 'string' }, bodyDefaults: { type: 'object', required: ['action'], properties: { action: { type: 'string' } }, additionalProperties: false } }, additionalProperties: false },
+          { type: 'object', required: ['transport', 'transactionHash'], properties: { transport: { const: 'external_stellar_submission' }, transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' } }, additionalProperties: false },
+        ] } },
         reviewUrl: { type: 'string', format: 'uri' },
         waitingFor: { type: 'array', uniqueItems: true, items: { oneOf: [accountId, contractId] } },
         expiresAtLedger: { type: 'integer', minimum: 1 },
@@ -725,8 +787,10 @@ const components: OpenApiObject = {
           type: 'array',
           items: {
             type: 'object',
-            required: ['code', 'requiredAccess', 'available'],
+            required: ['code', 'operationId', 'requiredAccess', 'available'],
             properties: {
+              operationId: { type: 'string', description: 'Resolve this exact call in x-multisig-operations. Use the task id in the required resource header.' },
+              bodyDefaults: { type: 'object', additionalProperties: { type: 'string' } },
               code: { type: 'string', enum: ['contribute_signature', 'contribute_authorization', 'decline', 'prepare_execution', 'refresh_execution', 'reconcile_execution', 'replan', 'cancel'] },
               requiredAccess: { type: 'string', enum: ['write', 'sign'] },
               available: { type: 'boolean' },
@@ -1501,12 +1565,191 @@ const components: OpenApiObject = {
   },
 };
 
+/** Retry policy is deliberately conservative. A transport failure is not
+ * evidence that a mutation did not commit. A 409 is not universally retryable. */
+function logicalOperationRetry(operation: HeadlessOperationDescriptor): OpenApiObject {
+  const { id, effect, path } = operation;
+  const replay = ['proposal.create', 'integration.request.create', 'contract.intent.create', 'integration.intent.create'].includes(id);
+  const inspectId = operation.access.startsWith('browser:') ? 'integration.intent.browser.inspect'
+    : path === '/intent' ? (id.startsWith('integration.') ? 'integration.intent.inspect' : 'contract.intent.inspect')
+    : path === '/request' ? (id.startsWith('integration.') ? 'integration.request.inspect' : 'proposal.inspect') : undefined;
+  const reconcileId = id.startsWith('integration.') ? 'integration.intent.execution.reconcile' : 'contract.intent.execution.reconcile';
+  const rule = (strategy: string, nextOperationIds: string[] = [], condition?: string) =>
+    ({ strategy, nextOperationIds, ...(condition ? { condition } : {}) });
+  const onError: OpenApiObject = {};
+  let transportFailure = effect === 'none' ? rule('retry_same_request')
+    : inspectId && operation.access !== 'human' ? rule('inspect_then_decide', [inspectId]) : rule('human_review');
+  let idempotencyKey = replay ? 'required' : 'not_used';
+  if (replay) {
+    transportFailure = rule('retry_same_request', [], 'Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty.');
+    onError.idempotency_conflict = rule('stop', [], 'Do not change the payload or key merely to bypass a conflict.');
+  }
+  if (id === 'agent.grant.request') {
+    transportFailure = rule('start_new_request', [id], 'If no verification URL was delivered, the unapproved request expires. Send only the new approval link.');
+  }
+  if (id === 'agent.grant.poll') {
+    transportFailure = rule('retry_same_request', [id], 'Poll with the same deviceCode at the returned interval. A consumed claim cannot mint again.');
+    const recover = rule('human_recovery', ['agent.access.list', 'agent.access.revoke', 'agent.grant.request'],
+      'Use details.credentialId to identify the exact reserved credential; check again if issuance is still uncertain. Revoke any issued credential before a fresh Human-approved pairing. No secret is returned again.');
+    for (const code of ['already_exchanged', 'exchange_outcome_unknown', 'grant_expired', 'agent_credential_limit_reached', 'agent_credential_conflict', 'agent_pairing_rate_limited']) {
+      onError[code] = { ...recover, responseSchema: schema('AgentGrantRecoveryError') };
+    }
+  }
+  if (id === 'agent.grant.approve' || id === 'agent.grant.deny') {
+    transportFailure = rule('inspect_then_decide', ['agent.grant.inspect'], 'Read the pairing status before repeating a decision.');
+    onError.grant_already_decided = transportFailure;
+    onError.grant_expired = rule('stop');
+  }
+  if (id === 'integration.testnet.create') {
+    idempotencyKey = 'unsupported';
+    transportFailure = rule('retry_same_request', [id], 'Keep the original serviceId and payload. Atomic create-only: a retry either creates the previously absent profile or returns a conflict, never replaces a credential.');
+    onError.integration_service_exists = { ...rule('human_recovery', [], 'No public recovery of an existing secret. For a disposable Testnet profile, obtain approval to use a new unique serviceId; for the existing profile, an authorized operator must rotate its credential.'), responseSchema: schema('TestnetIntegrationExistsError') };
+    onError.idempotency_key_unsupported = rule('correct_input', [], 'Do not send Idempotency-Key for this operation.');
+  }
+  if (id.endsWith('.execution.reconcile')) {
+    transportFailure = rule('retry_same_request', [id], 'Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion.');
+  }
+  if (id.endsWith('.execution.prepare') || id.endsWith('.replan')) {
+    onError.intent_execution_outcome_unknown = rule('reconcile_first', [inspectId!, reconcileId], 'Reconcile every unresolvedTransactionHash before creating another execution package or plan.');
+    onError.intent_already_executed = rule('inspect_terminal', [inspectId!]);
+    onError.intent_execution_effects_reauthorization_required = rule('review_and_reauthorize', [inspectId!, id.startsWith('integration.') ? 'integration.intent.replan' : 'contract.intent.replan']);
+    if (!id.startsWith('integration.')) onError.intent_execution_effects_review_required = rule('human_review', [inspectId!], 'Review the exact effects digest before accepting it.');
+  }
+  if (id === 'agent.access.revoke') transportFailure = rule('inspect_then_decide', ['agent.access.list']);
+  if (id === 'agent.access.list') onError.agent_credential_not_found = rule('stop');
+  if (path === '/address-book' && effect !== 'none') transportFailure = rule('inspect_then_decide', ['signer.contacts.list']);
+  if (path === '/contracts' && effect !== 'none') transportFailure = rule('inspect_then_decide', ['contract.workspace.list']);
+  if (effect === 'network-submit') {
+    transportFailure = rule(operation.access === 'human' ? 'human_review' : 'inspect_then_decide', operation.access === 'human' ? [] : [inspectId!], 'Check the existing Request and exact Stellar transaction hash; do not create a second payment.');
+  }
+  const defaultError = rule('stop_and_inspect', inspectId && operation.access !== 'human' ? [inspectId] : []);
+  const retryable = transportFailure.strategy === 'retry_same_request';
+  const onHttpStatus = {
+    '400': rule('correct_input'), '401': rule('authenticate'), '403': rule('stop'),
+    '409': defaultError, '410': rule('stop'), '413': rule('correct_input'), '415': rule('correct_input'),
+    ...Object.fromEntries(['429', '500', '502', '503'].map((status) => [status, retryable
+      ? { ...transportFailure, strategy: 'retry_same_request_with_backoff' } : transportFailure])),
+  };
+  return { idempotencyKey, transportFailure, onError, onHttpStatus, defaultError };
+}
+
+/** Canonical logical calls, narrower than their shared HTTP transport. Keep
+ * the existing paths for generic OpenAPI clients; resolve this table for Agents. */
+function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
+  const definitions = components.schemas as Record<string, OpenApiObject>;
+  const objectBody = (name: string, keys: string[], required: string[], extra: OpenApiObject = {}) => body({
+    type: 'object', required,
+    properties: Object.fromEntries(keys.map((key) => [key, (definitions[name].properties as OpenApiObject)[key]])),
+    additionalProperties: false, ...extra,
+  });
+  return Object.fromEntries(HEADLESS_OPERATION_CATALOG.map((operation) => {
+    const { id, path, method, access, effect } = operation;
+    const transport = (paths[path] as OpenApiObject)[method.toLowerCase()] as OpenApiObject;
+    let parameters = ((transport.parameters ?? []) as OpenApiObject[]).filter((p) =>
+      (p.name !== 'x-multisig-session-address' || access === 'human')
+      && p.name !== 'x-multisig-capability'
+      && (p.name !== 'X-MultiSig-Intent-Capability' || access.startsWith('browser:')));
+    parameters = parameters.map((p) => ({
+      ...p,
+      ...((p.name === 'Idempotency-Key' || p.name === 'x-multisig-session-address'
+        || p.name === 'X-MultiSig-Intent-Capability'
+        || (id === 'signer.auth.challenge' && ['account', 'network'].includes(String(p.name))))
+        ? { required: true } : {}),
+    }));
+    if (access === 'treasury:audit') parameters = parameters.filter((p) => p.name !== 'view');
+    let request = transport.requestBody as OpenApiObject | undefined;
+    let result: OpenApiObject | undefined;
+    let statuses: string[] | undefined;
+    let dispatch: OpenApiObject | undefined;
+    const security = access === 'public' ? []
+      : access === 'human' ? [{ humanBearer: [] }, { humanSession: [] }]
+      : access.startsWith('principal:') ? [{ agentBearer: [] }]
+      : access.startsWith('integration:') ? [{ integrationBearer: [] }]
+      : access.startsWith('browser:') ? [{ intentCapability: [] }]
+      : [{ treasuryAuditBearer: [] }];
+    const grant = id.startsWith('agent.grant.');
+    if (grant) {
+      const action = id.split('.').at(-1)!;
+      if (action === 'inspect') {
+        parameters = parameters.filter((p) => p.name !== 'challenge');
+        result = schema('AgentGrantPreview');
+      } else if (action === 'challenge') {
+        parameters = parameters.map((p) => p.name === 'challenge' ? { ...p, required: true } : p);
+        dispatch = { query: { challenge: '1' } };
+        result = schema('AgentGrantChallengeResult');
+      } else {
+        const suffix = action[0].toUpperCase() + action.slice(1);
+        request = body(schema('AgentGrant' + suffix + 'Input'));
+        dispatch = { body: { action } };
+        result = action === 'approve' || action === 'deny'
+          ? { type: 'object', required: ['status'], properties: { status: { const: action === 'approve' ? 'approved' : 'denied' } }, additionalProperties: false }
+          : schema(action === 'request' ? 'AgentGrantRequestResult' : 'AgentGrantPollResult');
+        statuses = [action === 'request' ? '201' : '200'];
+      }
+    } else if (id === 'signer.auth.challenge') {
+      result = schema('SignerAuthChallenge');
+    } else if (path === '/intent') {
+      const integration = access.startsWith('integration:');
+      if (method === 'POST') {
+        request = objectBody('ContractIntentCreateInput',
+          ['network', 'contractId', 'method', 'arguments', 'externalReference', integration ? 'executor' : 'privateNote'],
+          ['network', 'contractId', 'method', 'arguments']);
+        result = schema('ContractIntentCreateResult');
+      } else if (method === 'GET') {
+        result = schema(access === 'browser:read' ? 'BrowserAuthorizationInspectResult' : 'ContractIntentInspectResult');
+      } else if (method === 'PATCH') {
+        result = schema(access === 'browser:sign' ? 'BrowserAuthorizationContributionResult' : 'ContractIntentContributionResult');
+      } else if (method === 'PUT') {
+        statuses = [id.endsWith('.browser.issue') ? '201' : '200'];
+        if (id.endsWith('.execution.prepare')) {
+          request = objectBody('ContractIntentExecutionInput', integration
+            ? ['action', 'executor'] : ['action', 'executor', 'acceptedEffectsDigest'],
+          integration ? ['action'] : ['action', 'executor']);
+          dispatch = { body: { action: 'prepare_execution' }, actionValues: ['prepare_execution', 'refresh_execution'] };
+          result = schema('ContractIntentExecutionResult');
+        } else {
+          const branch = id.endsWith('.execution.reconcile') ? ['ContractIntentExecutionReconcile', 'reconcile_execution']
+            : id.endsWith('.replan') ? ['ContractIntentReplan', 'replan']
+            : id.endsWith('.cancel') ? ['ContractIntentCancel', 'cancel']
+            : ['BrowserAuthorizationIssue', 'issue_browser_authorization'];
+          request = body(schema(branch[0] + 'Input'));
+          result = schema(branch[0] + 'Result');
+          dispatch = { body: { action: branch[1] } };
+        }
+      }
+    } else if (path === '/request' && method === 'POST') {
+      request = access === 'principal:write'
+        ? objectBody('ProposalCreateInput', ['network', 'xdr', 'externalReference', 'privateNote'], ['network', 'xdr'])
+        : objectBody('ProposalCreateInput', ['network', 'xdr', 'payment', 'externalReference', 'privateCommitment'], ['network'], {
+          oneOf: [
+            { required: ['xdr'], not: { required: ['payment'] } },
+            { required: ['payment'], not: { anyOf: [{ required: ['xdr'] }, { required: ['privateCommitment'] }] } },
+          ],
+        });
+    } else if (path === '/request' && method === 'PATCH') {
+      request = body((definitions.ProposalPatchInput.oneOf as OpenApiObject[]).find((item) => item['x-multisig-access'] === access)!);
+      if (id === 'proposal.decline') dispatch = { body: { decision: 'decline' } };
+      if (id === 'proposal.activity.retain') dispatch = { body: { retainActivity: true } };
+    } else if (path === '/request' && method === 'PUT' && access === 'human') {
+      request = { ...body({ type: 'object', properties: { acceptedEffectsDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' } }, additionalProperties: false }), required: false };
+    }
+    const responses = Object.fromEntries(Object.entries(transport.responses as OpenApiObject)
+      .filter(([status]) => !status.startsWith('2') || !statuses || statuses.includes(status))
+      .map(([status, value]) => [status, status.startsWith('2') && result ? response(status === '201' ? 'Created.' : 'Successful operation.', result) : value]));
+    const retry = logicalOperationRetry(operation);
+    return [id, { operationId: id, method, path, access, effect, security, parameters,
+      ...(request ? { requestBody: request } : {}), ...(dispatch ? { dispatch } : {}), responses, retry }];
+  }));
+}
+
 export function createOpenApiDocument(
   origin = '/',
   deploymentNetwork: 'public' | 'testnet' | 'dual' = 'dual',
 ): OpenApiObject {
+  const paths = openApiPaths();
   return {
     openapi: '3.1.1',
+    'x-multisig-operations': logicalOperationContracts(paths),
     'x-multisig-deployment-network': deploymentNetwork,
     jsonSchemaDialect: 'https://json-schema.org/draft/2020-12/schema',
     info: {
@@ -1515,7 +1758,7 @@ export function createOpenApiDocument(
       description: 'Composable Stellar coordination operations for Human, signer Agent, bot, script, wallet, plugin, MCP, CLI, and scoped external-service consumers. Building or preparing XDR never grants signer authority. Signer Agent credentials cannot directly submit. Integration-owned Requests may be automatically submitted at quorum, retried by their Integration, or designated for external execution.',
     },
     servers: [{ url: origin }],
-    paths: openApiPaths(),
+    paths,
     components,
     externalDocs: {
       description: 'MultiSig Tools developer integration and authority guide',

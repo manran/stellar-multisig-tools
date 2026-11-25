@@ -7,7 +7,7 @@ import {
   verifyAgentApproval, decideAgentGrant, pollAgentGrant,
   type AgentGrantRequest, type AgentGrantDecision, type AgentGrantStore,
 } from './agentGrantService.js';
-import { authenticateAgentCredential } from './agentCredentialService.js';
+import { authenticateAgentCredential, revokeSignerAgentCredential } from './agentCredentialService.js';
 import type { AgentCredentialStore, StoredAgentIdempotencyClaim, StoredSignerAgentCredential } from './agentCredentialStore.js';
 import type { SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 import { POST as legacyCreate } from '../routes/agent-access.js';
@@ -137,6 +137,60 @@ test('Only a one-time pairing secret receives an approved msa credential', async
   assert.equal(JSON.stringify(stored).includes(response.apiKey), false);
   assert.equal((await authenticateAgentCredential(credentials, response.apiKey)).principal.address, principal.address);
   await assert.rejects(() => pollAgentGrant(store, credentials, created.deviceCode), { code: 'already_exchanged' });
+  assert.equal(credentials.items.size, 1);
+});
+
+test('a lost successful poll response identifies the exact credential without reissuing its secret', async () => {
+  const { store, created, request } = await pending();
+  const credentials = new MemoryCredentials();
+  await decideAgentGrant(store, request.id, approval());
+  const first = await pollAgentGrant(store, credentials, created.deviceCode);
+  assert.equal(first.status, 'approved');
+  if (first.status !== 'approved' || !first.apiKey) throw new Error('Expected issued key');
+  // Simulate delivery loss: the requesting Agent has only the original device code.
+  await assert.rejects(() => pollAgentGrant(store, credentials, created.deviceCode), (error: unknown) => {
+    const e = error as { code: string; details: Record<string, unknown> };
+    assert.equal(e.code, 'already_exchanged');
+    assert.equal(e.details.credentialId, first.credential!.credentialId);
+    assert.deepEqual(e.details.recoveryOperations, ['agent.access.list', 'agent.access.revoke', 'agent.grant.request']);
+    assert.ok(!JSON.stringify(e.details).includes(first.apiKey!));
+    return true;
+  });
+  assert.equal(credentials.items.size, 1);
+  await revokeSignerAgentCredential(credentials, principal, first.credential!.credentialId, principal.address);
+  await assert.rejects(() => authenticateAgentCredential(credentials, first.apiKey!), { code: 'agent_credential_revoked' });
+  await assert.rejects(() => pollAgentGrant(store, credentials, created.deviceCode), { code: 'already_exchanged' });
+  await assert.rejects(() => pollAgentGrant(store, credentials, created.deviceCode, new Date(Date.parse(request.expiresAt) + 1)),
+    (error: unknown) => (error as { code: string; details: { credentialId: string } }).code === 'grant_expired'
+      && (error as { details: { credentialId: string } }).details.credentialId === first.credential!.credentialId);
+});
+
+test('a storage response lost after credential commit never allows a second mint', async () => {
+  const { store, created, request } = await pending();
+  class LostWriteResponse extends MemoryCredentials {
+    async putCredential(item: StoredSignerAgentCredential) {
+      await super.putCredential(item);
+      throw new Error('simulated transport failure after commit');
+    }
+  }
+  const credentials = new LostWriteResponse();
+  await decideAgentGrant(store, request.id, approval());
+  await assert.rejects(() => pollAgentGrant(store, credentials, created.deviceCode),
+    (error: unknown) => (error as { code: string; details: { credentialId: string } }).code === 'exchange_outcome_unknown'
+      && (error as { details: { credentialId: string } }).details.credentialId === request.credentialId);
+  assert.equal(credentials.items.size, 1);
+  assert.ok(await credentials.getCredential(request.credentialId!));
+  await assert.rejects(() => pollAgentGrant(store, credentials, created.deviceCode), { code: 'already_exchanged' });
+  assert.equal(credentials.items.size, 1);
+});
+
+test('concurrent polls have exactly one successful exchange', async () => {
+  const { store, created, request } = await pending();
+  const credentials = new MemoryCredentials();
+  await decideAgentGrant(store, request.id, approval());
+  const outcomes = await Promise.allSettled([pollAgentGrant(store, credentials, created.deviceCode), pollAgentGrant(store, credentials, created.deviceCode)]);
+  assert.equal(outcomes.filter((item) => item.status === 'fulfilled').length, 1);
+  assert.equal(outcomes.filter((item) => item.status === 'rejected').length, 1);
   assert.equal(credentials.items.size, 1);
 });
 

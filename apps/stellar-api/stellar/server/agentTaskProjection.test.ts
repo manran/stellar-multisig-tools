@@ -55,8 +55,8 @@ test('Read Agent can discover a pending signature without an executable task', (
   assert.equal(task.state, 'waiting');
   assert.equal(task.signatureRequired, true);
   assert.deepEqual(task.nextActions, [
-    { code: 'contribute_signature', requiredAccess: 'sign', available: false },
-    { code: 'decline', requiredAccess: 'write', available: false },
+    { code: 'contribute_signature', operationId: 'proposal.contribute', requiredAccess: 'sign', available: false },
+    { code: 'decline', operationId: 'proposal.decline', bodyDefaults: { decision: 'decline' }, requiredAccess: 'write', available: false },
   ]);
 });
 
@@ -67,8 +67,8 @@ test('Classic Agent Task reports Principal action separately from credential cap
   assert.equal(task.state, 'action_required');
   assert.equal(task.signatureRequired, true);
   assert.deepEqual(task.nextActions, [
-    { code: 'contribute_signature', requiredAccess: 'sign', available: false },
-    { code: 'decline', requiredAccess: 'write', available: true },
+    { code: 'contribute_signature', operationId: 'proposal.contribute', requiredAccess: 'sign', available: false },
+    { code: 'decline', operationId: 'proposal.decline', bodyDefaults: { decision: 'decline' }, requiredAccess: 'write', available: true },
   ]);
 });
 
@@ -119,7 +119,7 @@ test('Soroban Agent Task exposes required Sign access without granting it', () =
   assert.equal(task.signatureRequired, true);
   assert.deepEqual(task.waitingFor, [OTHER]);
   assert.deepEqual(task.nextActions, [
-    { code: 'contribute_authorization', requiredAccess: 'sign', available: false },
+    { code: 'contribute_authorization', operationId: 'contract.intent.contribute', requiredAccess: 'sign', available: false },
   ]);
 });
 
@@ -141,7 +141,7 @@ test('Soroban Agent Task tells a Write Agent to prepare after authorization', ()
   assert.equal(task.state, 'action_required');
   assert.equal(task.signatureRequired, false);
   assert.deepEqual(task.nextActions, [
-    { code: 'prepare_execution', requiredAccess: 'write', available: true },
+    { code: 'prepare_execution', operationId: 'contract.intent.execution.prepare', bodyDefaults: { action: 'prepare_execution' }, requiredAccess: 'write', available: true },
   ]);
 });
 test('Soroban Agent Task reconciles a stale prepared package before refresh', () => {
@@ -158,7 +158,7 @@ test('Soroban Agent Task reconciles a stale prepared package before refresh', ()
   });
   assert.equal(task.state, 'action_required');
   assert.deepEqual(task.nextActions, [
-    { code: 'reconcile_execution', requiredAccess: 'write', available: true },
+    { code: 'reconcile_execution', operationId: 'contract.intent.execution.reconcile', bodyDefaults: { action: 'reconcile_execution' }, requiredAccess: 'write', available: true },
   ]);
 });
 
@@ -169,8 +169,8 @@ test('creator Agent gets explicit cancellation as a write action', () => {
   });
   assert.equal(task.state, 'action_required');
   assert.deepEqual(task.nextActions, [
-    { code: 'contribute_authorization', requiredAccess: 'sign', available: false },
-    { code: 'cancel', requiredAccess: 'write', available: true },
+    { code: 'contribute_authorization', operationId: 'contract.intent.contribute', requiredAccess: 'sign', available: false },
+    { code: 'cancel', operationId: 'contract.intent.cancel', bodyDefaults: { action: 'cancel' }, requiredAccess: 'write', available: true },
   ]);
 });
 
@@ -220,7 +220,7 @@ test('creator Agent waiting on others can cancel without falsely reporting a pen
   });
   assert.equal(task.state, 'action_required');
   assert.equal(task.signatureRequired, false);
-  assert.deepEqual(task.nextActions, [{ code: 'cancel', requiredAccess: 'write', available: true }]);
+  assert.deepEqual(task.nextActions, [{ code: 'cancel', operationId: 'contract.intent.cancel', bodyDefaults: { action: 'cancel' }, requiredAccess: 'write', available: true }]);
 });
 
 test('Soroban Agent Task projects observed result without asking the Agent to interpret evidence', () => {

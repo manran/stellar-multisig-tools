@@ -57,7 +57,11 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
   },
   {
     id: 'agent.grant.approve', version: 1, method: 'POST', path: '/agent-grants',
-    access: 'human', effect: 'private-state', summary: 'Human signer approves or denies a request with a distinct wallet consent signature.',
+    access: 'human', effect: 'private-state', summary: 'Human signer approves a request with a distinct wallet consent signature.',
+  },
+  {
+    id: 'agent.grant.deny', version: 1, method: 'POST', path: '/agent-grants',
+    access: 'human', effect: 'private-state', summary: 'Human signer denies a pending pairing using a matching verified session.',
   },
   {
     id: 'agent.access.list', version: 1, method: 'GET', path: '/agent-access',

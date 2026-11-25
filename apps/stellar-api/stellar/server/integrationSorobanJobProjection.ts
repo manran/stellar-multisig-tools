@@ -100,6 +100,15 @@ export function projectIntegrationSorobanJob({
       : state === 'expired' ? ['replan', 'cancel']
       : ['cancel'];
 
+  const operationIds = {
+    prepare_execution: 'integration.intent.execution.prepare', refresh_execution: 'integration.intent.execution.prepare',
+    reconcile_execution: 'integration.intent.execution.reconcile', replan: 'integration.intent.replan', cancel: 'integration.intent.cancel',
+  };
+  const actionCalls: IntegrationSorobanJobProjection['actionCalls'] = Object.fromEntries(nextActions.map((action) => [action,
+    action === 'submit_execution'
+      ? { transport: 'external_stellar_submission' as const, transactionHash: latestPreparation!.transactionHash }
+      : { operationId: operationIds[action], bodyDefaults: { action } },
+  ]));
   const expiry = expiresAtLedger(authorization);
   return {
     version: 1,
@@ -108,6 +117,7 @@ export function projectIntegrationSorobanJob({
     network: stored.network,
     state,
     nextActions,
+    actionCalls,
     reviewUrl,
     ...(state === 'waiting_for_authorization' ? { waitingFor: waitingFor(authorization) } : {}),
     ...(state !== 'completed' && unresolved.length ? { unresolvedTransactionHashes: unresolved.map((item) => item.transactionHash) } : {}),

@@ -16,7 +16,7 @@ curl -fsSL https://api-testnet.multisig.tools/stellar/operations
 curl -fsSL https://api-testnet.multisig.tools/stellar/openapi.json
 ```
 
-The Catalog links to the existing Operations Registry and OpenAPI. The Registry is authoritative for the current operation IDs, methods, required access, and effects. Do not infer permissions from a page label.
+The Catalog links to the Operations Registry and OpenAPI. For an operation, fetch `schema.href` and resolve `schema.pointer` in that document. The logical operation defines its exact request body, authorization, successful result and retry rules. Do not select a shared HTTP request-body branch by guessing. For a task's next action, use its `operationId` and `bodyDefaults`.
 
 ## 2. Verify network without credentials
 
@@ -50,6 +50,8 @@ The response contains `verificationUri`, `userCode`, `deviceCode` and `intervalS
 
 The request expires after **10 minutes**, and the device code is single-use. Each renewal or different scope requires another approval. The human can revoke access on [Agent access](https://stellar-testnet.multisig.tools/agent-access).
 
+If a poll response is lost, retry **the same deviceCode** at the advised interval. A successful exchange requires both `apiKey` and `credential`. If the retry returns `already_exchanged` (409), `exchange_outcome_unknown` (503), or `grant_expired` (410), no new secret will be issued. Pass only `details.credentialId` and the recovery instruction to the Human signer, who lists and revokes that credential before approving another pairing. A credential not yet visible in the list is not proof that the prior write failed: check again if its outcome is uncertain. Older grants may not have a reserved credential ID; the signer must identify any issued credential from its name and creation time. Never share the device code. Do not start another pairing automatically.
+
 ### Approve with an independent signing tool
 
 Browser wallets are optional. A signer who controls a Stellar CLI, hardware wallet, or separate signing service can use the same two signed challenges. Do this on the **signer side**, not in an untrusted requesting Agent. Never share a private key, device code, or Human session token with the requesting Agent.
@@ -67,7 +69,7 @@ For message-signing tools that implement SEP-53, the auth exchange also accepts 
 
 The Stellar transaction signature for a subsequent payment is separate again: inspect the exact Request baseXdr, obtain the signer's approval of that payment, sign it locally, and send signedXdr through proposal.contribute. The msa credential never signs for you.
 
-If browser wallet connection fails, return to the same verification link and choose another wallet, or use this independent signing flow while the request is pending. If the request expires, ask the Agent to begin a new pairing.
+If browser wallet connection fails, return to the same verification link and choose another wallet, or use this independent signing flow while the request is pending. If an unexchanged request expires, ask the Agent to begin a new pairing. If credential delivery was uncertain, first follow the revocation recovery above.
 
 **Manual alternative:** A signer can create a named credential directly in the Agent access UI. This uses the same wallet-confirmed grant and shows the secret once for copying into a secure store.
 

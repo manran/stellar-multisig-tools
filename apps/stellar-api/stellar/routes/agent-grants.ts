@@ -16,7 +16,10 @@ import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
 import { limitAgentGrant, grantRequestSource } from '../server/agentGrantRateLimit.js';
 
 function errorResponse(cause: unknown): Response {
-  if (cause instanceof AgentGrantError || cause instanceof AgentCredentialServiceError || cause instanceof AuthServiceError || cause instanceof RequestBodyError
+  if (cause instanceof AgentGrantError) {
+    return publicCorsJson({ error: cause.message, code: cause.code, ...(cause.details ? { details: cause.details } : {}) }, 'GET, POST, OPTIONS', cause.status);
+  }
+  if (cause instanceof AgentCredentialServiceError || cause instanceof AuthServiceError || cause instanceof RequestBodyError
     || cause instanceof DeploymentNetworkPolicyError) {
     return publicCorsJson({ error: cause.message, code: cause.code }, 'GET, POST, OPTIONS', cause.status);
   }

@@ -24,6 +24,10 @@ class MemoryIntegrationStore implements IntegrationCredentialStore {
   credentials = new Map<string, StoredIntegrationCredential>();
   async getCredential(id: string) { return this.credentials.get(id) ?? null; }
   async listCredentials() { return [...this.credentials.values()]; }
+  async createCredential(value: StoredIntegrationCredential) {
+    if (this.credentials.has(value.credential.serviceId)) return false;
+    this.credentials.set(value.credential.serviceId, value); return true;
+  }
   async putCredential(value: StoredIntegrationCredential) { this.credentials.set(value.credential.serviceId, value); }
 }
 

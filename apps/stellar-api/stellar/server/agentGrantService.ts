@@ -10,14 +10,14 @@ import {
 } from '@stellar/stellar-sdk/base';
 import type { AgentAccessLevel, SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 import type { AgentCredentialStore } from './agentCredentialStore.js';
-import { createSignerAgentCredential } from './agentCredentialService.js';
+import { AgentCredentialServiceError, createSignerAgentCredential } from './agentCredentialService.js';
 
 const TTL_MS = 10 * 60 * 1000;
 const MESSAGE_PREFIX = Buffer.from('Stellar Signed Message:\n', 'utf8');
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export class AgentGrantError extends Error {
-  constructor(message: string, readonly status: number, readonly code: string) {
+  constructor(message: string, readonly status: number, readonly code: string, readonly details?: Record<string, unknown>) {
     super(message);
     this.name = 'AgentGrantError';
   }
@@ -27,6 +27,8 @@ export interface AgentGrantRequest {
   version: 1;
   id: string;
   codeHash: string;
+  /** Reserved before approval so a lost exchange response is recoverable without returning its secret again. */
+  credentialId?: string;
   userCode: string;
   label: string;
   access: AgentAccessLevel;
@@ -85,7 +87,7 @@ export async function beginAgentGrant(
   const id = randomBytes(16).toString('hex');
   const secret = randomBytes(32).toString('base64url');
   const record: AgentGrantRequest = {
-    version: 1, id, codeHash: digest(secret), userCode: userCode(),
+    version: 1, id, codeHash: digest(secret), credentialId: randomBytes(9).toString('base64url'), userCode: userCode(),
     label: labelValue.trim(), access: accessValue, network: 'testnet',
     createdAt: now.toISOString(), expiresAt: new Date(now.getTime() + TTL_MS).toISOString(),
   };
@@ -193,11 +195,29 @@ export async function pollAgentGrant(
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
     throw new AgentGrantError('Invalid Agent pairing secret.', 401, 'invalid_device_code');
   }
-  live(grant, now);
+  const recovery = {
+    requestId: grant.id,
+    ...(grant.credentialId ? { credentialId: grant.credentialId } : {}),
+    recoveryOperations: ['agent.access.list', 'agent.access.revoke', 'agent.grant.request'],
+  };
+  // Expiry never authorizes another mint. The original device secret may
+  // still identify the reserved credential for Human revocation.
+  if (Date.parse(grant.expiresAt) <= now.getTime()) {
+    throw new AgentGrantError('Agent pairing expired. If delivery was uncertain, ask the signer to check and revoke the reserved credential before starting again.', 410, 'grant_expired', recovery);
+  }
   const decision = await store.decision(id);
   if (!decision) return { status: 'authorization_pending' };
   if (decision.status === 'denied') return { status: 'access_denied' };
-  if (!await store.claim(id)) throw new AgentGrantError('Pairing credential has already been delivered.', 409, 'already_exchanged');
-  const result = await createSignerAgentCredential(credentials, decision.principal, grant.label, grant.access, decision.principal.address, now);
-  return { status: 'approved', apiKey: result.apiKey, credential: result.credential };
+  if (!await store.claim(id)) {
+    throw new AgentGrantError('Pairing exchange was already claimed; delivery is not guaranteed. Do not retry minting. Ask the signer to check and revoke the reserved credential before pairing again.', 409, 'already_exchanged', recovery);
+  }
+  try {
+    const result = await createSignerAgentCredential(credentials, decision.principal, grant.label, grant.access, decision.principal.address, now, grant.credentialId);
+    return { status: 'approved', apiKey: result.apiKey, credential: result.credential };
+  } catch (cause) {
+    if (cause instanceof AgentCredentialServiceError || cause instanceof AgentGrantError) {
+      throw new AgentGrantError(cause.message, cause.status, cause.code, recovery);
+    }
+    throw new AgentGrantError('Credential exchange outcome is unknown. Ask the signer to check and revoke the reserved credential before pairing again.', 503, 'exchange_outcome_unknown', recovery);
+  }
 }

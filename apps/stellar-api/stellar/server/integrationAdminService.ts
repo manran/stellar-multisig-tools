@@ -49,7 +49,7 @@ export interface IntegrationAdminSummary {
 }
 
 export class IntegrationAdminServiceError extends Error {
-  constructor(message: string, readonly status: number, readonly code: string) {
+  constructor(message: string, readonly status: number, readonly code: string, readonly details?: Record<string, unknown>) {
     super(message);
     this.name = 'IntegrationAdminServiceError';
   }
@@ -206,9 +206,11 @@ export async function createIntegrationAdminService(
   if (!isValidIntegrationServiceId(serviceId)) {
     throw new IntegrationAdminServiceError('Service id must contain 1–40 lowercase letters, digits or hyphens, starting with a letter or digit.', 400, 'invalid_integration_service_id');
   }
-  if (await currentRecord(store, serviceId)) {
-    throw new IntegrationAdminServiceError('This Integration Service already exists.', 409, 'integration_service_exists');
-  }
+  const serviceExists = () => new IntegrationAdminServiceError(
+    'This Integration Service already exists. Creation cannot return its original credential or replace it.',
+    409, 'integration_service_exists', { serviceId, recovery: 'new_service_id_or_authorized_operator_rotation' },
+  );
+  if (await currentRecord(store, serviceId)) throw serviceExists();
   const generated = createIntegrationApiKey(serviceId);
   const credential = normalizeInput(input, generated.secretHash);
   assertExecutionConfiguration(credential);
@@ -233,7 +235,7 @@ export async function createIntegrationAdminService(
     profile,
     createdAt: timestamp, updatedAt: timestamp,
   };
-  await store.putCredential(record);
+  if (!await store.createCredential(record)) throw serviceExists();
   return {
     service: summary(record, 'durable'),
     apiKey: generated.apiKey,

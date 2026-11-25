@@ -182,7 +182,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
     { required: ['preparedXdr'] },
   ]);
   assert.deepEqual(schemas.ContractIntentInspectResult.required, ['operation', 'version', 'intent', 'authorization', 'evidence']);
-  assert.deepEqual(schemas.IntegrationSorobanJob.required, ['version', 'id', 'kind', 'network', 'state', 'nextActions', 'reviewUrl']);
+  assert.deepEqual(schemas.IntegrationSorobanJob.required, ['version', 'id', 'kind', 'network', 'state', 'nextActions', 'actionCalls', 'reviewUrl']);
   assert.deepEqual((schemas.IntegrationSorobanJob.properties as JsonObject).state, {
     type: 'string', enum: ['waiting_for_authorization', 'ready', 'executing', 'execution_unknown', 'completed', 'expired', 'failed', 'cancelled'],
   });
@@ -198,7 +198,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.equal(((schemas.SignerInboxResult.properties as JsonObject).intents as JsonObject).type, 'array');
   assert.deepEqual(((schemas.AgentTask.properties as JsonObject).state as JsonObject).enum, ['action_required', 'waiting', 'completed', 'expired', 'failed', 'cancelled']);
   const agentTaskAction = (((schemas.AgentTask.properties as JsonObject).nextActions as JsonObject).items as JsonObject);
-  assert.deepEqual(agentTaskAction.required, ['code', 'requiredAccess', 'available']);
+  assert.deepEqual(agentTaskAction.required, ['code', 'operationId', 'requiredAccess', 'available']);
   for (const name of ['ContractIntentCreateResult', 'ContractIntentInspectResult', 'ContractIntentContributionResult', 'ContractIntentExecutionResult', 'ContractIntentExecutionReconcileResult', 'ContractIntentReplanResult', 'ContractIntentCancelResult', 'ProposalResult']) {
     assert.ok((schemas[name].properties as JsonObject).task);
   }
@@ -291,6 +291,65 @@ test('discovery endpoints expose the deployment-bound description and schema poi
     && operation.schema.path.startsWith('/')
     && !operation.schema.path.startsWith('/api/')
     && HTTP_METHODS.has(operation.schema.method.toLowerCase())));
+});
+
+test('every registry operation has an exact resolvable logical contract and a retry policy', async () => {
+  process.env[networkVariable] = 'testnet';
+  const catalog = await (await getOperations()).json() as { operations: Array<{ id: string; path: string; method: string; access: string; schema: { pointer: string } }> };
+  const doc = createOpenApiDocument();
+  const contracts = doc['x-multisig-operations'] as Record<string, JsonObject>;
+  assert.equal(Object.keys(contracts).length, catalog.operations.length);
+  const resolve = (pointer: string): unknown => pointer.slice(2).split('/').reduce<unknown>((value, key) => (value as JsonObject)[key.replace(/~1/g, '/').replace(/~0/g, '~')], doc);
+  const deref = (value: JsonObject): JsonObject => value.$ref ? resolve(String(value.$ref)) as JsonObject : value;
+  const input = (id: string) => deref(((((contracts[id].requestBody as JsonObject).content as JsonObject)['application/json'] as JsonObject).schema as JsonObject));
+  for (const entry of catalog.operations) {
+    const contract = resolve(entry.schema.pointer) as JsonObject;
+    assert.equal(contract.operationId, entry.id);
+    assert.equal(contract.path, entry.path);
+    assert.equal(contract.method, entry.method);
+    assert.equal(contract.access, entry.access);
+    const retry = contract.retry as JsonObject;
+    assert.ok(retry.idempotencyKey);
+    for (const rule of [retry.transportFailure, retry.defaultError, ...Object.values(retry.onError as JsonObject), ...Object.values(retry.onHttpStatus as JsonObject)]) {
+      assert.ok((rule as JsonObject).strategy);
+      for (const nextId of (rule as JsonObject).nextOperationIds as string[]) assert.ok(contracts[nextId], nextId);
+    }
+  }
+  const expectedActions = {
+    'contract.intent.execution.prepare': 'prepare_execution',
+    'integration.intent.execution.prepare': 'prepare_execution',
+    'contract.intent.execution.reconcile': 'reconcile_execution',
+    'integration.intent.execution.reconcile': 'reconcile_execution',
+    'contract.intent.replan': 'replan', 'integration.intent.replan': 'replan',
+    'contract.intent.cancel': 'cancel', 'integration.intent.cancel': 'cancel',
+    'integration.intent.browser.issue': 'issue_browser_authorization',
+  };
+  assert.equal(catalog.operations.filter((entry) => entry.path === '/intent' && entry.method === 'PUT').length, Object.keys(expectedActions).length);
+  for (const [id, action] of Object.entries(expectedActions)) {
+    assert.ok((input(id).required as string[]).includes('action'));
+    assert.equal(((contracts[id].dispatch as JsonObject).body as JsonObject).action, action);
+    const actionSchema = (input(id).properties as JsonObject).action as JsonObject;
+    assert.ok(actionSchema.const === action || (actionSchema.enum as string[] | undefined)?.includes(action));
+    assert.equal((contracts[id].retry as JsonObject).idempotencyKey, 'not_used');
+  }
+  assert.ok((input('contract.intent.execution.prepare').required as string[]).includes('executor'));
+  assert.ok(!Object.hasOwn(input('integration.intent.execution.prepare').properties as JsonObject, 'acceptedEffectsDigest'));
+  assert.deepEqual(input('integration.intent.execution.reconcile').required, ['action', 'transactionHash']);
+  assert.deepEqual(input('integration.intent.browser.issue').required, ['action', 'signerAddress', 'origin']);
+  for (const id of ['proposal.create', 'integration.request.create', 'contract.intent.create', 'integration.intent.create']) {
+    assert.equal((contracts[id].retry as JsonObject).idempotencyKey, 'required');
+    assert.equal((contracts[id].parameters as JsonObject[]).find((p) => p.name === 'Idempotency-Key')?.required, true);
+  }
+  assert.equal((contracts['integration.testnet.create'].retry as JsonObject).idempotencyKey, 'unsupported');
+  const poll = contracts['agent.grant.poll'];
+  const result = deref((((((poll.responses as JsonObject)['200'] as JsonObject).content as JsonObject)['application/json'] as JsonObject).schema as JsonObject));
+  const approved = (result.oneOf as JsonObject[]).find((variant) => ((variant.properties as JsonObject).status as JsonObject).const === 'approved');
+  assert.deepEqual(approved?.required, ['status', 'apiKey', 'credential']);
+  assert.deepEqual(input('agent.grant.approve').required, ['action', 'requestId', 'mode']);
+  assert.equal((input('agent.grant.approve').oneOf as unknown[]).length, 2);
+  assert.deepEqual(input('agent.grant.deny').required, ['action', 'requestId']);
+  assert.deepEqual(contracts['agent.grant.poll'].security, []);
+  assert.deepEqual(contracts['agent.grant.approve'].security, [{ humanBearer: [] }, { humanSession: [] }]);
 });
 
 test('Stellar API deployment advertises standard service description and documentation links', () => {

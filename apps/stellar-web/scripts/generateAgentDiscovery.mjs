@@ -61,7 +61,7 @@ Permission types are distinct: \`msa_*\` grants signer-principal Agent access; \
 ## Machine discovery
 
 - [API catalog](${origin}/.well-known/api-catalog): RFC 9727 Linkset for this deployment.
-- [Operation registry](${api}/operations): Current operations, access requirements, effects, and OpenAPI references.
+- [Operation registry](${api}/operations): Current operations, access requirements, effects, and exact logical OpenAPI pointers. Resolve schema.href + schema.pointer, then follow the operation's retry rules.
 - [OpenAPI specification](${api}/openapi.json): Exact request schemas, responses, and security schemes.
 - [Runtime network configuration](${api}/runtime-config): Verify this deployment's network before any action.
 

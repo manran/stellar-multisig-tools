@@ -13,6 +13,12 @@ import type {
 } from './sorobanIntentStore.js';
 
 const ACCESS_RANK: Record<AgentAccessLevel, number> = { read: 1, write: 2, sign: 3 };
+const TASK_OPERATIONS: Record<AgentTaskAction['code'], string> = {
+  contribute_signature: 'proposal.contribute', decline: 'proposal.decline',
+  contribute_authorization: 'contract.intent.contribute',
+  prepare_execution: 'contract.intent.execution.prepare', refresh_execution: 'contract.intent.execution.prepare',
+  reconcile_execution: 'contract.intent.execution.reconcile', replan: 'contract.intent.replan', cancel: 'contract.intent.cancel',
+};
 
 function action(
   code: AgentTaskAction['code'],
@@ -21,6 +27,9 @@ function action(
 ): AgentTaskAction {
   return {
     code,
+    operationId: TASK_OPERATIONS[code],
+    ...(code === 'decline' ? { bodyDefaults: { decision: 'decline' } }
+      : code.startsWith('contribute_') ? {} : { bodyDefaults: { action: code } }),
     requiredAccess,
     available: ACCESS_RANK[credentialAccess] >= ACCESS_RANK[requiredAccess],
   };

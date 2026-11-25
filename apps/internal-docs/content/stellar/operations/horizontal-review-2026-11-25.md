@@ -74,3 +74,13 @@ description: "Counterexample-driven review of Agent First discovery, history and
 - HR-05: PostgreSQL history candidates include the creator and proven contributors independently of current signer discovery. Historical visibility does not grant signing authority.
 - Verification on the repaired working tree: 971 unit/service tests, 39 isolated PostgreSQL tests, 104 browser scenarios; API, web and public documentation builds passed. The 101-request pagination fixture returned 50 + 50 + 1. Browser report recorded zero failed scenarios, unexpected requests or page errors.
 - Scope: Testnet PostgreSQL. Legacy Blob records have no offline authorizer-index backfill. Mainnet is unchanged. Independent black-box acceptance and real Soroban lifecycle remain open.
+
+## Public Agent contract review — 2026-11-25
+
+Independent reviewer reported three public-contract findings on revision 7806445: ambiguous operation-body branches, missing successful poll credential requirements and lost-response recovery, and an overbroad creation-idempotency rule. This was a contract review, not another transaction acceptance.
+
+- The Operations Registry now resolves every logical operation in OpenAPI via schema.pointer. The operation-specific contract defines security, parameters, request/response schemas, dispatch defaults, and retry rules. Human denial has its own logical operation ID. Agent task actions and Integration job actions identify the call directly; external Stellar submission is distinguished.
+- One-time grant issuance reserves a credential ID before approval. Poll success requires apiKey and credential. Lost-response recovery identifies the reservation for Human inspection and revocation without disclosing the secret again. A missing credential is not proof of failed issuance; older grants have no reserved ID.
+- Testnet Profile creation is atomic create-only, including the shared administrator creation path. Repeating an occupied ID cannot replace its credential. Idempotency-Key is supported only for machine Request/Intent creation; the Profile route rejects it. No public recovery or rotation of an existing Profile secret is introduced.
+- Verification: 977 regular tests passed, including simulated response loss after successful commit, concurrent polls, actual isolated filesystem concurrent Profile creation, and resolution of all logical operation pointers. Root and public documentation builds passed. Final targeted checks and Testnet release are separate from independent acceptance.
+- No Mainnet, credential policies, or database migrations are part of this repair. Real network disconnection and independent black-box retest remain open.

@@ -21,6 +21,8 @@ export type AgentTaskActionCode =
 
 export interface AgentTaskAction {
   code: AgentTaskActionCode;
+  operationId: string;
+  bodyDefaults?: Record<string, string>;
   requiredAccess: Exclude<AgentAccessLevel, 'read'>;
   available: boolean;
 }

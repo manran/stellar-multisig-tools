@@ -122,7 +122,9 @@ async function pairAgent(bob, label, grantPath = '/agent-grants', authPath = '/a
       && agent.apiKey.startsWith('msa_') && agent.credential?.access === access,
       'Agent credential was not issued');
     const replay = await call(grantPath, 'POST', poll, {}, 409);
-    check(replay.code === 'already_exchanged' && !replay.apiKey, 'Device code was reusable');
+    check(replay.code === 'already_exchanged' && !replay.apiKey
+      && replay.details?.credentialId === agent.credential.credentialId
+      && replay.details?.recoveryOperations?.includes('agent.access.revoke'), 'Device code recovery was ambiguous or reusable');
     record('agent-single-use-credential-exchange');
     return { agent, bobToken };
 }
@@ -301,6 +303,14 @@ async function discoverIntegration() {
   check(registry.base === TESTNET_API && openapi.servers?.[0]?.url === TESTNET_API
     && openapi['x-multisig-deployment-network'] === 'testnet', 'Discovery network mismatch');
   API = registry.base;
+  for (const item of registry.operations) {
+    const pointer = item.schema?.pointer;
+    check(item.schema?.href === openApiUrl && pointer?.startsWith('#/x-multisig-operations/'), 'Missing logical operation pointer: ' + item.id);
+    const logical = pointer.slice(2).split('/').reduce((value, key) => value?.[key], openapi);
+    check(logical?.operationId === item.id && logical.path === item.path && logical.method === item.method
+      && logical.access === item.access && logical.retry?.transportFailure?.strategy, 'Unresolvable logical operation: ' + item.id);
+  }
+  record('public-logical-operation-contracts-resolve', { count: registry.operations.length });
   const operation = (id, access, effect) => {
     const item = registry.operations.find((candidate) => candidate.id === id);
     check(item && item.access === access && item.effect === effect
@@ -363,11 +373,20 @@ async function integrationE2E() {
   record('integration-disposable-testnet-treasury', { account: source });
 
   const serviceId = 'agent-qa-' + randomBytes(6).toString('hex');
-  const integration = await call(ops.create.path, ops.create.method, {
+  const profileInput = {
     serviceId, label: 'Agent collaboration QA', classicSourceAccounts: [source],
     ...(EXTERNAL ? { classicExternalExecutionSourceAccounts: [source] } : {}),
     profile: { authorizationExperience: 'hosted' },
-  }, {}, 201);
+  };
+  const integration = await call(ops.create.path, ops.create.method, profileInput, {}, 201);
+  const duplicate = await call(ops.create.path, ops.create.method, profileInput, {}, 409);
+  check(duplicate.code === 'integration_service_exists' && !duplicate.apiKey
+    && duplicate.details?.serviceId === serviceId
+    && duplicate.details?.recovery === 'new_service_id_or_authorized_operator_rotation', 'Profile retry did not fail closed');
+  record('msi-self-service-retry-create-only');
+  const unsupportedIdempotency = await call(ops.create.path, ops.create.method, profileInput, { 'Idempotency-Key': 'unsupported' }, 400);
+  check(unsupportedIdempotency.code === 'idempotency_key_unsupported', 'Profile incorrectly accepted a generic idempotency key');
+  record('msi-profile-idempotency-boundary');
   check(integration.apiKey?.startsWith('msi_') && integration.service?.serviceId === serviceId
     && integration.service.networks?.length === 1 && integration.service.networks[0] === 'testnet',
   'Testnet Integration credential not issued');
@@ -437,7 +456,7 @@ async function integrationE2E() {
       check(inbox.address === item.signer.publicKey() && inbox.actor === 'agent'
         && inbox.signature_required_count === 1 && inbox.action_count === 1
         && discovered?.state === 'action_required' && discovered.signatureRequired === true
-        && discovered.nextActions?.some((action) => action.code === 'contribute_signature' && action.available),
+        && discovered.nextActions?.some((action) => action.code === 'contribute_signature' && action.operationId === 'proposal.contribute' && action.available),
       'Signer Agent did not independently discover payment task');
       record('msa-inbox-task-discovered', { signer: index + 1 });
       const headers = requestHeaders(discovered.id, '', agentHeaders);

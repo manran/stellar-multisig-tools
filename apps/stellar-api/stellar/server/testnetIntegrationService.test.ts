@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { blobIntegrationCredentialStore } from './blobIntegrationCredentialStore.js';
+import { POST as createProfileRoute } from '../routes/integration-testnet.js';
 import { Keypair, StrKey } from '@stellar/stellar-sdk/base';
 import type {
   IntegrationCredentialStore,
@@ -18,6 +23,11 @@ class MemoryStore implements IntegrationCredentialStore {
 
   async listCredentials() {
     return [...this.records.values()];
+  }
+
+  async createCredential(record: StoredIntegrationCredential) {
+    if (this.records.has(record.credential.serviceId)) return false;
+    this.records.set(record.credential.serviceId, record); return true;
   }
 
   async putCredential(record: StoredIntegrationCredential) {
@@ -51,6 +61,55 @@ test('Testnet Integration self-service forces Testnet and enabled while reusing 
   assert.equal(stored?.enabled, true);
 });
 
+
+test('concurrent profile creation is create-only in the real filesystem store', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'mst-profile-create-'));
+  const oldMode = process.env.MULTISIG_PRIVATE_OBJECT_STORAGE;
+  const oldRoot = process.env.MULTISIG_PRIVATE_OBJECT_ROOT;
+  process.env.MULTISIG_PRIVATE_OBJECT_STORAGE = 'filesystem';
+  process.env.MULTISIG_PRIVATE_OBJECT_ROOT = directory;
+  try {
+    const input = { serviceId: 'concurrent-profile', label: 'Fixture Profile',
+      classicSourceAccounts: [Keypair.random().publicKey()] };
+    const outcomes = await Promise.allSettled([
+      createTestnetIntegration(blobIntegrationCredentialStore, input),
+      createTestnetIntegration(blobIntegrationCredentialStore, input),
+    ]);
+    const winners = outcomes.filter((item) => item.status === 'fulfilled');
+    const losers = outcomes.filter((item) => item.status === 'rejected');
+    assert.equal(winners.length, 1);
+    assert.equal(losers.length, 1);
+    assert.equal(losers[0].reason.code, 'integration_service_exists');
+    assert.deepEqual(losers[0].reason.details, { serviceId: input.serviceId, recovery: 'new_service_id_or_authorized_operator_rotation' });
+    const original = winners[0].value;
+    // Discarding the successful response cannot justify returning another key.
+    await assert.rejects(() => createTestnetIntegration(blobIntegrationCredentialStore, input), { code: 'integration_service_exists' });
+    await assert.rejects(() => createTestnetIntegration(blobIntegrationCredentialStore, { ...input, label: 'Changed' }), { code: 'integration_service_exists' });
+    const stored = await blobIntegrationCredentialStore.getCredential(input.serviceId);
+    assert.ok(stored);
+    assert.equal(stored.credential.label, input.label);
+    assert.equal((await authenticateIntegrationCredentialWithResolver(original.apiKey, async () => stored.credential)).serviceId, input.serviceId);
+    assert.equal((await blobIntegrationCredentialStore.listCredentials()).length, 1);
+  } finally {
+    if (oldMode === undefined) delete process.env.MULTISIG_PRIVATE_OBJECT_STORAGE; else process.env.MULTISIG_PRIVATE_OBJECT_STORAGE = oldMode;
+    if (oldRoot === undefined) delete process.env.MULTISIG_PRIVATE_OBJECT_ROOT; else process.env.MULTISIG_PRIVATE_OBJECT_ROOT = oldRoot;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('profile creation rejects an unsupported idempotency header before writing', async () => {
+  const oldNetwork = process.env.VITE_STELLAR_DEPLOYMENT_NETWORK;
+  process.env.VITE_STELLAR_DEPLOYMENT_NETWORK = 'testnet';
+  try {
+    const response = await createProfileRoute(new Request('https://example.test/integration-testnet', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'not-supported' }, body: '{}',
+    }));
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).code, 'idempotency_key_unsupported');
+  } finally {
+    if (oldNetwork === undefined) delete process.env.VITE_STELLAR_DEPLOYMENT_NETWORK; else process.env.VITE_STELLAR_DEPLOYMENT_NETWORK = oldNetwork;
+  }
+});
 
 test('self-service cannot create a Soroban profile with no available execution route', async () => {
   const store = new MemoryStore();

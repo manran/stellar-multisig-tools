@@ -105,6 +105,8 @@ test('projects ready authorization into one explicit next action', () => {
   });
   assert.equal(job.state, 'ready');
   assert.deepEqual(job.nextActions, ['prepare_execution', 'cancel']);
+  assert.deepEqual(job.actionCalls.prepare_execution, { operationId: 'integration.intent.execution.prepare', bodyDefaults: { action: 'prepare_execution' } });
+  assert.deepEqual(job.actionCalls.cancel, { operationId: 'integration.intent.cancel', bodyDefaults: { action: 'cancel' } });
 });
 test('legacy Intent with unavailable executor does not advertise prepare or refresh', () => {
   const job = projectIntegrationSorobanJob({ stored: stored(), authorization: authorization('authorization_ready'), reviewUrl: REVIEW_URL, executionAvailable: false });
@@ -134,6 +136,8 @@ test('projects a current execution package as executing', () => {
   });
   assert.equal(job.state, 'executing');
   assert.deepEqual(job.nextActions, ['submit_execution', 'reconcile_execution', 'cancel']);
+  assert.deepEqual(job.actionCalls.submit_execution, { transport: 'external_stellar_submission', transactionHash: job.execution?.transactionHash });
+  assert.deepEqual(job.actionCalls.reconcile_execution, { operationId: 'integration.intent.execution.reconcile', bodyDefaults: { action: 'reconcile_execution' } });
   assert.deepEqual(job.execution, {
     owner: 'external_service',
     executor: 'GEXECUTOR',
