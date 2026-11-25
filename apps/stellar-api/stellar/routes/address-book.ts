@@ -2,12 +2,11 @@ import { blobAddressBookStore } from '../server/blobAddressBookStore.js';
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
 import { blobAuthStore } from '../server/blobAuthStore.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
-import { authConfigForRequest } from '../server/authConfig.js';
-import { AuthServiceError, requirePrivateWorkspaceSession } from '../server/authService.js';
+import { DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
+import { AuthServiceError } from '../server/authService.js';
+import { CallerAuthenticationError, signerWorkspaceCallerFromRequest } from '../server/callerAuthentication.js';
 import {
   AgentCredentialServiceError,
-  authenticateAgentCredential,
-  requireAgentAccess,
 } from '../server/agentCredentialService.js';
 import {
   AddressBookServiceError,
@@ -40,7 +39,7 @@ function publicEntry(entry: StoredAddressAlias) {
 
 function errorResponse(cause: unknown): Response {
   if (cause instanceof RequestBodyError) return json({ error: cause.message, code: cause.code }, cause.status);
-  if (cause instanceof AuthServiceError) return json({ error: cause.message, code: cause.code }, cause.status);
+  if (cause instanceof AuthServiceError || cause instanceof CallerAuthenticationError || cause instanceof DeploymentNetworkPolicyError) return json({ error: cause.message, code: cause.code }, cause.status);
   if (cause instanceof AgentCredentialServiceError) return json({ error: cause.message, code: cause.code }, cause.status);
   if (cause instanceof AddressBookServiceError) return json({ error: cause.message, code: cause.code }, cause.status);
   if (cause instanceof RequestStorageUnavailableError) return json({ error: cause.message, code: 'storage_not_configured' }, 503);
@@ -49,21 +48,10 @@ function errorResponse(cause: unknown): Response {
 }
 
 async function ownerAddress(request: Request, requiredAccess: AgentAccessLevel): Promise<string> {
-  const authorization = request.headers.get('authorization') ?? '';
-  const bearer = /^Bearer\s+(.+)$/i.exec(authorization);
-  if (bearer) {
-    const credential = await authenticateAgentCredential(blobAgentCredentialStore, bearer[1].trim());
-    requireAgentAccess(credential, requiredAccess);
-    await blobAgentCredentialStore.touchCredential(credential.credentialId, new Date().toISOString());
-    return credential.principal.address;
-  }
-  const session = await requirePrivateWorkspaceSession(
-    blobAuthStore,
-    request,
-    authConfigForRequest(request),
-    'Sign in to use your private address book.',
+  const caller = await signerWorkspaceCallerFromRequest(
+    blobAgentCredentialStore, blobAuthStore, request, requiredAccess, 'Sign in to use your private address book.',
   );
-  return session.address;
+  return caller.address;
 }
 
 export async function OPTIONS(): Promise<Response> {

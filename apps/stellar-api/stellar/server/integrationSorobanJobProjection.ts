@@ -83,8 +83,10 @@ export function projectIntegrationSorobanJob({
   else if (authorization.status === 'awaiting_authorization') state = 'waiting_for_authorization';
   else state = latestPreparation && !preparationExpired ? 'executing' : 'ready';
 
-  const executionBlocked = !executionAvailable && (state === 'ready' || state === 'waiting_for_authorization');
-  const nextActions: IntegrationSorobanJobProjection['nextActions'] = executionBlocked ? ['cancel'] : state === 'ready'
+  const executionBlocked = !executionAvailable && ['ready', 'waiting_for_authorization', 'expired', 'executing'].includes(state);
+  const nextActions: IntegrationSorobanJobProjection['nextActions'] = executionBlocked
+    ? state === 'executing' ? ['reconcile_execution', 'cancel'] : ['cancel']
+    : state === 'ready'
     ? preparationExpired ? ['refresh_execution', 'cancel'] : ['prepare_execution', 'cancel']
     : state === 'executing' && !managed
       ? ['submit_execution', 'reconcile_execution', 'refresh_execution', 'cancel']

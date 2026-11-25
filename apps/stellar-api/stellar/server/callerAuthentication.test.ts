@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Keypair } from '@stellar/stellar-sdk/base';
+import { Keypair, Networks, TransactionBuilder } from '@stellar/stellar-sdk/base';
+import { authConfigForRequest } from './authConfig.js';
+import { createAuthChallenge, exchangeAuthChallenge } from './authService.js';
+import type { AuthStore, StoredAuthServerKey } from './authStore.js';
 import { createSignerAgentCredential } from './agentCredentialService.js';
 import type { AgentCredentialStore, StoredAgentIdempotencyClaim, StoredSignerAgentCredential } from './agentCredentialStore.js';
-import { CallerAuthenticationError, machineCallerFromRequest } from './callerAuthentication.js';
+import { CallerAuthenticationError, machineCallerFromRequest, signerWorkspaceCallerFromRequest } from './callerAuthentication.js';
 import { createIntegrationApiKey } from './integrationCredentialService.js';
 import type { IntegrationCredentialStore, StoredIntegrationCredential } from './integrationCredentialStore.js';
 
@@ -57,6 +60,45 @@ test('machine caller auth distinguishes signer Agent and independent Service cre
 test('Human Bearer JWT shape is left for signer-session verification', async () => {
   const caller = await machineCallerFromRequest(new MemoryAgentStore(), bearer('header.payload.signature'));
   assert.equal(caller, null);
+});
+
+test('Signer workspace accepts verified Human bearer and cookie sessions, not service credentials', async (t) => {
+  const previousNetwork = process.env.VITE_STELLAR_DEPLOYMENT_NETWORK;
+  t.after(() => {
+    if (previousNetwork === undefined) delete process.env.VITE_STELLAR_DEPLOYMENT_NETWORK;
+    else process.env.VITE_STELLAR_DEPLOYMENT_NETWORK = previousNetwork;
+  });
+  process.env.VITE_STELLAR_DEPLOYMENT_NETWORK = 'testnet';
+  const agentStore = new MemoryAgentStore();
+  let key: StoredAuthServerKey | null = null;
+  const authStore: AuthStore = {
+    async getServerKey() { return key; },
+    async createServerKey(value) { key = value; },
+    async claimChallengeRedemption() { return true; },
+  };
+  const signer = Keypair.random();
+  const config = authConfigForRequest(bearer('placeholder'));
+  const challenge = await createAuthChallenge(authStore, signer.publicKey(), 'testnet', config);
+  const transaction = TransactionBuilder.fromXDR(challenge.transaction, Networks.TESTNET);
+  transaction.sign(signer);
+  const session = await exchangeAuthChallenge(authStore, transaction.toXDR(), 'testnet', config);
+  const principal = { type: 'signer', address: signer.publicKey(), network: 'testnet', actor: 'human' };
+  for (const request of [
+    bearer(session.token),
+    new Request('https://stellar-testnet.multisig.tools/api/inbox', { headers: { Cookie: 'mst_auth=' + encodeURIComponent(session.token) } }),
+  ]) {
+    assert.deepEqual(await signerWorkspaceCallerFromRequest(agentStore, authStore, request, 'read', 'Unlock wallet'), principal);
+  }
+  const agent = await createSignerAgentCredential(agentStore, { type: 'signer', network: 'testnet', address: signer.publicKey() }, 'Monitor', 'read', signer.publicKey());
+  const caller = await signerWorkspaceCallerFromRequest(agentStore, authStore, bearer(agent.apiKey), 'read', 'Unlock wallet');
+  assert.equal(caller.actor, 'agent');
+  await assert.rejects(() => signerWorkspaceCallerFromRequest(agentStore, authStore, bearer(agent.apiKey), 'write', 'Unlock wallet'), { code: 'agent_access_denied' });
+  for (const invalid of ['msi_invalid', 'mta_invalid']) {
+    await assert.rejects(() => signerWorkspaceCallerFromRequest(agentStore, authStore, bearer(invalid), 'read', 'Unlock wallet'), { code: 'invalid_agent_credential' });
+  }
+  await assert.rejects(() => signerWorkspaceCallerFromRequest(agentStore, authStore, bearer('invalid.jwt.signature'), 'read', 'Unlock wallet'), { status: 401 });
+  process.env.VITE_STELLAR_DEPLOYMENT_NETWORK = 'public';
+  await assert.rejects(() => signerWorkspaceCallerFromRequest(agentStore, authStore, bearer(agent.apiKey), 'read', 'Unlock wallet'), { code: 'deployment_network_mismatch' });
 });
 
 test('malformed authorization header fails before caller classification', async () => {

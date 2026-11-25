@@ -1,3 +1,5 @@
+import type { AgentAccessLevel } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
+import { projectSorobanAgentTask } from './agentTaskProjection.js';
 import type { InboxSorobanIntentSnapshot } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
@@ -90,14 +92,14 @@ function snapshot(
   };
 }
 
-export async function listSorobanIntentInbox(
+async function pendingSorobanIntents(
   store: SorobanIntentStore,
   address: string,
   network: StellarNetwork,
-  options: IntentInboxOptions = {},
-): Promise<InboxSorobanIntentSnapshot[]> {
+  options: IntentInboxOptions,
+) {
   if (!store.listIntentsBySigner) return [];
-  const records = await store.listIntentsBySigner(network, address);
+  const records = (await store.listIntentsBySigner(network, address)).filter((stored) => stored.network === network);
   const values = await Promise.all(records.map(async (stored) => {
     try {
       const [authorization, preparations, observations] = await Promise.all([
@@ -108,12 +110,36 @@ export async function listSorobanIntentInbox(
       if (!isLiveParticipant(stored, address, authorization)) return null;
       const executionState = executionEvidenceState(preparations, observations);
       if (executionState === 'confirmed' || authorization.status === 'cancelled') return null;
-      return snapshot(stored, authorization, address, executionState === 'failed');
+      return { stored, authorization, preparations, observations, executionFailed: executionState === 'failed' };
     } catch {
       return null;
     }
   }));
   return values
-    .filter((value): value is InboxSorobanIntentSnapshot => Boolean(value))
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    .filter((value): value is NonNullable<typeof value> => value !== null)
+    .sort((left, right) => right.stored.createdAt.localeCompare(left.stored.createdAt));
+}
+
+export async function listSorobanIntentInbox(
+  store: SorobanIntentStore,
+  address: string,
+  network: StellarNetwork,
+  options: IntentInboxOptions = {},
+): Promise<InboxSorobanIntentSnapshot[]> {
+  return (await pendingSorobanIntents(store, address, network, options)).map((item) =>
+    snapshot(item.stored, item.authorization, address, item.executionFailed));
+}
+
+export async function listAgentSorobanInbox(
+  store: SorobanIntentStore,
+  address: string,
+  network: StellarNetwork,
+  access: AgentAccessLevel,
+  options: IntentInboxOptions = {},
+) {
+  const pending = await pendingSorobanIntents(store, address, network, options);
+  return {
+    intents: pending.map((item) => snapshot(item.stored, item.authorization, address, item.executionFailed)),
+    tasks: pending.map((item) => projectSorobanAgentTask({ ...item, principalAddress: address, credentialAccess: access })),
+  };
 }

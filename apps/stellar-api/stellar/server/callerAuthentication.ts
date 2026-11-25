@@ -1,12 +1,15 @@
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { privateSessionAddressFromRequest } from '../../../../packages/stellar-core/src/privateSessionTransport.js';
 import { authConfigForRequest } from './authConfig.js';
-import { AuthServiceError, privateWorkspaceSessionFromRequest, type AuthSession } from './authService.js';
+import { AuthServiceError, privateWorkspaceSessionFromRequest, requirePrivateWorkspaceSession, type AuthSession } from './authService.js';
+import { assertDeploymentNetwork } from './deploymentNetworkPolicy.js';
+import type { AgentAccessLevel } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 import type { AuthStore } from './authStore.js';
 import {
   AgentCredentialServiceError,
   authenticateAgentCredential,
   looksLikeAgentCredential,
+  requireAgentAccess,
 } from './agentCredentialService.js';
 import type { AgentCredentialStore, StoredSignerAgentCredential } from './agentCredentialStore.js';
 import { blobIntegrationCredentialStore } from './blobIntegrationCredentialStore.js';
@@ -59,6 +62,27 @@ export async function machineCallerFromRequest(
   }
   if (looksLikeHumanSessionToken(value)) return null;
   throw new AgentCredentialServiceError('Invalid Agent credential.', 401, 'invalid_agent_credential');
+}
+
+/** Signer workspace APIs accept an MSA or a verified Human session, never MSI/MTA. */
+export async function signerWorkspaceCallerFromRequest(
+  agentStore: AgentCredentialStore,
+  authStore: AuthStore,
+  request: Request,
+  requiredAccess: AgentAccessLevel,
+  missingMessage: string,
+) {
+  const bearer = bearerTokenFromRequest(request);
+  if (bearer && !looksLikeHumanSessionToken(bearer)) {
+    const credential = await authenticateAgentCredential(agentStore, bearer);
+    requireAgentAccess(credential, requiredAccess);
+    assertDeploymentNetwork(credential.principal.network);
+    await agentStore.touchCredential(credential.credentialId, new Date().toISOString());
+    return { ...credential.principal, actor: 'agent' as const, access: credential.access };
+  }
+  const session = await requirePrivateWorkspaceSession(authStore, request, authConfigForRequest(request), missingMessage);
+  assertDeploymentNetwork(session.network);
+  return { type: 'signer' as const, address: session.address, network: session.network, actor: 'human' as const };
 }
 
 export async function verifiedSignerSessionFromRequest(

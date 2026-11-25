@@ -199,6 +199,30 @@ test('Integration-owned Soroban work does not make a signer Agent its executor',
   assert.equal(task.state, 'waiting');
   assert.deepEqual(task.nextActions, []);
 });
+test('expired Integration Intent does not offer a signer Agent an Integration-only action', () => {
+  for (const credentialAccess of ['read', 'write', 'sign'] as const) {
+    const task = projectSorobanAgentTask({
+      stored: stored(true), authorization: authorization('expired'),
+      credentialAccess, principalAddress: PRINCIPAL,
+    });
+    assert.equal(task.state, 'expired');
+    assert.equal(task.signatureRequired, false);
+    assert.deepEqual(task.nextActions, []);
+  }
+});
+
+test('creator Agent waiting on others can cancel without falsely reporting a pending signature', () => {
+  const auth = authorization('awaiting_authorization');
+  auth.authorizers[0].activeSigners = [{ publicKey: OTHER, weight: 1 }];
+  const task = projectSorobanAgentTask({
+    stored: stored(false, true), authorization: auth,
+    credentialAccess: 'write', principalAddress: PRINCIPAL,
+  });
+  assert.equal(task.state, 'action_required');
+  assert.equal(task.signatureRequired, false);
+  assert.deepEqual(task.nextActions, [{ code: 'cancel', requiredAccess: 'write', available: true }]);
+});
+
 test('Soroban Agent Task projects observed result without asking the Agent to interpret evidence', () => {
   const task = projectSorobanAgentTask({
     stored: stored(), authorization: authorization('authorization_ready', true),

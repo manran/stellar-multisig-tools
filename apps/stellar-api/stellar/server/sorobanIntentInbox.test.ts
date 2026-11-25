@@ -4,15 +4,18 @@ import {
   Address,
   Contract,
   Keypair,
+  hash,
   nativeToScVal,
   xdr,
 } from '@stellar/stellar-sdk/base';
-import { initializeSorobanGAccountAuthorizationWindow } from '../../../../packages/stellar-core/src/sorobanAuthorization.js';
-import { createSorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import { initializeSorobanGAccountAuthorizationWindow, sorobanAuthorizationEntryPreimageXdr } from '../../../../packages/stellar-core/src/sorobanAuthorization.js';
+import { contributeSorobanIntentAuthorization } from './sorobanIntentAuthorizationService.js';
+import { createSorobanAuthorizationPlan, authorizationEntriesFromPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
 import { emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import { createSorobanIntent, materializeSorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
 import { createStoredSorobanIntent } from './sorobanIntentService.js';
 import {
+  listAgentSorobanInbox,
   listSorobanIntentInbox,
   projectSorobanIntentViewerAction,
 } from './sorobanIntentInbox.js';
@@ -149,6 +152,38 @@ test('Intent Inbox treats discovery as candidates and revalidates live signer au
   assert.equal(creatorInbox[0]?.viewerAction, 'waiting');
 });
 
+test('Read and Sign Agents discover the same current Soroban authorization, with different actions', async () => {
+  const f = await fixture();
+  const address = f.signer.publicKey();
+  const read = await listAgentSorobanInbox(f.store, address, 'testnet', 'read', f.options);
+  const sign = await listAgentSorobanInbox(f.store, address, 'testnet', 'sign', f.options);
+  assert.equal(read.intents.length, 1);
+  assert.equal(read.tasks.length, 1);
+  assert.equal(read.tasks[0].id, read.intents[0].id);
+  assert.equal(read.tasks[0].kind, 'soroban_contract');
+  assert.equal(read.tasks[0].signatureRequired, true);
+  assert.equal(read.tasks[0].state, 'waiting');
+  assert.equal(read.tasks[0].nextActions[0].available, false);
+  assert.equal(sign.tasks[0].state, 'action_required');
+  assert.equal(sign.tasks[0].nextActions[0].code, 'contribute_authorization');
+  assert.equal(sign.tasks[0].nextActions[0].available, true);
+  assert.deepEqual(await listAgentSorobanInbox(f.store, Keypair.random().publicKey(), 'testnet', 'read', f.options), { intents: [], tasks: [] });
+  assert.deepEqual(await listAgentSorobanInbox(f.store, address, 'public', 'read', f.options), { intents: [], tasks: [] });
+
+  const entry = authorizationEntriesFromPlan(f.stored.authorizationPlan)[0];
+  const preimage = xdr.HashIdPreimage.fromXdr(sorobanAuthorizationEntryPreimageXdr({
+    entry, network: 'testnet', expirationLedger: read.intents[0].authorizers[0].expirationLedger,
+  }), 'base64');
+  const contributed = await contributeSorobanIntentAuthorization(f.store, f.stored.id, {
+    entryIndex: 0, signerAddress: address,
+    signatureBase64: Buffer.from(f.signer.sign(hash(preimage.toXdr()))).toString('base64'),
+  }, f.options);
+  assert.equal(contributed.authorization.status, 'authorization_ready');
+  const after = await listAgentSorobanInbox(f.store, address, 'testnet', 'read', f.options);
+  assert.equal(after.tasks[0].signatureRequired, false);
+  assert.equal(after.intents[0].status, 'authorization_ready');
+});
+
 test('ready and blocked Intent states project to execution and attention actions', () => {
   const base = {
     id: 'N'.repeat(16),
@@ -213,6 +248,7 @@ test('cancelled Intent leaves the pending Inbox', async () => {
   });
   const cancelled = await listSorobanIntentInbox(f.store, f.creator.publicKey(), 'testnet', f.options);
   assert.deepEqual(cancelled, []);
+  assert.deepEqual(await listAgentSorobanInbox(f.store, f.creator.publicKey(), 'testnet', 'write', f.options), { intents: [], tasks: [] });
 });
 
 test('confirmed external execution leaves the pending Inbox', async () => {
@@ -233,4 +269,5 @@ test('confirmed external execution leaves the pending Inbox', async () => {
 
   const confirmed = await listSorobanIntentInbox(f.store, f.creator.publicKey(), 'testnet', f.options);
   assert.deepEqual(confirmed, []);
+  assert.deepEqual(await listAgentSorobanInbox(f.store, f.creator.publicKey(), 'testnet', 'read', f.options), { intents: [], tasks: [] });
 });

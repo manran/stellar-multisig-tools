@@ -111,6 +111,19 @@ test('legacy Intent with unavailable executor does not advertise prepare or refr
   assert.equal(job.reason, 'execution_unavailable');
   assert.deepEqual(job.nextActions, ['cancel']);
 });
+test('unavailable execution never advertises rejected replan or refresh actions', () => {
+  const expired = projectIntegrationSorobanJob({
+    stored: stored(), authorization: authorization('expired'), reviewUrl: REVIEW_URL, executionAvailable: false,
+  });
+  assert.equal(expired.reason, 'execution_unavailable');
+  assert.deepEqual(expired.nextActions, ['cancel']);
+  const executing = projectIntegrationSorobanJob({
+    stored: stored(), authorization: authorization('authorization_ready'), preparations: [preparation()],
+    reviewUrl: REVIEW_URL, executionAvailable: false, now: BEFORE_EXPIRY,
+  });
+  assert.equal(executing.reason, 'execution_unavailable');
+  assert.deepEqual(executing.nextActions, ['reconcile_execution', 'cancel']);
+});
 test('projects a current execution package as executing', () => {
   const job = projectIntegrationSorobanJob({
     stored: stored({ executionPolicy: { mode: 'external', executor: { address: 'GEXECUTOR', source: 'service_default' } } }),

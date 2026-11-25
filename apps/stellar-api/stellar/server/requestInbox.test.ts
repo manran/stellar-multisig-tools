@@ -272,6 +272,9 @@ test('non-signer proposer sees only own live Request as waiting, not a signature
   const own = await listSignerInbox(store, proposer, options);
   assert.equal(own.length, 1);
   assert.equal(own[0].proposerAddress, proposer);
+  assert.deepEqual(await listSignerInbox(store, proposer, { ...options, includeProposed: false }), []);
+  const staleDiscoveryStore = { ...store, listRequestsByDiscoverySubjects: async () => [request] };
+  assert.deepEqual(await listSignerInbox(staleDiscoveryStore, proposer, { ...options, includeProposed: false }), []);
   const others = await listSignerInbox(store, other, options);
   assert.deepEqual(others, []);
   const { projectHumanInboxRequests } = await import('./requestInbox.js');

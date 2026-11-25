@@ -125,7 +125,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(requestSubmit.security, [{ integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { requestCapability: [] }]);
   const inbox = paths['/inbox'].get as JsonObject;
   assert.equal(inbox.operationId, 'signer.inbox.list');
-  assert.deepEqual(inbox.security, [{ agentBearer: [] }, { humanSession: [] }]);
+  assert.deepEqual(inbox.security, [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }]);
   assert.deepEqual(inbox['x-multisig-effects'], ['none']);
   assert.ok(((paths['/agent-grants'].post as JsonObject).responses as JsonObject)['201']);
   assert.equal((paths['/auth'].get as JsonObject).operationId, 'signer.auth.challenge');
@@ -186,6 +186,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(schemas.AgentTask.required, ['version', 'id', 'kind', 'network', 'state', 'signatureRequired', 'nextActions']);
   assert.equal(((schemas.AgentTask.properties as JsonObject).signatureRequired as JsonObject).type, 'boolean');
   assert.equal(((schemas.SignerInboxResult.properties as JsonObject).signature_required_count as JsonObject).type, 'integer');
+  assert.equal(((schemas.SignerInboxResult.properties as JsonObject).intents as JsonObject).type, 'array');
   assert.deepEqual(((schemas.AgentTask.properties as JsonObject).state as JsonObject).enum, ['action_required', 'waiting', 'completed', 'expired', 'failed', 'cancelled']);
   const agentTaskAction = (((schemas.AgentTask.properties as JsonObject).nextActions as JsonObject).items as JsonObject);
   assert.deepEqual(agentTaskAction.required, ['code', 'requiredAccess', 'available']);

@@ -17,6 +17,7 @@ interface InboxOptions {
   accountLoader?: (accountId: string, network: StellarNetwork) => ReturnType<typeof loadAccount>;
   networkParametersLoader?: (network: StellarNetwork) => Promise<StellarNetworkParameters>;
   limit?: number;
+  includeProposed?: boolean;
 }
 
 const REQUEST_SCAN_BATCH_SIZE = 6;
@@ -25,8 +26,9 @@ async function discoveryCandidates(
   store: SigningRequestStore,
   address: string,
   network: StellarNetwork | undefined,
+  includeProposed: boolean,
 ): Promise<StoredSigningRequest[]> {
-  const proposer = network ? await store.listRequestsByProposer?.(network, address) ?? [] : [];
+  const proposer = network && includeProposed ? await store.listRequestsByProposer?.(network, address) ?? [] : [];
   let signers: StoredSigningRequest[];
   if (!network || !store.listRequestsByDiscoverySubjects) {
     signers = store.listRequests ? await store.listRequests() : [];
@@ -60,7 +62,7 @@ export async function listSignerInbox(
     return pending;
   };
 
-  const requests = (await discoveryCandidates(store, address, options.network))
+  const requests = (await discoveryCandidates(store, address, options.network, options.includeProposed !== false))
     .filter((request) => isValidSigningRequestId(request.id))
     .filter((request) => (!options.network || request.network === options.network))
     .filter((request) => new Date(request.expiresAt).getTime() > now.getTime())
@@ -70,7 +72,7 @@ export async function listSignerInbox(
   for (let index = 0; index < requests.length && visible.length < limit; index += REQUEST_SCAN_BATCH_SIZE) {
     const batch = requests.slice(index, index + REQUEST_SCAN_BATCH_SIZE);
     const snapshots = await Promise.all(batch.map(async (request): Promise<SigningRequestSnapshot | null> => {
-      let authorized = request.proposerAddress === address;
+      let authorized = options.includeProposed !== false && request.proposerAddress === address;
       try {
         if (!authorized) authorized = await signerCanAccessTransaction(
           address,

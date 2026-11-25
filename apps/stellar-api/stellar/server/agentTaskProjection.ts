@@ -145,8 +145,11 @@ export function projectSorobanAgentTask({
   else if (stored.cancellation || authorization.status === 'cancelled') state = 'cancelled';
   else if (latestObservation && !latestObservation.successful) state = 'failed';
   else if (authorization.status === 'expired') {
-    state = 'action_required';
-    nextActions = [action('replan', 'write', credentialAccess)];
+    state = 'expired';
+    if (!stored.integration) {
+      state = 'action_required';
+      nextActions = [action('replan', 'write', credentialAccess)];
+    }
   } else if (authorization.status === 'blocked') state = 'failed';
   else if (authorization.status === 'awaiting_authorization') {
     state = needsPrincipalAuthorization ? 'action_required' : 'waiting';
@@ -170,7 +173,9 @@ export function projectSorobanAgentTask({
 
   const signatureRequired = state === 'action_required'
     && authorization.status === 'awaiting_authorization' && needsPrincipalAuthorization;
-  if (state === 'action_required' && !nextActions.some((item) => item.available)) state = 'waiting';
+  const hasAvailableAction = nextActions.some((item) => item.available);
+  if (state === 'action_required' && !hasAvailableAction) state = 'waiting';
+  else if (state === 'waiting' && hasAvailableAction) state = 'action_required';
 
   const expiry = earliestExpiry(authorization);
   return {

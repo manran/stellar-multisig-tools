@@ -132,7 +132,7 @@ function security(path: string, method: string, access: HeadlessOperationAccess)
     return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
   }
   if (path === '/integration-execution') return [{ integrationBearer: [] }];
-  if (path === '/contracts' || path === '/inbox') return [{ agentBearer: [] }, { humanSession: [] }];
+  if (path === '/contracts' || path === '/inbox') return [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
   if (path === '/payment-prepare' || path === '/account-create-prepare') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
   if (path === '/request' && method === 'put') return [{ integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
   if (path === '/request' && method === 'post') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
@@ -1392,10 +1392,11 @@ const components: OpenApiObject = {
         network: stellarNetwork,
         actor: { type: 'string', enum: ['agent', 'human'] },
         pending_count: { type: 'integer', minimum: 0 },
-        action_count: { type: 'integer', minimum: 0, description: 'For Agent callers, the number of tasks with state action_required that the current credential can act on.' },
+        action_count: { type: 'integer', minimum: 0, description: 'For Agent callers, the number of tasks with at least one nextAction whose available flag is true.' },
         signature_required_count: { type: 'integer', minimum: 0, description: 'For Agent callers, the number of returned tasks with signatureRequired=true, regardless of scope.' },
         requests: { type: 'array', items: { type: 'object', additionalProperties: true } },
-        tasks: { type: 'array', items: schema('AgentTask'), description: 'Present for Agent callers; correlate each task id with a Request id.' },
+        intents: { type: 'array', items: { type: 'object', additionalProperties: true }, description: 'Pending Soroban Intents visible to the authenticated signer.' },
+        tasks: { type: 'array', items: schema('AgentTask'), description: 'Present for Agent callers. A classic_transaction task refers to a Request; a soroban_contract task refers to an Intent. Both counts include both kinds.' },
       },
       additionalProperties: true,
     },
