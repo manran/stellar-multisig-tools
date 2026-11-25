@@ -288,6 +288,7 @@ export async function prepareClassicPayment(
     explicitOperationSources: transactionSourceAccount !== sourceAccount,
     memo,
     memoHashHex,
+    minTime: Math.floor(Date.parse(parameters.ledgerClosedAt) / 1000),
   });
   const xdr = transaction.toXDR();
   const inspection = inspectTransactionXdr(xdr, network);

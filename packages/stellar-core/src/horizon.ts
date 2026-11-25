@@ -1,4 +1,4 @@
-import { StrKey } from '@stellar/stellar-sdk/base';
+import { FeeBumpTransaction, Networks, StrKey, TransactionBuilder } from '@stellar/stellar-sdk/base';
 import type { StellarAccountSnapshot, StellarNetwork } from './types.js';
 
 const HORIZON_URLS: Record<StellarNetwork, string> = {
@@ -54,6 +54,7 @@ interface HorizonTransactionResponse {
   ledger: number;
   successful: boolean;
   created_at?: string;
+  envelope_xdr?: string;
 }
 
 interface HorizonTransactionFailureResponse {
@@ -81,6 +82,7 @@ export interface TransactionSubmissionResult {
   ledger: number;
   successful: boolean;
   createdAt?: string;
+  ledgerTransactionHash?: string;
 }
 
 export class AccountNotFoundError extends Error {
@@ -290,11 +292,27 @@ export async function loadTransactionByHash(
   }
 
   const transaction = (await response.json()) as HorizonTransactionResponse;
+  // Horizon can return the requested inner hash with an outer fee-bump
+  // envelope. Derive the actual ledger hash even when its hash field matches.
+  let ledgerTransactionHash: string | undefined;
+  const hex = (bytes: Uint8Array) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  if (transaction.envelope_xdr) {
+    const envelope = TransactionBuilder.fromXdr(transaction.envelope_xdr, network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC);
+    const outerHash = hex(envelope.hash());
+    const innerHash = envelope instanceof FeeBumpTransaction ? hex(envelope.innerTransaction.hash()) : outerHash;
+    if (![outerHash, innerHash].includes(hash) || ![outerHash, innerHash].includes(transaction.hash)) {
+      throw new Error('Horizon returned a transaction that does not match the requested hash.');
+    }
+    if (outerHash !== hash) ledgerTransactionHash = outerHash;
+  } else if (transaction.hash !== hash) {
+    throw new Error('Horizon returned a transaction that does not match the requested hash.');
+  }
   return {
-    hash: transaction.hash,
+    hash,
     ledger: transaction.ledger,
     successful: transaction.successful,
     createdAt: transaction.created_at,
+    ...(ledgerTransactionHash ? { ledgerTransactionHash } : {}),
   };
 }
 

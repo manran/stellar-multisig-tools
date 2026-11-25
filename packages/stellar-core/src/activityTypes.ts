@@ -65,6 +65,7 @@ export interface ActivityCoordinationEvent extends ActivityEventBase {
 export type ActivityTimelineEvent = ActivityFactEvent | ActivityCoordinationEvent;
 
 export interface ActivityRequestItem {
+  executionOutcome?: import('./requestTypes.js').ClassicExecutionEvidence;
   requestId: string;
   network: StellarNetwork;
   transactionHash: string;

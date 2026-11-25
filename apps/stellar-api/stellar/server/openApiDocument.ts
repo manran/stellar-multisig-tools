@@ -75,7 +75,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
   }
   if (path === '/request' && method === 'get') {
     values.push(
-      parameter('view', 'query', false, { type: 'string', enum: ['history'] }, 'Request retained history projection.'),
+      parameter('view', 'query', false, { type: 'string', enum: ['history', 'reconciliation'] }, 'Retained signer history, or external Classic execution reconciliation for the owning Integration.'),
       parameter('account', 'query', false, { type: 'string', pattern: '^G[A-Z2-7]{55}$' }, 'Optional Treasury scope for history.'),
     );
   }
@@ -137,7 +137,7 @@ function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/contracts' && method === 'delete') return schema('ContractWorkspaceForgetResult');
   if (path === '/payment-prepare') return schema('ClassicPaymentPrepareResult');
   if (path === '/account-create-prepare') return schema('ClassicCreateAccountPrepareResult');
-  if (path === '/request') return schema('ProposalResult');
+  if (path === '/request') return method === 'get' ? { oneOf: [schema('ProposalResult'), schema('ClassicExecutionReconcileResult')] } : schema('ProposalResult');
   return { type: 'object', additionalProperties: true };
 }
 
@@ -217,6 +217,7 @@ function openApiPaths(): OpenApiObject {
         '500': response('Internal error.', schema('ApiError')),
         '502': response('Upstream service returned an invalid or unavailable response.', schema('ApiError')),
         '503': response('Dependency unavailable.', schema('ApiError')),
+        '504': response('Upstream outcome may be unknown.', schema('ApiError')),
       },
       'x-multisig-operation-ids': operations.map((item) => item.id),
       'x-multisig-access': operations.map((item) => item.access),
@@ -246,6 +247,35 @@ function grantPreviewSchema(extra: OpenApiObject = {}, required: string[] = []):
     additionalProperties: false,
   };
 }
+
+// Terminal outcomes require their matching evidence and forbid contradictory evidence.
+function executionOutcomeBranches(): OpenApiObject[] {
+  return [
+    { properties: { outcome: { const: 'unknown' }, observed: { const: false } },
+      not: { anyOf: [{ required: ['observation'] }, { required: ['nonInclusionProof'] }] } },
+    { required: ['nonInclusionProof'], properties: { outcome: { const: 'not_included' }, observed: { const: false } },
+      not: { required: ['observation'] } },
+    ...(['successful', 'failed'] as const).map((outcome) => ({
+      required: ['observation'],
+      properties: { outcome: { const: outcome }, observed: { const: true },
+        observation: { properties: { successful: { const: outcome === 'successful' } } } },
+      not: { required: ['nonInclusionProof'] },
+    })),
+  ];
+}
+
+const submissionProperties = {
+  transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+  ledger: { type: 'integer', minimum: 1 },
+  submittedAt: timestamp,
+  ledgerTransactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$', description: 'Actual ledger envelope hash if a fee bump wrapped the Request transaction.' },
+};
+const classicExecutionEvidenceProperties = {
+  outcome: { type: 'string', enum: ['unknown', 'not_included', 'failed', 'successful'] },
+  observed: { type: 'boolean' },
+  nonInclusionProof: schema('ClassicExecutionNonInclusionProof'),
+  observation: schema('ClassicExecutionObservation'),
+};
 
 const components: OpenApiObject = {
   securitySchemes: {
@@ -1088,6 +1118,7 @@ const components: OpenApiObject = {
         job: schema('IntegrationSorobanJob'),
         task: schema('AgentTask'),
       },
+      oneOf: executionOutcomeBranches(),
       additionalProperties: false,
     },
     ContractIntentReplanResult: {
@@ -1453,6 +1484,36 @@ const components: OpenApiObject = {
       },
       additionalProperties: false,
     },
+    SigningRequestSubmission: {
+      type: 'object', required: ['transactionHash', 'ledger', 'submittedAt'],
+      properties: submissionProperties, additionalProperties: false,
+    },
+    ClassicExecutionObservation: {
+      type: 'object', required: ['transactionHash', 'ledger', 'submittedAt', 'successful'],
+      properties: { ...submissionProperties, successful: { type: 'boolean' } }, additionalProperties: false,
+    },
+    ClassicExecutionNonInclusionProof: {
+      type: 'object', required: ['oldestLedger', 'latestLedger', 'oldestLedgerClosedAt', 'latestLedgerClosedAt', 'validAfter', 'validUntil', 'checkedAt'],
+      properties: {
+        oldestLedger: { type: 'integer', minimum: 1 }, latestLedger: { type: 'integer', minimum: 1 },
+        oldestLedgerClosedAt: timestamp, latestLedgerClosedAt: timestamp, validAfter: timestamp, validUntil: timestamp, checkedAt: timestamp,
+      },
+      description: 'Healthy RPC history starts strictly before the signed lower time bound and extends strictly beyond the signed upper time bound; the subsequent exact hash lookup returned NOT_FOUND.',
+      additionalProperties: false,
+    },
+    ClassicExecutionEvidence: {
+      type: 'object', required: ['outcome', 'observed'], properties: classicExecutionEvidenceProperties,
+      oneOf: executionOutcomeBranches(), additionalProperties: false,
+    },
+    ClassicExecutionReconcileResult: {
+      type: 'object', required: ['operation', 'version', 'requestId', 'network', 'transactionHash', 'replayed', 'outcome', 'observed'],
+      properties: {
+        operation: { const: 'integration.request.execution.reconcile' }, version: operationVersion,
+        requestId: { type: 'string' }, network: stellarNetwork, transactionHash: submissionProperties.transactionHash,
+        replayed: { type: 'boolean' }, ...classicExecutionEvidenceProperties,
+      },
+      oneOf: executionOutcomeBranches(), additionalProperties: false,
+    },
     SigningRequest: {
       type: 'object',
       required: ['id', 'network', 'transactionHash', 'baseXdr', 'mergedXdr', 'createdAt', 'expiresAt', 'contributionCount', 'signatureCount', 'status', 'statusReason'],
@@ -1469,10 +1530,22 @@ const components: OpenApiObject = {
         status: { type: 'string', enum: ['awaiting_signatures', 'waiting_preconditions', 'ready', 'submitted', 'expired', 'stale', 'blocked'] },
         statusReason: { type: 'string' },
         statusDetail: { type: 'string' },
-        submission: { type: 'object', additionalProperties: true },
+        creatorAddress: accountId,
+        proposerAddress: accountId,
+        template: { type: 'object', additionalProperties: true },
+        submission: schema('SigningRequestSubmission'),
+        executionOutcome: schema('ClassicExecutionEvidence'),
         execution: schema('RequestExecution'),
         sorobanOrigin: schema('SorobanRequestOrigin'),
       },
+      allOf: [
+        { if: { properties: { status: { const: 'submitted' } } }, then: { required: ['submission'] }, else: { not: { required: ['submission'] } } },
+        { if: { required: ['execution'], properties: { execution: { properties: { mode: { const: 'external' } } } } }, then: { required: ['executionOutcome'] } },
+        { if: { required: ['executionOutcome'], properties: { executionOutcome: { properties: { outcome: { const: 'successful' } } } } }, then: { properties: { status: { const: 'submitted' } } } },
+        { if: { required: ['executionOutcome'], properties: { executionOutcome: { properties: { outcome: { const: 'failed' } } } } }, then: { properties: { status: { const: 'blocked' } } } },
+        { if: { required: ['executionOutcome'], properties: { executionOutcome: { properties: { outcome: { const: 'not_included' } } } } }, then: { properties: { status: { const: 'expired' } } } },
+        { if: { required: ['executionOutcome'], properties: { status: { const: 'submitted' } } }, then: { properties: { executionOutcome: { properties: { outcome: { const: 'successful' } } } } } },
+      ],
       additionalProperties: false,
     },
     ContactDeleteInput: {
@@ -1555,6 +1628,7 @@ const components: OpenApiObject = {
         access: { type: 'object', additionalProperties: true },
         context: { type: 'object', additionalProperties: true },
         history: { type: 'object', additionalProperties: true },
+        coordination: { type: 'object', additionalProperties: true },
         addedSignatureCount: { type: 'integer', minimum: 0 },
         duplicateSignatureCount: { type: 'integer', minimum: 0 },
         decision: { type: 'string', enum: ['declined'] },
@@ -1606,8 +1680,15 @@ function logicalOperationRetry(operation: HeadlessOperationDescriptor): OpenApiO
     onError.integration_service_exists = { ...rule('human_recovery', [], 'No public recovery of an existing secret. For a disposable Testnet profile, obtain approval to use a new unique serviceId; for the existing profile, an authorized operator must rotate its credential.'), responseSchema: schema('TestnetIntegrationExistsError') };
     onError.idempotency_key_unsupported = rule('correct_input', [], 'Do not send Idempotency-Key for this operation.');
   }
+  let onOutcome: OpenApiObject | undefined;
   if (id.endsWith('.execution.reconcile')) {
     transportFailure = rule('retry_same_request', [id], 'Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion.');
+    onOutcome = {
+      unknown: rule('retry_same_request_with_backoff', [id], 'Do not create or sign a replacement while execution remains unknown. Stop automatic polling and escalate for manual reconciliation if bounded retries do not resolve it, or the signed validity window or historical coverage is unavailable.'),
+      successful: rule('complete', [], 'Retain the verified ledger receipt. Do not repeat the business payment.'),
+      failed: rule('human_review', [], 'The transaction was included but failed. Review the receipt before a separately authorized replacement.'),
+      not_included: rule('human_review', [], 'The original validity window is closed and non-inclusion is verified. Review before a separately authorized replacement.'),
+    };
   }
   if (id.endsWith('.execution.prepare') || id.endsWith('.replan')) {
     onError.intent_execution_outcome_unknown = rule('reconcile_first', [inspectId!, reconcileId], 'Reconcile every unresolvedTransactionHash before creating another execution package or plan.');
@@ -1627,10 +1708,10 @@ function logicalOperationRetry(operation: HeadlessOperationDescriptor): OpenApiO
   const onHttpStatus = {
     '400': rule('correct_input'), '401': rule('authenticate'), '403': rule('stop'),
     '409': defaultError, '410': rule('stop'), '413': rule('correct_input'), '415': rule('correct_input'),
-    ...Object.fromEntries(['429', '500', '502', '503'].map((status) => [status, retryable
+    ...Object.fromEntries(['429', '500', '502', '503', '504'].map((status) => [status, retryable
       ? { ...transportFailure, strategy: 'retry_same_request_with_backoff' } : transportFailure])),
   };
-  return { idempotencyKey, transportFailure, onError, onHttpStatus, defaultError };
+  return { idempotencyKey, transportFailure, onError, onHttpStatus, defaultError, ...(onOutcome ? { onOutcome } : {}) };
 }
 
 /** Canonical logical calls, narrower than their shared HTTP transport. Keep
@@ -1716,6 +1797,17 @@ function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
           result = schema(branch[0] + 'Result');
           dispatch = { body: { action: branch[1] } };
         }
+      }
+    } else if (path === '/request' && method === 'GET') {
+      if (id === 'integration.request.execution.reconcile') {
+        parameters = parameters.filter((p) => p.name !== 'view' && p.name !== 'account');
+        parameters.push(parameter('view', 'query', true, { const: 'reconciliation' }, 'Verify the exact stored hash of this external Classic Request.'));
+        dispatch = { query: { view: 'reconciliation' } };
+        result = schema('ClassicExecutionReconcileResult');
+      } else {
+        parameters = parameters.filter((p) => access !== 'integration:read' || (p.name !== 'view' && p.name !== 'account'))
+          .map((p) => p.name === 'view' ? { ...p, schema: { const: 'history' } } : p);
+        result = schema('ProposalResult');
       }
     } else if (path === '/request' && method === 'POST') {
       request = access === 'principal:write'

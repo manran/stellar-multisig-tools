@@ -33,13 +33,44 @@ export type SigningRequestStatusReason =
   | 'soroban_authorization_invalid'
   | 'soroban_authorization_expired'
   | 'soroban_execution_verification_unavailable'
-  | 'soroban_execution_failed';
+  | 'soroban_execution_failed'
+  | 'execution_failed'
+  | 'execution_not_included';
 
 export interface SigningRequestSubmission {
   transactionHash: string;
   ledger: number;
   submittedAt: string;
+  /** Actual ledger envelope hash when a fee bump wrapped the Request transaction. */
+  ledgerTransactionHash?: string;
 }
+
+export interface ClassicExecutionNonInclusionProof {
+  oldestLedger: number;
+  latestLedger: number;
+  oldestLedgerClosedAt: string;
+  latestLedgerClosedAt: string;
+  validAfter: string;
+  validUntil: string;
+  checkedAt: string;
+}
+
+export type ClassicExecutionEvidence =
+  | { outcome: 'unknown'; observed: false }
+  | { outcome: 'not_included'; observed: false; nonInclusionProof: ClassicExecutionNonInclusionProof }
+  | { outcome: 'successful'; observed: true; observation: SigningRequestSubmission & { successful: true } }
+  | { outcome: 'failed'; observed: true; observation: SigningRequestSubmission & { successful: false } };
+
+export type ClassicTerminalExecutionEvidence = Exclude<ClassicExecutionEvidence, { outcome: 'unknown' }>;
+
+export type ClassicExecutionReconciliationResponse = ClassicExecutionEvidence & {
+  operation: 'integration.request.execution.reconcile';
+  version: 1;
+  requestId: string;
+  network: StellarNetwork;
+  transactionHash: string;
+  replayed: boolean;
+};
 
 export interface SorobanRequestOrigin {
   version: 1;
@@ -67,6 +98,7 @@ export interface SigningRequestSnapshot {
   statusReason: SigningRequestStatusReason;
   statusDetail?: string;
   submission?: SigningRequestSubmission;
+  executionOutcome?: ClassicExecutionEvidence;
   execution?: RequestExecution;
   sorobanOrigin?: SorobanRequestOrigin;
   template?: ReusableTemplateRef;

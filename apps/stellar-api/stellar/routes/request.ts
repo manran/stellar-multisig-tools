@@ -26,6 +26,7 @@ import {
 import type { ConfiguredIntegrationCredential } from '../server/integrationCredentialService.js';
 import { CallerAuthenticationError, machineCallerFromRequest, verifiedSignerSessionFromRequest } from '../server/callerAuthentication.js';
 import { createIntegrationPaymentSigningRequest, createIntegrationSigningRequest } from '../server/integrationRequestService.js';
+import { reconcileClassicExecution } from '../server/classicExecutionReconciliationService.js';
 import { ClassicManagedChannelServiceError } from '../server/classicManagedChannelService.js';
 import { ClassicManagedChannelConfigurationError } from '../server/classicManagedChannelConfig.js';
 import { ClassicPaymentPrepareError, type ClassicPaymentInstruction } from '../../../../packages/stellar-core/src/classicPaymentPrepare.js';
@@ -652,6 +653,7 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const url = new URL(request.url);
     const historyRequested = url.searchParams.get('view') === 'history';
+    const reconciliationRequested = url.searchParams.get('view') === 'reconciliation';
     const historyAccountId = url.searchParams.get('account')?.trim() ?? '';
     if (historyAccountId && !isValidStellarAccountId(historyAccountId)) {
       throw new SigningRequestServiceError('Enter a valid Stellar account.', 400, 'invalid_account');
@@ -671,6 +673,13 @@ export async function GET(request: Request): Promise<Response> {
     });
     if (access.mode === 'capability' && access.capabilityClosed) {
       return capabilityClosedResponse(access.network, access.capabilityClosed);
+    }
+
+    if (reconciliationRequested) {
+      if (access.mode !== 'service') {
+        throw new SigningRequestServiceError('Only the owning Integration can reconcile external Classic execution.', 403, 'integration_request_access_denied');
+      }
+      return noStoreJson(await reconcileClassicExecution(signingRequestStore, access.stored));
     }
 
     if (historyRequested && (!access.actorAddress || !['session', 'proposer', 'contribution', 'agent'].includes(access.mode))) {

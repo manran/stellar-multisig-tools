@@ -365,3 +365,32 @@ test('Stellar API deployment advertises standard service description and documen
   assert.ok(config.rewrites.some((rewrite) =>
     rewrite.source === '/openapi.json' && rewrite.destination === '/api/openapi'));
 });
+
+
+test('Execution reconciliation contracts require matching evidence and expose a bounded recovery operation', () => {
+  const document = createOpenApiDocument();
+  const schemas = (document.components as JsonObject).schemas as Record<string, JsonObject>;
+  for (const name of ['ContractIntentExecutionReconcileResult', 'ClassicExecutionReconcileResult', 'ClassicExecutionEvidence']) {
+    const branches = schemas[name].oneOf as JsonObject[];
+    assert.equal(branches.length, 4);
+    const byOutcome = Object.fromEntries(branches.map(branch => [((branch.properties as JsonObject).outcome as JsonObject).const, branch]));
+    assert.deepEqual(byOutcome.not_included.required, ['nonInclusionProof']);
+    assert.deepEqual(byOutcome.successful.required, ['observation']);
+    assert.deepEqual(byOutcome.failed.required, ['observation']);
+    for (const outcome of ['successful', 'failed']) {
+      const properties = byOutcome[outcome].properties as JsonObject;
+      assert.equal((properties.observed as JsonObject).const, true);
+      assert.equal((((properties.observation as JsonObject).properties as JsonObject).successful as JsonObject).const, outcome === 'successful');
+    }
+  }
+  assert.deepEqual(schemas.SigningRequestSubmission.required, ['transactionHash', 'ledger', 'submittedAt']);
+  const operation = (document['x-multisig-operations'] as Record<string, JsonObject>)['integration.request.execution.reconcile'];
+  assert.equal(operation.method, 'GET');
+  assert.equal(operation.access, 'integration:read');
+  assert.deepEqual(operation.dispatch, { query: { view: 'reconciliation' } });
+  const outcomes = (operation.retry as JsonObject).onOutcome as Record<string, JsonObject>;
+  assert.equal(outcomes.unknown.strategy, 'retry_same_request_with_backoff');
+  assert.equal(outcomes.successful.strategy, 'complete');
+  assert.equal(outcomes.failed.strategy, 'human_review');
+  assert.equal(outcomes.not_included.strategy, 'human_review');
+});

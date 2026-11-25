@@ -6,7 +6,7 @@ import type { ExecutionPolicy } from '../../../../packages/stellar-core/src/exec
 import type { PrivateCommitmentRecord } from '../../../../packages/stellar-core/src/privateCommitment.js';
 import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
 import type { SorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
-import type { SorobanRequestOrigin } from '../../../../packages/stellar-core/src/requestTypes.js';
+import type { ClassicTerminalExecutionEvidence, SorobanRequestOrigin } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import type { ReusableTemplateRef } from '../../../../packages/stellar-core/src/reusableTemplate.js';
 
@@ -70,11 +70,24 @@ export interface StoredSubmissionResult {
   transactionHash: string;
   ledger: number;
   submittedAt: string;
+  ledgerTransactionHash?: string;
+}
+
+export function isExternalClassicRequest(request: StoredSigningRequest): boolean {
+  // External Classic is an Integration-owned execution policy; Soroban Intent
+  // execution has its own resource and reconciliation service.
+  return request.executionPolicy?.mode === 'external';
+}
+
+export function successfulClassicEvidence(submission: StoredSubmissionResult): Extract<ClassicTerminalExecutionEvidence, { outcome: 'successful' }> {
+  const { version: _version, ...receipt } = submission;
+  return { outcome: 'successful', observed: true, observation: { ...receipt, successful: true } };
 }
 
 export interface StoredSigningRequestReadFacts {
   contributions: StoredSignatureContribution[];
   submission: StoredSubmissionResult | null;
+  executionEvidence?: ClassicTerminalExecutionEvidence | null;
 }
 
 export interface StoredRequestParticipant {
@@ -118,6 +131,8 @@ export interface SigningRequestStore {
   putContribution(id: string, contribution: StoredSignatureContribution): Promise<void>;
   getSubmission(id: string, transactionHash: string): Promise<StoredSubmissionResult | null>;
   putSubmission(id: string, submission: StoredSubmissionResult): Promise<void>;
+  getExecutionEvidence?(id: string): Promise<ClassicTerminalExecutionEvidence | null>;
+  putExecutionEvidence?(id: string, evidence: ClassicTerminalExecutionEvidence): Promise<void>;
   getRequestParticipant?(id: string, address: string): Promise<StoredRequestParticipant | null>;
   listRequestParticipants?(id: string): Promise<StoredRequestParticipant[]>;
   putRequestParticipant?(id: string, participant: StoredRequestParticipant): Promise<void>;

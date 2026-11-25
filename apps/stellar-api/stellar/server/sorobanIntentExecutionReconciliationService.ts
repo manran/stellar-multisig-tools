@@ -1,6 +1,7 @@
 import { FeeBumpTransaction, Networks, TransactionBuilder } from '@stellar/stellar-sdk/base';
 import { stellarRpcUrl } from '../../../../packages/stellar-core/src/sorobanRpc.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import type { ClassicExecutionNonInclusionProof } from '../../../../packages/stellar-core/src/requestTypes.js';
 import {
   loadTransactionByHash,
   type TransactionSubmissionResult,
@@ -45,12 +46,20 @@ function rpcInteger(value: unknown): number {
   return Number.isSafeInteger(number) && number > 0 ? number : NaN;
 }
 
-export async function probeSorobanExecution(
-  preparation: StoredSorobanIntentExecutionPreparation,
+type ExecutionCoverage =
+  | { kind: 'prepared_ledger'; latestLedger: number; validUntil: string | null }
+  | { kind: 'time_bounds'; validAfter: string | null; validUntil: string | null };
+
+/** Both transaction types use the same RPC lookup and pre-lookup coverage check.
+ * Classic envelopes may have existed before MST saw them: only their signed
+ * lower time bound, not Request creation time, can establish coverage. */
+export async function probeTransactionExecution(
+  transactionHash: string,
   network: StellarNetwork,
+  coverage: ExecutionCoverage,
   fetchImpl: typeof fetch = fetch,
   now = new Date(),
-): Promise<{ receipt?: TransactionSubmissionResult; proof?: SorobanExecutionNonInclusionProof }> {
+): Promise<{ receipt?: TransactionSubmissionResult; proof?: SorobanExecutionNonInclusionProof; oldestLedgerClosedAt?: string }> {
   const rpc = async (method: string, params = {}): Promise<RpcResult> => {
     const response = await fetchImpl(stellarRpcUrl(network), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -65,17 +74,18 @@ export async function probeSorobanExecution(
   // Establish an ingested ledger beyond the time bound BEFORE checking the
   // hash. The range reported after a lookup alone can race with ingestion.
   const health = await rpc('getHealth');
-  const result = await rpc('getTransaction', { hash: preparation.transactionHash, xdrFormat: 'base64' });
+  const result = await rpc('getTransaction', { hash: transactionHash, xdrFormat: 'base64' });
   if (result.status === 'SUCCESS' || result.status === 'FAILED') {
     if (typeof result.envelopeXdr !== 'string') throw new Error('Missing transaction envelope.');
     const tx = TransactionBuilder.fromXdr(result.envelopeXdr, network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC);
     const actual = tx instanceof FeeBumpTransaction ? tx.innerTransaction : tx;
     const hash = Buffer.from(actual.hash()).toString('hex');
-    if (hash !== preparation.transactionHash || !Number.isSafeInteger(result.ledger) || Number(result.ledger) <= 0) {
+    if (hash !== transactionHash || !Number.isSafeInteger(result.ledger) || Number(result.ledger) <= 0) {
       throw new Error('Inconsistent Stellar RPC execution result.');
     }
     const timestamp = rpcInteger(result.createdAt);
     return { receipt: { hash, ledger: Number(result.ledger), successful: result.status === 'SUCCESS',
+      ...(tx instanceof FeeBumpTransaction ? { ledgerTransactionHash: Buffer.from(tx.hash()).toString('hex') } : {}),
       ...(Number.isFinite(timestamp) ? { createdAt: new Date(timestamp * 1000).toISOString() } : {}) } };
   }
   if (result.status !== 'NOT_FOUND') throw new Error('Unknown Stellar RPC transaction status.');
@@ -85,15 +95,54 @@ export async function probeSorobanExecution(
   const prior = rpcInteger(health.latestLedger);
   const priorClose = rpcInteger(health.latestLedgerCloseTime);
   const close = rpcInteger(result.latestLedgerCloseTime);
-  const end = preparation.validUntil ? Date.parse(preparation.validUntil) : NaN;
+  const end = coverage.validUntil ? Date.parse(coverage.validUntil) : NaN;
   if (health.status !== 'healthy' || ![oldest, latest, priorOldest, prior, priorClose, close, end].every(Number.isFinite)
-    || !Number.isSafeInteger(preparation.latestLedger) || preparation.latestLedger <= 0
-    || oldest > preparation.latestLedger || priorOldest > preparation.latestLedger || prior <= preparation.latestLedger
+    || oldest > latest || priorOldest > prior
     || priorClose * 1000 <= end || latest < prior || close < priorClose) return {};
+  let oldestLedgerClosedAt: string | undefined;
+  if (coverage.kind === 'prepared_ledger') {
+    if (!Number.isSafeInteger(coverage.latestLedger) || coverage.latestLedger <= 0
+      || oldest > coverage.latestLedger || priorOldest > coverage.latestLedger || prior <= coverage.latestLedger) return {};
+  } else {
+    const start = coverage.validAfter ? Date.parse(coverage.validAfter) : NaN;
+    const oldestClose = rpcInteger(result.oldestLedgerCloseTime);
+    const priorOldestClose = rpcInteger(health.oldestLedgerCloseTime);
+    // Strictly before the signed lower time bound, on both reads. An older
+    // envelope with minTime=0 or pruned history cannot prove non-inclusion.
+    if (![start, oldestClose, priorOldestClose].every(Number.isFinite) || start > end
+      || oldestClose * 1000 >= start || priorOldestClose * 1000 >= start
+      || oldestClose > close || priorOldestClose > priorClose) return {};
+    oldestLedgerClosedAt = new Date(oldestClose * 1000).toISOString();
+  }
   return { proof: {
     oldestLedger: oldest, latestLedger: latest,
     latestLedgerClosedAt: new Date(close * 1000).toISOString(), checkedAt: now.toISOString(),
-  } };
+  }, ...(oldestLedgerClosedAt ? { oldestLedgerClosedAt } : {}) };
+}
+
+export async function probeSorobanExecution(
+  preparation: StoredSorobanIntentExecutionPreparation,
+  network: StellarNetwork,
+  fetchImpl: typeof fetch = fetch,
+  now = new Date(),
+): Promise<{ receipt?: TransactionSubmissionResult; proof?: SorobanExecutionNonInclusionProof }> {
+  return probeTransactionExecution(preparation.transactionHash, network, {
+    kind: 'prepared_ledger', latestLedger: preparation.latestLedger, validUntil: preparation.validUntil,
+  }, fetchImpl, now);
+}
+
+export async function probeClassicExecution(
+  transactionHash: string,
+  network: StellarNetwork,
+  validAfter: string | null,
+  validUntil: string | null,
+  fetchImpl: typeof fetch = fetch,
+  now = new Date(),
+): Promise<{ receipt?: TransactionSubmissionResult; proof?: ClassicExecutionNonInclusionProof }> {
+  const result = await probeTransactionExecution(transactionHash, network, { kind: 'time_bounds', validAfter, validUntil }, fetchImpl, now);
+  return { ...(result.receipt ? { receipt: result.receipt } : {}),
+    ...(result.proof && result.oldestLedgerClosedAt && validAfter && validUntil
+      ? { proof: { ...result.proof, oldestLedgerClosedAt: result.oldestLedgerClosedAt, validAfter, validUntil } } : {}) };
 }
 
 function normalizeTransactionHash(value: string): string {

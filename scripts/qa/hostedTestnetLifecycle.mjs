@@ -4,7 +4,7 @@
 // No saved keys, email invitations, Mainnet calls, or production credentials.
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import { Account, BASE_FEE, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
+import { Account, Asset, BASE_FEE, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
 
 const TESTNET_API = 'https://api-testnet.multisig.tools/stellar';
 let API = TESTNET_API;
@@ -325,6 +325,10 @@ async function discoverIntegration() {
   const prepare = operation('integration.classic.payment.prepare', 'integration:write', 'none');
   const request = operation('integration.request.create', 'integration:write', 'coordination-state');
   const inspect = operation('integration.request.inspect', 'integration:read', 'none');
+  const reconcile = operation('integration.request.execution.reconcile', 'integration:read', 'none');
+  const reconcileContract = openapi['x-multisig-operations'][reconcile.id];
+  check(reconcileContract.dispatch?.query?.view === 'reconciliation' && reconcileContract.retry?.onOutcome?.unknown?.strategy === 'retry_same_request_with_backoff', 'Classic reconciliation dispatch/recovery contract missing');
+  reconcile.path += '?' + new URLSearchParams(reconcileContract.dispatch.query).toString();
   const submit = operation('integration.request.submit', 'integration:write', 'network-submit');
   const auth = operation('signer.auth.challenge', 'public', 'none');
   const exchange = operation('signer.auth.exchange', 'public', 'private-state');
@@ -346,7 +350,7 @@ async function discoverIntegration() {
     inbox = operation('signer.inbox.list', 'principal:read', 'none');
   }
   record('public-msi-msa-operation-discovery', { strict: !ALLOW_UNDISCOVERED_INBOX });
-  return { runtime, create, prepare, request, inspect, submit, pair, contribute, inbox, auth, revoke };
+  return { runtime, create, prepare, request, inspect, reconcile, submit, pair, contribute, inbox, auth, revoke };
 }
 
 async function integrationE2E() {
@@ -498,9 +502,29 @@ async function integrationE2E() {
       check(final.request.status === 'ready', 'External Request did not stay ready at quorum');
       const refused = await call(ops.submit.path, ops.submit.method, {}, requestHeaders(requestId, '', serviceHeaders), 409);
       check(refused.code === 'external_executor_required', 'MST attempted to submit externally owned Request');
+      const reconcileHeaders = requestHeaders(requestId, '', serviceHeaders);
+      const unknown = await call(ops.reconcile.path, ops.reconcile.method, undefined, reconcileHeaders);
+      check(unknown.outcome === 'unknown' && unknown.observed === false && !unknown.observation && !unknown.nonInclusionProof && unknown.transactionHash === created.request.transactionHash, 'Unsubmitted ready Request was not unknown');
+      check(final.request.executionOutcome?.outcome === 'unknown', 'Canonical Request falsely claims a result at quorum');
+      record('classic-unsubmitted-ready-outcome-unknown');
+      const denied = await call(ops.reconcile.path, ops.reconcile.method, undefined, requestHeaders(requestId, '', monitorHeaders), 403);
+      check(denied.code === 'integration_request_access_denied', 'MSA acquired owner reconciliation');
+      record('classic-reconciliation-owner-only');
       const externalReceipt = await submitXdr(final.request.mergedXdr);
       check(externalReceipt.successful && externalReceipt.hash === created.request.transactionHash, 'External submission did not match Request');
       record('external-executor-submitted-exact-xdr', { ledger: externalReceipt.ledger });
+      // Discard the submit response for business recovery: obtain the result
+      // from the original Request, not from the executor's returned receipt.
+      let recovered = await call(ops.reconcile.path, ops.reconcile.method, undefined, reconcileHeaders);
+      for (let retry = 0; recovered.outcome === 'unknown' && retry < 8; retry++) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        recovered = await call(ops.reconcile.path, ops.reconcile.method, undefined, reconcileHeaders);
+      }
+      check(recovered.outcome === 'successful' && recovered.observed && recovered.observation?.successful === true
+        && recovered.observation?.transactionHash === created.request.transactionHash && recovered.observation.ledger === externalReceipt.ledger, 'Response-loss recovery did not produce verified receipt');
+      const again = await call(ops.reconcile.path, ops.reconcile.method, undefined, reconcileHeaders);
+      check(again.replayed && JSON.stringify(again.observation) === JSON.stringify(recovered.observation), 'Successful reconciliation was not durable');
+      record('classic-lost-response-reconciliation-and-replay', { ledger: recovered.observation.ledger });
     } else if (final.request.status === 'ready') {
       final = await call(ops.submit.path, ops.submit.method, {}, requestHeaders(requestId, '', serviceHeaders));
       record('msi-authorized-submission-retry');
@@ -520,6 +544,40 @@ async function integrationE2E() {
     check(chain.successful && chain.hash === receipt.transactionHash && chain.ledger === receipt.ledger,
       'Canonical status does not match Stellar ledger');
     record('msi-canonical-ledger-confirmation', { requestId, ledger: chain.ledger, transactionHash: chain.hash });
+    if (EXTERNAL) {
+      check(canonical.request.executionOutcome?.outcome === 'successful', 'Canonical Request lacks successful execution evidence');
+      const latest = (await horizon('/ledgers?order=desc&limit=1'))._embedded.records[0];
+      const lower = Math.floor(Date.parse(latest.closed_at) / 1000);
+      const upper = Math.floor(Date.now() / 1000) + 30;
+      const fresh = await horizon('/accounts/' + source);
+      // Never sign or submit this envelope. The signed-payload time bounds
+      // define its entire possible execution window.
+      const absent = new TransactionBuilder(new Account(source, fresh.sequence), {
+        fee: BASE_FEE, networkPassphrase: Networks.TESTNET,
+      }).addOperation(Operation.payment({ destination: source, asset: Asset.native(), amount: '1' }))
+        .setTimebounds(lower, upper).build();
+      const newRequest = await call(ops.request.path, ops.request.method, { network: 'testnet', xdr: absent.toXDR() },
+        { ...serviceHeaders, 'Idempotency-Key': serviceId + '-never-submitted' }, 201);
+      const absentHeaders = requestHeaders(newRequest.request.id, '', serviceHeaders);
+      let result = await call(ops.reconcile.path, ops.reconcile.method, undefined, absentHeaders);
+      check(result.outcome === 'unknown', 'Still-valid envelope falsely declared absent');
+      for (let retry = 0; result.outcome === 'unknown' && retry < 30; retry++) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        result = await call(ops.reconcile.path, ops.reconcile.method, undefined, absentHeaders);
+      }
+      const proof = result.nonInclusionProof;
+      check(result.outcome === 'not_included' && !result.observed && proof
+        && Date.parse(proof.oldestLedgerClosedAt) < lower * 1000
+        && Date.parse(proof.latestLedgerClosedAt) > upper * 1000
+        && Date.parse(proof.validAfter) === lower * 1000
+        && Date.parse(proof.validUntil) === upper * 1000, 'Non-inclusion proof does not cover entire transaction validity');
+      const absentReplay = await call(ops.reconcile.path, ops.reconcile.method, undefined, absentHeaders);
+      const absentCanonical = await call(ops.inspect.path, ops.inspect.method, undefined, absentHeaders);
+      check(absentReplay.replayed && JSON.stringify(absentReplay.nonInclusionProof) === JSON.stringify(proof)
+        && absentCanonical.request.executionOutcome?.outcome === 'not_included'
+        && absentCanonical.request.statusReason === 'execution_not_included' && !absentCanonical.request.submission, 'Non-inclusion evidence not persisted consistently');
+      record('classic-real-non-inclusion-and-durable-replay', { requestId: newRequest.request.id, proof });
+    }
   } finally {
     for (const item of paired) {
       const revoked = await call(ops.revoke.path, ops.revoke.method, {

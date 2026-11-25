@@ -109,6 +109,27 @@ curl -sS https://api-testnet.multisig.tools/stellar/request \
   -H "X-MultiSig-Request-Id: <request-id>"
 ```
 
-For an externally executed Request, wait for `request.status=ready`, then submit its exact `request.mergedXdr` using Stellar Testnet Horizon `POST /transactions` with form field `tx`. Do not submit with MST's Request PUT operation. Check the returned transaction hash and ledger against `request.transactionHash`; GET the canonical MST Request again after confirmation. MST observes the matching on-chain transaction and records the submission. If the first GET still reports ready or stale, retry after Horizon reflects the confirmed account sequence; never create a second payment to resolve uncertainty.
+For an externally executed Request, wait for `request.status=ready`, then submit its exact `request.mergedXdr` using Stellar Testnet Horizon `POST /transactions` with form field `tx`. Do not submit with MST's Request PUT operation.
+
+If the submission response is lost, use the original Request ID, not a new payment. Discover operation `integration.request.execution.reconcile` in `/operations`. The owning Integration calls:
+
+```sh
+curl -sS "https://api-testnet.multisig.tools/stellar/request?view=reconciliation" \
+  -H "Authorization: Bearer $MSI_KEY" \
+  -H "X-Multisig-Request-Id: $REQUEST_ID"
+```
+
+The service checks the stored transaction hash on Stellar and returns one of four outcomes:
+
+| Outcome | Required evidence | Next action |
+| --- | --- | --- |
+| `unknown` | No terminal evidence | Repeat reconciliation with bounded backoff; escalate if unresolved. Never create a replacement. |
+| `successful` | `observation` with transaction hash, ledger, timestamp and `successful: true` | Retain the receipt and close the original payment. |
+| `failed` | `observation` with `successful: false` | Review the observed failed execution before separately authorizing any replacement. |
+| `not_included` | `nonInclusionProof` covering the entire signed validity window | Review the proof before separately authorizing a replacement. |
+
+A Horizon 404, local expiry, or changed account sequence is not proof of non-inclusion. New prepared Classic payments and CreateAccount transactions carry signed lower and upper time bounds. If imported or older XDR lacks a finite lower/upper bound, or RPC history no longer covers that window, the result can remain unknown and requires manual reconciliation. A Fee Bump receipt includes the actual ledger envelope hash when it differs from the original transaction hash.
+
+Terminal observations and proofs are retained by MST. Ordinary GET Request and Integration webhook projections expose `executionOutcome` independently of the approval state. `submission` is reserved for confirmed success. Check the stored transaction hash against the evidence and retain the original business reference.
 
 If a webhook is configured, treat it as a wake-up signal: verify the signature, deduplicate the event id, then GET current canonical state before acting.

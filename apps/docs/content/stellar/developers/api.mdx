@@ -29,7 +29,7 @@ Each registry entry's `schema.href` identifies the OpenAPI document and `schema.
 
 **Job projection:** follow `nextActions` and `actionCalls` for Integration jobs, or `nextActions[].operationId` and `bodyDefaults` for signer Agents. Resolve the operation contract and respect its access requirements. An external Stellar submission is not an MST API operation.
 
-**Retry:** apply the exact operation's `retry.onError` rule first, then `retry.onHttpStatus`, then `retry.defaultError`. If no response was received, use `retry.transportFailure`. Do not infer that a timeout means a write did not commit. A retry strategy never grants permission to sign or submit.
+**Retry:** apply the exact operation's `retry.onError` rule first, then `retry.onHttpStatus`, then `retry.defaultError`. If no response was received, use `retry.transportFailure`. Do not infer that a timeout means a write did not commit. For execution reconciliation, apply `retry.onOutcome` to the validated result. A retry strategy never grants permission to sign or submit.
 
 **Webhook:** receive → verify → deduplicate event id → GET canonical Request/Intent/Job → act from current state.
 

@@ -224,6 +224,10 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'principal:read', effect: 'none', summary: 'Read current Signing Request state and evidence.',
   },
   {
+    id: 'integration.request.execution.reconcile', version: 1, method: 'GET', path: '/request',
+    access: 'integration:read', effect: 'none', summary: 'Verify the owning Integration\'s exact external Classic transaction hash, preserving successful/failed ledger evidence or proven non-inclusion. Unknown never authorizes a replacement.',
+  },
+  {
     id: 'integration.request.inspect', version: 1, method: 'GET', path: '/request',
     access: 'integration:read', effect: 'none', summary: "Read an external service's own Classic multisig Request and merged authorization evidence.",
   },

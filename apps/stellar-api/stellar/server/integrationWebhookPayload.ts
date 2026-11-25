@@ -1,5 +1,7 @@
 import type { IntegrationSorobanJobProjection } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 import type {
+  ClassicExecutionEvidence,
+  SigningRequestSubmission,
   SigningRequestSnapshot,
   SigningRequestStatus,
   SigningRequestStatusReason,
@@ -34,11 +36,8 @@ export interface IntegrationClassicRequestWebhookProjection {
     statusReason: SigningRequestStatusReason;
     executionMode?: 'multisigtools' | 'external';
     externalReference?: string;
-    result?: {
-      transactionHash: string;
-      ledger: number;
-      submittedAt: string;
-    };
+    executionOutcome?: ClassicExecutionEvidence;
+    result?: SigningRequestSubmission;
   };
 }
 
@@ -96,13 +95,8 @@ export function projectClassicIntegrationWebhook(
       ...(stored.integration?.correlationId
         ? { externalReference: stored.integration.correlationId }
         : {}),
-      ...(snapshot.submission ? {
-        result: {
-          transactionHash: snapshot.submission.transactionHash,
-          ledger: snapshot.submission.ledger,
-          submittedAt: snapshot.submission.submittedAt,
-        },
-      } : {}),
+      ...(snapshot.executionOutcome ? { executionOutcome: snapshot.executionOutcome } : {}),
+      ...(snapshot.submission ? { result: snapshot.submission } : {}),
     },
   };
 }

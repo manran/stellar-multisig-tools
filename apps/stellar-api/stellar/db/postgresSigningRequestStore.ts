@@ -10,7 +10,7 @@ import type { ExecutionPolicy } from '../../../../packages/stellar-core/src/exec
 import type { RequestIntegrationContext } from '../../../../packages/stellar-core/src/integrationTypes.js';
 import type { SorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import type { ReusableTemplateKind } from '../../../../packages/stellar-core/src/reusableTemplate.js';
-import type { SorobanRequestOrigin } from '../../../../packages/stellar-core/src/requestTypes.js';
+import type { ClassicTerminalExecutionEvidence, SorobanRequestOrigin } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import type { Pool, PoolClient } from 'pg';
 import { blobRequestPrivateDataStore } from '../server/blobRequestPrivateDataStore.js';
@@ -415,8 +415,9 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
       transaction_hash: string;
       ledger: string;
       submitted_at: Date | string;
+      ledger_transaction_hash: string | null;
     }>(
-      `SELECT transaction_hash, ledger, submitted_at
+      `SELECT transaction_hash, ledger, submitted_at, ledger_transaction_hash
          FROM mst_stellar.classic_submissions
         WHERE request_id = $1 AND transaction_hash = $2`,
       [id, transactionHash],
@@ -428,6 +429,7 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
       transactionHash: row.transaction_hash,
       ledger: Number(row.ledger),
       submittedAt: iso(row.submitted_at),
+      ...(row.ledger_transaction_hash ? { ledgerTransactionHash: row.ledger_transaction_hash } : {}),
     };
   }
 
@@ -437,10 +439,10 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
       if (!parent) return;
       const inserted = await client.query(
         `INSERT INTO mst_stellar.classic_submissions (
-           request_id, transaction_hash, ledger, submitted_at
-         ) VALUES ($1, $2, $3, $4)
+           request_id, transaction_hash, ledger, submitted_at, ledger_transaction_hash
+         ) VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (request_id, transaction_hash) DO NOTHING`,
-        [id, submission.transactionHash, submission.ledger, submission.submittedAt],
+        [id, submission.transactionHash, submission.ledger, submission.submittedAt, submission.ledgerTransactionHash ?? null],
       );
       if (!inserted.rowCount) return;
       await insertActivityEvent(client, {
@@ -459,6 +461,37 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
           changeKey: `submission:${submission.transactionHash}`,
           change: 'execution_confirmed',
           occurredAt: submission.submittedAt,
+        });
+      }
+    });
+  }
+
+  async getExecutionEvidence(id: string): Promise<ClassicTerminalExecutionEvidence | null> {
+    const result = await this.pool.query<{ execution_evidence: ClassicTerminalExecutionEvidence | null }>(
+      'SELECT execution_evidence FROM mst_stellar.classic_requests WHERE id = $1', [id]);
+    return result.rows[0]?.execution_evidence ?? null;
+  }
+
+  async putExecutionEvidence(id: string, evidence: ClassicTerminalExecutionEvidence): Promise<void> {
+    // A verified receipt outranks non-inclusion; a confirmed success remains
+    // authoritative through the existing classic_submissions table.
+    await withPostgresTransaction(this.pool, async (client) => {
+      const parent = await lockParent(client, id);
+      if (!parent) throw new Error('Request missing during execution reconciliation.');
+      const updated = await client.query(`UPDATE mst_stellar.classic_requests SET execution_evidence = $2
+        WHERE id = $1 AND NOT EXISTS (
+          SELECT 1 FROM mst_stellar.classic_submissions WHERE request_id = $1
+        ) AND (execution_evidence IS NULL
+          OR (execution_evidence->>'outcome' = 'not_included' AND $2::jsonb->>'outcome' = 'failed'))`,
+        [id, evidence]);
+      if (updated.rowCount && this.emitOutbox && parent.integration_service_id) {
+        await enqueueCoordinationChange(client, {
+          serviceId: parent.integration_service_id,
+          resourceKind: 'classic_request',
+          resourceId: id,
+          changeKey: 'execution:' + evidence.outcome,
+          change: 'execution_' + evidence.outcome,
+          occurredAt: evidence.outcome === 'not_included' ? evidence.nonInclusionProof.checkedAt : evidence.observation.submittedAt,
         });
       }
     });

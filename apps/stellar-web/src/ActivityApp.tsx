@@ -251,9 +251,11 @@ function ActivityCard({
         <div className="mst-activity-actions">
           <div>
             {confirmed && <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4" />Confirmed</div>}
+            {!confirmed && item.executionOutcome?.outcome === 'failed' && <div className="text-sm font-semibold text-red-600">Execution failed on Stellar</div>}
+            {!confirmed && item.executionOutcome?.outcome === 'not_included' && <div className="text-sm font-semibold text-neutral-500">Verified not included</div>}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-xs font-semibold">
-            {confirmed ? <a href={stellarHrefWithSearch('/receipt', { request: item.requestId, account: scopeAccountId, network: item.network })} className="underline decoration-black/20 underline-offset-4 dark:decoration-white/20">Transaction receipt</a> : <a href={stellarHrefWithSearch('/s', { request: item.requestId, network: item.network })} className="underline decoration-emerald-600/30 text-emerald-700 underline-offset-4 dark:text-emerald-300">Review & Submit</a>}
+            {confirmed ? <a href={stellarHrefWithSearch('/receipt', { request: item.requestId, account: scopeAccountId, network: item.network })} className="underline decoration-black/20 underline-offset-4 dark:decoration-white/20">Transaction receipt</a> : <a href={stellarHrefWithSearch('/s', { request: item.requestId, network: item.network })} className="underline decoration-emerald-600/30 text-emerald-700 underline-offset-4 dark:text-emerald-300" >{item.executionOutcome?.outcome === 'failed' || item.executionOutcome?.outcome === 'not_included' ? 'View Request' : 'Review & Submit'}</a>}
             {confirmed && <a href={horizonTransactionUrl(item.transactionHash, item.network)} target="_blank" rel="noreferrer" className="underline decoration-black/20 underline-offset-4 dark:decoration-white/20">View network record</a>}
             {confirmed && <a href={stellarExpertTransactionUrl(item.transactionHash, item.network)} target="_blank" rel="noreferrer" className="underline decoration-black/20 underline-offset-4 dark:decoration-white/20">View on StellarExpert</a>}
           </div>
