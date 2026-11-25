@@ -112,7 +112,8 @@ export function projectSorobanIntentEvidence(
     if (preparation.nonInclusionProof && !observations.some((item) => item.transactionHash === preparation.transactionHash)) {
       events.push({ version: 1, eventId: `execution-not-included-${preparation.preparedAt}-${preparation.transactionHash}`, type: 'execution_not_included', occurredAt: preparation.nonInclusionProof.checkedAt,
         authorizationPlanDigest: preparation.authorizationPlanDigest, authorizationPlanRevision: preparation.authorizationPlanRevision,
-        executionSource: preparation.executionSource, transactionHash: preparation.transactionHash, latestLedger: preparation.nonInclusionProof.latestLedger });
+        executionSource: preparation.executionSource, transactionHash: preparation.transactionHash, latestLedger: preparation.nonInclusionProof.latestLedger,
+        nonInclusionProof: preparation.nonInclusionProof });
     }
   }
 

@@ -27,7 +27,7 @@ Each registry entry's `schema.href` identifies the OpenAPI document and `schema.
 
 **Idempotency:** only machine Request and Intent creation (`proposal.create`, `integration.request.create`, `contract.intent.create`, `integration.intent.create`) requires a stable `Idempotency-Key`. Retry the same accepted input with the same credential and key; changed input conflicts. One-time Agent pairing and Testnet Integration Profile issuance do not have this replay guarantee. Profile creation rejects this header.
 
-**Job projection:** follow `nextActions` and `actionCalls` for Integration jobs, or `nextActions[].operationId` and `bodyDefaults` for signer Agents. Resolve the operation contract and respect its access requirements. An external Stellar submission is not an MST API operation.
+**Job projection:** follow `nextActions` and `actionCalls` for Integration jobs, or `nextActions[].operationId` and `bodyDefaults` for signer Agents. Resolve the operation contract and respect its access requirements. `reviewRequired: true` on an action requires an explicit caller decision after reviewing the resolved prior attempt; it is not a new authorization grant. A Classic task with `state=execution_unknown` is not a failed payment: inspect its `executionOutcome`; the owning Integration reconciles the original hash. An external Stellar submission is not an MST API operation.
 
 **Retry:** apply the exact operation's `retry.onError` rule first, then `retry.onHttpStatus`, then `retry.defaultError`. If no response was received, use `retry.transportFailure`. Do not infer that a timeout means a write did not commit. For execution reconciliation, apply `retry.onOutcome` to the validated result. A retry strategy never grants permission to sign or submit.
 

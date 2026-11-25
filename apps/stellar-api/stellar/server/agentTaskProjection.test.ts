@@ -237,3 +237,53 @@ test('Soroban Agent Task projects observed result without asking the Agent to in
   assert.deepEqual(task.result, { transactionHash: DIGEST, ledger: 77, successful: true });
   assert.deepEqual(task.nextActions, []);
 });
+test('external Classic task distinguishes approval closure from actual payment evidence for every credential level', () => {
+  const submittedAt = '2026-09-17T00:01:00.000Z';
+  const failed = { outcome: 'failed' as const, observed: true as const, observation: { transactionHash: DIGEST, ledger: 42, submittedAt, successful: false as const } };
+  const absent = { outcome: 'not_included' as const, observed: false as const, nonInclusionProof: {
+    oldestLedger: 1, latestLedger: 42, oldestLedgerClosedAt: '2026-09-16T23:59:00Z', latestLedgerClosedAt: '2026-09-17T00:02:00Z',
+    validAfter: '2026-09-17T00:00:00Z', validUntil: '2026-09-17T00:01:00Z', checkedAt: '2026-09-17T00:02:01Z',
+  } };
+  for (const credentialAccess of ['read', 'write', 'sign'] as const) {
+    for (const status of ['blocked', 'stale', 'expired'] as const) {
+      const task = projectClassicAgentTask({ request: { ...classic(status), executionOutcome: { outcome: 'unknown', observed: false } }, credentialAccess, hasSigned: true });
+      assert.equal(task.state, 'execution_unknown');
+      assert.deepEqual(task.executionOutcome, { outcome: 'unknown', observed: false });
+      assert.equal(task.signatureRequired, false);
+      assert.deepEqual(task.nextActions, []);
+      assert.equal(task.result, undefined);
+    }
+    const failure = projectClassicAgentTask({ request: { ...classic('blocked'), executionOutcome: failed }, credentialAccess, hasSigned: true });
+    assert.equal(failure.state, 'failed');
+    assert.deepEqual(failure.executionOutcome, failed);
+    assert.deepEqual(failure.result, { transactionHash: DIGEST, ledger: 42, successful: false });
+    const nonIncluded = projectClassicAgentTask({ request: { ...classic('expired'), executionOutcome: absent }, credentialAccess, hasSigned: true });
+    assert.equal(nonIncluded.state, 'expired');
+    assert.deepEqual(nonIncluded.executionOutcome, absent);
+    const pending = projectClassicAgentTask({ request: { ...classic('awaiting_signatures'), executionOutcome: { outcome: 'unknown', observed: false } }, credentialAccess, hasSigned: false });
+    assert.equal(pending.signatureRequired, true);
+  }
+});
+
+test('Soroban Agent retry actions mark resolved prior evidence for explicit review', () => {
+  const preparation = {
+    version: 1 as const, transactionHash: DIGEST, authorizationPlanDigest: DIGEST,
+    authorizationPlanRevision: 1, executionSource: PRINCIPAL, transactionSequence: '1',
+    validUntil: '2026-09-17T00:01:00.000Z', latestLedger: 10, effectsDigest: DIGEST,
+    effectsAccepted: true, preparedAt: '2026-09-17T00:00:30.000Z',
+  };
+  const observation = {
+    version: 1 as const, transactionHash: DIGEST, authorizationPlanDigest: DIGEST,
+    authorizationPlanRevision: 1, executionSource: PRINCIPAL, ledger: 11,
+    successful: false, observedAt: '2026-09-17T00:00:50.000Z',
+  };
+  const input = { stored: stored(), credentialAccess: 'write' as const, principalAddress: PRINCIPAL, preparations: [preparation], observations: [observation] };
+  const ready = projectSorobanAgentTask({ ...input, authorization: authorization('authorization_ready', true) });
+  assert.equal(ready.nextActions[0].code, 'refresh_execution');
+  assert.equal(ready.nextActions[0].reviewRequired, true);
+  const expired = projectSorobanAgentTask({ ...input, authorization: authorization('expired') });
+  assert.equal(expired.nextActions[0].code, 'replan');
+  assert.equal(expired.nextActions[0].reviewRequired, true);
+  const integration = projectSorobanAgentTask({ ...input, stored: stored(true), authorization: authorization('authorization_ready', true) });
+  assert.deepEqual(integration.nextActions, []);
+});

@@ -196,7 +196,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.equal(((schemas.AgentTask.properties as JsonObject).signatureRequired as JsonObject).type, 'boolean');
   assert.equal(((schemas.SignerInboxResult.properties as JsonObject).signature_required_count as JsonObject).type, 'integer');
   assert.equal(((schemas.SignerInboxResult.properties as JsonObject).intents as JsonObject).type, 'array');
-  assert.deepEqual(((schemas.AgentTask.properties as JsonObject).state as JsonObject).enum, ['action_required', 'waiting', 'completed', 'expired', 'failed', 'cancelled']);
+  assert.deepEqual(((schemas.AgentTask.properties as JsonObject).state as JsonObject).enum, ['action_required', 'waiting', 'completed', 'execution_unknown', 'expired', 'failed', 'cancelled']);
   const agentTaskAction = (((schemas.AgentTask.properties as JsonObject).nextActions as JsonObject).items as JsonObject);
   assert.deepEqual(agentTaskAction.required, ['code', 'operationId', 'requiredAccess', 'available']);
   for (const name of ['ContractIntentCreateResult', 'ContractIntentInspectResult', 'ContractIntentContributionResult', 'ContractIntentExecutionResult', 'ContractIntentExecutionReconcileResult', 'ContractIntentReplanResult', 'ContractIntentCancelResult', 'ProposalResult']) {
@@ -393,4 +393,28 @@ test('Execution reconciliation contracts require matching evidence and expose a 
   assert.equal(outcomes.successful.strategy, 'complete');
   assert.equal(outcomes.failed.strategy, 'human_review');
   assert.equal(outcomes.not_included.strategy, 'human_review');
+});
+
+test('resolved Soroban retry policy points to same-Intent review; completed projections require success', () => {
+  const doc = createOpenApiDocument();
+  const schemas = (doc.components as JsonObject).schemas as Record<string, JsonObject>;
+  const contracts = doc['x-multisig-operations'] as Record<string, JsonObject>;
+  for (const prefix of ['contract', 'integration']) {
+    const retry = (contracts[prefix + '.intent.execution.reconcile'].retry as JsonObject).onOutcome as Record<string, JsonObject>;
+    for (const outcome of ['failed', 'not_included']) {
+      assert.equal(retry[outcome].strategy, 'inspect_then_decide');
+      assert.deepEqual(retry[outcome].nextOperationIds, [prefix + '.intent.inspect']);
+      assert.match(String(retry[outcome].condition), /SAME Intent/);
+      assert.match(String(retry[outcome].condition), /reviewRequired/);
+    }
+  }
+  for (const name of ['AgentTask', 'IntegrationSorobanJob']) {
+    const completed = (schemas[name].allOf as JsonObject[])[0];
+    const then = completed.then as JsonObject;
+    assert.deepEqual(then.required, ['result']);
+    const fields = then.properties as JsonObject;
+    assert.equal(((fields.nextActions as JsonObject).maxItems), 0);
+    assert.equal((((fields.result as JsonObject).properties as JsonObject).successful as JsonObject).const, true);
+  }
+  assert.ok((schemas.ContractIntentExecutionReconcileResult.properties as JsonObject).projectionNotRefreshed);
 });

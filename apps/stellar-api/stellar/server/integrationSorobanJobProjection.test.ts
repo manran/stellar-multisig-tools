@@ -176,6 +176,7 @@ test('elapsed execution package must be reconciled before refresh', () => {
   });
   assert.equal(cleared.state, 'ready');
   assert.deepEqual(cleared.nextActions, ['refresh_execution', 'cancel']);
+  assert.equal((cleared.actionCalls.refresh_execution as { reviewRequired?: true }).reviewRequired, true);
 });
 
 test('projects confirmed execution into a compact result', () => {
@@ -225,6 +226,7 @@ test('projects verified execution failure with safe refresh', () => {
   assert.equal(job.state, 'failed');
   assert.equal(job.reason, 'execution_failed');
   assert.deepEqual(job.nextActions, ['refresh_execution', 'cancel']);
+  assert.deepEqual(job.actionCalls.refresh_execution, { operationId: 'integration.intent.execution.prepare', bodyDefaults: { action: 'refresh_execution' }, reviewRequired: true });
 });
 
 test('managed execution does not tell an external Service to submit', () => {

@@ -107,7 +107,9 @@ export function projectIntegrationSorobanJob({
   const actionCalls: IntegrationSorobanJobProjection['actionCalls'] = Object.fromEntries(nextActions.map((action) => [action,
     action === 'submit_execution'
       ? { transport: 'external_stellar_submission' as const, transactionHash: latestPreparation!.transactionHash }
-      : { operationId: operationIds[action], bodyDefaults: { action } },
+      : { operationId: operationIds[action], bodyDefaults: { action },
+          ...(!unresolved.length && (preparations.length || observations.length) && ['prepare_execution', 'refresh_execution', 'replan'].includes(action)
+            ? { reviewRequired: true as const } : {}) },
   ]));
   const expiry = expiresAtLedger(authorization);
   return {

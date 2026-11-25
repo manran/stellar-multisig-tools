@@ -797,7 +797,9 @@ async function buildSnapshot(
       ...base,
       status: 'expired',
       statusReason: 'request_expired',
-      statusDetail: 'This signing request has expired and no longer accepts signatures or submission.',
+      statusDetail: isExternalClassicRequest(request)
+        ? 'The signing request has expired. Payment outcome remains unknown; the owning Integration must reconcile the original hash before authorizing a replacement.'
+        : 'This signing request has expired and no longer accepts signatures or submission.',
     };
   }
 

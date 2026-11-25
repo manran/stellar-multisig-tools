@@ -64,6 +64,7 @@ import {
   contributeSorobanIntentAuthorization,
   getSorobanIntentAuthorization,
   SorobanIntentAuthorizationServiceError,
+  type SorobanIntentAuthorizationSnapshot,
 } from '../server/sorobanIntentAuthorizationService.js';
 import { isValidSigningRequestId } from '../server/requestLocator.js';
 import {
@@ -150,7 +151,7 @@ function intentIdFromRequest(request: Request): string {
   return id;
 }
 
-async function storedIntentAccess(request: Request, required: 'read' | 'write' | 'sign') {
+async function storedIntentCaller(request: Request) {
   const id = intentIdFromRequest(request);
   const stored = await sorobanIntentStore.getIntent(id);
   if (!stored) throw new SorobanIntentAuthorizationServiceError('Soroban Intent not found.', 404, 'intent_not_found');
@@ -162,6 +163,39 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
   const session = machineCaller || browserCapabilityToken
     ? null
     : await verifiedSignerSessionFromRequest(blobAuthStore, request, stored.network);
+  return { id, stored, integrationCredential, agent, browserCapabilityToken, session };
+}
+
+type StoredIntentCaller = Awaited<ReturnType<typeof storedIntentCaller>>;
+type IntentAccessLevel = 'read' | 'write' | 'sign';
+
+function assertIntegrationIntentAccess(stored: StoredIntentCaller['stored'], credential: ConfiguredIntegrationCredential, required: IntentAccessLevel): void {
+  if (!credential.networks.includes(stored.network)) {
+    throw new SorobanIntentAuthorizationServiceError('This Integration credential is not permitted on this network.', 403, 'integration_network_not_allowed');
+  }
+  if (stored.integration?.serviceId !== credential.serviceId) {
+    throw new SorobanIntentAuthorizationServiceError('This Integration credential does not own this Soroban Intent.', 403, 'integration_intent_access_denied');
+  }
+  if (required === 'sign') {
+    throw new SorobanIntentAuthorizationServiceError('Integration credentials cannot contribute Soroban signer authorization.', 403, 'integration_intent_sign_denied');
+  }
+}
+
+function requireIntentPrincipal(caller: StoredIntentCaller, required: IntentAccessLevel): string {
+  if (caller.agent) {
+    requireAgentAccess(caller.agent, required);
+    if (caller.agent.principal.network !== caller.stored.network) {
+      throw new AgentCredentialServiceError('Agent credential network does not match this Soroban Intent.', 403, 'principal_network_mismatch');
+    }
+  } else if (!caller.session) {
+    throw new SorobanIntentAuthorizationServiceError('Confirm the selected Stellar wallet before opening this Soroban Intent.', 401, 'intent_authentication_required');
+  }
+  return caller.agent?.principal.address ?? caller.session!.address;
+}
+
+async function storedIntentAccess(request: Request, required: IntentAccessLevel, caller?: StoredIntentCaller) {
+  const identity = caller ?? await storedIntentCaller(request);
+  const { id, stored, integrationCredential, agent, browserCapabilityToken, session } = identity;
   if (browserCapabilityToken) {
     if (required === 'write') {
       throw new SorobanBrowserAuthorizationServiceError(
@@ -193,41 +227,12 @@ async function storedIntentAccess(request: Request, required: 'read' | 'write' |
   }
 
   if (integrationCredential) {
-    if (!integrationCredential.networks.includes(stored.network)) {
-      throw new SorobanIntentAuthorizationServiceError('This Integration credential is not permitted on this network.', 403, 'integration_network_not_allowed');
-    }
-    if (stored.integration?.serviceId !== integrationCredential.serviceId) {
-      throw new SorobanIntentAuthorizationServiceError(
-        'This Integration credential does not own this Soroban Intent.',
-        403,
-        'integration_intent_access_denied',
-      );
-    }
-    if (required === 'sign') {
-      throw new SorobanIntentAuthorizationServiceError(
-        'Integration credentials cannot contribute Soroban signer authorization.',
-        403,
-        'integration_intent_sign_denied',
-      );
-    }
+    assertIntegrationIntentAccess(stored, integrationCredential, required);
     const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, id, { terminalReceiptOnly: true });
     return { id, integrationCredential, agent: null, session: null, browserCapability: null, stored, authorization, address: undefined };
   }
 
-  if (agent) {
-    requireAgentAccess(agent, required);
-    if (agent.principal.network !== stored.network) {
-      throw new AgentCredentialServiceError('Agent credential network does not match this Soroban Intent.', 403, 'principal_network_mismatch');
-    }
-  } else if (!session) {
-    throw new SorobanIntentAuthorizationServiceError(
-      'Confirm the selected Stellar wallet before opening this Soroban Intent.',
-      401,
-      'intent_authentication_required',
-    );
-  }
-
-  const address = agent?.principal.address ?? session!.address;
+  const address = requireIntentPrincipal(identity, required);
   const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, id, { terminalReceiptOnly: stored.creatorAddress === address });
   const participant = stored.creatorAddress === address || authorization.authorizers.some(
     (authorizer) => authorizer.activeSigners.some((signer) => signer.publicKey === address),
@@ -605,12 +610,7 @@ export async function PATCH(request: Request): Promise<Response> {
       added: result.added,
       authorization: result.authorization,
       ...(access.agent ? {
-        task: agentTask(
-          access.stored,
-          result.authorization,
-          access.agent.access,
-          access.agent.principal.address,
-        ),
+        task: await loadAgentTask(access.stored, result.authorization, access.agent),
       } : {}),
     });
   } catch (cause) {
@@ -618,12 +618,67 @@ export async function PATCH(request: Request): Promise<Response> {
   }
 }
 
+async function reconcileIntentResponse(request: Request, body: Record<string, unknown>): Promise<Response> {
+  const caller = await storedIntentCaller(request);
+  const { stored, id, integrationCredential, agent } = caller;
+  if (caller.browserCapabilityToken) {
+    throw new SorobanBrowserAuthorizationServiceError('Browser authorization cannot change Intent lifecycle or execution state.', 403, 'browser_capability_write_denied');
+  }
+
+  // Ownership is durable evidence. Only non-owner signers require current
+  // signer-policy evaluation before gaining access to the Intent.
+  let currentAuthorization: SorobanIntentAuthorizationSnapshot | undefined;
+  if (integrationCredential) {
+    assertIntegrationIntentAccess(stored, integrationCredential, 'write');
+  } else {
+    const address = requireIntentPrincipal(caller, 'write');
+    if (stored.creatorAddress !== address) currentAuthorization = (await storedIntentAccess(request, 'write', caller)).authorization;
+    else if (agent) await blobAgentCredentialStore.touchCredential(agent.credentialId, new Date().toISOString());
+  }
+
+  const result = await reconcileSorobanIntentExecution(
+    sorobanIntentStore, id, typeof body.transactionHash === 'string' ? body.transactionHash : '',
+  );
+  // The verified receipt is authoritative even if the optional live
+  // authorization/job projection cannot be refreshed.
+  let projection: Record<string, unknown> = {};
+  if (integrationCredential || agent) {
+    // A completed receipt supports an offline projection. For other owner
+    // results, do not start a live authorization lookup at all; inspection
+    // of the current policy is a separate operation.
+    if (result.outcome === 'successful' || currentAuthorization) {
+      try {
+        const authorization = result.outcome === 'successful'
+          ? await getSorobanIntentAuthorization(sorobanIntentStore, id, { terminalReceiptOnly: true })
+          : currentAuthorization!;
+        projection = integrationCredential
+          ? { job: await loadIntegrationJob(integrationCredential, stored, authorization) }
+          : { task: await loadAgentTask(stored, authorization, agent!) };
+      } catch {
+        projection = { projectionNotRefreshed: true };
+      }
+    } else projection = { projectionNotRefreshed: true };
+  }
+  return json({
+    operation: 'contract.intent.execution.reconcile',
+    version: 1,
+    transactionHash: result.transactionHash,
+    observed: result.observed,
+    replayed: result.replayed,
+    outcome: result.outcome,
+    ...(result.nonInclusionProof ? { nonInclusionProof: result.nonInclusionProof } : {}),
+    ...(result.observation ? { observation: result.observation } : {}),
+    ...projection,
+  });
+}
+
 export async function PUT(request: Request): Promise<Response> {
   try {
     assertCoordinationWritesEnabled();
-    const access = await storedIntentAccess(request, 'write');
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
-    if (body.action !== 'cancel' && body.action !== 'reconcile_execution') await assertSorobanIntentNotExecuted(sorobanIntentStore, access.id);
+    if (body.action === 'reconcile_execution') return await reconcileIntentResponse(request, body);
+    const access = await storedIntentAccess(request, 'write');
+    if (body.action !== 'cancel') await assertSorobanIntentNotExecuted(sorobanIntentStore, access.id);
     if (access.integrationCredential && ['issue_browser_authorization', 'replan', 'prepare_execution', 'refresh_execution'].includes(String(body.action ?? 'prepare_execution'))
       && !integrationSorobanExecutionAvailable(access.stored.network, access.stored.executionPolicy, access.integrationCredential.sorobanExecutionAccounts)) {
       throw new BoxServiceError('No available Soroban execution route. Configure an allowed executor before collecting authorization or preparing execution.', 409, 'managed_executor_not_configured');
@@ -658,31 +713,6 @@ export async function PUT(request: Request): Promise<Response> {
           sorobanReviewUrl(access.stored.network, access.stored.id),
         ),
       }, 201);
-    }
-    if (body.action === 'reconcile_execution') {
-      const result = await reconcileSorobanIntentExecution(
-        sorobanIntentStore,
-        access.id,
-        typeof body.transactionHash === 'string' ? body.transactionHash : '',
-      );
-      const job = access.integrationCredential
-        ? await loadIntegrationJob(access.integrationCredential, access.stored, access.authorization)
-        : undefined;
-      const task = access.agent
-        ? await loadAgentTask(access.stored, access.authorization, access.agent)
-        : undefined;
-      return json({
-        operation: 'contract.intent.execution.reconcile',
-        version: 1,
-        transactionHash: result.transactionHash,
-        observed: result.observed,
-        replayed: result.replayed,
-        outcome: result.outcome,
-        ...(result.nonInclusionProof ? { nonInclusionProof: result.nonInclusionProof } : {}),
-        ...(result.observation ? { observation: result.observation } : {}),
-        ...(job ? { job } : {}),
-        ...(task ? { task } : {}),
-      });
     }
     if (body.action === 'cancel') {
       assertSorobanIntentCancellationOwner(access.stored, access.integrationCredential

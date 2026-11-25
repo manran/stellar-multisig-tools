@@ -52,6 +52,13 @@ export type SorobanIntentEvidenceEventType =
   | 'execution_confirmed'
   | 'execution_failed';
 
+export interface SorobanExecutionNonInclusionProof {
+  oldestLedger: number;
+  latestLedger: number;
+  latestLedgerClosedAt: string;
+  checkedAt: string;
+}
+
 export interface SorobanIntentEvidenceEvent {
   version: 1;
   eventId: string;
@@ -71,6 +78,7 @@ export interface SorobanIntentEvidenceEvent {
   effectsAccepted?: boolean;
   validUntil?: string | null;
   latestLedger?: number;
+  nonInclusionProof?: SorobanExecutionNonInclusionProof;
   ledger?: number;
   successful?: boolean;
   observedAt?: string;
@@ -117,7 +125,7 @@ export interface IntegrationSorobanJobProjection {
   state: IntegrationJobState;
   nextActions: IntegrationJobNextAction[];
   actionCalls: Partial<Record<IntegrationJobNextAction,
-    { operationId: string; bodyDefaults: { action: string } }
+    { operationId: string; bodyDefaults: { action: string }; reviewRequired?: true }
     | { transport: 'external_stellar_submission'; transactionHash: string }>>;
   reviewUrl: string;
   waitingFor?: string[];
@@ -194,7 +202,9 @@ export interface SorobanIntentExecutionReconciliationResponse {
   replayed: boolean;
   observation?: SorobanIntentExecutionObservation;
   outcome: 'unknown' | 'not_included' | 'failed' | 'successful';
-  nonInclusionProof?: { oldestLedger: number; latestLedger: number; latestLedgerClosedAt: string; checkedAt: string };
+  nonInclusionProof?: SorobanExecutionNonInclusionProof;
+  /** Evidence is available; current job/task was not refreshed. Inspect separately. */
+  projectionNotRefreshed?: true;
   job?: IntegrationSorobanJobProjection;
   task?: AgentTaskProjection;
 }

@@ -67,4 +67,53 @@ for field in ("transactionHash", "ledger", "submittedAt"):
     check("SigningRequestSubmission", submission, True)
     del submission[field]
     check("SigningRequestSubmission", submission, False)
-print(f"PASS {cases} JSON Schema positive/negative cases")
+
+# Compact projections are payment evidence too, not just a convenient state label.
+for name, base in [
+    ("AgentTask", dict(version=1, id="fixture", kind="classic_transaction", network="testnet", signatureRequired=False, nextActions=[])),
+    ("AgentTask", dict(version=1, id="fixture", kind="soroban_contract", network="testnet", signatureRequired=False, nextActions=[])),
+    ("IntegrationSorobanJob", dict(version=1, id="fixture", kind="soroban_contract", network="testnet", nextActions=[], actionCalls={}, reviewUrl="https://example.test/a")),
+]:
+    result = dict(transactionHash=hash_value, ledger=42, successful=True)
+    completed = dict(base, state="completed", result=result)
+    check(name, completed, True)
+    check(name, dict(base, state="completed"), False)
+    check(name, dict(completed, result=dict(result, successful=False)), False)
+    check(name, dict(completed, result=dict(transactionHash=hash_value, successful=True)), False)
+    check(name, dict(completed, state="failed"), False)
+    check(name, dict(completed, unresolvedTransactionHashes=[hash_value]), False)
+    if name == "AgentTask":
+        check(name, dict(completed, signatureRequired=True), False)
+        action = dict(code="reconcile_execution", operationId="contract.intent.execution.reconcile", requiredAccess="write", available=True)
+        check(name, dict(completed, nextActions=[action]), False)
+    else:
+        check(name, dict(completed, nextActions=["refresh_execution"]), False)
+        check(name, dict(completed, actionCalls={"refresh_execution": dict(operationId="integration.intent.execution.prepare", bodyDefaults=dict(action="refresh_execution"))}), False)
+
+task = dict(version=1, id="fixture", kind="classic_transaction", network="testnet", signatureRequired=False, nextActions=[], state="execution_unknown", executionOutcome=dict(outcome="unknown", observed=False))
+check("AgentTask", task, True)
+check("AgentTask", dict(task, state="failed"), False)
+check("AgentTask", dict(task, state="completed", result=dict(transactionHash=hash_value, ledger=42, successful=True)), False)
+check("AgentTask", dict(task, result=dict(transactionHash=hash_value, ledger=42, successful=False)), False)
+missing = dict(task)
+del missing["executionOutcome"]
+check("AgentTask", missing, False)
+failed = dict(task, state="failed", executionOutcome=dict(outcome="failed", observed=True, observation=dict(classic_observation, successful=False)), result=dict(transactionHash=hash_value, ledger=42, successful=False))
+check("AgentTask", failed, True)
+del failed["result"]
+check("AgentTask", failed, False)
+absent = dict(task, state="expired", executionOutcome=dict(outcome="not_included", observed=False, nonInclusionProof=classic_proof))
+check("AgentTask", absent, True)
+check("AgentTask", dict(absent, state="failed"), False)
+event = dict(version=1, eventId="evidence", type="execution_not_included", occurredAt=timestamp, authorizationPlanDigest=hash_value, authorizationPlanRevision=1, transactionHash=hash_value)
+check("SorobanIntentEvidenceEvent", event, False)
+check("SorobanIntentEvidenceEvent", dict(event, nonInclusionProof=proof), True)
+check("SorobanIntentEvidenceEvent", dict(event, nonInclusionProof=proof, successful=True), False)
+confirmed = dict(event, type="execution_confirmed", ledger=42, successful=True, observedAt=timestamp)
+check("SorobanIntentEvidenceEvent", confirmed, True)
+check("SorobanIntentEvidenceEvent", dict(confirmed, successful=False), False)
+check("SorobanIntentEvidenceEvent", dict(event, type="execution_failed"), False)
+replay = dict(common, operation="contract.intent.execution.reconcile", outcome="failed", observed=True, observation=dict(soroban_observation, successful=False), projectionNotRefreshed=True)
+check("ContractIntentExecutionReconcileResult", replay, True)
+check("ContractIntentExecutionReconcileResult", dict(replay, job=dict(version=1, id="fixture", kind="soroban_contract", network="testnet", state="failed", nextActions=[], actionCalls={}, reviewUrl="https://example.test/a")), False)
+print(f"PASS {cases} JSON Schema positive/negative cases (including compact projections)")

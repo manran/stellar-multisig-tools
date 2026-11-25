@@ -51,6 +51,7 @@ export function projectClassicAgentTask({
   const signatureRequired = request.status === 'awaiting_signatures' && !hasSigned && !declined;
 
   if (request.status === 'submitted') state = 'completed';
+  else if (request.executionOutcome?.outcome === 'unknown' && ['expired', 'stale', 'blocked'].includes(request.status)) state = 'execution_unknown';
   else if (request.status === 'expired') state = 'expired';
   else if (request.status === 'stale' || request.status === 'blocked') state = 'failed';
   else if (signatureRequired) {
@@ -70,11 +71,18 @@ export function projectClassicAgentTask({
     signatureRequired,
     nextActions,
     ...(request.expiresAt ? { expiresAt: request.expiresAt } : {}),
+    ...(request.executionOutcome ? { executionOutcome: request.executionOutcome } : {}),
     ...(request.submission ? {
       result: {
         transactionHash: request.submission.transactionHash,
         ledger: request.submission.ledger,
         successful: true,
+      },
+    } : request.executionOutcome?.outcome === 'failed' ? {
+      result: {
+        transactionHash: request.executionOutcome.observation.transactionHash,
+        ledger: request.executionOutcome.observation.ledger,
+        successful: false,
       },
     } : {}),
   };
@@ -180,6 +188,11 @@ export function projectSorobanAgentTask({
 
   if (canCancel && state !== 'completed' && state !== 'cancelled') {
     nextActions = [...nextActions, action('cancel', 'write', credentialAccess)];
+  }
+
+  if (!unresolved.length && (preparations.length || observations.length) && !latestObservation?.successful) {
+    nextActions = nextActions.map((item) => ['prepare_execution', 'refresh_execution', 'replan'].includes(item.code)
+      ? { ...item, reviewRequired: true as const } : item);
   }
 
   const signatureRequired = state === 'action_required' && !unresolved.length

@@ -4,6 +4,8 @@ import type { SorobanIntentIntegrationContext } from '../../../../packages/stell
 import type { SorobanExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
 import type { SorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
 import type { SorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
+import type { SorobanExecutionNonInclusionProof } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
+export type { SorobanExecutionNonInclusionProof } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
@@ -35,13 +37,6 @@ export interface StoredSorobanIntentAuthorizationContribution {
   authorizationPlanRevision?: number;
   receivedAt: string;
   submittedBy?: AgentActorProvenance;
-}
-
-export interface SorobanExecutionNonInclusionProof {
-  oldestLedger: number;
-  latestLedger: number;
-  latestLedgerClosedAt: string;
-  checkedAt: string;
 }
 
 export interface StoredSorobanIntentExecutionPreparation {

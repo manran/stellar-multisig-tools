@@ -264,6 +264,18 @@ function executionOutcomeBranches(): OpenApiObject[] {
   ];
 }
 
+/** Compact task/job completion must never contradict its receipt. */
+function completedExecutionProjection(task: boolean): OpenApiObject {
+  return {
+    if: { properties: { state: { const: 'completed' } } },
+    then: { required: ['result'], properties: {
+      result: { properties: { successful: { const: true } } }, nextActions: { maxItems: 0 }, unresolvedTransactionHashes: { maxItems: 0 },
+      ...(task ? { signatureRequired: { const: false } } : { actionCalls: { maxProperties: 0 } }),
+    } },
+    else: { not: { required: ['result'], properties: { result: { properties: { successful: { const: true } } } } } },
+  };
+}
+
 const submissionProperties = {
   transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
   ledger: { type: 'integer', minimum: 1 },
@@ -769,7 +781,7 @@ const components: OpenApiObject = {
           items: { type: 'string', enum: ['prepare_execution', 'submit_execution', 'reconcile_execution', 'refresh_execution', 'replan', 'cancel'] },
         },
         actionCalls: { type: 'object', description: 'Resolve each offered action by operationId and bodyDefaults. External submission is not an MST API call; use the exact prepared and authorized XDR matching transactionHash.', additionalProperties: { oneOf: [
-          { type: 'object', required: ['operationId', 'bodyDefaults'], properties: { operationId: { type: 'string' }, bodyDefaults: { type: 'object', required: ['action'], properties: { action: { type: 'string' } }, additionalProperties: false } }, additionalProperties: false },
+          { type: 'object', required: ['operationId', 'bodyDefaults'], properties: { operationId: { type: 'string' }, bodyDefaults: { type: 'object', required: ['action'], properties: { action: { type: 'string' } }, additionalProperties: false }, reviewRequired: { const: true, description: 'Review the resolved prior attempt and current authorization before continuing this same Intent. This is a caller decision, not a new grant of signing authority.' } }, additionalProperties: false },
           { type: 'object', required: ['transport', 'transactionHash'], properties: { transport: { const: 'external_stellar_submission' }, transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' } }, additionalProperties: false },
         ] } },
         reviewUrl: { type: 'string', format: 'uri' },
@@ -801,6 +813,7 @@ const components: OpenApiObject = {
           additionalProperties: false,
         },
       },
+      allOf: [completedExecutionProjection(false)],
       additionalProperties: false,
     },
     AgentTask: {
@@ -811,7 +824,7 @@ const components: OpenApiObject = {
         id: { type: 'string', minLength: 1 },
         kind: { type: 'string', enum: ['classic_transaction', 'soroban_contract'] },
         network: stellarNetwork,
-        state: { type: 'string', enum: ['action_required', 'waiting', 'completed', 'expired', 'failed', 'cancelled'], description: 'action_required means a required task action is available to the current credential; read-only pending work is waiting.' },
+        state: { type: 'string', enum: ['action_required', 'waiting', 'completed', 'execution_unknown', 'expired', 'failed', 'cancelled'], description: 'action_required means a required task action is available to the current credential; read-only pending work is waiting. execution_unknown means the external Classic payment outcome is unresolved despite a closed or blocked signing task.' },
         signatureRequired: { type: 'boolean', description: 'This signer still has a pending signature or authorization decision, independently of the credential scope. A Read Agent can use this signal to notify the signer.' },
         nextActions: {
           type: 'array',
@@ -824,6 +837,7 @@ const components: OpenApiObject = {
               code: { type: 'string', enum: ['contribute_signature', 'contribute_authorization', 'decline', 'prepare_execution', 'refresh_execution', 'reconcile_execution', 'replan', 'cancel'] },
               requiredAccess: { type: 'string', enum: ['write', 'sign'] },
               available: { type: 'boolean' },
+              reviewRequired: { const: true, description: 'Review the resolved prior attempt before continuing this same Intent; availability alone does not authorize a retry.' },
             },
             additionalProperties: false,
           },
@@ -831,6 +845,7 @@ const components: OpenApiObject = {
         waitingFor: { type: 'array', uniqueItems: true, items: { oneOf: [accountId, contractId] } },
         expiresAt: timestamp,
         expiresAtLedger: { type: 'integer', minimum: 1 },
+        executionOutcome: schema('ClassicExecutionEvidence'),
         unresolvedTransactionHashes: { type: 'array', uniqueItems: true, items: { type: 'string', pattern: '^[0-9a-f]{64}$' } },
         result: {
           type: 'object',
@@ -843,6 +858,19 @@ const components: OpenApiObject = {
           additionalProperties: false,
         },
       },
+      allOf: [completedExecutionProjection(true),
+        { if: { properties: { state: { const: 'execution_unknown' } } }, then: { required: ['executionOutcome'], properties: { kind: { const: 'classic_transaction' }, executionOutcome: { properties: { outcome: { const: 'unknown' } } }, signatureRequired: { const: false }, nextActions: { maxItems: 0 } }, not: { required: ['result'] } } },
+        { if: { required: ['executionOutcome'] }, then: { properties: { kind: { const: 'classic_transaction' } } } },
+        { if: { required: ['executionOutcome'], properties: { executionOutcome: { properties: { outcome: { const: 'unknown' } } } } }, then: { properties: { state: { enum: ['action_required', 'waiting', 'execution_unknown'] } }, not: { required: ['result'] } } },
+        { if: { required: ['executionOutcome'], properties: { executionOutcome: { properties: { outcome: { const: 'failed' } } } } }, then: { required: ['result'], properties: { state: { const: 'failed' }, result: { properties: { successful: { const: false } } } } } },
+        { if: { required: ['executionOutcome'], properties: { executionOutcome: { properties: { outcome: { const: 'successful' } } } } }, then: { properties: { state: { const: 'completed' } } } },
+        { if: { required: ['executionOutcome'], properties: { executionOutcome: { properties: { outcome: { const: 'not_included' } } } } }, then: { properties: { state: { const: 'expired' } }, not: { required: ['result'] } } },
+      ],
+      additionalProperties: false,
+    },
+    SorobanExecutionNonInclusionProof: {
+      type: 'object', required: ['oldestLedger', 'latestLedger', 'latestLedgerClosedAt', 'checkedAt'],
+      properties: { oldestLedger: { type: 'integer', minimum: 1 }, latestLedger: { type: 'integer', minimum: 1 }, latestLedgerClosedAt: timestamp, checkedAt: timestamp },
       additionalProperties: false,
     },
     SorobanIntentEvidenceEvent: {
@@ -867,10 +895,15 @@ const components: OpenApiObject = {
         effectsAccepted: { type: 'boolean' },
         validUntil: { oneOf: [timestamp, { type: 'null' }] },
         latestLedger: { type: 'integer', minimum: 1 },
+        nonInclusionProof: schema('SorobanExecutionNonInclusionProof'),
         ledger: { type: 'integer', minimum: 1 },
         successful: { type: 'boolean' },
         observedAt: timestamp,
       },
+      allOf: [
+        { if: { properties: { type: { const: 'execution_not_included' } } }, then: { required: ['transactionHash', 'nonInclusionProof'], not: { anyOf: [{ required: ['ledger'] }, { required: ['successful'] }] } }, else: { not: { required: ['nonInclusionProof'] } } },
+        ...(['execution_confirmed', 'execution_failed'] as const).map((type) => ({ if: { properties: { type: { const: type } } }, then: { required: ['transactionHash', 'ledger', 'successful', 'observedAt'], properties: { successful: { const: type === 'execution_confirmed' } } } })),
+      ],
       additionalProperties: false,
     },
     ContractIntentCreateResult: {
@@ -1113,12 +1146,14 @@ const components: OpenApiObject = {
         observed: { type: 'boolean' },
         replayed: { type: 'boolean' },
         outcome: { type: 'string', enum: ['unknown', 'not_included', 'failed', 'successful'] },
-        nonInclusionProof: { type: 'object', required: ['oldestLedger', 'latestLedger', 'latestLedgerClosedAt', 'checkedAt'], properties: { oldestLedger: { type: 'integer', minimum: 1 }, latestLedger: { type: 'integer', minimum: 1 }, latestLedgerClosedAt: timestamp, checkedAt: timestamp }, additionalProperties: false },
+        nonInclusionProof: schema('SorobanExecutionNonInclusionProof'),
         observation: schema('SorobanIntentExecutionObservation'),
+        projectionNotRefreshed: { const: true, description: 'Reconciliation evidence is authoritative; the current Job or Task was not refreshed. Inspect the Intent again before further actions.' },
         job: schema('IntegrationSorobanJob'),
         task: schema('AgentTask'),
       },
       oneOf: executionOutcomeBranches(),
+      allOf: [{ if: { required: ['projectionNotRefreshed'] }, then: { not: { anyOf: [{ required: ['job'] }, { required: ['task'] }] } } }],
       additionalProperties: false,
     },
     ContractIntentReplanResult: {
@@ -1689,6 +1724,11 @@ function logicalOperationRetry(operation: HeadlessOperationDescriptor): OpenApiO
       failed: rule('human_review', [], 'The transaction was included but failed. Review the receipt before a separately authorized replacement.'),
       not_included: rule('human_review', [], 'The original validity window is closed and non-inclusion is verified. Review before a separately authorized replacement.'),
     };
+    if (path === '/intent') {
+      const review = rule('inspect_then_decide', [inspectId!], 'Review the resolved attempt and current Intent before another attempt. Continue only the SAME Intent if all released hashes are resolved, current AUTH and effects allow it, and the caller explicitly decides to retry. Use replan and fresh AUTH when required. Actions marked reviewRequired are technically available, not automatic permission. Never create another business payment to recover this one.');
+      onOutcome.failed = review;
+      onOutcome.not_included = review;
+    }
   }
   if (id.endsWith('.execution.prepare') || id.endsWith('.replan')) {
     onError.intent_execution_outcome_unknown = rule('reconcile_first', [inspectId!, reconcileId], 'Reconcile every unresolvedTransactionHash before creating another execution package or plan.');

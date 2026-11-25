@@ -1,10 +1,12 @@
 import type { AgentAccessLevel } from './agentAccessTypes.js';
 import type { StellarNetwork } from './types.js';
+import type { ClassicExecutionEvidence } from './requestTypes.js';
 
 export type AgentTaskState =
   | 'action_required'
   | 'waiting'
   | 'completed'
+  | 'execution_unknown'
   | 'expired'
   | 'failed'
   | 'cancelled';
@@ -25,6 +27,8 @@ export interface AgentTaskAction {
   bodyDefaults?: Record<string, string>;
   requiredAccess: Exclude<AgentAccessLevel, 'read'>;
   available: boolean;
+  /** Review the resolved prior attempt before continuing this same Intent. Not a new authorization grant. */
+  reviewRequired?: true;
 }
 
 export interface AgentTaskProjection {
@@ -41,6 +45,8 @@ export interface AgentTaskProjection {
   unresolvedTransactionHashes?: string[];
   expiresAt?: string;
   expiresAtLedger?: number;
+  /** External Classic payment evidence, separate from the signer task state. */
+  executionOutcome?: ClassicExecutionEvidence;
   result?: {
     transactionHash: string;
     ledger: number;
