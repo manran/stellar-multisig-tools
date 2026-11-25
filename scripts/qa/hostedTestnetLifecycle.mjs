@@ -305,7 +305,7 @@ async function discoverIntegration() {
   API = registry.base;
   for (const item of registry.operations) {
     const pointer = item.schema?.pointer;
-    check(item.schema?.href === openApiUrl && pointer?.startsWith('#/x-multisig-operations/'), 'Missing logical operation pointer: ' + item.id);
+    check(item.schema?.href === openApiUrl.href && pointer?.startsWith('#/x-multisig-operations/'), 'Missing logical operation pointer: ' + item.id);
     const logical = pointer.slice(2).split('/').reduce((value, key) => value?.[key], openapi);
     check(logical?.operationId === item.id && logical.path === item.path && logical.method === item.method
       && logical.access === item.access && logical.retry?.transportFailure?.strategy, 'Unresolvable logical operation: ' + item.id);
