@@ -49,7 +49,7 @@ export async function readJsonObjectBody(
   maxBytes: number,
 ): Promise<Record<string, unknown>> {
   const contentType = request.headers.get('content-type') ?? '';
-  if (!contentType.toLowerCase().startsWith('application/json')) {
+  if (contentType.split(';', 1)[0].trim().toLowerCase() !== 'application/json') {
     throw new RequestBodyError('Content-Type must be application/json.', 415, 'unsupported_media_type');
   }
 

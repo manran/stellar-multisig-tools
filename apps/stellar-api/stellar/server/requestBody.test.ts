@@ -55,6 +55,11 @@ test('rejects arrays and malformed JSON as invalid_json', async () => {
   }
 });
 
+test('JSON media type matching is exact but accepts charset parameters', async () => {
+  assert.deepEqual(await readJsonObjectBody(jsonRequest('{}', { 'content-type': 'application/json; charset=utf-8' }), 1024), {});
+  await assert.rejects(() => readJsonObjectBody(jsonRequest('{}', { 'content-type': 'application/jsoninvalid' }), 1024), (error: unknown) => error instanceof RequestBodyError && error.status === 415);
+});
+
 test('rejects non-JSON media types', async () => {
   const request = new Request('https://example.test/api/request', {
     method: 'POST',

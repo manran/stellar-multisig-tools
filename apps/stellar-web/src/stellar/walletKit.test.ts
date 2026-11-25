@@ -1,12 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  isPopupWalletModule,
   isWalletAuthEntrySigningUnsupported,
   isWalletMessageSigningUnsupported,
   isWalletSelectionCancelled,
   nameVarialWallet,
   walletActionErrorMessage,
 } from './walletKit.js';
+
+test('only known interactive popup wallets use a cached identity', () => {
+  assert.equal(isPopupWalletModule({ productId: 'albedo' }), true);
+  assert.equal(isPopupWalletModule({ productId: 'xbull' }), true);
+  assert.equal(isPopupWalletModule({ productId: 'freighter' }), false);
+  assert.equal(isPopupWalletModule({ productId: 'unknown' }), false);
+});
 
 test('displays Varial without changing the legacy wallet module identity', () => {
   const modules = [

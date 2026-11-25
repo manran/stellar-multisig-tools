@@ -1,5 +1,7 @@
 import type { IntegrationSorobanJobProjection } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 import type {
+  ClassicExecutionEvidence,
+  SigningRequestSubmission,
   SigningRequestSnapshot,
   SigningRequestStatus,
   SigningRequestStatusReason,
@@ -34,11 +36,8 @@ export interface IntegrationClassicRequestWebhookProjection {
     statusReason: SigningRequestStatusReason;
     executionMode?: 'multisigtools' | 'external';
     externalReference?: string;
-    result?: {
-      transactionHash: string;
-      ledger: number;
-      submittedAt: string;
-    };
+    executionOutcome?: ClassicExecutionEvidence;
+    result?: SigningRequestSubmission;
   };
 }
 
@@ -96,13 +95,8 @@ export function projectClassicIntegrationWebhook(
       ...(stored.integration?.correlationId
         ? { externalReference: stored.integration.correlationId }
         : {}),
-      ...(snapshot.submission ? {
-        result: {
-          transactionHash: snapshot.submission.transactionHash,
-          ledger: snapshot.submission.ledger,
-          submittedAt: snapshot.submission.submittedAt,
-        },
-      } : {}),
+      ...(snapshot.executionOutcome ? { executionOutcome: snapshot.executionOutcome } : {}),
+      ...(snapshot.submission ? { result: snapshot.submission } : {}),
     },
   };
 }
@@ -120,6 +114,7 @@ export function projectSorobanIntegrationWebhook(
   observations: Awaited<ReturnType<NonNullable<SorobanIntentStore['listExecutionObservations']>>>,
   reviewOrigin: string,
   now = new Date(),
+  executionAvailable = true,
 ): IntegrationSorobanWebhookProjection {
   return {
     type: 'soroban_job',
@@ -129,6 +124,7 @@ export function projectSorobanIntegrationWebhook(
       preparations,
       observations,
       reviewUrl: reviewUrl(reviewOrigin, stored.id),
+      executionAvailable,
       now,
     }),
   };
@@ -162,6 +158,7 @@ export function createIntegrationWebhookPayloadBuilder(input: {
   requests: SigningRequestStore;
   intents: SorobanIntentStore;
   reviewOriginFor: (network: StellarNetwork) => string;
+  executionAvailableFor?: (stored: StoredSorobanIntent, serviceId: string) => Promise<boolean>;
   loadClassicSnapshot?: (
     store: SigningRequestStore,
     stored: StoredSigningRequest,
@@ -175,7 +172,7 @@ export function createIntegrationWebhookPayloadBuilder(input: {
   const loadClassic = input.loadClassicSnapshot
     ?? ((store, stored) => getSigningRequestForStoredRequest(store, stored));
   const loadAuthorization = input.loadSorobanAuthorization
-    ?? ((store, id) => getSorobanIntentAuthorization(store, id));
+    ?? ((store, id) => getSorobanIntentAuthorization(store, id, { terminalReceiptOnly: true }));
   const now = input.now ?? (() => new Date());
 
   return {
@@ -215,6 +212,7 @@ export function createIntegrationWebhookPayloadBuilder(input: {
         observations,
         input.reviewOriginFor(stored.network),
         now(),
+        observations.some((item) => item.successful) || (await input.executionAvailableFor?.(stored, record.serviceId) ?? true),
       );
       return integrationWebhookEnvelope(
         record,

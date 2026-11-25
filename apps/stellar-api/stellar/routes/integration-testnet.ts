@@ -17,9 +17,11 @@ import { createTestnetIntegration } from '../server/testnetIntegrationService.js
 const MAX_BODY_BYTES = 64 * 1024;
 
 function errorResponse(cause: unknown): Response {
+  if (cause instanceof IntegrationAdminServiceError) {
+    return noStoreJson({ error: cause.message, code: cause.code, ...(cause.details ? { details: cause.details } : {}) }, cause.status);
+  }
   if (
-    cause instanceof IntegrationAdminServiceError
-    || cause instanceof RequestBodyError
+    cause instanceof RequestBodyError
     || cause instanceof DeploymentNetworkPolicyError
   ) {
     return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
@@ -39,6 +41,9 @@ export async function POST(request: Request): Promise<Response> {
         409,
         'testnet_integration_self_service_unavailable',
       );
+    }
+    if (request.headers.has('idempotency-key')) {
+      throw new IntegrationAdminServiceError('Idempotency-Key is not supported for one-time Integration Profile creation.', 400, 'idempotency_key_unsupported');
     }
     const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
     const result = await createTestnetIntegration(blobIntegrationCredentialStore, body);

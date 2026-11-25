@@ -17,6 +17,7 @@ import type { InboxSorobanIntentSnapshot } from '../../../packages/stellar-core/
 import type { InboxRequestDescription } from './stellar/inboxRequestPresentation';
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
 import { navigateWorkspace, stellarHref } from './workspaceNavigation';
+import { loadCompleteHumanInbox } from '../../../packages/stellar-core/src/humanInboxClient';
 
 interface InboxResponse {
   address: string;
@@ -97,9 +98,7 @@ export default function InboxApp() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/inbox', { cache: 'no-store' });
-      const body = await response.json() as InboxResponse & { error?: string };
-      if (!response.ok) throw new Error(body.error || 'Unable to load your inbox.');
+      const body = await loadCompleteHumanInbox({ address: unlockedAddress, network: unlockedNetwork });
       setData(body);
     } catch (cause) {
       setData(null);

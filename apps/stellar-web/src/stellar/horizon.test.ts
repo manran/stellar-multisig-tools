@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { Account, Asset, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk/base';
 import {
   loadAccount,
   loadNetworkParameters,
@@ -78,6 +79,28 @@ test('loads a submitted transaction by hash', async () => {
   assert.equal(requestedUrl, 'https://horizon-testnet.stellar.org/transactions/abc123');
   assert.equal(result?.ledger, 987);
   assert.equal(result?.createdAt, '2026-08-28T00:00:00Z');
+});
+
+test('recognizes a real fee-bump envelope regardless of the Horizon hash representation', async () => {
+  const key = Keypair.random();
+  const inner = new TransactionBuilder(new Account(key.publicKey(), '1'), { fee: '100', networkPassphrase: Networks.TESTNET })
+    .addOperation(Operation.payment({ destination: key.publicKey(), asset: Asset.native(), amount: '1' }))
+    .setTimeout(120).build();
+  inner.sign(key);
+  const outer = TransactionBuilder.buildFeeBumpTransaction(key.publicKey(), '1000', inner, Networks.TESTNET);
+  outer.sign(key);
+  const innerHash = Buffer.from(inner.hash()).toString('hex');
+  const outerHash = Buffer.from(outer.hash()).toString('hex');
+  for (const hash of [innerHash, outerHash]) {
+    const result = await loadTransactionByHash(innerHash, 'testnet', undefined, async () => Response.json({
+      hash, ledger: 42, successful: true, envelope_xdr: outer.toXDR(),
+    }));
+    assert.equal(result?.hash, innerHash);
+    assert.equal(result?.ledgerTransactionHash, outerHash);
+  }
+  await assert.rejects(loadTransactionByHash('a'.repeat(64), 'testnet', undefined, async () => Response.json({
+    hash: 'a'.repeat(64), ledger: 42, successful: true, envelope_xdr: outer.toXDR(),
+  })), /does not match/);
 });
 
 test('returns null when a transaction hash is not yet on Horizon', async () => {

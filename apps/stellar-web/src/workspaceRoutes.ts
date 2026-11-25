@@ -6,6 +6,7 @@ export type StellarWorkspaceRouteKind =
   | 'demo'
   | 'inbox'
   | 'new'
+  | 'templates'
   | 'contracts'
   | 'contract-workspace'
   | 'account-signing'
@@ -35,6 +36,7 @@ export const CANONICAL_STELLAR_ROUTES = [
   { path: '/demo', kind: 'demo', mode: null },
   { path: '/inbox', kind: 'inbox', mode: 'sign' },
   { path: '/new', kind: 'new', mode: null },
+  { path: '/templates', kind: 'templates', mode: 'sign' },
   { path: '/new/payment', kind: 'new', mode: null },
   { path: '/new/proposer', kind: 'new', mode: null },
   { path: '/new/create-account', kind: 'new', mode: null },

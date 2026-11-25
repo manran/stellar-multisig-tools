@@ -15,5 +15,7 @@ export interface StoredIntegrationCredential {
 export interface IntegrationCredentialStore {
   getCredential(serviceId: string): Promise<StoredIntegrationCredential | null>;
   listCredentials(): Promise<StoredIntegrationCredential[]>;
+  /** Atomically create only; never replace an existing Service credential. */
+  createCredential(record: StoredIntegrationCredential): Promise<boolean>;
   putCredential(record: StoredIntegrationCredential): Promise<void>;
 }

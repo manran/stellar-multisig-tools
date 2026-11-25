@@ -1,8 +1,28 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 import { Keypair } from '@stellar/stellar-sdk/base';
 import { GET } from '../routes/integration-execution.js';
 import { createIntegrationApiKey } from './integrationCredentialService.js';
+
+// Fixed Testnet resolves durable Integration records before bootstrap entries.
+const previousStorageMode = process.env.MULTISIG_PRIVATE_OBJECT_STORAGE;
+const previousStorageRoot = process.env.MULTISIG_PRIVATE_OBJECT_ROOT;
+let privateRoot: string;
+test.before(async () => {
+  privateRoot = await mkdtemp(join(tmpdir(), 'mst-integration-api-'));
+  process.env.MULTISIG_PRIVATE_OBJECT_STORAGE = 'filesystem';
+  process.env.MULTISIG_PRIVATE_OBJECT_ROOT = privateRoot;
+});
+test.after(async () => {
+  if (previousStorageMode === undefined) delete process.env.MULTISIG_PRIVATE_OBJECT_STORAGE;
+  else process.env.MULTISIG_PRIVATE_OBJECT_STORAGE = previousStorageMode;
+  if (previousStorageRoot === undefined) delete process.env.MULTISIG_PRIVATE_OBJECT_ROOT;
+  else process.env.MULTISIG_PRIVATE_OBJECT_ROOT = previousStorageRoot;
+  if (privateRoot) await rm(privateRoot, { recursive: true, force: true });
+});
 
 const MASTER = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const previous = {

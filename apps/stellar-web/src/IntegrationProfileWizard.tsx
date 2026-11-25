@@ -88,6 +88,7 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
   const [network, setNetwork] = useState<StellarNetwork>('testnet');
   const [fixedNetwork, setFixedNetwork] = useState<StellarNetwork | null>(null);
   const [classicManagedCapabilities, setClassicManagedCapabilities] = useState<{ testnet: boolean; public: boolean } | null>(null);
+  const [sorobanManagedCapabilities, setSorobanManagedCapabilities] = useState<{ testnet: boolean; public: boolean } | null>(null);
 
   const [treasuryInput, setTreasuryInput] = useState('');
   const [treasuries, setTreasuries] = useState<TreasuryEntry[]>([]);
@@ -112,7 +113,7 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
     void fetch('/api/runtime-config', { cache: 'no-store' })
       .then((response) => apiJson<{
         fixedNetwork: StellarNetwork | null;
-        capabilities?: { classicManagedExecution?: { testnet?: boolean; public?: boolean } };
+        capabilities?: { classicManagedExecution?: { testnet?: boolean; public?: boolean }; sorobanManagedExecution?: { testnet?: boolean; public?: boolean } };
       }>(response))
       .then((body) => {
         if (!active) return;
@@ -121,9 +122,16 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
           testnet: Boolean(body.capabilities?.classicManagedExecution?.testnet),
           public: Boolean(body.capabilities?.classicManagedExecution?.public),
         });
+        setSorobanManagedCapabilities({
+          testnet: Boolean(body.capabilities?.sorobanManagedExecution?.testnet),
+          public: Boolean(body.capabilities?.sorobanManagedExecution?.public),
+        });
         if (body.fixedNetwork) resetNetwork(body.fixedNetwork);
       })
-      .catch(() => { if (active) setClassicManagedCapabilities({ testnet: false, public: false }); });
+      .catch(() => { if (active) {
+        setClassicManagedCapabilities({ testnet: false, public: false });
+        setSorobanManagedCapabilities({ testnet: false, public: false });
+      } });
     return () => { active = false; };
   }, []);
 
@@ -133,16 +141,18 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
   );
 
   const hasBusinessScope = treasuries.length > 0 || selectedMethodCount > 0;
-  const contractExecutionValid = !manageExecution || contracts.every((item) => (
-    item.executionOwner === 'multisigtools'
-    || Boolean(item.executor && executorPool.includes(item.executor) && isValidStellarAccountId(item.executor))
+  const sorobanManagedAvailable = sorobanManagedCapabilities?.[network] ?? null;
+  const contractExecutionValid = contracts.filter((item) => item.selectedMethods.length > 0).every((item) => (
+    !manageExecution || item.executionOwner === 'multisigtools'
+      ? sorobanManagedAvailable === true
+      : Boolean(item.executor && executorPool.includes(item.executor) && isValidStellarAccountId(item.executor))
   ));
   const classicManagedAvailable = classicManagedCapabilities?.[network] ?? null;
   const classicExecutionValid = treasuries.length === 0
     || classicManagedAvailable !== false
     || (manageExecution && treasuries.every((item) => item.executionOwner === 'integration'));
   const webhookValid = !webhookEnabled || /^https:\/\//i.test(webhookUrl.trim());
-  const basicsValid = Boolean(serviceId.trim() && label.trim());
+  const basicsValid = /^[a-z0-9][a-z0-9-]{0,39}$/.test(serviceId.trim().toLowerCase()) && Boolean(label.trim());
   const readyToCreate = basicsValid && hasBusinessScope && contractExecutionValid && classicExecutionValid && webhookValid;
 
   function resetNetwork(next: StellarNetwork) {
@@ -283,7 +293,7 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
   function next() {
     setError('');
     if (step === 0 && !basicsValid) {
-      setError('Service id and label are required.');
+      setError('Enter a service ID of 1–40 lowercase letters, digits or hyphens, beginning with a letter or digit, and a label.');
       return;
     }
     if (step === 2 && !hasBusinessScope) {
@@ -295,7 +305,7 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
       return;
     }
     if (step === 3 && !contractExecutionValid) {
-      setError('Each externally executed contract must use one executor from the global pool.');
+      setError('Choose an available execution route for every selected contract. If managed execution is unavailable, add and select your own executor.');
       return;
     }
     if (step === 3 && !webhookValid) {
@@ -507,9 +517,12 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
             </button>
           </div>
 
-          {!manageExecution && (classicManagedAvailable === false && treasuries.length > 0
+          {selectedMethodCount > 0 && sorobanManagedAvailable !== true && (
+            <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">Managed Soroban execution is unavailable. Choose “Manage execution myself”, then add and select an executor for each contract.</p>
+          )}
+          {!manageExecution && ((classicManagedAvailable === false && treasuries.length > 0) || (selectedMethodCount > 0 && sorobanManagedAvailable !== true)
             ? <div className="mt-4 border-y border-amber-500/30 bg-amber-500/[0.06] px-1 py-3 text-sm text-amber-800 dark:text-amber-200">
-                Managed Classic execution is not configured on this deployment. Choose “Manage execution myself” for every Treasury, or enable a managed channel pool.
+                Managed execution is not available for all selected resources. Choose “Manage execution myself”.
               </div>
             : <div className="mt-4 flex items-center gap-2 text-sm font-semibold">
                 <Check className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
@@ -558,7 +571,7 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
                     onChange={(event) => setContractExecutor(item.contractId, event.target.value)}
                     className="ia-select mt-2 text-sm"
                   >
-                    <option value="multisigtools">MultiSigTools managed</option>
+                    <option value="multisigtools" disabled={sorobanManagedAvailable !== true}>MultiSigTools managed{ sorobanManagedAvailable !== true ? " (unavailable)" : "" }</option>
                     {executorPool.map((executor) => <option key={executor} value={executor}>{compactAddress(executor)}</option>)}
                   </select>
                 </label>)}

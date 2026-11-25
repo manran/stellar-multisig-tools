@@ -8,6 +8,9 @@ import {
   configuredClassicManagedChannels,
 } from '../server/classicManagedChannelConfig.js';
 
+import { configuredSorobanManagedExecutor } from '../server/sorobanIntentConfig.js';
+import { SorobanIntentPlanningError } from '../server/sorobanIntentPlanningService.js';
+
 const METHODS = 'GET, OPTIONS';
 
 export async function OPTIONS(): Promise<Response> {
@@ -30,12 +33,17 @@ export async function GET(): Promise<Response> {
       fixedNetwork: network === 'dual' ? null : network,
       capabilities: {
         classicManagedExecution: managedClassic,
+        sorobanManagedExecution: {
+          testnet: (network === 'testnet' || network === 'dual') && Boolean(configuredSorobanManagedExecutor('testnet')),
+          public: (network === 'public' || network === 'dual') && Boolean(configuredSorobanManagedExecutor('public')),
+        },
       },
     }, METHODS);
   } catch (cause) {
     if (cause instanceof DeploymentNetworkPolicyError || cause instanceof ClassicManagedChannelConfigurationError) {
       return publicCorsJson({ error: cause.message, code: cause.code }, METHODS, cause.status);
     }
+    if (cause instanceof SorobanIntentPlanningError) return publicCorsJson({ error: cause.message, code: cause.code }, METHODS, 503);
     console.error('Runtime config API error', cause);
     return publicCorsJson({ error: 'Runtime configuration is unavailable.', code: 'internal_error' }, METHODS, 500);
   }

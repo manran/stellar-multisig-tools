@@ -59,6 +59,10 @@ test('Classic webhook projection omits XDR and private context while preserving 
   const projection = projectClassicIntegrationWebhook(stored, snapshot);
   assert.equal(projection.request.status, 'ready');
   assert.equal(projection.request.externalReference, 'transfer-42');
+  const failed = { outcome: 'failed' as const, observed: true as const, observation: { transactionHash: snapshot.transactionHash, ledger: 42, submittedAt: snapshot.createdAt, successful: false as const } };
+  const failureProjection = projectClassicIntegrationWebhook(stored, { ...snapshot, status: 'blocked', statusReason: 'execution_failed', executionOutcome: failed });
+  assert.deepEqual(failureProjection.request.executionOutcome, failed);
+  assert.equal(failureProjection.request.result, undefined);
   const encoded = JSON.stringify(projection);
   assert.doesNotMatch(encoded, /SECRET_BASE_XDR|SECRET_MERGED_XDR|SECRET_PRIVATE_NOTE/);
   assert.doesNotMatch(encoded, /baseXdr|mergedXdr|privateNote/);

@@ -25,6 +25,7 @@ import { analyzeKnownSorobanContractAuthorization } from '../../../../packages/s
 import { compareSorobanEffects, type SorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import type { TransactionXdrInspection } from '../../../../packages/stellar-core/src/transactionXdr.js';
 import type {
+  ClassicTerminalExecutionEvidence,
   SigningRequestSnapshot,
   SigningRequestStatusReason,
   SigningRequestSubmission,
@@ -34,6 +35,7 @@ import type { StellarAccountSnapshot, StellarNetwork, StellarSigner } from '../.
 import { createSigningRequestId, isValidSigningRequestId } from './requestLocator.js';
 import { requestDiscoverySignerKeys } from './requestDiscovery.js';
 import { recordSubmittedActivity } from './requestActivity.js';
+import { isExternalClassicRequest, successfulClassicEvidence } from './requestStore.js';
 import type {
   SigningRequestStore,
   StoredAcceptedSignature,
@@ -537,6 +539,7 @@ function submissionSnapshot(submission: StoredSubmissionResult): SigningRequestS
     transactionHash: submission.transactionHash,
     ledger: submission.ledger,
     submittedAt: submission.submittedAt,
+    ...(submission.ledgerTransactionHash ? { ledgerTransactionHash: submission.ledgerTransactionHash } : {}),
   };
 }
 
@@ -549,6 +552,7 @@ function confirmedSubmission(
     transactionHash: result.hash,
     ledger: result.ledger,
     submittedAt: result.createdAt ?? fallbackTime.toISOString(),
+    ...(result.ledgerTransactionHash ? { ledgerTransactionHash: result.ledgerTransactionHash } : {}),
   };
 }
 
@@ -735,6 +739,7 @@ async function buildSnapshot(
   now: Date,
   accountLoader: AccountLoader,
   networkParametersLoader: NetworkParametersLoader | undefined,
+  executionEvidence?: ClassicTerminalExecutionEvidence | null,
 ): Promise<SigningRequestSnapshot> {
   const merged = mergeContributions(request, contributions);
   const base = {
@@ -749,6 +754,7 @@ async function buildSnapshot(
     ...(request.proposerAddress ? { proposerAddress: request.proposerAddress } : {}),
     contributionCount: merged.contributionCount,
     signatureCount: merged.signatureCount,
+    ...(isExternalClassicRequest(request) ? { executionOutcome: submission ? successfulClassicEvidence(submission) : executionEvidence ?? { outcome: 'unknown' as const, observed: false as const } } : {}),
     ...(request.sorobanOrigin ? { sorobanOrigin: request.sorobanOrigin } : {}),
     ...(request.templateRef ? { template: request.templateRef } : {}),
     ...(request.executionPolicy?.mode === 'external'
@@ -775,12 +781,25 @@ async function buildSnapshot(
     };
   }
 
+  if (executionEvidence?.outcome === 'failed' || executionEvidence?.outcome === 'not_included') {
+    return {
+      ...base,
+      status: executionEvidence.outcome === 'failed' ? 'blocked' : 'expired',
+      statusReason: executionEvidence.outcome === 'failed' ? 'execution_failed' : 'execution_not_included',
+      statusDetail: executionEvidence.outcome === 'failed'
+        ? 'Stellar recorded a failed execution. Review the receipt before authorizing any replacement.'
+        : 'Stellar history covers the transaction validity window and confirms non-inclusion. Review before creating a replacement.',
+    };
+  }
+
   if (requestExpired(request, now)) {
     return {
       ...base,
       status: 'expired',
       statusReason: 'request_expired',
-      statusDetail: 'This signing request has expired and no longer accepts signatures or submission.',
+      statusDetail: isExternalClassicRequest(request)
+        ? 'The signing request has expired. Payment outcome remains unknown; the owning Integration must reconcile the original hash before authorizing a replacement.'
+        : 'This signing request has expired and no longer accepts signatures or submission.',
     };
   }
 
@@ -832,7 +851,10 @@ async function buildSnapshot(
     Boolean(networkParametersLoader),
   );
   if (lifecycle && lifecycle.status !== 'waiting_preconditions') {
-    return { ...base, status: lifecycle.status, statusReason: lifecycle.reason, statusDetail: lifecycle.detail };
+    return { ...base, status: lifecycle.status, statusReason: lifecycle.reason,
+      statusDetail: isExternalClassicRequest(request) && (lifecycle.status === 'stale' || lifecycle.status === 'expired')
+        ? 'This envelope is no longer executable. The payment outcome is still unknown; reconcile the original hash before authorizing a replacement.'
+        : lifecycle.detail };
   }
 
   if (analysis.authorization.coreAuthorizationValid) {
@@ -930,7 +952,7 @@ export async function getSigningRequestForStoredRequest(
 ): Promise<SigningRequestSnapshot> {
   const now = options.now ?? new Date();
   const facts = readFacts ?? await loadSigningRequestReadFacts(store, request);
-  const { contributions, submission } = facts;
+  const { contributions, submission, executionEvidence } = facts;
   const accountLoader = options.accountLoader ?? loadAccount;
   const networkParametersLoader = options.networkParametersLoader;
   const snapshot = await buildSnapshot(
@@ -940,8 +962,9 @@ export async function getSigningRequestForStoredRequest(
     now,
     accountLoader,
     networkParametersLoader,
+    executionEvidence,
   );
-  if (submission || !['stale', 'expired', 'blocked'].includes(snapshot.status)) return snapshot;
+  if (submission || executionEvidence || !['stale', 'expired', 'blocked'].includes(snapshot.status)) return snapshot;
 
   let confirmed: TransactionSubmissionResult | null;
   try {
@@ -972,11 +995,13 @@ export async function loadSigningRequestReadFacts(
   store: SigningRequestStore,
   request: StoredSigningRequest,
 ): Promise<StoredSigningRequestReadFacts> {
-  const [contributions, submission] = await Promise.all([
+  const [contributions, executionEvidence] = await Promise.all([
     store.listContributions(request.id),
-    store.getSubmission(request.id, request.transactionHash),
+    isExternalClassicRequest(request) ? store.getExecutionEvidence?.(request.id) ?? null : null,
   ]);
-  return { contributions, submission };
+  // A concurrent successful receipt outranks a negative proof.
+  const submission = await store.getSubmission(request.id, request.transactionHash);
+  return { contributions, submission, executionEvidence };
 }
 
 export async function contributeSigningRequest(
@@ -993,6 +1018,9 @@ export async function contributeSigningRequest(
   const submission = await store.getSubmission(request.id, request.transactionHash);
   if (submission) {
     throw new SigningRequestServiceError('This signing request has already been submitted.', 409, 'request_submitted');
+  }
+  if (isExternalClassicRequest(request) && await store.getExecutionEvidence?.(request.id)) {
+    throw new SigningRequestServiceError('This external execution already has a terminal result. Review the receipt before any replacement.', 409, 'execution_already_resolved');
   }
 
   const contributions = await store.listContributions(request.id);
@@ -1076,7 +1104,7 @@ async function persistConfirmedSubmission(
   result: TransactionSubmissionResult,
   now: Date,
 ): Promise<StoredSubmissionResult> {
-  if (!result.successful || result.hash !== request.transactionHash) {
+  if (result.successful !== true || result.hash !== request.transactionHash || !Number.isSafeInteger(result.ledger) || result.ledger <= 0) {
     throw new SigningRequestServiceError(
       'Horizon returned an unexpected transaction result.',
       502,

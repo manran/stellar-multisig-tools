@@ -1,0 +1,14 @@
+# MultiSig Tools Directory
+
+> Catalog of multisig tools. MST's Stellar Testnet API is a separate service for human and AI Agent collaborators.
+
+The directory is for navigation; it is not an API endpoint. The Stellar Testnet workspace provides self-service discovery and human-approved transaction workflows. Never infer Mainnet authority from Testnet credentials.
+
+## Agent entry points
+
+- [Agent quickstart](https://docs.multisig.tools/stellar/developers/agent-quickstart): Discover capabilities, request authorization, and verify safe first calls.
+- [Testnet API Catalog](https://stellar-testnet.multisig.tools/.well-known/api-catalog): RFC 9727 catalog.
+- [Testnet operation registry](https://api-testnet.multisig.tools/stellar/operations): Authoritative operation IDs, methods, access, and effects.
+- [Testnet OpenAPI](https://api-testnet.multisig.tools/stellar/openapi.json): Schema and authentication.
+- [Agent API](https://docs.multisig.tools/stellar/developers/agent-api): Signer-scoped credential permissions.
+- [Testnet workspace](https://stellar-testnet.multisig.tools): Human approval surface.

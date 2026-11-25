@@ -32,6 +32,7 @@ class MemoryCredentialStore implements IntegrationCredentialStore {
     return this.value?.credential.serviceId === serviceId ? this.value : null;
   }
   async listCredentials() { return this.value ? [this.value] : []; }
+  async createCredential() { throw new Error('unused'); return false; }
   async putCredential() {}
 }
 

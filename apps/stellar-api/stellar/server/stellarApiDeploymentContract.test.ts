@@ -7,6 +7,7 @@ const apiFiles = [
   'activity.ts',
   'address-book.ts',
   'agent-access.ts',
+  'agent-grants.ts',
   'auth.ts',
   'contract-call.ts',
   'contract-interface.ts',

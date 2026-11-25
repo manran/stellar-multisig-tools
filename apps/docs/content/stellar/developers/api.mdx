@@ -19,13 +19,17 @@ curl -sS https://api-testnet.multisig.tools/stellar/operations
 curl -sS https://api-testnet.multisig.tools/stellar/openapi.json
 ```
 
+Each registry entry's `schema.href` identifies the OpenAPI document and `schema.pointer` identifies its exact logical operation in `x-multisig-operations`. Resolve that pointer instead of choosing a branch of the shared HTTP path. Its parameters, security, request body, success responses, dispatch defaults, and retry policy apply to the selected operation.
+
 ## Core rules
 
 **Network-bound origin:** use the deployment that owns the selected network. A Request/Intent cannot be switched to another network by URL parameter or wallet default.
 
-**Idempotency:** machine creation requires a stable `Idempotency-Key`. Replays return the same work; changing payload under the same key is a conflict.
+**Idempotency:** only machine Request and Intent creation (`proposal.create`, `integration.request.create`, `contract.intent.create`, `integration.intent.create`) requires a stable `Idempotency-Key`. Retry the same accepted input with the same credential and key; changed input conflicts. One-time Agent pairing and Testnet Integration Profile issuance do not have this replay guarantee. Profile creation rejects this header.
 
-**Job projection:** Integration callers may follow compact business state and next actions without interpreting every authorization/preparation/evidence record.
+**Job projection:** follow `nextActions` and `actionCalls` for Integration jobs, or `nextActions[].operationId` and `bodyDefaults` for signer Agents. Resolve the operation contract and respect its access requirements. `reviewRequired: true` on an action requires an explicit caller decision after reviewing the resolved prior attempt; it is not a new authorization grant. A Classic task with `state=execution_unknown` is not a failed payment: inspect its `executionOutcome`; the owning Integration reconciles the original hash. An external Stellar submission is not an MST API operation.
+
+**Retry:** apply the exact operation's `retry.onError` rule first, then `retry.onHttpStatus`, then `retry.defaultError`. If no response was received, use `retry.transportFailure`. Do not infer that a timeout means a write did not commit. For execution reconciliation, apply `retry.onOutcome` to the validated result. A retry strategy never grants permission to sign or submit.
 
 **Webhook:** receive → verify → deduplicate event id → GET canonical Request/Intent/Job → act from current state.
 
@@ -60,6 +64,11 @@ Branch on stable error codes, not message text.
 | 400 | Invalid input or missing idempotency key | Fix the request; do not blind-retry. |
 | 401 | Credential missing or invalid | Refresh or replace the credential. |
 | 403 | Credential outside configured scope | Change scope or request. |
-| 409 | Idempotency/state/network conflict | Read current state before deciding. |
+| 409 | Idempotency/state/network/configuration conflict | Read current state or change configuration; do not blind-retry. |
+| 404 | Resource not found | Check the resource ID and deployment. |
+| 410 | Expired resource or grant | Obtain a new valid grant or resource. |
+| 413 | Request body too large | Reduce the request size. |
+| 415 | Unsupported media type | Send application/json. |
 | 429 | Rate limited | Retry with backoff. |
+| 502 | Upstream interface or network response unavailable | Inspect the input and retry with backoff if temporary. |
 | 503 | Dependency/storage unavailable | Retry with backoff and inspect current state. |

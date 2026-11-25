@@ -8,14 +8,14 @@
   },
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "tsc -p tsconfig.json && vite build && node scripts/generateAgentDiscovery.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test webDeploymentContract.test.mjs"
   },
   "dependencies": {
     "@creit.tech/stellar-wallets-kit": "2.6.0",
-    "@stellar/stellar-sdk": "^17.0.1",
+    "@stellar/stellar-sdk": "^17.4.0",
     "buffer": "^6.0.3",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",

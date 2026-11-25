@@ -5,55 +5,44 @@ import {
   runtimeSigningRequestStore,
   runtimeSorobanIntentStore,
 } from '../server/coordinationStores.js';
-import { authConfigForRequest } from '../server/authConfig.js';
-import { AuthServiceError, requirePrivateWorkspaceSession } from '../server/authService.js';
+import { AuthServiceError } from '../server/authService.js';
+import { CallerAuthenticationError, signerWorkspaceCallerFromRequest } from '../server/callerAuthentication.js';
 import {
   AgentCredentialServiceError,
-  authenticateAgentCredential,
-  requireAgentAccess,
 } from '../server/agentCredentialService.js';
 import { listSignerInbox, projectHumanInboxRequests } from '../server/requestInbox.js';
 import { projectClassicAgentTask } from '../server/agentTaskProjection.js';
 import { signerHasSignedTransaction } from '../server/requestAccess.js';
-import { listSorobanIntentInbox } from '../server/sorobanIntentInbox.js';
+import { listAgentSorobanInbox, listSorobanIntentInbox } from '../server/sorobanIntentInbox.js';
 import { noStoreJson } from '../server/httpResponse.js';
+import { DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import { summarizeInboxActions } from '../../../../packages/stellar-core/src/inboxPresentation.js';
+import { loadAccountsForSigner } from '../../../../packages/stellar-core/src/signerAccounts.js';
+import { inboxPageParameters, mergeInboxPage, InvalidInboxPageError } from '../server/inboxPage.js';
 
 const signingRequestStore = runtimeSigningRequestStore();
 const sorobanIntentStore = runtimeSorobanIntentStore();
 
-async function signerContext(request: Request) {
-  const authorization = request.headers.get('authorization') ?? '';
-  const bearer = /^Bearer\s+(.+)$/i.exec(authorization);
-  if (bearer) {
-    const credential = await authenticateAgentCredential(blobAgentCredentialStore, bearer[1].trim());
-    requireAgentAccess(credential, 'read');
-    await blobAgentCredentialStore.touchCredential(credential.credentialId, new Date().toISOString());
-    return { address: credential.principal.address, network: credential.principal.network, actor: 'agent' as const, access: credential.access };
-  }
-  const session = await requirePrivateWorkspaceSession(
-    blobAuthStore,
-    request,
-    authConfigForRequest(request),
-    'Sign in with a Stellar wallet to view this inbox.',
-  );
-  return { address: session.address, network: session.network, actor: 'human' as const };
-}
-
 export async function GET(request: Request): Promise<Response> {
   try {
-    const context = await signerContext(request);
-    const requests = await listSignerInbox(signingRequestStore, context.address, { network: context.network });
+    const context = await signerWorkspaceCallerFromRequest(blobAgentCredentialStore, blobAuthStore, request, 'read', 'Sign in with a Stellar wallet to view this inbox.');
+    const { limit, after } = inboxPageParameters(new URL(request.url));
+    // Reverse lookup is discovery, not authorization. Do not return a stale
+    // cached account set as a complete Inbox after signer rotation.
+    const accounts = await loadAccountsForSigner(context.address, context.network, AbortSignal.timeout(30000), fetch, { fresh: true });
+    const options = { sourceAccountIds: accounts.map((item) => item.accountId), after, limit: limit + 1 };
+    const candidates = await listSignerInbox(signingRequestStore, context.address, { ...options, network: context.network, includeProposed: context.actor === 'human' });
     if (context.actor === 'human') {
-      const [humanRequests, intents] = await Promise.all([
-        projectHumanInboxRequests(signingRequestStore, context.address, requests),
-        listSorobanIntentInbox(sorobanIntentStore, context.address, context.network),
-      ]);
+      const page = mergeInboxPage(candidates, await listSorobanIntentInbox(sorobanIntentStore, context.address, context.network, options), limit);
+      const { intents, complete, nextCursor } = page;
+      const humanRequests = await projectHumanInboxRequests(signingRequestStore, context.address, page.requests);
       const actionCounts = summarizeInboxActions(humanRequests, intents);
       return noStoreJson({
         address: context.address,
         network: context.network,
         actor: context.actor,
+        complete,
+        ...(nextCursor ? { nextCursor } : {}),
         pending_count: humanRequests.length + intents.length,
         action_count: actionCounts.actionRequired,
         action_counts: actionCounts,
@@ -61,10 +50,11 @@ export async function GET(request: Request): Promise<Response> {
         intents,
       });
     }
-    // Machine callers receive the same verified Request list plus typed next tasks.
-    // A task action can be unavailable to a Read/Write credential without
-    // implying a different on-chain signer or permission.
-    const tasks = await Promise.all(requests.map(async (item) => {
+    // Separate the signer's pending signatures from actions the current
+    // Agent credential can perform. Read Agents can notify their signer.
+    const soroban = await listAgentSorobanInbox(sorobanIntentStore, context.address, context.network, context.access, options);
+    const { requests, intents, complete, nextCursor } = mergeInboxPage(candidates, soroban.intents, limit);
+    const classicTasks = await Promise.all(requests.map(async (item) => {
       const declined = item.status === 'awaiting_signatures' && signingRequestStore.listActivityEvents
         ? (await signingRequestStore.listActivityEvents(item.id)).some((event) =>
           event.type === 'approval_declined' && event.actorAddress === context.address)
@@ -76,20 +66,27 @@ export async function GET(request: Request): Promise<Response> {
         declined,
       });
     }));
+    const intentIds = new Set(intents.map((item) => item.id));
+    const tasks = [...classicTasks, ...soroban.tasks.filter((item) => intentIds.has(item.id))];
     return noStoreJson({
       address: context.address,
       network: context.network,
       actor: context.actor,
-      pending_count: requests.length,
-      action_count: tasks.filter((task) => task.state === 'action_required').length,
+      complete,
+      ...(nextCursor ? { nextCursor } : {}),
+      pending_count: tasks.length,
+      action_count: tasks.filter((task) => task.nextActions.some((action) => action.available)).length,
+      signature_required_count: tasks.filter((task) => task.signatureRequired).length,
       requests,
+      intents,
       tasks,
     });
   } catch (cause) {
+    if (cause instanceof InvalidInboxPageError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
     if (cause instanceof AgentCredentialServiceError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
-    if (cause instanceof AuthServiceError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
+    if (cause instanceof AuthServiceError || cause instanceof CallerAuthenticationError || cause instanceof DeploymentNetworkPolicyError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
     if (cause instanceof RequestStorageUnavailableError) return noStoreJson({ error: cause.message, code: 'storage_not_configured' }, 503);
     console.error('Inbox API error', cause);
-    return noStoreJson({ error: 'Signer inbox is temporarily unavailable.', code: 'internal_error' }, 500);
+    return noStoreJson({ error: 'Unable to establish the current Inbox state. Retry before treating any tasks as cleared.', code: 'inbox_unavailable' }, 503);
   }
 }

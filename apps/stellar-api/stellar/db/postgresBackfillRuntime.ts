@@ -90,7 +90,7 @@ export async function runRuntimeCoordinationBackfill(
     sourceRequests: blobSigningRequestStore,
     sourceIntents: blobSorobanIntentStore,
     targetRequests: createPostgresSigningRequestStore(pool, undefined, { emitOutbox: false }),
-    targetIntents: createPostgresSorobanIntentStore(pool, undefined, { emitOutbox: false }),
+    targetIntents: createPostgresSorobanIntentStore(pool, undefined, { emitOutbox: false, historicalImport: true }),
   });
   const outboxAfter = await pool.query<{ count: string }>(
     'SELECT count(*)::text AS count FROM mst_stellar.integration_outbox',

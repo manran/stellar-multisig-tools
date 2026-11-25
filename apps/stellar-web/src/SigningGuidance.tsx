@@ -399,7 +399,7 @@ export default function SigningGuidance({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] opacity-40">Signatures</div>
-          <h2 className="mt-2 text-2xl font-bold">{authorizationComplete ? 'All required signatures are present' : readOnlyProposer ? 'Waiting for Treasury signatures' : walletAlreadySigned ? 'Waiting for other signatures' : 'Who needs to sign?'}</h2>
+          <h2 className="mt-2 text-2xl font-bold">{authorizationComplete ? 'All required signatures are present' : readOnlyProposer ? 'Waiting for Treasury signatures' : walletAlreadySigned ? 'Waiting for other signatures' : walletCanSign ? 'Sign with your wallet' : 'Who needs to sign?'}</h2>
           {!authorizationComplete && !hasAuthorizationError && walletAlreadySigned && (
             <p className="mt-2 text-sm leading-6 text-[var(--color-ink-2)]">
               {remainingSignatureCopy}
@@ -432,6 +432,52 @@ export default function SigningGuidance({
         <div className="mt-4 flex gap-3 rounded-xl border border-red-500/25 bg-red-500/10 p-4 text-sm">
           <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
           <div><span className="font-semibold">The signatures need technical attention.</span> Open Advanced details below to see which signature Stellar cannot use.</div>
+        </div>
+      )}
+
+      {!authorizationComplete && !hasAuthorizationError && !readOnlyProposer && (
+        <div className="mst-signing-action-strip mt-5">
+          <div className="text-sm">
+            <div className="font-semibold">{walletAlreadySigned ? 'Signed by' : walletCanSign ? 'Signing with' : 'Sign proposal'}</div>
+            <div className="mt-2">
+              {walletAddress
+                ? <AddressIdentity address={walletAddress} subjectType="signer" />
+                : <div className="text-neutral-500 dark:text-neutral-400">No signer connected.</div>}
+            </div>
+
+            <div className={`mst-signing-action-grid mt-4 ${shouldShowShare && onShare ? 'mst-signing-action-grid--split' : ''}`}>
+              {walletAddress ? (
+                walletAlreadySigned ? (
+                  <div role="status" className="flex min-h-12 items-center gap-2 text-sm font-semibold text-[var(--color-success)]">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />{signedStateCopy}
+                  </div>
+                ) : walletCanSign ? (
+                  <ActionButton variant="primary" disabled={walletBusy} aria-busy={walletBusy} onClick={onSignWithWallet} className="min-h-12 w-full px-4">
+                    <WalletCards className="h-4 w-4" />{walletBusy ? 'Signing…' : 'Sign'}
+                  </ActionButton>
+                ) : (
+                  <ActionButton variant="secondary" disabled={walletBusy} aria-busy={walletBusy} onClick={onConnectWallet} className="min-h-12 w-full px-4">
+                    <WalletCards className="h-4 w-4" />{walletBusy ? 'Opening wallets…' : 'Choose an authorized signer'}
+                  </ActionButton>
+                )
+              ) : (
+                <ActionButton disabled={walletBusy} aria-busy={walletBusy} onClick={onConnectWallet} className="min-h-12 w-full px-4">
+                  <WalletCards className="h-4 w-4" />{walletBusy ? 'Opening wallets…' : 'Connect signer'}
+                </ActionButton>
+              )}
+
+              {shouldShowShare && onShare && (
+                <ActionButton variant="secondary" disabled={shareBusy} aria-busy={shareBusy} onClick={invokeShare} className="min-h-12 w-full px-4">
+                  {shareBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+                  Share private link
+                </ActionButton>
+              )}
+            </div>
+
+            {walletAddress && !walletCanSign && !walletAlreadySigned && <div className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">This wallet is not an authorized signer for this Proposal. Choose another signer wallet, ask a saved Contact, or share the private link.</div>}
+            {walletError && <div className="mt-3 flex gap-2 text-sm text-red-600 dark:text-red-400"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{walletError}</div>}
+            {shareError && <div className="mt-3 flex gap-2 text-sm text-red-600 dark:text-red-400"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{shareError}</div>}
+          </div>
         </div>
       )}
 
@@ -502,7 +548,7 @@ export default function SigningGuidance({
                   <div className="mst-signer-ledger">
                     <div className="mst-signer-ledger__header">
                       <div className="min-w-0">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500 dark:text-neutral-400">Signing progress</div>
+                        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500 dark:text-neutral-400">Signing progress</div>
                         {accountDisplay && <div className="mt-0.5 truncate text-xs font-semibold text-neutral-700 dark:text-neutral-200">{accountDisplay}</div>}
                       </div>
                       <span className="font-mono text-xs font-semibold tabular-nums text-neutral-600 dark:text-neutral-300">{matchedSignerKeys.length} / {policy.exactNOfM.required} required</span>
@@ -520,7 +566,7 @@ export default function SigningGuidance({
                               <AddressIdentity address={key} subjectType="signer" />
                               {!signed && !currentSigner && signerContactControl(key)}
                             </div>
-                            <span className={`shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] ${signed ? 'text-emerald-700 dark:text-emerald-300' : currentSigner ? 'text-amber-700 dark:text-amber-300' : 'text-neutral-400'}`}>{signed ? 'Signed' : currentSigner ? 'You can sign' : 'Can sign'}</span>
+                            <span className={`shrink-0 text-xs font-semibold ${signed ? 'text-emerald-700 dark:text-emerald-300' : currentSigner ? 'text-amber-700 dark:text-amber-300' : 'text-neutral-400'}`}>{signed ? 'Signed' : currentSigner ? 'You can sign' : 'Can sign'}</span>
                           </div>
                         );
                       })}
@@ -594,49 +640,6 @@ export default function SigningGuidance({
               {signerContactControl(signer.signerKey)}
             </div>
           ))}
-        </div>
-      )}
-
-      {!authorizationComplete && !hasAuthorizationError && !readOnlyProposer && (
-        <div className="mst-signing-action-strip mt-5">
-          <div className="text-sm">
-            <div className="font-semibold">Sign proposal</div>
-            <div className="mt-2">
-              {walletAddress
-                ? <AddressIdentity address={walletAddress} subjectType="signer" />
-                : <div className="text-neutral-500 dark:text-neutral-400">No signer connected.</div>}
-            </div>
-
-            <div className={`mst-signing-action-grid mt-4 ${shouldShowShare && onShare ? 'mst-signing-action-grid--split' : ''}`}>
-              {walletAddress ? (
-                walletCanSign || walletAlreadySigned ? (
-                  <ActionButton variant={walletAlreadySigned ? 'secondary' : 'primary'} disabled={!walletCanSign || walletBusy} aria-busy={walletBusy} onClick={onSignWithWallet} className="min-h-12 w-full px-4">
-                    {walletAlreadySigned ? <CheckCircle2 className="h-4 w-4" /> : <WalletCards className="h-4 w-4" />}{walletBusy ? 'Signing…' : walletAlreadySigned ? 'Signed' : 'Sign'}
-                  </ActionButton>
-                ) : (
-                  <ActionButton variant="secondary" disabled={walletBusy} aria-busy={walletBusy} onClick={onConnectWallet} className="min-h-12 w-full px-4">
-                    <WalletCards className="h-4 w-4" />{walletBusy ? 'Opening wallets…' : 'Choose an authorized signer'}
-                  </ActionButton>
-                )
-              ) : (
-                <ActionButton disabled={walletBusy} aria-busy={walletBusy} onClick={onConnectWallet} className="min-h-12 w-full px-4">
-                  <WalletCards className="h-4 w-4" />{walletBusy ? 'Opening wallets…' : 'Connect signer'}
-                </ActionButton>
-              )}
-
-              {shouldShowShare && onShare && (
-                <ActionButton variant="secondary" disabled={shareBusy} aria-busy={shareBusy} onClick={invokeShare} className="min-h-12 w-full px-4">
-                  {shareBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
-                  Share private link
-                </ActionButton>
-              )}
-            </div>
-
-            {walletAddress && walletAlreadySigned && <div className="mt-3 text-sm text-emerald-700 dark:text-emerald-300">{signedStateCopy}</div>}
-            {walletAddress && !walletCanSign && !walletAlreadySigned && <div className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">This wallet is not an authorized signer for this Proposal. Choose another signer wallet, ask a saved Contact, or share the private link.</div>}
-            {walletError && <div className="mt-3 flex gap-2 text-sm text-red-600 dark:text-red-400"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{walletError}</div>}
-            {shareError && <div className="mt-3 flex gap-2 text-sm text-red-600 dark:text-red-400"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{shareError}</div>}
-          </div>
         </div>
       )}
 

@@ -11,6 +11,7 @@ import {
   type SignerPrincipalRef,
 } from '../../../packages/stellar-core/src/agentAccessTypes';
 import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
+import { isWalletUserRejected } from './stellar/walletKit';
 
 const ACCESS_OPTIONS: readonly { value: AgentAccessLevel; title: string; detail: string }[] = [
   {
@@ -30,6 +31,21 @@ const ACCESS_OPTIONS: readonly { value: AgentAccessLevel; title: string; detail:
   },
 ];
 
+interface AgentPairingPreview {
+  requestId: string;
+  userCode: string;
+  label: string;
+  access: AgentAccessLevel;
+  network: 'testnet';
+  expiresAt: string;
+  status: 'pending' | 'approved' | 'denied';
+}
+
+interface AgentPairingCreated extends AgentPairingPreview {
+  deviceCode: string;
+  verificationUri: string;
+}
+
 function shortAddress(value: string) {
   return value.length <= 22 ? value : `${value.slice(0, 10)}…${value.slice(-8)}`;
 }
@@ -40,6 +56,7 @@ export default function AgentAccessApp() {
     network,
     busy,
     connect,
+    approveAgentGrant,
     privateUnlocked,
     unlockedAddress,
     unlockedNetwork,
@@ -54,6 +71,10 @@ export default function AgentAccessApp() {
   const [error, setError] = useState('');
   const [pendingRevokeId, setPendingRevokeId] = useState('');
   const [showRevoked, setShowRevoked] = useState(false);
+  const incomingGrantId = new URLSearchParams(window.location.search).get('grant');
+  const [incomingGrant, setIncomingGrant] = useState<AgentPairingPreview | null>(null);
+  const [grantError, setGrantError] = useState('');
+  const [grantBusy, setGrantBusy] = useState(false);
   const privateReady = Boolean(
     privateUnlocked
     && address
@@ -76,6 +97,20 @@ export default function AgentAccessApp() {
     setShowRevoked(false);
     if (privateReady) void loadCredentials();
   }, [privateReady, address, network]);
+
+  useEffect(() => {
+    if (!incomingGrantId) return;
+    let cancelled = false;
+    fetch('/api/agent-grants?id=' + encodeURIComponent(incomingGrantId), { cache: 'no-store' })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'Unable to load this Agent request.');
+        return body as AgentPairingPreview;
+      })
+      .then((grant) => { if (!cancelled) setIncomingGrant(grant); })
+      .catch((cause) => { if (!cancelled) setGrantError(cause instanceof Error ? cause.message : 'Unable to load Agent request.'); });
+    return () => { cancelled = true; };
+  }, [incomingGrantId]);
 
   useEffect(() => {
     if (!copied) return;
@@ -112,24 +147,81 @@ export default function AgentAccessApp() {
     }
   }
 
+  async function grantApi(body: Record<string, unknown>) {
+    const headers = new Headers({ 'Content-Type': 'application/json' });
+    for (const [name, value] of Object.entries(privateSessionAddressHeaders(address))) headers.set(name, value);
+    const response = await fetch('/api/agent-grants', {
+      method: 'POST', cache: 'no-store', headers, body: JSON.stringify(body),
+    });
+    const result = await response.json() as Record<string, unknown>;
+    if (!response.ok) throw new Error(String(result.error || 'Agent pairing failed.'));
+    return result;
+  }
+
+  async function approvePairing(requestId: string) {
+    if (!address || network !== 'testnet' || !privateReady) {
+      throw new Error('Connect and confirm a Testnet signer wallet first.');
+    }
+    const response = await fetch('/api/agent-grants?id=' + encodeURIComponent(requestId) + '&challenge=1', {
+      cache: 'no-store', headers: privateSessionAddressHeaders(address),
+    });
+    const challenge = await response.json() as { message?: string; transaction?: string; signer?: string; error?: string };
+    if (!response.ok || !challenge.message || !challenge.transaction || challenge.signer !== address) {
+      throw new Error(challenge.error || 'Unable to prepare this wallet approval.');
+    }
+    const approval = await approveAgentGrant(challenge.message, challenge.transaction, network);
+    await grantApi({ action: 'approve', requestId, ...approval });
+  }
+
   async function createCredential() {
     setLoading(true);
     setError('');
     setNewSecret('');
     try {
-      const body = await api({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label, access }),
-      });
-      if (!body.apiKey) throw new Error('Agent credential secret was not returned.');
-      setNewSecret(body.apiKey);
+      if (network !== 'testnet' || !privateReady) throw new Error('Connect and confirm a Testnet signer wallet.');
+      // Manual mode uses the same single-use pairing and fresh signature as an external Agent.
+      const created = await grantApi({ action: 'request', label, access, network }) as unknown as AgentPairingCreated;
+      await approvePairing(created.requestId);
+      const exchanged = await grantApi({ action: 'poll', deviceCode: created.deviceCode });
+      if (exchanged.status !== 'approved' || typeof exchanged.apiKey !== 'string') {
+        throw new Error('The approved pairing did not return a credential.');
+      }
+      setNewSecret(exchanged.apiKey);
       setLabel('');
       await loadCredentials();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to create Agent credential.');
+      if (!isWalletUserRejected(cause)) setError(cause instanceof Error ? cause.message : 'Unable to create Agent credential.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function connectSigner() {
+    setGrantError('');
+    try {
+      const selected = await connect();
+      if (!selected) setGrantError('Wallet connection cancelled. Choose a wallet to continue this request.');
+    } catch (cause) {
+      setGrantError(cause instanceof Error ? cause.message : 'Wallet connection failed. Try again or choose another wallet.');
+    }
+  }
+
+  async function respondToIncomingGrant(action: 'approve' | 'deny') {
+    if (!incomingGrant) return;
+    setGrantBusy(true);
+    setGrantError('');
+    try {
+      if (network !== 'testnet' || !privateReady) throw new Error('Confirm a Testnet wallet first.');
+      if (action === 'approve') await approvePairing(incomingGrant.requestId);
+      else await grantApi({ action: 'deny', requestId: incomingGrant.requestId });
+      setIncomingGrant({ ...incomingGrant, status: action === 'approve' ? 'approved' : 'denied' });
+      if (action === 'approve') await loadCredentials();
+    } catch (cause) {
+      setGrantError(isWalletUserRejected(cause)
+        ? 'Wallet approval cancelled. You can retry this request before it expires.'
+        : cause instanceof Error ? cause.message : 'Unable to respond to Agent request.');
+    } finally {
+      setGrantBusy(false);
     }
   }
 
@@ -163,15 +255,44 @@ export default function AgentAccessApp() {
         <div className="mx-auto max-w-6xl">
           <PageHeader
             title="Agent access"
-            description="Give each agent its own credential and permission. Your wallet remains the signer."
+            description="Approve each agent with your wallet. Review, revoke, or connect agent credentials here."
           />
+
+          {incomingGrantId && (
+            <section aria-label="Agent authorization request" className="mst-agent-section mt-6">
+              <h2 className="text-xl font-bold">An agent is requesting access</h2>
+              {grantError && <p role="alert" className="mt-3 text-sm text-[var(--color-danger)]">{grantError}</p>}
+              {incomingGrant && (
+                <>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div><div className="text-xs font-semibold text-[var(--color-muted)]">Agent</div><div className="mt-1 text-lg font-semibold break-words">{incomingGrant.label}</div></div>
+                    <div><div className="text-xs font-semibold text-[var(--color-muted)]">Permission</div><div className="mt-1 text-lg font-semibold capitalize">{incomingGrant.access}</div></div>
+                    <div><div className="text-xs font-semibold text-[var(--color-muted)]">Network</div><div className="mt-1 font-semibold">Stellar Testnet</div></div>
+                    <div><div className="text-xs font-semibold text-[var(--color-muted)]">Verification code</div><div className="mt-1 font-mono text-lg font-semibold tracking-wide">{incomingGrant.userCode}</div></div>
+                  </div>
+                  <p className="mt-4 text-sm text-[var(--color-ink-2)]">Compare this code and permission with the agent's request. Approval creates a reusable credential for this signer. The agent receives the credential directly; no key is shown here.</p>
+                  {incomingGrant.status === 'pending' && privateReady && (
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <button type="button" disabled={grantBusy} onClick={() => void respondToIncomingGrant('approve')} className="mst-action-primary disabled:opacity-40">{grantBusy ? 'Waiting for wallet…' : 'Approve in wallet'}</button>
+                      <button type="button" disabled={grantBusy} onClick={() => void respondToIncomingGrant('deny')} className="mst-action-secondary disabled:opacity-40">Deny</button>
+                    </div>
+                  )}
+                  {incomingGrant.status === 'pending' && <p role="status" className="mt-4 text-sm font-semibold">{!address ? 'Connect your Testnet wallet below.' : !privateReady ? 'Wallet selected. Confirm your identity below.' : grantBusy ? 'Waiting for your wallet approval…' : 'Wallet confirmed. Review and approve this request.'}</p>}
+                  {incomingGrant.status === 'pending' && <p className="mt-2 text-sm text-[var(--color-muted)]">Using a CLI or another signing tool? <a className="underline" href="https://docs.multisig.tools/stellar/developers/agent-quickstart#approve-with-an-independent-signing-tool" target="_blank" rel="noreferrer">Approve without a browser wallet</a>.</p>}
+                  {incomingGrant.status === 'approved' && <p role="status" className="mt-4 text-sm font-semibold text-[var(--color-success)]">Approved. The agent may now complete pairing.</p>}
+                  {incomingGrant.status === 'denied' && <p role="status" className="mt-4 text-sm font-semibold">Access denied.</p>}
+                </>
+              )}
+            </section>
+          )}
 
           {!address && (
             <section className="mx-auto max-w-xl py-14 sm:py-20">
               <KeyRound className="h-8 w-8 text-neutral-400" />
               <h2 className="mt-5 text-3xl font-bold">Connect the signer</h2>
               <p className="mt-2 text-base leading-7 text-neutral-600 dark:text-neutral-300">Agent credentials belong to a signer identity, not to a Treasury.</p>
-              <button type="button" disabled={busy} onClick={() => void connect()} className="mst-action-primary mt-6 disabled:opacity-50">{busy ? 'Opening wallets…' : 'Connect wallet'}</button>
+              {!incomingGrantId && grantError && <p role="alert" className="mt-4 text-sm text-[var(--color-danger)]">{grantError}</p>}
+              <button type="button" disabled={busy} onClick={() => void connectSigner()} className="mst-action-primary mt-6 disabled:opacity-50">{busy ? 'Opening wallets…' : 'Connect wallet'}</button>
             </section>
           )}
 
@@ -225,9 +346,9 @@ export default function AgentAccessApp() {
                 ))}</div>}
               </section>
 
-              <section className="mst-agent-section">
-                <h2 className="text-xl font-bold">{activeCount > 0 ? 'Connect another agent' : 'Connect an agent'}</h2>
-                <p className="mt-1 text-sm leading-6 text-neutral-500 dark:text-neutral-400">Access levels are cumulative: Write includes Read; Sign includes Write. Use a separate credential for each agent so Activity can retain the actual actor.</p>
+              {!incomingGrantId && <section className="mst-agent-section">
+                <h2 className="text-xl font-bold">{activeCount > 0 ? 'Create another manual credential' : 'Create a manual credential'}</h2>
+                <p className="mt-1 text-sm leading-6 text-neutral-500 dark:text-neutral-400">For a remote agent, ask it to start a pairing request and open the link it gives you. For manual credentials, choose the minimum permission and approve once more in your wallet. Write includes Read; Sign includes Write.</p>
 
                 <div className="mst-agent-access-grid mt-5">
                   {ACCESS_OPTIONS.map((option) => (
@@ -242,7 +363,7 @@ export default function AgentAccessApp() {
                   <label htmlFor="agent-name">Agent name</label>
                   <div className="mst-agent-create-form__actions">
                     <input id="agent-name" value={label} onChange={(event) => setLabel(event.target.value)} maxLength={80} placeholder="e.g. My ChatGPT" className="mst-agent-control min-w-0 flex-1" />
-                    <button type="button" disabled={loading || !label.trim() || activeCount >= MAX_ACTIVE_SIGNER_AGENT_CREDENTIALS} onClick={() => void createCredential()} className="mst-action-primary disabled:opacity-40">Create credential</button>
+                    <button type="button" disabled={loading || network !== 'testnet' || !label.trim() || activeCount >= MAX_ACTIVE_SIGNER_AGENT_CREDENTIALS} onClick={() => void createCredential()} className="mst-action-primary disabled:opacity-40">{loading ? 'Waiting for wallet…' : 'Approve and create'}</button>
                   </div>
                 </div>
 
@@ -253,7 +374,7 @@ export default function AgentAccessApp() {
                   </div>
                 )}
 
-              </section>
+              </section>}
             </div>
           )}
         </div>

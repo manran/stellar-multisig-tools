@@ -14,6 +14,8 @@ function eventCopy(event: SorobanIntentEvidenceEvent, currentAddress: string) {
     };
     case 'authorization_plan_revised': return { title: 'Authorization refreshed', tone: 'neutral' as const };
     case 'execution_prepared': return { title: 'Execution prepared', tone: 'neutral' as const };
+    case 'execution_not_included': return { title: 'Expired without execution', tone: 'neutral' as const };
+    case 'intent_cancelled': return { title: 'Intent cancelled', tone: 'neutral' as const };
     case 'execution_confirmed': return {
       title: event.ledger ? `Confirmed on Stellar · Ledger ${event.ledger.toLocaleString()}` : 'Confirmed on Stellar',
       tone: 'positive' as const,

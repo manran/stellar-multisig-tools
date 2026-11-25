@@ -4,7 +4,7 @@ import type {
 } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 
 export function intentViewerActionNeedsAction(action: SorobanIntentViewerAction): boolean {
-  return action === 'sign' || action === 'route_execution' || action === 'execution_failed' || action === 'attention';
+  return action === 'sign' || action === 'route_execution' || action === 'execution_failed' || action === 'reconcile_execution' || action === 'attention';
 }
 
 export function intentViewerActionPresentation(action: SorobanIntentViewerAction): {
@@ -35,6 +35,14 @@ export function intentViewerActionPresentation(action: SorobanIntentViewerAction
       detail: 'The owning external service controls final execution for this Intent.',
       cta: 'View status',
       tone: 'neutral',
+    };
+  }
+  if (action === 'reconcile_execution') {
+    return {
+      label: 'Execution result unknown',
+      detail: 'Check the released transaction on Stellar before preparing another one.',
+      cta: 'Check result',
+      tone: 'warning',
     };
   }
   if (action === 'execution_failed') {

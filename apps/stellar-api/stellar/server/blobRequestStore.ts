@@ -1,5 +1,6 @@
 import { BlobError, get, list, put } from './privateObjectStorage.js';
 import { AccountNotFoundError, isValidStellarAccountId, loadAccount } from '../../../../packages/stellar-core/src/horizon.js';
+import type { ClassicTerminalExecutionEvidence } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { ActivityEvent, ActivityFactEvent } from '../../../../packages/stellar-core/src/activityTypes.js';
 import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
 import type { StellarAccountSnapshot, StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
@@ -530,6 +531,28 @@ export const blobSigningRequestStore: SigningRequestStore = {
       occurredAt: submission.submittedAt,
       ledger: submission.ledger,
     });
+  },
+
+  async getExecutionEvidence(id) {
+    const prefix = `requests/${id}/execution-evidence/`;
+    // Store independent immutable observations, not a mutable outcome that
+    // concurrent writers could downgrade.
+    return await readJson<ClassicTerminalExecutionEvidence>(prefix + 'successful.json')
+      ?? await readJson<ClassicTerminalExecutionEvidence>(prefix + 'failed.json')
+      ?? await readJson<ClassicTerminalExecutionEvidence>(prefix + 'not_included.json');
+  },
+
+  async putExecutionEvidence(id, evidence) {
+    const path = `requests/${id}/execution-evidence/${evidence.outcome}.json`;
+    if (await readJson(path)) return;
+    try {
+      await withBlobStorage(() => put(path, JSON.stringify(evidence), {
+        access: 'private', addRandomSuffix: false, allowOverwrite: false,
+        contentType: 'application/json', cacheControlMaxAge: 60,
+      }));
+    } catch (cause) {
+      if (!await readJson(path)) throw cause;
+    }
   },
 
   getRequestParticipant(id, address) {

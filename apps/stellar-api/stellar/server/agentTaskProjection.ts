@@ -5,6 +5,7 @@ import type {
 } from '../../../../packages/stellar-core/src/agentTaskTypes.js';
 import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
+import { successfulSorobanExecution, unresolvedSorobanPreparations } from './sorobanIntentStore.js';
 import type {
   StoredSorobanIntent,
   StoredSorobanIntentExecutionObservation,
@@ -12,6 +13,12 @@ import type {
 } from './sorobanIntentStore.js';
 
 const ACCESS_RANK: Record<AgentAccessLevel, number> = { read: 1, write: 2, sign: 3 };
+const TASK_OPERATIONS: Record<AgentTaskAction['code'], string> = {
+  contribute_signature: 'proposal.contribute', decline: 'proposal.decline',
+  contribute_authorization: 'contract.intent.contribute',
+  prepare_execution: 'contract.intent.execution.prepare', refresh_execution: 'contract.intent.execution.prepare',
+  reconcile_execution: 'contract.intent.execution.reconcile', replan: 'contract.intent.replan', cancel: 'contract.intent.cancel',
+};
 
 function action(
   code: AgentTaskAction['code'],
@@ -20,6 +27,9 @@ function action(
 ): AgentTaskAction {
   return {
     code,
+    operationId: TASK_OPERATIONS[code],
+    ...(code === 'decline' ? { bodyDefaults: { decision: 'decline' } }
+      : code.startsWith('contribute_') ? {} : { bodyDefaults: { action: code } }),
     requiredAccess,
     available: ACCESS_RANK[credentialAccess] >= ACCESS_RANK[requiredAccess],
   };
@@ -38,16 +48,18 @@ export function projectClassicAgentTask({
 }): AgentTaskProjection {
   let state: AgentTaskProjection['state'];
   let nextActions: AgentTaskAction[] = [];
+  const signatureRequired = request.status === 'awaiting_signatures' && !hasSigned && !declined;
 
   if (request.status === 'submitted') state = 'completed';
+  else if (request.executionOutcome?.outcome === 'unknown' && ['expired', 'stale', 'blocked'].includes(request.status)) state = 'execution_unknown';
   else if (request.status === 'expired') state = 'expired';
   else if (request.status === 'stale' || request.status === 'blocked') state = 'failed';
-  else if (request.status === 'awaiting_signatures' && !hasSigned && !declined) {
-    state = 'action_required';
+  else if (signatureRequired) {
     nextActions = [
       action('contribute_signature', 'sign', credentialAccess),
       action('decline', 'write', credentialAccess),
     ];
+    state = nextActions.some((item) => item.available) ? 'action_required' : 'waiting';
   } else state = 'waiting';
 
   return {
@@ -56,13 +68,21 @@ export function projectClassicAgentTask({
     kind: 'classic_transaction',
     network: request.network,
     state,
+    signatureRequired,
     nextActions,
     ...(request.expiresAt ? { expiresAt: request.expiresAt } : {}),
+    ...(request.executionOutcome ? { executionOutcome: request.executionOutcome } : {}),
     ...(request.submission ? {
       result: {
         transactionHash: request.submission.transactionHash,
         ledger: request.submission.ledger,
         successful: true,
+      },
+    } : request.executionOutcome?.outcome === 'failed' ? {
+      result: {
+        transactionHash: request.executionOutcome.observation.transactionHash,
+        ledger: request.executionOutcome.observation.ledger,
+        successful: false,
       },
     } : {}),
   };
@@ -126,11 +146,9 @@ export function projectSorobanAgentTask({
   now?: Date;
 }): AgentTaskProjection {
   const latestPreparation = latestBy(currentPreparations(stored, preparations), (item) => item.preparedAt);
-  const latestObservation = latestBy(currentObservations(stored, observations), (item) => item.observedAt);
-  const preparationExpired = Boolean(
-    latestPreparation?.validUntil
-    && Date.parse(latestPreparation.validUntil) <= now.getTime(),
-  );
+  const latestObservation = successfulSorobanExecution(observations)
+    ?? latestBy(currentObservations(stored, observations), (item) => item.observedAt);
+  const unresolved = unresolvedSorobanPreparations(preparations, observations);
   const canCancel = !stored.integration && stored.creatorAddress === principalAddress;
   const needsPrincipalAuthorization = authorization.authorizers.some((authorizer) =>
     !authorizer.ready
@@ -140,11 +158,17 @@ export function projectSorobanAgentTask({
   let state: AgentTaskProjection['state'];
   let nextActions: AgentTaskAction[] = [];
   if (latestObservation?.successful) state = 'completed';
+  else if (unresolved.length) {
+    state = stored.cancellation ? 'cancelled' : 'action_required';
+    nextActions = [action('reconcile_execution', 'write', credentialAccess)];
+  }
   else if (stored.cancellation || authorization.status === 'cancelled') state = 'cancelled';
-  else if (latestObservation && !latestObservation.successful) state = 'failed';
   else if (authorization.status === 'expired') {
-    state = 'action_required';
-    nextActions = [action('replan', 'write', credentialAccess)];
+    state = 'expired';
+    if (!stored.integration) {
+      state = 'action_required';
+      nextActions = [action('replan', 'write', credentialAccess)];
+    }
   } else if (authorization.status === 'blocked') state = 'failed';
   else if (authorization.status === 'awaiting_authorization') {
     state = needsPrincipalAuthorization ? 'action_required' : 'waiting';
@@ -153,18 +177,29 @@ export function projectSorobanAgentTask({
     }
   } else if (stored.integration) {
     state = 'waiting';
-  } else if (!latestPreparation || preparationExpired) {
+  } else {
     state = 'action_required';
     nextActions = [action(
-      preparationExpired ? 'refresh_execution' : 'prepare_execution',
+      latestPreparation ? 'refresh_execution' : 'prepare_execution',
       'write',
       credentialAccess,
     )];
-  } else state = 'waiting';
+  }
 
   if (canCancel && state !== 'completed' && state !== 'cancelled') {
     nextActions = [...nextActions, action('cancel', 'write', credentialAccess)];
   }
+
+  if (!unresolved.length && (preparations.length || observations.length) && !latestObservation?.successful) {
+    nextActions = nextActions.map((item) => ['prepare_execution', 'refresh_execution', 'replan'].includes(item.code)
+      ? { ...item, reviewRequired: true as const } : item);
+  }
+
+  const signatureRequired = state === 'action_required' && !unresolved.length
+    && authorization.status === 'awaiting_authorization' && needsPrincipalAuthorization;
+  const hasAvailableAction = nextActions.some((item) => item.available);
+  if (state === 'action_required' && !hasAvailableAction) state = 'waiting';
+  else if (state === 'waiting' && hasAvailableAction) state = 'action_required';
 
   const expiry = earliestExpiry(authorization);
   return {
@@ -173,8 +208,10 @@ export function projectSorobanAgentTask({
     kind: 'soroban_contract',
     network: stored.network,
     state,
+    signatureRequired,
     nextActions,
-    ...(authorization.status === 'awaiting_authorization' ? { waitingFor: unresolvedAuthorizers(authorization) } : {}),
+    ...(state !== 'completed' && unresolved.length ? { unresolvedTransactionHashes: unresolved.map((item) => item.transactionHash) } : {}),
+    ...(state !== 'completed' && !unresolved.length && authorization.status === 'awaiting_authorization' ? { waitingFor: unresolvedAuthorizers(authorization) } : {}),
     ...(expiry !== undefined ? { expiresAtLedger: expiry } : {}),
     ...(latestObservation ? {
       result: {

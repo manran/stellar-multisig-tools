@@ -21,6 +21,6 @@ export function sorobanCoordinationPhase(
 ): CoordinationWorkflowPhase {
   if (status === 'awaiting_authorization') return 'authorization';
   if (status === 'authorization_ready') return 'ready';
-  if (status === 'cancelled') return 'done';
+  if (status === 'cancelled' || status === 'completed') return 'done';
   return 'attention';
 }

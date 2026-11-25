@@ -71,6 +71,7 @@ export function buildTransferTransaction({
   explicitOperationSources,
   memo,
   memoHashHex,
+  minTime,
 }: {
   rows: readonly ResolvedTransferRow[];
   transactionSource: string;
@@ -81,6 +82,7 @@ export function buildTransferTransaction({
   explicitOperationSources: boolean;
   memo?: string;
   memoHashHex?: string;
+  minTime?: number;
 }) {
   if (rows.length < 1 || rows.length > 100) throw new Error('A transfer transaction must contain between 1 and 100 operations.');
   const builder = new TransactionBuilder(new Account(transactionSource, transactionSourceSequence), {
@@ -98,5 +100,6 @@ export function buildTransferTransaction({
       amount: row.amount,
     }));
   }
+  if (minTime !== undefined) builder.setTimebounds(minTime, 0);
   return builder.setTimeout(lifetimeSeconds).build();
 }

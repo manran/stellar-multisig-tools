@@ -16,7 +16,7 @@ import {
   type SorobanIntentAuthorizationSnapshot,
 } from './sorobanIntentAuthorizationService.js';
 import type { MachineCallerProvenance } from '../../../../packages/stellar-core/src/coordinationActorTypes.js';
-import type { SorobanIntentStore, StoredSorobanIntentExecutionPreparation } from './sorobanIntentStore.js';
+import { assertCurrentSorobanPlan, assertSorobanIntentNotExecuted, assertSorobanExecutionResolved, type SorobanIntentStore, type StoredSorobanIntentExecutionPreparation } from './sorobanIntentStore.js';
 
 export class SorobanIntentExecutionServiceError extends Error {
   constructor(message: string, readonly status: number, readonly code: string, readonly details?: unknown) {
@@ -74,7 +74,11 @@ export async function prepareSorobanIntentExecution(
   if (!stored) {
     throw new SorobanIntentExecutionServiceError('Soroban Intent not found.', 404, 'intent_not_found');
   }
+  await assertSorobanExecutionResolved(store, id);
   const authorization = options.authorization ?? await getSorobanIntentAuthorization(store, id);
+  if (authorization.authorizationPlanDigest !== stored.authorizationPlan.authorizationPlanDigest) {
+    throw new SorobanIntentExecutionServiceError('Reload the current authorization plan before preparing execution.', 409, 'authorization_plan_changed');
+  }
   if (stored.cancellation || authorization.status === 'cancelled') {
     throw new SorobanIntentExecutionServiceError(
       'This Soroban Intent is cancelled and MultiSigTools will not prepare another execution package.',
@@ -180,6 +184,8 @@ export async function prepareSorobanIntentExecution(
       'intent_cancelled',
     );
   }
+  assertCurrentSorobanPlan(latest, stored);
+  await assertSorobanExecutionResolved(store, id);
   const preparedAt = (options.now ?? new Date()).toISOString();
   const result: SorobanIntentExecutionPreparation = {
     version: 1,
@@ -199,6 +205,10 @@ export async function prepareSorobanIntentExecution(
     preparedAt,
     xdr: enforced.assembledXdr,
   };
+  if (!result.validUntil || !Number.isFinite(Date.parse(result.validUntil)) || Number(prepared.timeBounds?.maxTime) <= 0
+    || !Number.isSafeInteger(result.latestLedger) || result.latestLedger <= 0) {
+    throw new SorobanIntentExecutionServiceError('Execution requires a finite validity window and a verified preparation ledger.', 503, 'intent_execution_unavailable');
+  }
   if (!store.putExecutionPreparation) {
     throw new SorobanIntentExecutionServiceError(
       'Soroban execution evidence storage is unavailable. The prepared transaction was not released.',
@@ -230,5 +240,7 @@ export async function prepareSorobanIntentExecution(
       'intent_cancelled',
     );
   }
+  assertCurrentSorobanPlan(afterWrite, stored);
+  await assertSorobanIntentNotExecuted(store, id);
   return result;
 }

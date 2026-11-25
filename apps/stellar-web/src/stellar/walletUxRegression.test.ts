@@ -44,8 +44,8 @@ test('top-level Sign in selects a wallet and verifies workspace identity in one 
   assert.match(walletContext, /const signIn = useCallback[\s\S]*if \(unlockedAddress && unlockedNetwork\) await lock\(\)[\s\S]*await connect\(\)[\s\S]*return unlock\(durationSeconds\)/);
   assert.match(walletContext, /if \(isWalletSelectionCancelled\(cause\)\) return ''/);
   assert.match(accountControl, /onClick=\{\(\) => void signIn\(\)\}/);
-  assert.match(accountControl, /'Sign in'/);
-  assert.match(accountControl, /Sign in to workspace/);
+  assert.match(accountControl, /'Connect wallet'/);
+  assert.match(accountControl, /Confirm wallet/);
 });
 
 
@@ -74,8 +74,8 @@ test('Ledger and Trezor are explicit signer transports inside the existing walle
   assert.match(walletKit, /ledgerInternals = ledger as unknown as/);
   assert.match(walletKit, /if \(transport\) await transport\.close\(\)/);
   assert.match(walletKit, /ledgerInternals\._transport = undefined/);
-  assert.match(walletKit, /hardware[\s\S]*\? kit\.getAddress\(\)[\s\S]*: kit\.selectedModule\.getAddress/);
-  assert.match(walletKit, /if \(isHardwareWalletModule\(kit\.selectedModule\)\) setKitNetworkContext\(kit, network\)/);
+  assert.match(walletKit, /const addressPromise = applicationNetwork\s*\? kit\.getAddress\(\)\s*: kit\.selectedModule\.getAddress/);
+  assert.match(walletKit, /if \(usesApplicationNetwork\(kit\.selectedModule\)\) setKitNetworkContext\(kit, network\)/);
   assert.match(walletKit, /WalletNetworkSource = 'wallet' \| 'application'/);
   assert.match(walletKit, /networkSource: 'application'/);
   assert.match(walletKit, /networkSource: 'wallet'/);
@@ -90,9 +90,9 @@ test('Ledger and Trezor are explicit signer transports inside the existing walle
   assert.match(walletContext, /isWalletMessageSigningUnsupported[\s\S]*signTransactionWithWallet/);
   assert.match(accountControl, /networkSource === 'application'/);
   assert.match(accountControl, /Mainnet context/);
-  assert.match(accountControl, /Hardware wallet network/);
-  assert.match(accountControl, /Selected hardware wallet/);
-  assert.match(accountControl, /stays selected after unplugging until you choose another wallet or sign out/);
+  assert.match(accountControl, /Signing network/);
+  assert.match(accountControl, /Selected wallet/);
+  assert.match(accountControl, /stays active until you choose another wallet or sign out/);
   assert.match(accountControl, /selectNetworkContext\(candidate\)/);
   assert.doesNotMatch(inbox, /<NetworkFallbackChoice/);
   assert.doesNotMatch(indexCss, /fonts\.googleapis\.com/);

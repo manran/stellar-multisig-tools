@@ -2,17 +2,19 @@ import { createHash } from 'node:crypto';
 import { isValidStellarAccountId } from '../../../../packages/stellar-core/src/horizon.js';
 import type { SorobanExecutorBinding, SorobanExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
-import { buildContractIntent } from './contractIntentService.js';
+import { buildContractIntent, contractIntentInputHash, normalizeContractIntentInput } from './contractIntentService.js';
 import type { ConfiguredIntegrationCredential } from './integrationCredentialService.js';
 import { integrationCallerForCredential } from './integrationCredentialService.js';
 import { BoxServiceError, normalizeExternalReference, normalizeIdempotencyKey } from './boxService.js';
 import { encodeSigningRequestId } from './requestLocator.js';
+import { integrationSorobanExecutionAvailable } from './sorobanIntentConfig.js';
 import { planSorobanIntentForStorage } from './sorobanIntentPlanningService.js';
 import { createStoredSorobanIntent } from './sorobanIntentService.js';
 import type { SorobanIntentStore, StoredSorobanIntent } from './sorobanIntentStore.js';
 
 interface IntegrationSorobanIntentOptions {
   planningSource: string;
+  managedExecutor?: string | null;
   now?: Date;
   contractDependencies?: Parameters<typeof buildContractIntent>[1];
   planningDependencies?: Parameters<typeof planSorobanIntentForStorage>[2];
@@ -134,15 +136,18 @@ function assertReplayMatches(
   credential: ConfiguredIntegrationCredential,
   input: { network: StellarNetwork; intentDigest: string; externalReference?: string; requestedExecutor?: string },
 ): void {
-  const storedRequestedExecutor = stored.executionPolicy?.executor?.source === 'intent'
-    ? stored.executionPolicy.executor.address
-    : undefined;
+  const binding = stored.executionPolicy?.executor;
+  const storedRequestedExecutor = binding?.source === 'intent' ? binding.address : undefined;
+  // A matching explicitly supplied contract-policy executor is equivalent to
+  // letting that immutable policy choose it. Late binding must not alter replay identity.
+  const requestedExecutor = binding?.source === 'contract_policy' && input.requestedExecutor === binding.address
+    ? undefined : input.requestedExecutor;
   if (
     stored.network !== input.network
     || stored.intent.intentDigest !== input.intentDigest
     || stored.integration?.serviceId !== credential.serviceId
     || stored.integration.correlationId !== input.externalReference
-    || storedRequestedExecutor !== input.requestedExecutor
+    || storedRequestedExecutor !== requestedExecutor
   ) {
     throw new BoxServiceError(
       'Idempotency key is already bound to a different Integration Intent.',
@@ -190,9 +195,12 @@ export async function resolveAndBindIntegrationSorobanExecutor(
     executionPolicy = { mode: 'external', executor };
   } else {
     if (!managedExecutor || !isValidStellarAccountId(managedExecutor)) {
+      if (stored.executionPolicy?.mode !== 'multisigtools' && credential.sorobanExecutionAccounts.length > 0) {
+        throw new BoxServiceError('Choose an allowed executor and provide it in the prepare_execution request.', 400, 'executor_required');
+      }
       throw new BoxServiceError(
         'No Service executor is bound and MultiSigTools managed execution is not configured for this network.',
-        503,
+        409,
         'managed_executor_not_configured',
       );
     }
@@ -243,29 +251,45 @@ export async function createIntegrationSorobanIntent(
   const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
   const externalReference = normalizeExternalReference(input.externalReference);
   const requestedExecutor = optionalExecutor(input.executor);
-  const built = await buildContractIntent({
-    network: input.network,
-    contractId: input.contractId,
-    method: input.method,
-    arguments: input.arguments,
-  }, options.contractDependencies);
-  assertContractAllowed(credential, built.contractId, built.method);
+  const normalized = normalizeContractIntentInput(input);
+  assertContractAllowed(credential, normalized.contractId, normalized.method);
 
   const id = options.intentIdFactory?.(credential.serviceId, idempotencyKey)
     ?? deterministicIntentId(credential.serviceId, idempotencyKey);
+  const hashForPolicy = (policy?: SorobanExecutionPolicy) => contractIntentInputHash(normalized, {
+    externalReference: externalReference ?? null,
+    executor: (policy?.executor?.source === 'contract_policy' && requestedExecutor === policy.executor.address
+      ? undefined : requestedExecutor) ?? null,
+  });
+  const assertInputIdentity = (value: StoredSorobanIntent) => {
+    if (value.network !== input.network || value.integration?.serviceId !== credential.serviceId
+      || value.creationInputHash !== hashForPolicy(value.executionPolicy)) {
+      throw new BoxServiceError('Idempotency key is already bound to a different Integration Intent.', 409, 'idempotency_conflict');
+    }
+  };
+  const existing = await store.getIntent(id);
+  if (existing?.creationInputHash) {
+    assertInputIdentity(existing);
+    return { replayed: true, intent: existing, ...(externalReference ? { externalReference } : {}) };
+  }
+  // Legacy Intents have only the typed digest. Preserve their original
+  // comparison rather than inventing the previously accepted JSON input.
+  const built = await buildContractIntent(normalized, options.contractDependencies);
   const replayInput = {
     network: input.network,
     intentDigest: built.intent.intentDigest,
     ...(externalReference ? { externalReference } : {}),
     ...(requestedExecutor ? { requestedExecutor } : {}),
   };
-  const existing = await store.getIntent(id);
   if (existing) {
     assertReplayMatches(existing, credential, replayInput);
     return { replayed: true, intent: existing, ...(externalReference ? { externalReference } : {}) };
   }
 
   const executionPolicy = integrationSorobanExecutionPolicyForCreation(credential, input.network, built.contractId, requestedExecutor);
+  if (!integrationSorobanExecutionAvailable(input.network, executionPolicy, credential.sorobanExecutionAccounts, options.managedExecutor)) {
+    throw new BoxServiceError('No available Soroban execution route. Configure an allowed executor before collecting authorization.', 409, 'managed_executor_not_configured');
+  }
   const planned = await planSorobanIntentForStorage(
     built.intent,
     options.planningSource,
@@ -284,6 +308,7 @@ export async function createIntegrationSorobanIntent(
       intent: built.intent,
       authorizationPlan: planned.authorizationPlan,
       creatorActor: integrationCallerForCredential(credential),
+      creationInputHash: hashForPolicy(executionPolicy),
       discoverySignerKeys: planned.discoverySignerKeys,
       integration: {
         version: 1,
@@ -302,7 +327,8 @@ export async function createIntegrationSorobanIntent(
     if (!durableWriteAttempted) throw cause;
     const recovered = await store.getIntent(id);
     if (!recovered) throw cause;
-    assertReplayMatches(recovered, credential, replayInput);
+    if (recovered.creationInputHash) assertInputIdentity(recovered);
+    else assertReplayMatches(recovered, credential, replayInput);
     return { replayed: true, intent: recovered, ...(externalReference ? { externalReference } : {}) };
   }
 }

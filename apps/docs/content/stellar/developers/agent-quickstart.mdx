@@ -1,0 +1,109 @@
+---
+title: Agent quickstart
+description: Discover MST, inspect available operations, and request the right Testnet authority.
+---
+
+Start with the public [MST Testnet](https://stellar-testnet.multisig.tools). Agents can discover API capabilities **without a wallet or secret**. They need explicit authorization before taking action on someone's behalf.
+
+## 1. Discover the service
+
+The site publishes HTML `rel="api-catalog"` / `rel="service-desc"` links and an RFC 9727 API Catalog. You can also access its `llms.txt` file directly.
+
+```bash
+curl -fsSL https://stellar-testnet.multisig.tools/llms.txt
+curl -fsSL https://stellar-testnet.multisig.tools/.well-known/api-catalog
+curl -fsSL https://api-testnet.multisig.tools/stellar/operations
+curl -fsSL https://api-testnet.multisig.tools/stellar/openapi.json
+```
+
+The Catalog links to the Operations Registry and OpenAPI. For an operation, fetch `schema.href` and resolve `schema.pointer` in that document. The logical operation defines its exact request body, authorization, successful result and retry rules. Do not select a shared HTTP request-body branch by guessing. For a task's next action, use its `operationId` and `bodyDefaults`.
+
+## 2. Verify network without credentials
+
+```bash
+curl -fsSL https://api-testnet.multisig.tools/stellar/runtime-config
+```
+
+Check `fixedNetwork` is `testnet`. **Stop if the network differs from the user's intended network.** Do not send credentials to a different origin.
+
+## 3. Choose who the Agent represents
+
+**Signer Agent (`msa_*`):** A human signer explicitly authorizes the Agent. A valid login session alone cannot mint a credential; each grant needs a fresh wallet signature bound to that Agent's name, scope, Testnet network and request ID. The Agent receives a one-time token when the user approves. The credential can be revoked independently and never contains a signing key.
+
+### Pair an Agent with a Testnet signer
+
+The Agent calls the public pairing endpoint without prior credentials:
+
+```bash
+curl -fsS https://api-testnet.multisig.tools/stellar/agent-grants \
+  -H 'Content-Type: application/json' \
+  -d '{"action":"request","label":"My Agent","access":"read","network":"testnet"}'
+```
+
+The response contains `verificationUri`, `userCode`, `deviceCode` and `intervalSeconds`. **Store `deviceCode` privately**: it is the secret needed to claim the credential. Send only the verification URL and display code to the human. Never add the device code to a URL, prompt log, or browser page.
+
+1. The human opens `verificationUri` at [Testnet Agent access](https://stellar-testnet.multisig.tools/agent-access).
+2. The human checks the **Agent**, **Permission**, **Testnet** and **Verification code** against the Agent's request.
+3. They connect and confirm their wallet, then select **Approve in wallet**. A fresh SEP-53 message or a non-submittable Stellar approval XDR explicitly binds the scope to this request. **Deny** ends the request without granting a credential.
+4. The Agent polls the endpoint with `{"action":"poll","deviceCode":"<private-device-code>"}` at the advised interval. `authorization_pending` means wait; `access_denied` means stop.
+5. When approved, one poll returns an `msa_*` credential **once**. Store it in the Agent's secret manager and use it as `Authorization: Bearer msa_...` for authorized operations.
+
+The request expires after **10 minutes**, and the device code is single-use. Each renewal or different scope requires another approval. The human can revoke access on [Agent access](https://stellar-testnet.multisig.tools/agent-access).
+
+If a poll response is lost, retry **the same deviceCode** at the advised interval. A successful exchange requires both `apiKey` and `credential`. If the retry returns `already_exchanged` (409), `exchange_outcome_unknown` (503), or `grant_expired` (410), no new secret will be issued. Pass only `details.credentialId` and the recovery instruction to the Human signer, who lists and revokes that credential before approving another pairing. A credential not yet visible in the list is not proof that the prior write failed: check again if its outcome is uncertain. Older grants may not have a reserved credential ID; the signer must identify any issued credential from its name and creation time. Never share the device code. Do not start another pairing automatically.
+
+### Approve with an independent signing tool
+
+Browser wallets are optional. A signer who controls a Stellar CLI, hardware wallet, or separate signing service can use the same two signed challenges. Do this on the **signer side**, not in an untrusted requesting Agent. Never share a private key, device code, or Human session token with the requesting Agent.
+
+Use the fixed Testnet API base above. After the Agent has sent the verification link and code, obtain its public request ID from the link. The signer checks the request preview and explicitly approves the exact name, permission and code.
+
+1. Request a session challenge: `GET /auth?account=SIGNER_G_ADDRESS&network=testnet&unlock_seconds=3600` (operation signer.auth.challenge).
+2. Inspect the returned network, signing_key, message and transaction. Verify the sequence-zero SEP-10 XDR, server signature, signer operation source, web_auth_domain and expiry against the Testnet workspace. Ask the signer to sign the exact challenge XDR with their independent tool. Preserve the server signature. Never broadcast a challenge.
+3. Exchange the signed challenge: `POST /auth` with `{"network":"testnet","unlock_seconds":3600,"transaction":"SIGNED_CHALLENGE_XDR"}` (signer.auth.exchange). Verify the returned address and network. Keep its short-lived token private on the signer side.
+4. With Authorization: Bearer HUMAN_SESSION_TOKEN and X-MultiSig-Session-Address: SIGNER_G_ADDRESS, `GET /agent-grants?id=REQUEST_ID&challenge=1` (agent.grant.challenge). Verify the signer, permission, verification code and human-readable message. Inspect the separate sequence-zero approval XDR, server signature and exact consent message commitment. Ask the signer to approve and sign this new challenge. This is not payment approval.
+5. `POST /agent-grants` with the same two headers and `{"action":"approve","requestId":"REQUEST_ID","mode":"transaction","transaction":"SIGNED_APPROVAL_XDR"}`. A successful response is `{"status":"approved"}`; the Agent itself exchanges its private device code for the msa credential. A session alone cannot approve.
+6. To revoke, the signer uses the same session headers with `DELETE /agent-access` and `{"credentialId":"CREDENTIAL_ID"}`. `GET /agent-access` lists credential IDs and scopes, not secrets.
+
+For message-signing tools that implement SEP-53, the auth exchange also accepts mode=sep53, challenge (the original XDR) and signature (base64); the grant approval accepts mode=sep53 and a fresh base64 signature of the returned approval message. Do not use a generic raw message signature or a private key as the proof.
+
+The Stellar transaction signature for a subsequent payment is separate again: inspect the exact Request baseXdr, obtain the signer's approval of that payment, sign it locally, and send signedXdr through proposal.contribute. The msa credential never signs for you.
+
+If browser wallet connection fails, return to the same verification link and choose another wallet, or use this independent signing flow while the request is pending. If an unexchanged request expires, ask the Agent to begin a new pairing. If credential delivery was uncertain, first follow the revocation recovery above.
+
+**Manual alternative:** A signer can create a named credential directly in the Agent access UI. This uses the same wallet-confirmed grant and shows the secret once for copying into a secure store.
+
+**Service Integration (`msi_*`):** An application or automation service creates a Testnet-only Integration Profile using [the guided setup](https://stellar-testnet.multisig.tools/developers/integrations/new) or the [Testnet API quickstart](/stellar/developers/testnet-quickstart). The service owns business orchestration; the Treasury's authorized signers retain signer authority. An `msi_*` key does **not** act as a signer. Testnet self-service issues this credential directly after the Agent has the user's approval to create the profile. Mainnet provisioning is separate. Inspect the runtime execution capability before choosing semantic payment creation or prepared XDR.
+
+**Treasury Audit (`mta_*`):** Issued from Treasury settings for read-only Treasury Activity. It does not allow proposals, signing, or submission.
+
+Never paste credentials into chat, URL parameters, public logs, or frontend scripts. Store secrets in the Agent's secure credential store.
+
+## 4. Plan the smallest authorized task
+
+1. Ask the human what task to perform and which Testnet Treasury or signer it concerns.
+2. Inspect the Registry's `access` and `effect` fields and read the relevant OpenAPI operation schema.
+3. Use public read-only operations first. Before an operation marked `private-state`, `coordination-state`, or `network-submit`, obtain explicit approval for that action.
+4. Authenticate with only the required credential. A Human signer must review and authorize the exact transaction with their wallet or separately controlled signing tool.
+5. Inspect canonical Request or Intent status after acting. Treat webhook events as notifications, not canonical transaction state.
+
+For a first end-to-end **Service Integration** payment, follow [Testnet quickstart](/stellar/developers/testnet-quickstart): create a Testnet Integration Profile, create a scoped Request, give signers the `/s#<request-id>` review link, then retrieve canonical status. Use actual funded Testnet addresses rather than the example fixtures.
+
+## 5. Coordinate two Agents
+
+The Service Agent creates the Request using `msi_*`. The Signer Agent uses `msa_*` with the `signer.inbox.list` operation to discover pending Classic and Soroban tasks without receiving a private link. A task with `kind: classic_transaction` identifies a Request; inspect its exact XDR with `GET /request`. A task with `kind: soroban_contract` identifies an Intent; inspect its authorization plan with `GET /intent`. Obtain the signer's authorization before contributing. The Service Agent reads its own Request to track quorum and the final ledger result. MST-managed Integration Requests may submit automatically at quorum; direct submission by a signer Agent is forbidden.
+
+### Monitor a signer's Inbox with Read access
+
+A personal Agent can request a Read credential and check `GET /inbox` without permission to sign, decline, or change proposals. `signature_required_count` counts pending signatures on the returned page for the represented signer. Follow `nextCursor` using `GET /inbox?cursor=...` until `complete` is true. The default combined page contains up to 50 Requests and Intents; `limit` accepts 1–100. All counts apply to the current page. Use each task's `signatureRequired` flag to identify the Requests and Intents to bring to that person's attention. `action_count` counts tasks with an action available to the current Agent credential; for Read it is zero, even when the signer has pending work. `state: waiting` does not mean that no signature is needed.
+
+Notify the human through the Agent's own notification channel, with the pending Request summary and a link to the signer's [Testnet Inbox](https://stellar-testnet.multisig.tools/inbox). Do not expose credentials or private transaction details outside that person's authorized channel. Deduplicate notifications by task kind and ID. Stop reminding when a fresh task explicitly reports `signatureRequired=false`. Before clearing a reminder for an absent task, finish a complete enumeration and check the known task directly if its outcome remains uncertain. Each page revalidates live signer access; this is not an atomic ledger snapshot. An incomplete page or failed scan is not proof that work is cleared. Check on demand or at the user's chosen interval; this is not a webhook subscription. The human reviews and signs with their own wallet. Read access is sufficient for this monitoring task; do not request Sign access just to send reminders.
+
+## Boundaries
+
+- Discovery is public; acquiring signer authority is not.
+- Agent `Sign` permission cannot generate Stellar private-key signatures on its own.
+- Signing and submitting remain separate operations; no automatic Mainnet transition exists.
+- The discovery catalog is not a remote MCP server or A2A Agent endpoint. WebMCP is experimental and is not required for this workflow.
+
+If discovery does not supply the information needed for an action, stop and consult the linked documentation or ask the user for permission and context. Do not guess API payloads.

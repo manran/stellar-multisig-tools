@@ -22,8 +22,24 @@ test('Human Web delegates API traffic to the protocol gateway before SPA fallbac
 test('Human Web does not own public Docs or hijack developer product routes', () => {
   assert.equal(config.routes.some((route) => route.src === '/docs' || route.src === '/docs/(.*)'), false);
   assert.equal(config.routes.some((route) => route.src === '/developers' || route.src === '/developers/(.*)'), false);
-  assert.doesNotMatch(html, /service-desc/);
-  assert.doesNotMatch(html, /openapi\.json/);
+  assert.match(html, /rel="service-desc" href="\/api\/openapi\.json"/);
+  assert.match(html, /rel="api-catalog" href="\/\.well-known\/api-catalog"/);
+  assert.match(html, /rel="describedby" href="\/llms\.txt"/);
+  assert.match(html, /rel="service-doc" href="https:\/\/docs\.multisig\.tools\/stellar\/developers\/agent-quickstart"/);
+});
+
+test('RFC 9727 API Catalog has a real static route, proper media type, and HEAD Link header', () => {
+  const catalogRoute = config.routes.find((route) => route.src.includes('api-catalog'));
+  const homeRoute = config.routes.find((route) => route.src === '/');
+  assert.equal(catalogRoute?.continue, true);
+  assert.match(catalogRoute.headers['Content-Type'], /^application\/linkset\+json/);
+  assert.match(catalogRoute.headers.Link, /rel="api-catalog"/);
+  assert.match(homeRoute?.headers?.Link, /rel="api-catalog"/);
+  assert.match(homeRoute?.headers?.Link, /rel="service-desc"/);
+  assert.match(homeRoute?.headers?.Link, /rel="service-doc"/);
+  const filesystemIndex = config.routes.findIndex((route) => route.handle === 'filesystem');
+  assert.ok(config.routes.indexOf(catalogRoute) < filesystemIndex);
+  assert.ok(config.routes.indexOf(homeRoute) < filesystemIndex);
 });
 
 test('Testnet indexing and baseline browser security headers remain deployment routing concerns', () => {

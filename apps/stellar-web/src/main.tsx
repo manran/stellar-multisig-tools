@@ -22,6 +22,7 @@ import SorobanIntentApp from './SorobanIntentApp';
 import StellarHomeApp from './StellarHomeApp';
 import { StellarWalletProvider } from './StellarWalletContext';
 import TreasuryApp from './TreasuryApp';
+import TemplatesApp from './TemplatesApp';
 import TreasuryBoxSettingsApp from './TreasuryBoxSettingsApp';
 import TransactionReceiptApp from './TransactionReceiptApp';
 import { canonicalStellarContentLocationForLocation, canonicalStellarRuntimeLocationForLocation, navigateWorkspace, WORKSPACE_NAVIGATION_EVENT } from './workspaceNavigation';
@@ -45,7 +46,8 @@ function titleFor(kind: StellarWorkspaceRouteKind) {
     case 'home': return 'MultiSig Tools for Stellar | Shared authorization without shared custody';
     case 'demo': return 'Interactive Demo | MultiSig Tools';
     case 'inbox': return 'Inbox | MultiSig Tools';
-    case 'new': return 'New transaction | MultiSig Tools';
+    case 'new': return 'New proposal | MultiSig Tools';
+    case 'templates': return 'Templates | MultiSig Tools';
     case 'contracts': return 'Contracts | MultiSig Tools';
     case 'contract-workspace': return 'Contract Workspace | MultiSig Tools';
     case 'account-signing': return 'Set up multisig | MultiSig Tools';
@@ -137,6 +139,7 @@ function RoutedApp() {
     case 'home': Component = StellarHomeApp; break;
     case 'inbox': Component = InboxEntryApp; break;
     case 'new': Component = NewTransactionApp; break;
+    case 'templates': Component = TemplatesApp; break;
     case 'contracts': Component = ContractsApp; break;
     case 'contract-workspace': Component = ContractWorkspaceApp; break;
     case 'account-signing': Component = AccountSigningEntryApp; break;

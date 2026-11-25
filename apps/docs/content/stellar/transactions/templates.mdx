@@ -1,0 +1,47 @@
+---
+title: Templates
+description: Reuse payments and let another Stellar wallet request a payment on Testnet.
+---
+
+A Template saves a payment's source Treasury, recipients, assets, and signing window. You choose the **amount and memo** each time you use it.
+
+**Testnet:** This guide describes the current [MST Testnet Templates page](https://stellar-testnet.multisig.tools/templates). Mainnet may have a different feature set.
+
+## Save a payment Template
+
+1. Open [MST Testnet](https://stellar-testnet.multisig.tools) and **Connect wallet**.
+2. Open **New proposal → Create payment**. Enter the Treasury, recipient, asset, and signing window.
+3. In **Reuse this setup**, select **Save as template**. Enter a name and select **Save template**.
+4. Open **Templates** from workspace navigation (under **More** on mobile). Select **Confirm wallet** if asked.
+
+Saving a Template does not create, sign, or submit a payment.
+
+## Use a saved Template
+
+1. In **New proposal**, find **Your templates**, or open **Templates** from the navigation.
+2. Choose **Use template**. The saved Treasury, recipient, asset, and signing window are reused.
+3. Enter the amount and memo for this payment, review the exact transaction, and continue to the Proposal.
+4. Treasury signers review and sign. When the required authorization is complete, an authorized participant submits the transaction.
+
+## Let another wallet request payments
+
+A Template owner who is still an authorized Treasury signer can allow another Stellar **G-address** to initiate payment requests.
+
+1. Open **Templates** and **Confirm wallet**.
+2. Find the single-recipient Payment Template you own.
+3. Expand **Allow another wallet to request payments**.
+4. Enter the other wallet's **G address** and select **Allow**.
+
+The invited wallet can connect to Testnet, select **Request payment**, enter an amount and optional memo, then select **Review request → Create signing request**. It can follow up with signers and track the result in Inbox.
+
+**Permission to request is not permission to sign or submit.** The source Treasury, recipient, and asset remain fixed by the Template. Only wallets authorized by the Treasury's current on-chain signing policy can sign.
+
+## Revoke access
+
+On the same Template, choose **Revoke** next to a wallet, then **Confirm revoke**. **Cancel** keeps its permission.
+
+Revocation prevents new requests by that wallet. Proposals already created remain available with their existing transaction history.
+
+## If a Template is missing
+
+Check that you are on **Testnet**, have connected the expected wallet, and selected **Confirm wallet**. Templates and their permissions belong to the verified wallet and the selected network.

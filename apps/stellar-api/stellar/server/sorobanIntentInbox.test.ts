@@ -4,15 +4,18 @@ import {
   Address,
   Contract,
   Keypair,
+  hash,
   nativeToScVal,
   xdr,
 } from '@stellar/stellar-sdk/base';
-import { initializeSorobanGAccountAuthorizationWindow } from '../../../../packages/stellar-core/src/sorobanAuthorization.js';
-import { createSorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import { initializeSorobanGAccountAuthorizationWindow, sorobanAuthorizationEntryPreimageXdr } from '../../../../packages/stellar-core/src/sorobanAuthorization.js';
+import { contributeSorobanIntentAuthorization } from './sorobanIntentAuthorizationService.js';
+import { createSorobanAuthorizationPlan, authorizationEntriesFromPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
 import { emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import { createSorobanIntent, materializeSorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
 import { createStoredSorobanIntent } from './sorobanIntentService.js';
 import {
+  listAgentSorobanInbox,
   listSorobanIntentInbox,
   projectSorobanIntentViewerAction,
 } from './sorobanIntentInbox.js';
@@ -149,6 +152,73 @@ test('Intent Inbox treats discovery as candidates and revalidates live signer au
   assert.equal(creatorInbox[0]?.viewerAction, 'waiting');
 });
 
+test('dependency failure does not turn a pending Soroban Inbox into an empty success', async () => {
+  const f = await fixture();
+  await assert.rejects(() => listAgentSorobanInbox(f.store, f.signer.publicKey(), 'testnet', 'read', {
+    ...f.options, networkParametersLoader: async () => { throw new Error('RPC unavailable'); },
+  }), /RPC unavailable/);
+  await assert.rejects(() => listSorobanIntentInbox(f.store, f.signer.publicKey(), 'testnet', {
+    ...f.options, accountLoader: async () => { throw new Error('Horizon unavailable'); },
+  }), /Horizon unavailable/);
+});
+
+test('Read and Sign Agents discover the same current Soroban authorization, with different actions', async () => {
+  const f = await fixture();
+  const address = f.signer.publicKey();
+  const read = await listAgentSorobanInbox(f.store, address, 'testnet', 'read', f.options);
+  const sign = await listAgentSorobanInbox(f.store, address, 'testnet', 'sign', f.options);
+  assert.equal(read.intents.length, 1);
+  assert.equal(read.tasks.length, 1);
+  assert.equal(read.tasks[0].id, read.intents[0].id);
+  assert.equal(read.tasks[0].kind, 'soroban_contract');
+  assert.equal(read.tasks[0].signatureRequired, true);
+  assert.equal(read.tasks[0].state, 'waiting');
+  assert.equal(read.tasks[0].nextActions[0].available, false);
+  assert.equal(sign.tasks[0].state, 'action_required');
+  assert.equal(sign.tasks[0].nextActions[0].code, 'contribute_authorization');
+  assert.equal(sign.tasks[0].nextActions[0].available, true);
+  assert.deepEqual(await listAgentSorobanInbox(f.store, Keypair.random().publicKey(), 'testnet', 'read', f.options), { intents: [], tasks: [] });
+  assert.deepEqual(await listAgentSorobanInbox(f.store, address, 'public', 'read', f.options), { intents: [], tasks: [] });
+
+  const entry = authorizationEntriesFromPlan(f.stored.authorizationPlan)[0];
+  const preimage = xdr.HashIdPreimage.fromXdr(sorobanAuthorizationEntryPreimageXdr({
+    entry, network: 'testnet', expirationLedger: read.intents[0].authorizers[0].expirationLedger,
+  }), 'base64');
+  const contributed = await contributeSorobanIntentAuthorization(f.store, f.stored.id, {
+    entryIndex: 0, signerAddress: address,
+    signatureBase64: Buffer.from(f.signer.sign(hash(preimage.toXdr()))).toString('base64'),
+  }, f.options);
+  assert.equal(contributed.authorization.status, 'authorization_ready');
+  const after = await listAgentSorobanInbox(f.store, address, 'testnet', 'read', f.options);
+  assert.equal(after.tasks[0].signatureRequired, false);
+  assert.equal(after.intents[0].status, 'authorization_ready');
+});
+
+test('Human and Agent Inbox reconcile a released package before any new action', async () => {
+  const f = await fixture();
+  const address = f.signer.publicKey();
+  const prep = {
+    version: 1 as const, transactionHash: 'ab'.repeat(32), authorizationPlanDigest: f.stored.authorizationPlan.authorizationPlanDigest,
+    authorizationPlanRevision: 1, executionSource: address, transactionSequence: '1',
+    validUntil: '2026-09-14T10:05:00.000Z', latestLedger: 100, effectsDigest: 'cd'.repeat(32),
+    effectsAccepted: true, preparedAt: '2026-09-14T10:01:00.000Z',
+  };
+  await f.store.putExecutionPreparation(f.stored.id, prep);
+  const human = await listSorobanIntentInbox(f.store, address, 'testnet', f.options);
+  const agent = await listAgentSorobanInbox(f.store, address, 'testnet', 'sign', f.options);
+  assert.equal(human[0].viewerAction, 'reconcile_execution');
+  assert.deepEqual(human[0].unresolvedTransactionHashes, [prep.transactionHash]);
+  assert.equal(agent.tasks[0].signatureRequired, false);
+  assert.deepEqual(agent.tasks[0].nextActions.map((item) => item.code), ['reconcile_execution']);
+  await f.store.updateIntent({ ...f.stored, cancellation: { version: 1, cancelledAt: '2026-09-14T10:02:00.000Z',
+    authorizationPlanDigest: prep.authorizationPlanDigest, authorizationPlanRevision: 1 } });
+  assert.equal((await listSorobanIntentInbox(f.store, f.creator.publicKey(), 'testnet', f.options))[0]?.viewerAction, 'reconcile_execution');
+  f.store.preparations.set(f.stored.id, [{ ...prep, nonInclusionProof: {
+    oldestLedger: 1, latestLedger: 300, latestLedgerClosedAt: '2026-09-14T10:06:00.000Z', checkedAt: '2026-09-14T10:06:01.000Z',
+  } }]);
+  assert.deepEqual(await listSorobanIntentInbox(f.store, f.creator.publicKey(), 'testnet', f.options), []);
+});
+
 test('ready and blocked Intent states project to execution and attention actions', () => {
   const base = {
     id: 'N'.repeat(16),
@@ -213,6 +283,7 @@ test('cancelled Intent leaves the pending Inbox', async () => {
   });
   const cancelled = await listSorobanIntentInbox(f.store, f.creator.publicKey(), 'testnet', f.options);
   assert.deepEqual(cancelled, []);
+  assert.deepEqual(await listAgentSorobanInbox(f.store, f.creator.publicKey(), 'testnet', 'write', f.options), { intents: [], tasks: [] });
 });
 
 test('confirmed external execution leaves the pending Inbox', async () => {
@@ -233,4 +304,5 @@ test('confirmed external execution leaves the pending Inbox', async () => {
 
   const confirmed = await listSorobanIntentInbox(f.store, f.creator.publicKey(), 'testnet', f.options);
   assert.deepEqual(confirmed, []);
+  assert.deepEqual(await listAgentSorobanInbox(f.store, f.creator.publicKey(), 'testnet', 'read', f.options), { intents: [], tasks: [] });
 });

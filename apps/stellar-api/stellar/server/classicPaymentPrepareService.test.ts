@@ -58,6 +58,7 @@ test('classic.payment.prepare builds one exact unsigned Payment transaction from
   const parsed = TransactionBuilder.fromXdr(result.xdr, Networks.TESTNET);
   if (parsed instanceof FeeBumpTransaction) assert.fail('Expected a classic transaction.');
   assert.equal(parsed.signatures.length, 0);
+  assert.equal(Number(parsed.timeBounds?.minTime), Math.floor(Date.parse(parameters.ledgerClosedAt) / 1000));
   assert.equal(parsed.operations.length, 1);
   assert.equal(parsed.source, SOURCE);
   assert.equal(parsed.sequence, '8');

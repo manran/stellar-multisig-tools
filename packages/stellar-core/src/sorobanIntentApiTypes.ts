@@ -48,8 +48,16 @@ export type SorobanIntentEvidenceEventType =
   | 'authorization_added'
   | 'authorization_plan_revised'
   | 'execution_prepared'
+  | 'execution_not_included'
   | 'execution_confirmed'
   | 'execution_failed';
+
+export interface SorobanExecutionNonInclusionProof {
+  oldestLedger: number;
+  latestLedger: number;
+  latestLedgerClosedAt: string;
+  checkedAt: string;
+}
 
 export interface SorobanIntentEvidenceEvent {
   version: 1;
@@ -70,6 +78,7 @@ export interface SorobanIntentEvidenceEvent {
   effectsAccepted?: boolean;
   validUntil?: string | null;
   latestLedger?: number;
+  nonInclusionProof?: SorobanExecutionNonInclusionProof;
   ledger?: number;
   successful?: boolean;
   observedAt?: string;
@@ -82,7 +91,7 @@ export interface SorobanIntentAuthorizationSnapshot {
   intentDigest: string;
   authorizationPlanDigest: string;
   executionBinding: 'detached';
-  status: 'awaiting_authorization' | 'authorization_ready' | 'expired' | 'blocked' | 'cancelled';
+  status: 'awaiting_authorization' | 'authorization_ready' | 'expired' | 'blocked' | 'cancelled' | 'completed';
   statusDetail?: string;
   authorizationEntriesXdr: string[];
   contributionCount: number;
@@ -94,6 +103,7 @@ export type IntegrationJobState =
   | 'waiting_for_authorization'
   | 'ready'
   | 'executing'
+  | 'execution_unknown'
   | 'completed'
   | 'expired'
   | 'failed'
@@ -114,11 +124,15 @@ export interface IntegrationSorobanJobProjection {
   network: StellarNetwork;
   state: IntegrationJobState;
   nextActions: IntegrationJobNextAction[];
+  actionCalls: Partial<Record<IntegrationJobNextAction,
+    { operationId: string; bodyDefaults: { action: string }; reviewRequired?: true }
+    | { transport: 'external_stellar_submission'; transactionHash: string }>>;
   reviewUrl: string;
   waitingFor?: string[];
   expiresAtLedger?: number;
   externalReference?: string;
-  reason?: 'authorization_blocked' | 'execution_failed';
+  reason?: 'authorization_blocked' | 'execution_failed' | 'execution_unavailable' | 'execution_outcome_unknown';
+  unresolvedTransactionHashes?: string[];
   execution?: {
     owner: 'external_service' | 'multisigtools';
     executor: string;
@@ -133,7 +147,7 @@ export interface IntegrationSorobanJobProjection {
   };
 }
 
-export type SorobanIntentViewerAction = 'sign' | 'route_execution' | 'waiting' | 'waiting_execution' | 'execution_failed' | 'attention' | 'cancelled';
+export type SorobanIntentViewerAction = 'sign' | 'route_execution' | 'waiting' | 'waiting_execution' | 'execution_failed' | 'reconcile_execution' | 'attention' | 'cancelled';
 
 export interface InboxSorobanIntentSnapshot {
   id: string;
@@ -146,6 +160,7 @@ export interface InboxSorobanIntentSnapshot {
   contributionCount: number;
   authorizers: SorobanGAccountAuthorizerStatus[];
   viewerAction: SorobanIntentViewerAction;
+  unresolvedTransactionHashes?: string[];
 }
 
 export interface SorobanIntentResponse {
@@ -186,6 +201,10 @@ export interface SorobanIntentExecutionReconciliationResponse {
   observed: boolean;
   replayed: boolean;
   observation?: SorobanIntentExecutionObservation;
+  outcome: 'unknown' | 'not_included' | 'failed' | 'successful';
+  nonInclusionProof?: SorobanExecutionNonInclusionProof;
+  /** Evidence is available; current job/task was not refreshed. Inspect separately. */
+  projectionNotRefreshed?: true;
   job?: IntegrationSorobanJobProjection;
   task?: AgentTaskProjection;
 }

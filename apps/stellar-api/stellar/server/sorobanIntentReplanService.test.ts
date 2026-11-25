@@ -68,7 +68,7 @@ function authorizationEntry(
   });
 }
 
-async function fixture() {
+async function fixture(effects = emptySorobanEffectsSnapshot()) {
   const authorizer = Keypair.random();
   const source = Keypair.random();
   const planningSource = Keypair.random();
@@ -89,7 +89,7 @@ async function fixture() {
     authorizationEntries: [oldEntry],
     sorobanData: new SorobanDataBuilder().build(),
   });
-  const oldPlan = createSorobanAuthorizationPlan(intent, oldTx.toXDR(), emptySorobanEffectsSnapshot());
+  const oldPlan = createSorobanAuthorizationPlan(intent, oldTx.toXDR(), effects);
   const store = new MemoryIntentStore();
   const stored = await createStoredSorobanIntent(store, {
     intent,
@@ -166,14 +166,14 @@ function signatureForPlan(
 }
 
 
-function structuralEffectsSnapshot() {
+function structuralEffectsSnapshot(amount = 1) {
   const event = new xdr.ContractEvent({
     ext: xdr.ExtensionPoint.v0(),
     contractId: null,
     type: xdr.ContractEventType.contract,
     body: xdr.ContractEventBody.v0(new xdr.ContractEventV0({
       topics: [nativeToScVal('unexpected_route')],
-      data: nativeToScVal(1, { type: 'u32' }),
+      data: nativeToScVal(amount, { type: 'u32' }),
     })),
   });
   return sorobanEffectsSnapshot([], [new xdr.DiagnosticEvent({
@@ -182,6 +182,45 @@ function structuralEffectsSnapshot() {
   }).toXdr('base64')]);
 }
 
+
+test('integration numeric effects drift permits fresh authorization', async () => {
+  const f = await fixture(structuralEffectsSnapshot(1));
+  await f.store.updateIntent({
+    ...f.stored, integration: { version: 1, serviceId: 'fixture' },
+  });
+  const signed = await contributeSorobanIntentAuthorization(f.store, f.stored.id, {
+    entryIndex: 0,
+    signerAddress: f.authorizer.publicKey(),
+    signatureBase64: signatureForPlan(f.oldPlan, f.authorizer),
+  }, f.activeAuthorizationDependencies);
+  assert.equal(signed.authorization.status, 'authorization_ready');
+  const simulated = await f.planningDependencies.simulator() as { assembledXdr: string; latestLedger: number; effects: ReturnType<typeof emptySorobanEffectsSnapshot> };
+  const result = await replanExpiredSorobanIntent(
+    f.store, f.stored.id, f.planningSource.publicKey(), {
+      authorizationDependencies: f.activeAuthorizationDependencies,
+      planningDependencies: {
+        ...f.planningDependencies,
+        simulator: async () => ({ ...simulated, effects: structuralEffectsSnapshot(2) } as never),
+      },
+    },
+  );
+  assert.equal(result.authorizationPlanRevision, 2);
+  assert.equal(result.authorization.status, 'awaiting_authorization');
+});
+
+test('observed success blocks re-planning before simulation', async () => {
+  const f = await fixture();
+  const store: SorobanIntentStore = f.store;
+  store.listExecutionObservations = async () => [{
+    version: 1, transactionHash: 'a'.repeat(64), authorizationPlanDigest: f.oldPlan.authorizationPlanDigest,
+    authorizationPlanRevision: 1, executionSource: f.planningSource.publicKey(), ledger: 123,
+    successful: true, observedAt: '2026-09-16T00:00:00.000Z',
+  }];
+  await assert.rejects(() => replanExpiredSorobanIntent(store, f.stored.id, f.planningSource.publicKey(), {
+    authorizationDependencies: f.expiredAuthorizationDependencies,
+    planningDependencies: { simulator: async () => { throw new Error('simulation must not run'); } },
+  }), { code: 'intent_already_executed' });
+});
 
 test('expired plan is replaced by a fresh revision without reusing old AUTH', async () => {
   const f = await fixture();

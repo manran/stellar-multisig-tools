@@ -36,6 +36,21 @@ export const blobIntegrationCredentialStore: IntegrationCredentialStore = {
       return records.sort((a, b) => a.credential.serviceId.localeCompare(b.credential.serviceId));
     });
   },
+  async createCredential(record) {
+    const pathname = pathFor(record.credential.serviceId);
+    if (await readJson(pathname)) return false;
+    try {
+      await withBlobStorage(() => put(pathname, JSON.stringify(record), {
+        access: 'private', addRandomSuffix: false, allowOverwrite: false,
+        contentType: 'application/json', cacheControlMaxAge: 60,
+      }));
+      return true;
+    } catch (cause) {
+      const existing = await readJson(pathname);
+      if (existing) return existing.credential.secretHash === record.credential.secretHash;
+      throw cause;
+    }
+  },
   async putCredential(record) {
     await withBlobStorage(async () => {
       await put(pathFor(record.credential.serviceId), JSON.stringify(record), {

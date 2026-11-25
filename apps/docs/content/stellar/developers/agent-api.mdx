@@ -5,17 +5,19 @@ description: Delegate signer-scoped Read, Write, or Sign API access to a distinc
 
 Delegate signer-scoped API access to a named Agent actor. The credential is bound to one Stellar signer Principal and network; it does not contain or become the Principal's private key.
 
+New to MST? Start with the [Agent quickstart](/stellar/developers/agent-quickstart) to discover capabilities and request the right credential. On Testnet, the website publishes an [API Catalog](https://stellar-testnet.multisig.tools/.well-known/api-catalog) and [llms.txt](https://stellar-testnet.multisig.tools/llms.txt).
+
 ## Scopes
 
 **Read:** read saved contracts, personal contacts, accessible Treasury metadata, Inbox, Activity, Request details, and status.
 
-**Write:** includes Read. Manage saved context, create Requests/Intents within signer scope, refresh/freeze preparation, and decline.
+**Write:** includes Read. Manage saved context, create Requests/Intents within signer scope, refresh/freeze preparation, reconcile released Soroban execution hashes, and decline. If execution remains unresolved, reconcile before preparing or re-planning; never interpret a timeout or local expiry as a failed transaction.
 
 **Sign:** includes Write. Contribute valid Stellar transaction signatures or detached Soroban authorization attributable to the credential Principal.
 
 ## Credential model
 
-Agent credentials are created from the signer account and shown once as `msa_*`. Store the secret in the Agent's secret manager.
+Agent credentials are issued through a signer-approved pairing and returned once as `msa_*`. A browser wallet is optional: follow [independent signing tool approval](/stellar/developers/agent-quickstart#approve-with-an-independent-signing-tool) to use the same two signed challenges with a CLI or independent signer. Store the secret in the Agent's secret manager.
 
 Sign access still does not contain a private key. MultiSig Tools independently validates newly contributed cryptographic evidence against the Principal.
 
@@ -26,7 +28,15 @@ curl -sS https://api-testnet.multisig.tools/stellar/operations
 curl -sS https://api-testnet.multisig.tools/stellar/openapi.json
 ```
 
-Agent Request creation currently uses exact transaction XDR. Semantic Integration payment creation is a separate `msi_*` capability.
+Agent Request creation currently uses exact transaction XDR. Semantic Integration payment creation is a separate `msi_*` capability. A personal Agent may create a Soroban Intent requiring authorization only if its Principal is a current eligible signer for at least one required authorizer. Calls requiring no authorization remain available. Unrelated signer credentials receive HTTP 403 (`principal_intent_access_denied`). Integration creation remains governed by its configured contract and method scope.
+
+Retaining a Proposal in Human Activity (`PATCH /request` with `retainActivity: true`) requires a verified human signer session; an Agent credential cannot perform this action. Human session bearer tokens are accepted alongside session cookies on the documented Request operations.
+
+### Signer workspace discovery
+
+Use `GET /treasuries` for Treasury metadata, `GET /address-book` for contacts, and `GET /activity?view=work` for unified Request and Intent activity. The operation registry and OpenAPI describe the supported methods, credential scopes, and effects.
+
+An Inbox HTTP 503 means discovery is incomplete, not that there are no pending tasks. Preserve existing reminders and retry later. Intent execution preparation can durably change coordination state; treat it as a Write operation.
 
 ## Identity
 

@@ -181,7 +181,7 @@ export async function prepareClassicCreateAccount(
   }).addOperation(Operation.createAccount({ destination, startingBalance }));
   if (memo) builder.addMemo(Memo.text(memo));
   if (memoHashHex) builder.addMemo(Memo.hash(hexToBytes(memoHashHex)));
-  const transaction = builder.setTimeout(lifetimeSeconds).build();
+  const transaction = builder.setTimebounds(Math.floor(Date.parse(parameters.ledgerClosedAt) / 1000), 0).setTimeout(lifetimeSeconds).build();
   const xdr = transaction.toXDR();
   const inspection = inspectTransactionXdr(xdr, network);
   const maxTime = inspection.timeBounds?.maxTime;

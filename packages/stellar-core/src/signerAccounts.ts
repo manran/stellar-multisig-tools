@@ -184,6 +184,7 @@ export async function loadAccountsForSigner(
   network: StellarNetwork,
   signal?: AbortSignal,
   fetchImpl: typeof fetch = fetch,
+  options: { fresh?: boolean } = {},
 ): Promise<StellarAccountSnapshot[]> {
   const normalizedSigner = signerAddress.trim();
   if (!isValidStellarAccountId(normalizedSigner)) {
@@ -195,16 +196,17 @@ export async function loadAccountsForSigner(
   const state = stateFor(fetchImpl);
   const now = Date.now();
   const cached = state.cache.get(key);
-  if (cached && now - cached.fetchedAt < CACHE_TTL_MS) return cached.accounts;
+  if (!options.fresh && cached && now - cached.fetchedAt < CACHE_TTL_MS) return cached.accounts;
 
   const rateLimitedUntil = state.rateLimitedUntil.get(key) ?? 0;
   if (rateLimitedUntil > now) {
-    if (cached && now - cached.fetchedAt < STALE_IF_RATE_LIMITED_MS) return cached.accounts;
+    if (!options.fresh && cached && now - cached.fetchedAt < STALE_IF_RATE_LIMITED_MS) return cached.accounts;
     throw rateLimitError(rateLimitedUntil, now);
   }
   if (rateLimitedUntil) state.rateLimitedUntil.delete(key);
 
-  const existing = state.inFlight.get(key);
+  const inFlightKey = options.fresh ? key + ':fresh' : key;
+  const existing = state.inFlight.get(inFlightKey);
   if (existing) return waitForSharedRequest(existing, signal);
 
   const generation = state.generation[network];
@@ -213,21 +215,26 @@ export async function loadAccountsForSigner(
     let nextUrl = new URL(`${horizonUrl(network)}/accounts`);
     nextUrl.searchParams.set('signer', normalizedSigner); nextUrl.searchParams.set('limit', '200');
     const byAccountId = new Map<string, StellarAccountSnapshot>();
+    const visited = new Set<string>();
     let fetchedAt = Date.now(); let pageCount = 0;
     while (true) {
-      const response = await fetchImpl(nextUrl, { headers: { Accept: 'application/json' } });
+      if (visited.has(nextUrl.toString())) throw new Error('Horizon signer pagination did not advance.');
+      visited.add(nextUrl.toString());
+      const response = await fetchImpl(nextUrl, { headers: { Accept: 'application/json' }, ...(options.fresh ? { signal: AbortSignal.timeout(15000) } : {}) });
       fetchedAt = Date.now();
       if (response.status === 429) {
         const until = fetchedAt + retryAfterMs(response, fetchedAt); state.rateLimitedUntil.set(key, until);
-        const stale = state.cache.get(key); if (stale && fetchedAt - stale.fetchedAt < STALE_IF_RATE_LIMITED_MS) return stale.accounts;
+        const stale = state.cache.get(key); if (!options.fresh && stale && fetchedAt - stale.fetchedAt < STALE_IF_RATE_LIMITED_MS) return stale.accounts;
         throw rateLimitError(until, fetchedAt);
       }
       if (!response.ok) throw new Error(`Unable to load signing access (${response.status}).`);
       const body = await response.json() as { _embedded?: { records?: HorizonSignerAccountRecord[] }; _links?: { next?: { href?: string } } };
-      const records = body._embedded?.records ?? [];
+      const records = body._embedded?.records;
+      if (!Array.isArray(records)) throw new Error('Horizon signer lookup returned invalid records.');
       for (const record of records) if (record.signers.some((signer) => signer.type === 'ed25519_public_key' && signer.key === normalizedSigner && signer.weight > 0)) byAccountId.set(record.account_id, accountSnapshot(record));
       if (records.length < 200) break;
-      const nextHref = body._links?.next?.href; if (!nextHref) break;
+      const nextHref = body._links?.next?.href;
+      if (!nextHref) throw new Error('Horizon signer lookup returned a truncated page.');
       const candidate = new URL(nextHref, nextUrl);
       if (candidate.origin !== baseUrl.origin || candidate.pathname !== '/accounts' || candidate.searchParams.get('signer') !== normalizedSigner) throw new Error('Horizon signer pagination returned an invalid next page.');
       if (candidate.toString() === nextUrl.toString()) throw new Error('Horizon signer pagination did not advance.');
@@ -239,9 +246,9 @@ export async function loadAccountsForSigner(
   })();
 
 
-  state.inFlight.set(key, request);
+  state.inFlight.set(inFlightKey, request);
   const clearInFlight = () => {
-    if (state.inFlight.get(key) === request) state.inFlight.delete(key);
+    if (state.inFlight.get(inFlightKey) === request) state.inFlight.delete(inFlightKey);
   };
   void request.then(clearInFlight, clearInFlight);
 

@@ -63,6 +63,15 @@ test('OpenAPI covers every catalog transport and business operation exactly once
   assert.ok(references.every((name) => Object.hasOwn(schemas, name)));
 });
 
+test('workspace discovery distinguishes signer, human and Treasury audit access', () => {
+  const doc = createOpenApiDocument();
+  const paths = doc.paths as Record<string, JsonObject>;
+  assert.deepEqual((paths['/treasuries'].get as JsonObject).security, [{ agentBearer: [] }]);
+  assert.deepEqual((paths['/address-book'].get as JsonObject).security, [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }]);
+  assert.deepEqual((paths['/activity'].get as JsonObject).security, [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { treasuryAuditBearer: [] }]);
+  assert.ok(((paths['/intent'].put as JsonObject).responses as JsonObject)['502']);
+});
+
 test('OpenAPI describes the public Contract composition without UI state', () => {
   const document = createOpenApiDocument();
   const paths = document.paths as Record<string, JsonObject>;
@@ -88,11 +97,11 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.equal(inspect.operationId, 'contract.interface.inspect');
   assert.equal(intent.operationId, 'contract.intent.create.integration.intent.create');
   assert.deepEqual(intent['x-multisig-operation-ids'], ['contract.intent.create', 'integration.intent.create']);
-  assert.deepEqual(intent.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }]);
+  assert.deepEqual(intent.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }]);
   assert.equal(intentInspect.operationId, 'contract.intent.inspect.integration.intent.inspect.integration.intent.browser.inspect');
-  assert.deepEqual(intentInspect.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }, { intentCapability: [] }]);
+  assert.deepEqual(intentInspect.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { intentCapability: [] }]);
   assert.equal(intentContribute.operationId, 'contract.intent.contribute.integration.intent.browser.contribute');
-  assert.deepEqual(intentContribute.security, [{ agentBearer: [] }, { humanSession: [] }, { intentCapability: [] }]);
+  assert.deepEqual(intentContribute.security, [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { intentCapability: [] }]);
   assert.equal(intentExecution.operationId, 'contract.intent.execution.prepare.integration.intent.execution.prepare.contract.intent.execution.reconcile.integration.intent.execution.reconcile.contract.intent.replan.integration.intent.replan.contract.intent.cancel.integration.intent.cancel.integration.intent.browser.issue');
   assert.deepEqual(intentExecution['x-multisig-operation-ids'], [
     'contract.intent.execution.prepare',
@@ -105,17 +114,33 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
     'integration.intent.cancel',
     'integration.intent.browser.issue',
   ]);
-  assert.deepEqual(intentExecution.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }]);
+  assert.deepEqual(intentExecution.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }]);
   assert.equal(build.operationId, 'contract.call.build');
   assert.equal(prepare.operationId, 'contract.call.prepare');
   assert.equal(integrationExecution.operationId, 'integration.execution.inspect');
   assert.deepEqual(integrationExecution.security, [{ integrationBearer: [] }]);
   assert.deepEqual(integrationExecution['x-multisig-operation-ids'], ['integration.execution.inspect']);
   assert.equal(paymentPrepare.operationId, 'classic.payment.prepare.integration.classic.payment.prepare');
-  assert.deepEqual(paymentPrepare.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }]);
+  assert.deepEqual(paymentPrepare.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }]);
   assert.equal(requestCreate.operationId, 'proposal.create.integration.request.create');
   assert.equal(requestSubmit.operationId, 'proposal.submit.integration.request.submit');
-  assert.deepEqual(requestSubmit.security, [{ integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }]);
+  const requestPatch = paths['/request'].patch as JsonObject;
+  assert.deepEqual(requestPatch['x-multisig-operation-ids'], ['proposal.contribute', 'proposal.decline', 'proposal.activity.retain']);
+  const patchVariants = ((document.components as JsonObject).schemas as Record<string, JsonObject>).ProposalPatchInput.oneOf as JsonObject[];
+  assert.equal(patchVariants.find((item) => (item.required as string[]).includes('retainActivity'))?.['x-multisig-access'], 'human');
+  assert.ok((intentExecution.responses as JsonObject)['201']);
+  assert.ok((testnetIntegrationCreate.responses as JsonObject)['413']);
+  assert.ok((testnetIntegrationCreate.responses as JsonObject)['415']);
+  assert.deepEqual(requestSubmit.security, [{ integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { requestCapability: [] }]);
+  const inbox = paths['/inbox'].get as JsonObject;
+  assert.equal(inbox.operationId, 'signer.inbox.list');
+  assert.deepEqual(inbox.security, [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }]);
+  assert.deepEqual(inbox['x-multisig-effects'], ['none']);
+  assert.ok(((paths['/agent-grants'].post as JsonObject).responses as JsonObject)['201']);
+  assert.equal((paths['/auth'].get as JsonObject).operationId, 'signer.auth.challenge');
+  assert.equal((paths['/auth'].post as JsonObject).operationId, 'signer.auth.exchange');
+  assert.deepEqual((paths['/agent-access'].delete as JsonObject).security, [{ humanBearer: [] }, { humanSession: [] }]);
+  assert.deepEqual((paths['/agent-grants'].get as JsonObject)['x-multisig-operation-ids'], ['agent.grant.inspect', 'agent.grant.challenge']);
   assert.equal(paths['/preparation'], undefined);
 
   const components = document.components as JsonObject;
@@ -157,9 +182,9 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
     { required: ['preparedXdr'] },
   ]);
   assert.deepEqual(schemas.ContractIntentInspectResult.required, ['operation', 'version', 'intent', 'authorization', 'evidence']);
-  assert.deepEqual(schemas.IntegrationSorobanJob.required, ['version', 'id', 'kind', 'network', 'state', 'nextActions', 'reviewUrl']);
+  assert.deepEqual(schemas.IntegrationSorobanJob.required, ['version', 'id', 'kind', 'network', 'state', 'nextActions', 'actionCalls', 'reviewUrl']);
   assert.deepEqual((schemas.IntegrationSorobanJob.properties as JsonObject).state, {
-    type: 'string', enum: ['waiting_for_authorization', 'ready', 'executing', 'completed', 'expired', 'failed', 'cancelled'],
+    type: 'string', enum: ['waiting_for_authorization', 'ready', 'executing', 'execution_unknown', 'completed', 'expired', 'failed', 'cancelled'],
   });
   assert.deepEqual(((schemas.IntegrationSorobanJob.properties as JsonObject).nextActions as JsonObject).items, {
     type: 'string', enum: ['prepare_execution', 'submit_execution', 'reconcile_execution', 'refresh_execution', 'replan', 'cancel'],
@@ -167,12 +192,13 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   for (const name of ['ContractIntentCreateResult', 'ContractIntentInspectResult', 'ContractIntentExecutionResult', 'ContractIntentExecutionReconcileResult', 'ContractIntentReplanResult', 'ContractIntentCancelResult']) {
     assert.ok((schemas[name].properties as JsonObject).job);
   }
-  assert.deepEqual(schemas.AgentTask.required, ['version', 'id', 'kind', 'network', 'state', 'nextActions']);
-  assert.deepEqual((schemas.AgentTask.properties as JsonObject).state, {
-    type: 'string', enum: ['action_required', 'waiting', 'completed', 'expired', 'failed', 'cancelled'],
-  });
+  assert.deepEqual(schemas.AgentTask.required, ['version', 'id', 'kind', 'network', 'state', 'signatureRequired', 'nextActions']);
+  assert.equal(((schemas.AgentTask.properties as JsonObject).signatureRequired as JsonObject).type, 'boolean');
+  assert.equal(((schemas.SignerInboxResult.properties as JsonObject).signature_required_count as JsonObject).type, 'integer');
+  assert.equal(((schemas.SignerInboxResult.properties as JsonObject).intents as JsonObject).type, 'array');
+  assert.deepEqual(((schemas.AgentTask.properties as JsonObject).state as JsonObject).enum, ['action_required', 'waiting', 'completed', 'execution_unknown', 'expired', 'failed', 'cancelled']);
   const agentTaskAction = (((schemas.AgentTask.properties as JsonObject).nextActions as JsonObject).items as JsonObject);
-  assert.deepEqual(agentTaskAction.required, ['code', 'requiredAccess', 'available']);
+  assert.deepEqual(agentTaskAction.required, ['code', 'operationId', 'requiredAccess', 'available']);
   for (const name of ['ContractIntentCreateResult', 'ContractIntentInspectResult', 'ContractIntentContributionResult', 'ContractIntentExecutionResult', 'ContractIntentExecutionReconcileResult', 'ContractIntentReplanResult', 'ContractIntentCancelResult', 'ProposalResult']) {
     assert.ok((schemas[name].properties as JsonObject).task);
   }
@@ -180,7 +206,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
     'version', 'eventId', 'type', 'occurredAt', 'authorizationPlanDigest', 'authorizationPlanRevision',
   ]);
   assert.deepEqual((schemas.SorobanIntentEvidenceEvent.properties as JsonObject).type, {
-    type: 'string', enum: ['intent_created', 'intent_cancelled', 'authorization_added', 'authorization_plan_revised', 'execution_prepared', 'execution_confirmed', 'execution_failed'],
+    type: 'string', enum: ['intent_created', 'intent_cancelled', 'authorization_added', 'authorization_plan_revised', 'execution_prepared', 'execution_not_included', 'execution_confirmed', 'execution_failed'],
   });
   assert.deepEqual(schemas.ContractIntentContributionInput.required, ['entryIndex', 'signatureBase64']);
   assert.deepEqual(schemas.ContractIntentCancelInput.required, ['action']);
@@ -207,7 +233,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.ok((schemas.SorobanIntentExecutionPreparation.properties as JsonObject).effects);
   assert.ok((schemas.SorobanIntentExecutionPreparation.properties as JsonObject).preparedAt);
   assert.deepEqual(schemas.ContractIntentExecutionReconcileInput.required, ['action', 'transactionHash']);
-  assert.deepEqual(schemas.ContractIntentExecutionReconcileResult.required, ['operation', 'version', 'transactionHash', 'observed', 'replayed']);
+  assert.deepEqual(schemas.ContractIntentExecutionReconcileResult.required, ['operation', 'version', 'transactionHash', 'observed', 'replayed', 'outcome']);
   assert.deepEqual(schemas.SorobanIntentExecutionObservation.required, ['version', 'transactionHash', 'authorizationPlanDigest', 'authorizationPlanRevision', 'executionSource', 'ledger', 'successful', 'observedAt']);
   assert.deepEqual(schemas.SorobanEffectsDiff.required, ['version', 'kind', 'severity', 'requiresExplicitReview', 'requiresReauthorization', 'expectedDigest', 'currentDigest', 'structureChanged', 'maxChangeBasisPoints', 'numericChanges']);
   assert.deepEqual(schemas.ContractIntentReplanInput.required, ['action']);
@@ -232,7 +258,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(schemas.ProposalCreateInput.required, ['network']);
   assert.deepEqual(schemas.ProposalCreateInput.oneOf, [
     { required: ['xdr'] },
-    { required: ['payment'], description: 'Semantic Classic payment creation is available to Integration Service callers. When the Treasury uses MultiSigTools-managed execution, MST supplies the transaction source, sequence, fee and submission while the Treasury remains the Payment operation source and authorization authority.' },
+    { required: ['payment'], description: 'Semantic Classic payment creation is available to Integration Service callers. For MST-managed semantic execution, runtime capabilities.classicManagedExecution must be true for the selected network. Otherwise prepare an unsigned payment with integration.classic.payment.prepare and create a Request using its xdr, or explicitly configure external execution.' },
   ]);
 });
 
@@ -267,6 +293,65 @@ test('discovery endpoints expose the deployment-bound description and schema poi
     && HTTP_METHODS.has(operation.schema.method.toLowerCase())));
 });
 
+test('every registry operation has an exact resolvable logical contract and a retry policy', async () => {
+  process.env[networkVariable] = 'testnet';
+  const catalog = await (await getOperations()).json() as { operations: Array<{ id: string; path: string; method: string; access: string; schema: { pointer: string } }> };
+  const doc = createOpenApiDocument();
+  const contracts = doc['x-multisig-operations'] as Record<string, JsonObject>;
+  assert.equal(Object.keys(contracts).length, catalog.operations.length);
+  const resolve = (pointer: string): unknown => pointer.slice(2).split('/').reduce<unknown>((value, key) => (value as JsonObject)[key.replace(/~1/g, '/').replace(/~0/g, '~')], doc);
+  const deref = (value: JsonObject): JsonObject => value.$ref ? resolve(String(value.$ref)) as JsonObject : value;
+  const input = (id: string) => deref(((((contracts[id].requestBody as JsonObject).content as JsonObject)['application/json'] as JsonObject).schema as JsonObject));
+  for (const entry of catalog.operations) {
+    const contract = resolve(entry.schema.pointer) as JsonObject;
+    assert.equal(contract.operationId, entry.id);
+    assert.equal(contract.path, entry.path);
+    assert.equal(contract.method, entry.method);
+    assert.equal(contract.access, entry.access);
+    const retry = contract.retry as JsonObject;
+    assert.ok(retry.idempotencyKey);
+    for (const rule of [retry.transportFailure, retry.defaultError, ...Object.values(retry.onError as JsonObject), ...Object.values(retry.onHttpStatus as JsonObject)]) {
+      assert.ok((rule as JsonObject).strategy);
+      for (const nextId of (rule as JsonObject).nextOperationIds as string[]) assert.ok(contracts[nextId], nextId);
+    }
+  }
+  const expectedActions = {
+    'contract.intent.execution.prepare': 'prepare_execution',
+    'integration.intent.execution.prepare': 'prepare_execution',
+    'contract.intent.execution.reconcile': 'reconcile_execution',
+    'integration.intent.execution.reconcile': 'reconcile_execution',
+    'contract.intent.replan': 'replan', 'integration.intent.replan': 'replan',
+    'contract.intent.cancel': 'cancel', 'integration.intent.cancel': 'cancel',
+    'integration.intent.browser.issue': 'issue_browser_authorization',
+  };
+  assert.equal(catalog.operations.filter((entry) => entry.path === '/intent' && entry.method === 'PUT').length, Object.keys(expectedActions).length);
+  for (const [id, action] of Object.entries(expectedActions)) {
+    assert.ok((input(id).required as string[]).includes('action'));
+    assert.equal(((contracts[id].dispatch as JsonObject).body as JsonObject).action, action);
+    const actionSchema = (input(id).properties as JsonObject).action as JsonObject;
+    assert.ok(actionSchema.const === action || (actionSchema.enum as string[] | undefined)?.includes(action));
+    assert.equal((contracts[id].retry as JsonObject).idempotencyKey, 'not_used');
+  }
+  assert.ok((input('contract.intent.execution.prepare').required as string[]).includes('executor'));
+  assert.ok(!Object.hasOwn(input('integration.intent.execution.prepare').properties as JsonObject, 'acceptedEffectsDigest'));
+  assert.deepEqual(input('integration.intent.execution.reconcile').required, ['action', 'transactionHash']);
+  assert.deepEqual(input('integration.intent.browser.issue').required, ['action', 'signerAddress', 'origin']);
+  for (const id of ['proposal.create', 'integration.request.create', 'contract.intent.create', 'integration.intent.create']) {
+    assert.equal((contracts[id].retry as JsonObject).idempotencyKey, 'required');
+    assert.equal((contracts[id].parameters as JsonObject[]).find((p) => p.name === 'Idempotency-Key')?.required, true);
+  }
+  assert.equal((contracts['integration.testnet.create'].retry as JsonObject).idempotencyKey, 'unsupported');
+  const poll = contracts['agent.grant.poll'];
+  const result = deref((((((poll.responses as JsonObject)['200'] as JsonObject).content as JsonObject)['application/json'] as JsonObject).schema as JsonObject));
+  const approved = (result.oneOf as JsonObject[]).find((variant) => ((variant.properties as JsonObject).status as JsonObject).const === 'approved');
+  assert.deepEqual(approved?.required, ['status', 'apiKey', 'credential']);
+  assert.deepEqual(input('agent.grant.approve').required, ['action', 'requestId', 'mode']);
+  assert.equal((input('agent.grant.approve').oneOf as unknown[]).length, 2);
+  assert.deepEqual(input('agent.grant.deny').required, ['action', 'requestId']);
+  assert.deepEqual(contracts['agent.grant.poll'].security, []);
+  assert.deepEqual(contracts['agent.grant.approve'].security, [{ humanBearer: [] }, { humanSession: [] }]);
+});
+
 test('Stellar API deployment advertises standard service description and documentation links', () => {
   const config = JSON.parse(readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8')) as {
     headers: Array<{ source: string; headers: Array<{ key: string; value: string }> }>;
@@ -279,4 +364,57 @@ test('Stellar API deployment advertises standard service description and documen
   assert.equal(globalHeaders.get('Access-Control-Expose-Headers'), 'Link');
   assert.ok(config.rewrites.some((rewrite) =>
     rewrite.source === '/openapi.json' && rewrite.destination === '/api/openapi'));
+});
+
+
+test('Execution reconciliation contracts require matching evidence and expose a bounded recovery operation', () => {
+  const document = createOpenApiDocument();
+  const schemas = (document.components as JsonObject).schemas as Record<string, JsonObject>;
+  for (const name of ['ContractIntentExecutionReconcileResult', 'ClassicExecutionReconcileResult', 'ClassicExecutionEvidence']) {
+    const branches = schemas[name].oneOf as JsonObject[];
+    assert.equal(branches.length, 4);
+    const byOutcome = Object.fromEntries(branches.map(branch => [((branch.properties as JsonObject).outcome as JsonObject).const, branch]));
+    assert.deepEqual(byOutcome.not_included.required, ['nonInclusionProof']);
+    assert.deepEqual(byOutcome.successful.required, ['observation']);
+    assert.deepEqual(byOutcome.failed.required, ['observation']);
+    for (const outcome of ['successful', 'failed']) {
+      const properties = byOutcome[outcome].properties as JsonObject;
+      assert.equal((properties.observed as JsonObject).const, true);
+      assert.equal((((properties.observation as JsonObject).properties as JsonObject).successful as JsonObject).const, outcome === 'successful');
+    }
+  }
+  assert.deepEqual(schemas.SigningRequestSubmission.required, ['transactionHash', 'ledger', 'submittedAt']);
+  const operation = (document['x-multisig-operations'] as Record<string, JsonObject>)['integration.request.execution.reconcile'];
+  assert.equal(operation.method, 'GET');
+  assert.equal(operation.access, 'integration:read');
+  assert.deepEqual(operation.dispatch, { query: { view: 'reconciliation' } });
+  const outcomes = (operation.retry as JsonObject).onOutcome as Record<string, JsonObject>;
+  assert.equal(outcomes.unknown.strategy, 'retry_same_request_with_backoff');
+  assert.equal(outcomes.successful.strategy, 'complete');
+  assert.equal(outcomes.failed.strategy, 'human_review');
+  assert.equal(outcomes.not_included.strategy, 'human_review');
+});
+
+test('resolved Soroban retry policy points to same-Intent review; completed projections require success', () => {
+  const doc = createOpenApiDocument();
+  const schemas = (doc.components as JsonObject).schemas as Record<string, JsonObject>;
+  const contracts = doc['x-multisig-operations'] as Record<string, JsonObject>;
+  for (const prefix of ['contract', 'integration']) {
+    const retry = (contracts[prefix + '.intent.execution.reconcile'].retry as JsonObject).onOutcome as Record<string, JsonObject>;
+    for (const outcome of ['failed', 'not_included']) {
+      assert.equal(retry[outcome].strategy, 'inspect_then_decide');
+      assert.deepEqual(retry[outcome].nextOperationIds, [prefix + '.intent.inspect']);
+      assert.match(String(retry[outcome].condition), /SAME Intent/);
+      assert.match(String(retry[outcome].condition), /reviewRequired/);
+    }
+  }
+  for (const name of ['AgentTask', 'IntegrationSorobanJob']) {
+    const completed = (schemas[name].allOf as JsonObject[])[0];
+    const then = completed.then as JsonObject;
+    assert.deepEqual(then.required, ['result']);
+    const fields = then.properties as JsonObject;
+    assert.equal(((fields.nextActions as JsonObject).maxItems), 0);
+    assert.equal((((fields.result as JsonObject).properties as JsonObject).successful as JsonObject).const, true);
+  }
+  assert.ok((schemas.ContractIntentExecutionReconcileResult.properties as JsonObject).projectionNotRefreshed);
 });

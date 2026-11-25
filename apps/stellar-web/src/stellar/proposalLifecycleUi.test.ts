@@ -217,7 +217,7 @@ test('default evidence export structurally excludes private plaintext', () => {
   assert.match(privateNoteCard, /allowConceal/);
   assert.match(transactionReceipt, /Private off-chain context/);
   assert.match(transactionReceipt, /never included in the evidence PDF/);
-  assert.match(transactionReceipt, /Export evidence PDF/);
+  assert.match(transactionReceipt, /Print or save PDF/);
   assert.doesNotMatch(transactionReceipt, /Include Private Note|Include Private memo|Print options/);
   assert.match(transactionReceipt, /allowConceal=\{false\}/);
   assert.match(stellarCss, /transaction-evidence-human-document/);
@@ -261,7 +261,7 @@ test('Human Inbox separates Request status from the current signer next action',
   assert.match(requestInbox, /approval_declined/);
   assert.match(inboxApi, /context\.actor === 'human'/);
   assert.match(inboxApi, /summarizeInboxActions\(humanRequests, intents\)/);
-  assert.match(inboxApi, /actor: context\.actor,[\s\S]*pending_count: requests\.length,[\s\S]*requests,/);
+  assert.match(inboxApi, /actor: context\.actor,[\s\S]*pending_count: tasks\.length,[\s\S]*requests,/);
   assert.match(inboxPresentation, /'sign'[\s\S]*'submit'[\s\S]*'waiting_for_others'[\s\S]*'waiting_preconditions'[\s\S]*'attention'[\s\S]*'declined'/);
   assert.match(inbox, /Needs me/);
   assert.match(inbox, /viewerAction/);
@@ -457,7 +457,7 @@ test('finished transaction receipt is a history resource with an explicit return
   assert.doesNotMatch(transactionReceipt, /origin.*signing|Back to signing/);
   assert.doesNotMatch(requestUi, /origin: 'signing'/);
   assert.match(requestUi, /returnLabel: 'Back to transaction'/);
-  assert.match(transactionReceipt, /Human-readable receipt with your authorized workspace context/);
+  assert.match(transactionReceipt, /Transaction details, signatures, and ledger confirmation/);
   assert.match(transactionReceipt, /Proposal ID/);
   assert.match(transactionReceipt, /transaction-evidence-record/);
   assert.doesNotMatch(transactionReceipt, /transaction-evidence-status|transaction-evidence-metadata/);
@@ -470,8 +470,8 @@ test('finished transaction receipt is a history resource with an explicit return
   assert.doesNotMatch(transactionReceipt, /Authorization collected/);
   assert.doesNotMatch(transactionReceipt, /sourceAccount\.thresholds\.medium\} payment/);
   assert.doesNotMatch(transactionReceipt, / · weight \$\{signer\.weight\}/);
-  assert.ok(transactionReceipt.indexOf('WorkflowProgress current="done"') < transactionReceipt.indexOf('Export evidence PDF'));
-  assert.ok(transactionReceipt.indexOf('Transaction receipt</h1>') < transactionReceipt.indexOf('Export evidence PDF'));
+  assert.ok(transactionReceipt.indexOf('WorkflowProgress current="done"') < transactionReceipt.indexOf('Print or save PDF'));
+  assert.ok(transactionReceipt.indexOf('Transaction receipt</h1>') < transactionReceipt.indexOf('Print or save PDF'));
   assert.match(transactionReceipt, /snapshot\.signatureCount\} signature/);
   assert.doesNotMatch(transactionReceipt, /approvalActors\.size\} signature/);
   assert.match(transactionReceipt, /snapshot\.submission\.submittedAt/);
@@ -597,7 +597,7 @@ test('private destinations confirm the wallet inside the user action instead of 
   assert.match(requestUi, /if \(!privateReadyForRequest && !contributionGrantActive\) await unlock\(undefined, snapshot\.network\)/);
   assert.match(transactionReceipt, /history_access_denied/);
   assert.match(transactionReceipt, /!privateReady && !networkMismatch && !snapshot && !loading/);
-  assert.match(requestUi, />Transaction receipt<\/button>/);
+  assert.match(requestUi, />View receipt<\/ActionButton>/);
   assert.doesNotMatch(requestUi, /privateReadyForRequest && \(!capability \|\| activityBound\).*Transaction receipt/);
   assert.match(requestUi, /Finished proposals use retained wallet history instead of the old share link/);
   assert.doesNotMatch(requestUi, /not saved to Activity before the link closed/);

@@ -28,6 +28,7 @@ export async function GET(): Promise<Response> {
         href: openapi,
         path: operation.path,
         method: operation.method,
+        pointer: '#/x-multisig-operations/' + operation.id,
       },
     })),
   }, METHODS);

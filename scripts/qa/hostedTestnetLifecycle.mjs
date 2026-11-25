@@ -4,15 +4,19 @@
 // No saved keys, email invitations, Mainnet calls, or production credentials.
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import { Account, BASE_FEE, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
+import { Account, Asset, BASE_FEE, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
 
-const API = 'https://api-testnet.multisig.tools/stellar';
+const TESTNET_API = 'https://api-testnet.multisig.tools/stellar';
+let API = TESTNET_API;
 const HORIZON = 'https://horizon-testnet.stellar.org';
 const FAUCET = 'https://friendbot.stellar.org';
 const LIVE = process.argv.includes('--live');
 const AGENT = process.argv.includes('--agent');
 const COORDINATION = process.argv.includes('--coordination');
 const PROPOSER = process.argv.includes('--proposer');
+const INTEGRATION = process.argv.includes('--integration');
+const EXTERNAL = process.argv.includes('--external');
+const ALLOW_UNDISCOVERED_INBOX = process.argv.includes('--allow-undiscovered-inbox');
 const now = () => new Date().toISOString();
 const trace = [];
 function record(step, extra = {}) {
@@ -66,8 +70,8 @@ async function submitXdr(xdr) {
     body: new URLSearchParams({ tx: xdr }),
   });
 }
-async function unlock(signer) {
-  const challenge = await call('/auth?account=' + encodeURIComponent(signer.publicKey()) + '&network=testnet');
+async function unlock(signer, authPath = '/auth') {
+  const challenge = await call(authPath + '?account=' + encodeURIComponent(signer.publicKey()) + '&network=testnet&unlock_seconds=3600');
   const tx = TransactionBuilder.fromXdr(challenge.transaction, Networks.TESTNET);
   check(tx.source === challenge.signing_key, 'Challenge source is not the server');
   check(tx.operations[0]?.source === signer.publicKey(), 'Challenge signer mismatch');
@@ -83,6 +87,46 @@ function humanHeaders(address, token) {
 function cookieHeaders(token) { return { Cookie: 'mst_auth=' + encodeURIComponent(token) }; }
 function requestHeaders(id, capability, extra = {}) {
   return { 'x-multisig-request-id': id, ...(capability ? { 'x-multisig-capability': capability } : {}), ...extra };
+}
+
+async function pairAgent(bob, label, grantPath = '/agent-grants', authPath = '/auth', access = 'sign') {
+    const bobToken = await unlock(bob, authPath);
+    const signerHeaders = humanHeaders(bob.publicKey(), bobToken);
+    const grant = await call(grantPath, 'POST', {
+      action: 'request', label, access, network: 'testnet',
+    }, {}, 201);
+    check(grant.verificationUri === 'https://stellar-testnet.multisig.tools/agent-access?grant=' + grant.requestId
+      && typeof grant.deviceCode === 'string' && grant.deviceCode.startsWith('mgd_'), 'Invalid pairing response');
+    const poll = { action: 'poll', deviceCode: grant.deviceCode };
+    const pending = await call(grantPath, 'POST', poll);
+    check(pending.status === 'authorization_pending' && !pending.apiKey, 'Credential issued before wallet approval');
+    record('agent-public-pairing-pending');
+    const unsignedApproval = await call(grantPath, 'POST', {
+      action: 'approve', requestId: grant.requestId,
+    }, signerHeaders, 403);
+    check(unsignedApproval.code === 'approval_signature_required', 'Login session bypassed fresh approval');
+    record('agent-session-only-approval-denied');
+    const challenge = await call(grantPath + '?id=' + grant.requestId + '&challenge=1', 'GET', undefined, signerHeaders);
+    check(challenge.signer === bob.publicKey() && challenge.access === access
+      && challenge.message.includes(grant.userCode), 'Pairing challenge does not match Agent request');
+    const approval = TransactionBuilder.fromXdr(challenge.transaction, Networks.TESTNET);
+    check(approval.operations[0]?.source === bob.publicKey(), 'Pairing approval signer mismatch');
+    approval.sign(bob);
+    const approved = await call(grantPath, 'POST', {
+      action: 'approve', requestId: grant.requestId, mode: 'transaction', transaction: approval.toXDR(),
+    }, signerHeaders);
+    check(approved.status === 'approved' && !approved.apiKey, 'Human approval exposed Agent credential');
+    record('agent-fresh-wallet-approval');
+    const agent = await call(grantPath, 'POST', poll);
+    check(agent.status === 'approved' && typeof agent.apiKey === 'string'
+      && agent.apiKey.startsWith('msa_') && agent.credential?.access === access,
+      'Agent credential was not issued');
+    const replay = await call(grantPath, 'POST', poll, {}, 409);
+    check(replay.code === 'already_exchanged' && !replay.apiKey
+      && replay.details?.credentialId === agent.credential.credentialId
+      && replay.details?.recoveryOperations?.includes('agent.access.revoke'), 'Device code recovery was ambiguous or reusable');
+    record('agent-single-use-credential-exchange');
+    return { agent, bobToken };
 }
 
 /** Dedicated authorized non-signer G-wallet Testnet lifecycle. New disposable keys
@@ -228,7 +272,332 @@ async function proposerE2E() {
     proposerFunded: false, evidence: trace }, null, 2));
 }
 
+// Discover business operations from the published service contract. A fixed
+// Testnet origin is a safety boundary, not a source of operation paths.
+async function discoverIntegration() {
+  const site = new URL(process.argv.find((arg) => arg.startsWith('https://'))
+    || 'https://stellar-testnet.multisig.tools/');
+  const htmlResponse = await fetch(site, { signal: AbortSignal.timeout(20000) });
+  check(htmlResponse.ok, 'Cannot load public MST website');
+  const html = await htmlResponse.text();
+  const link = html.match(/<link\s+rel="api-catalog"\s+href="([^"]+)"/);
+  check(link, 'Website does not advertise an API catalog');
+  const catalogUrl = new URL(link[1], site);
+  check(catalogUrl.protocol === 'https:', 'Catalog must use HTTPS');
+  const catalogResponse = await fetch(catalogUrl, { signal: AbortSignal.timeout(20000) });
+  check(catalogResponse.ok, 'Cannot load API catalog');
+  const catalog = await readJson(catalogResponse);
+  const entry = catalog.linkset?.find((item) => item.anchor === TESTNET_API);
+  check(entry, 'No catalog entry for the isolated Testnet deployment');
+  const registryUrl = new URL(entry['service-meta'][0].href);
+  const openApiUrl = new URL(entry['service-desc'][0].href);
+  for (const url of [registryUrl, openApiUrl]) {
+    check(url.href.startsWith(TESTNET_API + '/'), 'Unexpected API documentation origin');
+  }
+  const [registryResponse, openApiResponse] = await Promise.all([
+    fetch(registryUrl, { signal: AbortSignal.timeout(20000) }),
+    fetch(openApiUrl, { signal: AbortSignal.timeout(20000) }),
+  ]);
+  check(registryResponse.ok && openApiResponse.ok, 'Cannot load operation registry or OpenAPI');
+  const [registry, openapi] = await Promise.all([readJson(registryResponse), readJson(openApiResponse)]);
+  check(registry.base === TESTNET_API && openapi.servers?.[0]?.url === TESTNET_API
+    && openapi['x-multisig-deployment-network'] === 'testnet', 'Discovery network mismatch');
+  API = registry.base;
+  for (const item of registry.operations) {
+    const pointer = item.schema?.pointer;
+    check(item.schema?.href === openApiUrl.href && pointer?.startsWith('#/x-multisig-operations/'), 'Missing logical operation pointer: ' + item.id);
+    const logical = pointer.slice(2).split('/').reduce((value, key) => value?.[key], openapi);
+    check(logical?.operationId === item.id && logical.path === item.path && logical.method === item.method
+      && logical.access === item.access && logical.retry?.transportFailure?.strategy, 'Unresolvable logical operation: ' + item.id);
+  }
+  record('public-logical-operation-contracts-resolve', { count: registry.operations.length });
+  const operation = (id, access, effect) => {
+    const item = registry.operations.find((candidate) => candidate.id === id);
+    check(item && item.access === access && item.effect === effect
+      && item.path.startsWith('/') && !item.path.startsWith('//')
+      && openapi.paths?.[item.path]?.[item.method.toLowerCase()]?.['x-multisig-operation-ids']?.includes(id),
+    'Missing or inconsistent published operation: ' + id);
+    return item;
+  };
+  const runtime = await call(operation('runtime.config.inspect', 'public', 'none').path);
+  check(runtime.fixedNetwork === 'testnet', 'Refusing non-Testnet deployment');
+  const create = operation('integration.testnet.create', 'public', 'private-state');
+  const prepare = operation('integration.classic.payment.prepare', 'integration:write', 'none');
+  const request = operation('integration.request.create', 'integration:write', 'coordination-state');
+  const inspect = operation('integration.request.inspect', 'integration:read', 'none');
+  const reconcile = operation('integration.request.execution.reconcile', 'integration:read', 'none');
+  const reconcileContract = openapi['x-multisig-operations'][reconcile.id];
+  check(reconcileContract.dispatch?.query?.view === 'reconciliation' && reconcileContract.retry?.onOutcome?.unknown?.strategy === 'retry_same_request_with_backoff', 'Classic reconciliation dispatch/recovery contract missing');
+  reconcile.path += '?' + new URLSearchParams(reconcileContract.dispatch.query).toString();
+  const submit = operation('integration.request.submit', 'integration:write', 'network-submit');
+  const auth = operation('signer.auth.challenge', 'public', 'none');
+  const exchange = operation('signer.auth.exchange', 'public', 'private-state');
+  check(auth.path === exchange.path, 'Signer auth transport differs');
+  const grantChallenge = operation('agent.grant.challenge', 'human', 'none');
+  const revoke = operation('agent.access.revoke', 'human', 'private-state');
+  const pair = operation('agent.grant.request', 'public', 'private-state');
+  const poll = operation('agent.grant.poll', 'public', 'private-state');
+  const approve = operation('agent.grant.approve', 'human', 'private-state');
+  check(pair.path === poll.path && pair.path === approve.path && pair.path === grantChallenge.path, 'Pairing transport differs');
+  const contribute = operation('proposal.contribute', 'principal:sign', 'coordination-state');
+  let inbox;
+  if (ALLOW_UNDISCOVERED_INBOX && !registry.operations.some((item) => item.id === 'signer.inbox.list')) {
+    // Explicit compatibility mode for the already deployed API while the
+    // discovery fix is awaiting deployment. Not a successful blind test.
+    console.log('GAP signer.inbox.list is missing from deployed discovery; using known Inbox path');
+    inbox = { path: '/inbox', method: 'GET' };
+  } else {
+    inbox = operation('signer.inbox.list', 'principal:read', 'none');
+  }
+  record('public-msi-msa-operation-discovery', { strict: !ALLOW_UNDISCOVERED_INBOX });
+  return { runtime, create, prepare, request, inspect, reconcile, submit, pair, contribute, inbox, auth, revoke };
+}
+
+async function integrationE2E() {
+  const ops = await discoverIntegration();
+  if (!LIVE) {
+    console.log('READ-ONLY integration discovery passed');
+    return;
+  }
+  const alice = Keypair.random();
+  const bob = Keypair.random();
+  const carol = Keypair.random();
+  const source = alice.publicKey();
+  await fund(source);
+  const account = await horizon('/accounts/' + source);
+  const setup = new TransactionBuilder(new Account(source, account.sequence), {
+    fee: BASE_FEE, networkPassphrase: Networks.TESTNET,
+  })
+    .addOperation(Operation.setOptions({ signer: { ed25519PublicKey: bob.publicKey(), weight: 1 } }))
+    .addOperation(Operation.setOptions({ signer: { ed25519PublicKey: carol.publicKey(), weight: 1 } }))
+    .addOperation(Operation.setOptions({ masterWeight: 1, lowThreshold: 2, medThreshold: 2, highThreshold: 2 }))
+    .setTimeout(120).build();
+  setup.sign(alice);
+  check((await submitXdr(setup.toXDR())).successful, 'Disposable Treasury setup failed');
+  record('integration-disposable-testnet-treasury', { account: source });
+
+  const serviceId = 'agent-qa-' + randomBytes(6).toString('hex');
+  const profileInput = {
+    serviceId, label: 'Agent collaboration QA', classicSourceAccounts: [source],
+    ...(EXTERNAL ? { classicExternalExecutionSourceAccounts: [source] } : {}),
+    profile: { authorizationExperience: 'hosted' },
+  };
+  const integration = await call(ops.create.path, ops.create.method, profileInput, {}, 201);
+  const duplicate = await call(ops.create.path, ops.create.method, profileInput, {}, 409);
+  check(duplicate.code === 'integration_service_exists' && !duplicate.apiKey
+    && duplicate.details?.serviceId === serviceId
+    && duplicate.details?.recovery === 'new_service_id_or_authorized_operator_rotation', 'Profile retry did not fail closed');
+  record('msi-self-service-retry-create-only');
+  const unsupportedIdempotency = await call(ops.create.path, ops.create.method, profileInput, { 'Idempotency-Key': 'unsupported' }, 400);
+  check(unsupportedIdempotency.code === 'idempotency_key_unsupported', 'Profile incorrectly accepted a generic idempotency key');
+  record('msi-profile-idempotency-boundary');
+  check(integration.apiKey?.startsWith('msi_') && integration.service?.serviceId === serviceId
+    && integration.service.networks?.length === 1 && integration.service.networks[0] === 'testnet',
+  'Testnet Integration credential not issued');
+  const serviceHeaders = { Authorization: 'Bearer ' + integration.apiKey };
+  record('msi-self-service-issued', { serviceId });
+
+  const payment = { sourceAccount: source, payments: [{
+    destination: source, amount: '1', asset: { type: 'native' },
+  }], memo: 'Agent collaboration QA', lifetimeSeconds: 3600 };
+  const scopeDenied = await call(ops.prepare.path, ops.prepare.method, {
+    ...payment, network: 'testnet', sourceAccount: bob.publicKey(),
+  }, serviceHeaders, 403);
+  check(scopeDenied.code === 'integration_classic_source_account_not_allowed', 'MSI escaped source scope');
+  record('msi-out-of-scope-payment-denied');
+
+  let input;
+  if (!EXTERNAL && ops.runtime.capabilities?.classicManagedExecution?.testnet === true) {
+    input = { network: 'testnet', payment };
+    record('semantic-managed-payment-selected');
+  } else {
+    const prepared = await call(ops.prepare.path, ops.prepare.method, {
+      ...payment, network: 'testnet',
+    }, serviceHeaders);
+    check(prepared.xdr && prepared.network === 'testnet', 'Prepared payment missing');
+    input = { network: 'testnet', xdr: prepared.xdr };
+    record('prepared-xdr-fallback-selected');
+  }
+  const idempotencyHeaders = { ...serviceHeaders, 'Idempotency-Key': serviceId + '-payment' };
+  const created = await call(ops.request.path, ops.request.method, input, idempotencyHeaders, 201);
+  const requestId = created.request?.id;
+  check(requestId && created.request.status === 'awaiting_signatures', 'MSI could not create payment Request');
+  const replay = await call(ops.request.path, ops.request.method, input, idempotencyHeaders);
+  check(replay.request?.id === requestId && replay.replayed === true, 'MSI replay created another Request');
+  record('msi-idempotent-payment-created', { requestId });
+
+  const paired = [];
+  try {
+    const signerAgents = [
+      { signer: bob, label: 'QA signer Bob' },
+      { signer: carol, label: 'QA signer Carol' },
+    ];
+    for (const item of signerAgents) {
+      const pair = await pairAgent(item.signer, item.label, ops.pair.path, ops.auth.path);
+      paired.push({ ...item, ...pair });
+    }
+    // A separate, least-privilege personal Agent represents Bob, but may only notify him.
+    const monitor = await pairAgent(bob, 'QA personal Inbox monitor', ops.pair.path, ops.auth.path, 'read');
+    paired.push({ signer: bob, ...monitor });
+    const monitorHeaders = { Authorization: 'Bearer ' + monitor.agent.apiKey };
+    const monitorInbox = await call(ops.inbox.path, ops.inbox.method, undefined, monitorHeaders);
+    const pendingSignature = monitorInbox.tasks?.find((task) => task.signatureRequired);
+    check(monitorInbox.address === bob.publicKey() && monitorInbox.signature_required_count === 1 && monitorInbox.action_count === 0
+      && pendingSignature?.id === requestId && pendingSignature.state === 'waiting'
+      && pendingSignature.nextActions.every((action) => !action.available), 'Read Agent cannot distinguish pending signature from executable actions');
+    const monitorRequest = await call(ops.inspect.path, ops.inspect.method, undefined, requestHeaders(pendingSignature.id, '', monitorHeaders));
+    check(monitorRequest.task?.signatureRequired === true && monitorRequest.task.state === 'waiting', 'Read Agent Request projection disagrees with Inbox');
+    record('msa-read-monitor-discovers-signature-without-action');
+    const inboxDenied = await call(ops.inbox.path, ops.inbox.method, undefined, serviceHeaders, 401);
+    check(inboxDenied.code === 'invalid_agent_credential', 'MSI acquired signer Inbox access');
+    record('msi-signer-inbox-denied');
+
+    let final;
+    for (const [index, item] of paired.filter((item) => item.agent.credential.access === 'sign').entries()) {
+      const agentHeaders = { Authorization: 'Bearer ' + item.agent.apiKey };
+      const inbox = await call(ops.inbox.path, ops.inbox.method, undefined, agentHeaders);
+      const discovered = inbox.tasks?.find((task) => task.id === requestId);
+      check(inbox.address === item.signer.publicKey() && inbox.actor === 'agent'
+        && inbox.signature_required_count === 1 && inbox.action_count === 1
+        && discovered?.state === 'action_required' && discovered.signatureRequired === true
+        && discovered.nextActions?.some((action) => action.code === 'contribute_signature' && action.operationId === 'proposal.contribute' && action.available),
+      'Signer Agent did not independently discover payment task');
+      record('msa-inbox-task-discovered', { signer: index + 1 });
+      const headers = requestHeaders(discovered.id, '', agentHeaders);
+      const current = await call(ops.inspect.path, ops.inspect.method, undefined, headers);
+      const tx = TransactionBuilder.fromXdr(current.request.baseXdr, Networks.TESTNET);
+      const op = tx.operations[0];
+      check(tx.operations.length === 1 && op.type === 'payment' && (op.source || tx.source) === source
+        && op.destination === source && Number(op.amount) === 1 && op.asset.isNative(),
+      'Wallet review does not match authorized disposable payment');
+      check(Buffer.from(tx.hash()).toString('hex') === created.request.transactionHash, 'Request transaction changed');
+      if (index === 0) {
+        const deniedSubmit = await call(ops.submit.path, ops.submit.method, {}, headers, EXTERNAL ? 409 : 403);
+        check(deniedSubmit.code === (EXTERNAL ? 'external_executor_required' : 'agent_submit_denied'), 'MSA escaped submission boundary');
+        record('msa-direct-submit-denied');
+      }
+      tx.sign(item.signer);
+      if (index === 0) {
+        const monitorDenied = await call(ops.contribute.path, ops.contribute.method, { signedXdr: tx.toXDR() }, requestHeaders(requestId, '', monitorHeaders), 403);
+        check(monitorDenied.code === 'agent_access_denied', 'Read Agent acquired signature contribution authority');
+        record('msa-read-monitor-signature-contribution-denied');
+        const deniedContribution = await call(ops.contribute.path, ops.contribute.method,
+          { signedXdr: tx.toXDR() }, requestHeaders(requestId, '', serviceHeaders), 403);
+        check(deniedContribution.code === 'integration_request_write_denied', 'MSI acquired signer contribution authority');
+        record('msi-signature-contribution-denied');
+      }
+      final = await call(ops.contribute.path, ops.contribute.method, { signedXdr: tx.toXDR() }, headers);
+      check(final.addedSignatureCount === 1, 'Verified signer contribution rejected');
+      if (index === 0) {
+        check(final.request.status === 'awaiting_signatures', 'Payment executed before quorum');
+        const refreshed = await call(ops.inbox.path, ops.inbox.method, undefined, monitorHeaders);
+        const signedTask = refreshed.tasks?.find((task) => task.id === requestId);
+        check(refreshed.signature_required_count === 0 && refreshed.action_count === 0 && signedTask?.signatureRequired === false
+          && signedTask.state === 'waiting', 'Read Agent still sees pending signature after its human signed');
+        record('msa-read-monitor-clears-reminder-after-signature');
+      }
+      record('msa-wallet-signature-contributed', { signer: index + 1 });
+    }
+    if (EXTERNAL) {
+      check(final.request.status === 'ready', 'External Request did not stay ready at quorum');
+      const refused = await call(ops.submit.path, ops.submit.method, {}, requestHeaders(requestId, '', serviceHeaders), 409);
+      check(refused.code === 'external_executor_required', 'MST attempted to submit externally owned Request');
+      const reconcileHeaders = requestHeaders(requestId, '', serviceHeaders);
+      const unknown = await call(ops.reconcile.path, ops.reconcile.method, undefined, reconcileHeaders);
+      check(unknown.outcome === 'unknown' && unknown.observed === false && !unknown.observation && !unknown.nonInclusionProof && unknown.transactionHash === created.request.transactionHash, 'Unsubmitted ready Request was not unknown');
+      check(final.request.executionOutcome?.outcome === 'unknown', 'Canonical Request falsely claims a result at quorum');
+      record('classic-unsubmitted-ready-outcome-unknown');
+      const denied = await call(ops.reconcile.path, ops.reconcile.method, undefined, requestHeaders(requestId, '', monitorHeaders), 403);
+      check(denied.code === 'integration_request_access_denied', 'MSA acquired owner reconciliation');
+      record('classic-reconciliation-owner-only');
+      const externalReceipt = await submitXdr(final.request.mergedXdr);
+      check(externalReceipt.successful && externalReceipt.hash === created.request.transactionHash, 'External submission did not match Request');
+      record('external-executor-submitted-exact-xdr', { ledger: externalReceipt.ledger });
+      // Discard the submit response for business recovery: obtain the result
+      // from the original Request, not from the executor's returned receipt.
+      let recovered = await call(ops.reconcile.path, ops.reconcile.method, undefined, reconcileHeaders);
+      for (let retry = 0; recovered.outcome === 'unknown' && retry < 8; retry++) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        recovered = await call(ops.reconcile.path, ops.reconcile.method, undefined, reconcileHeaders);
+      }
+      check(recovered.outcome === 'successful' && recovered.observed && recovered.observation?.successful === true
+        && recovered.observation?.transactionHash === created.request.transactionHash && recovered.observation.ledger === externalReceipt.ledger, 'Response-loss recovery did not produce verified receipt');
+      const again = await call(ops.reconcile.path, ops.reconcile.method, undefined, reconcileHeaders);
+      check(again.replayed && JSON.stringify(again.observation) === JSON.stringify(recovered.observation), 'Successful reconciliation was not durable');
+      record('classic-lost-response-reconciliation-and-replay', { ledger: recovered.observation.ledger });
+    } else if (final.request.status === 'ready') {
+      final = await call(ops.submit.path, ops.submit.method, {}, requestHeaders(requestId, '', serviceHeaders));
+      record('msi-authorized-submission-retry');
+    } else {
+      check(final.request.status === 'submitted', 'Quorum did not produce ready or submitted state');
+      record('mst-auto-submitted-at-quorum');
+    }
+    let canonical = await call(ops.inspect.path, ops.inspect.method, undefined, requestHeaders(requestId, '', serviceHeaders));
+    for (let retry = 0; EXTERNAL && canonical.request.status !== 'submitted' && retry < 5; retry++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      canonical = await call(ops.inspect.path, ops.inspect.method, undefined, requestHeaders(requestId, '', serviceHeaders));
+    }
+    const receipt = canonical.request?.submission;
+    check(canonical.request.status === 'submitted' && receipt?.transactionHash === created.request.transactionHash,
+      'MSI did not receive canonical submission result');
+    const chain = await horizon('/transactions/' + receipt.transactionHash);
+    check(chain.successful && chain.hash === receipt.transactionHash && chain.ledger === receipt.ledger,
+      'Canonical status does not match Stellar ledger');
+    record('msi-canonical-ledger-confirmation', { requestId, ledger: chain.ledger, transactionHash: chain.hash });
+    if (EXTERNAL) {
+      check(canonical.request.executionOutcome?.outcome === 'successful', 'Canonical Request lacks successful execution evidence');
+      const latest = (await horizon('/ledgers?order=desc&limit=1'))._embedded.records[0];
+      const lower = Math.floor(Date.parse(latest.closed_at) / 1000);
+      const upper = Math.floor(Date.now() / 1000) + 30;
+      const fresh = await horizon('/accounts/' + source);
+      // Never sign or submit this envelope. The signed-payload time bounds
+      // define its entire possible execution window.
+      const absent = new TransactionBuilder(new Account(source, fresh.sequence), {
+        fee: BASE_FEE, networkPassphrase: Networks.TESTNET,
+      }).addOperation(Operation.payment({ destination: source, asset: Asset.native(), amount: '1' }))
+        .setTimebounds(lower, upper).build();
+      const newRequest = await call(ops.request.path, ops.request.method, { network: 'testnet', xdr: absent.toXDR() },
+        { ...serviceHeaders, 'Idempotency-Key': serviceId + '-never-submitted' }, 201);
+      const absentHeaders = requestHeaders(newRequest.request.id, '', serviceHeaders);
+      let result = await call(ops.reconcile.path, ops.reconcile.method, undefined, absentHeaders);
+      check(result.outcome === 'unknown', 'Still-valid envelope falsely declared absent');
+      for (let retry = 0; result.outcome === 'unknown' && retry < 30; retry++) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        result = await call(ops.reconcile.path, ops.reconcile.method, undefined, absentHeaders);
+      }
+      const proof = result.nonInclusionProof;
+      check(result.outcome === 'not_included' && !result.observed && proof
+        && Date.parse(proof.oldestLedgerClosedAt) < lower * 1000
+        && Date.parse(proof.latestLedgerClosedAt) > upper * 1000
+        && Date.parse(proof.validAfter) === lower * 1000
+        && Date.parse(proof.validUntil) === upper * 1000, 'Non-inclusion proof does not cover entire transaction validity');
+      const absentReplay = await call(ops.reconcile.path, ops.reconcile.method, undefined, absentHeaders);
+      const absentCanonical = await call(ops.inspect.path, ops.inspect.method, undefined, absentHeaders);
+      check(absentReplay.replayed && JSON.stringify(absentReplay.nonInclusionProof) === JSON.stringify(proof)
+        && absentCanonical.request.executionOutcome?.outcome === 'not_included'
+        && absentCanonical.request.statusReason === 'execution_not_included' && !absentCanonical.request.submission, 'Non-inclusion evidence not persisted consistently');
+      record('classic-real-non-inclusion-and-durable-replay', { requestId: newRequest.request.id, proof });
+    }
+  } finally {
+    for (const item of paired) {
+      const revoked = await call(ops.revoke.path, ops.revoke.method, {
+        credentialId: item.agent.credential.credentialId,
+      }, humanHeaders(item.signer.publicKey(), item.bobToken));
+      check(revoked.credential?.revokedAt, 'MSA cleanup failed');
+      const denied = await call(ops.inbox.path, ops.inbox.method, undefined, { Authorization: 'Bearer ' + item.agent.apiKey }, 401);
+      check(denied.code === 'agent_credential_revoked', 'Revoked Agent can still access Inbox');
+      record('msa-revocation-enforced');
+    }
+    // MSI has no self-revoke endpoint. This random Testnet-only service is
+    // scoped to the disposable Treasury; its secret and all test keys die
+    // with this process. Do not persist or print them.
+  }
+  console.log('LIVE MSI + MSA TESTNET E2E PASSED');
+  console.log(JSON.stringify({ evidence: trace }, null, 2));
+}
+
 async function main() {
+  if (INTEGRATION) return integrationE2E();
   const runtime = await call('/runtime-config');
   check(runtime.fixedNetwork === 'testnet', 'Refusing non-Testnet API deployment');
   record('isolated-testnet-runtime');
@@ -357,13 +726,9 @@ async function main() {
   let agentCredentialId = '';
   let bobToken = '';
   if (AGENT) {
-    bobToken = await unlock(bob);
-    const agent = await call('/agent-access', 'POST',
-      { label: 'MST hosted Testnet QA', access: 'sign' }, {
-        ...cookieHeaders(bobToken), 'x-multisig-session-address': bob.publicKey(),
-      }, 201);
-    check(typeof agent.apiKey === 'string' && agent.credential?.access === 'sign',
-      'Agent credential was not issued');
+    const paired = await pairAgent(bob, 'MST hosted Testnet QA');
+    const agent = paired.agent;
+    bobToken = paired.bobToken;
     agentApiKey = agent.apiKey;
     agentCredentialId = agent.credential.credentialId;
     record('agent-credential-created-for-signer');

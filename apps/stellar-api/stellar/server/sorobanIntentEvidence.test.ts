@@ -113,3 +113,15 @@ test('Soroban Intent evidence projects persisted creation, AUTH, and replan fact
   assert.equal(JSON.stringify(evidence).includes('SECRET'), false);
   assert.equal(JSON.stringify(evidence).includes('xdr'), false);
 });
+
+test('non-inclusion event carries the durable proof instead of only a conclusion', () => {
+  const proof = { oldestLedger: 1, latestLedger: 2000, latestLedgerClosedAt: '2026-09-15T12:06:00Z', checkedAt: '2026-09-15T12:06:01Z' };
+  const prepared = { ...preparations[0], nonInclusionProof: proof };
+  const events = projectSorobanIntentEvidence(intent(), [], [prepared], []);
+  const absent = events.find(event => event.type === 'execution_not_included');
+  assert.deepEqual(absent?.nonInclusionProof, proof);
+  assert.equal(absent?.transactionHash, prepared.transactionHash);
+  assert.equal(events.find(event => event.type === 'execution_prepared')?.validUntil, prepared.validUntil);
+  const observed = projectSorobanIntentEvidence(intent(), [], [prepared], observations);
+  assert.ok(!observed.some(event => event.type === 'execution_not_included'));
+});

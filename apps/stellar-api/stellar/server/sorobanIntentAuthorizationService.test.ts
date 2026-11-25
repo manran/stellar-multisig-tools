@@ -29,6 +29,8 @@ import type {
 } from './sorobanIntentStore.js';
 class MemoryIntentStore implements SorobanIntentStore {
   values = new Map<string, StoredSorobanIntent>();
+  observations: import('./sorobanIntentStore.js').StoredSorobanIntentExecutionObservation[] = [];
+  async listExecutionObservations() { return this.observations; }
   contributions = new Map<string, StoredSorobanIntentAuthorizationContribution[]>();
   async createIntent(value: StoredSorobanIntent) { this.values.set(value.id, value); }
   async getIntent(id: string) { return this.values.get(id) ?? null; }
@@ -107,6 +109,18 @@ async function fixture() {
   };
   return { store, stored, plan, authorizer, signerA, signerB, options };
 }
+test('owner-authorized completed projection needs no live account or ledger lookup', async () => {
+  const f = await fixture();
+  f.store.observations.push({ version: 1, transactionHash: 'a'.repeat(64), authorizationPlanDigest: f.plan.authorizationPlanDigest,
+    authorizationPlanRevision: 1, executionSource: f.signerA.publicKey(), ledger: 130, successful: true, observedAt: '2026-09-14T10:01:00.000Z' });
+  const snapshot = await getSorobanIntentAuthorization(f.store, f.stored.id, {
+    terminalReceiptOnly: true, accountLoader: async () => { throw new Error('offline account'); },
+    networkParametersLoader: async () => { throw new Error('offline ledger'); },
+  });
+  assert.equal(snapshot.status, 'completed');
+  assert.deepEqual(snapshot.authorizationEntriesXdr, []);
+});
+
 function revisedPlan(f: Awaited<ReturnType<typeof fixture>>, expirationLedger = 820) {
   const previousEntry = authorizationEntriesFromPlan(f.plan)[0];
   const nextEntry = new xdr.SorobanAuthorizationEntry({

@@ -42,8 +42,8 @@ export default function ContractsApp() {
           {!address && (
             <section className="mx-auto max-w-xl py-14 sm:py-20">
               <Braces className="mst-contract-accent h-8 w-8" />
-              <h2 className="mt-5 text-3xl font-bold">Connect the signer workspace</h2>
-              <p className="mt-2 text-base leading-7 text-neutral-600 dark:text-neutral-300">Saved contracts stay private to the connected signer workspace.</p>
+              <h2 className="mt-5 text-3xl font-bold">Connect wallet</h2>
+              <p className="mt-2 text-base leading-7 text-neutral-600 dark:text-neutral-300">Connect your wallet to see saved contracts.</p>
               <button type="button" disabled={busy} onClick={() => void connect()} className="mst-action-primary mt-6 disabled:opacity-50">{busy ? 'Opening wallets…' : 'Connect wallet'}</button>
             </section>
           )}

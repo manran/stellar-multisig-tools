@@ -3,6 +3,7 @@ import {
   configuredIntegrationCredentials,
   createIntegrationApiKey,
   IntegrationCredentialServiceError,
+  isValidIntegrationServiceId,
   normalizeConfiguredIntegrationCredential,
   type ConfiguredIntegrationCredential,
 } from './integrationCredentialService.js';
@@ -23,6 +24,9 @@ import {
   integrationProfileFromInput,
   type IntegrationProfilePreferences,
 } from './integrationProfile.js';
+
+import { integrationSorobanExecutionAvailable } from './sorobanIntentConfig.js';
+import { SorobanIntentPlanningError } from './sorobanIntentPlanningService.js';
 
 const ADMIN_KEY_PREFIX = 'mia';
 const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
@@ -45,7 +49,7 @@ export interface IntegrationAdminSummary {
 }
 
 export class IntegrationAdminServiceError extends Error {
-  constructor(message: string, readonly status: number, readonly code: string) {
+  constructor(message: string, readonly status: number, readonly code: string, readonly details?: Record<string, unknown>) {
     super(message);
     this.name = 'IntegrationAdminServiceError';
   }
@@ -157,6 +161,29 @@ function normalizeInput(input: Record<string, unknown>, secretHash: string): Con
   }
 }
 
+function assertExecutionConfiguration(credential: ConfiguredIntegrationCredential): void {
+  for (const network of credential.networks) {
+    for (const contract of credential.sorobanContracts) {
+      const mode = contract.execution?.mode ?? 'external';
+      let available: boolean;
+      try {
+        available = integrationSorobanExecutionAvailable(network, { mode }, credential.sorobanExecutionAccounts);
+      } catch (cause) {
+        if (cause instanceof SorobanIntentPlanningError) {
+          throw new IntegrationAdminServiceError(cause.message, 503, cause.code);
+        }
+        throw cause;
+      }
+      if (!available) {
+        throw new IntegrationAdminServiceError(
+          `Soroban execution is unavailable on ${network}. Configure an allowed external executor or use an available managed executor.`,
+          409, 'managed_executor_not_configured',
+        );
+      }
+    }
+  }
+}
+
 async function currentRecord(store: IntegrationCredentialStore, serviceId: string): Promise<StoredIntegrationCredential | null> {
   const durable = await store.getCredential(serviceId);
   if (durable) return durable;
@@ -172,13 +199,21 @@ export async function createIntegrationAdminService(
   now = new Date(),
   webhookMasterSecret?: string,
 ): Promise<{ service: IntegrationAdminSummary; apiKey: string; webhookSecret?: string }> {
-  const serviceId = typeof input.serviceId === 'string' ? input.serviceId.trim().toLowerCase() : '';
-  if (!serviceId) throw new IntegrationAdminServiceError('Service id is required.', 400, 'integration_service_id_required');
-  if (await currentRecord(store, serviceId)) {
-    throw new IntegrationAdminServiceError('This Integration Service already exists.', 409, 'integration_service_exists');
+  const serviceId = input.serviceId;
+  if (typeof serviceId !== 'string' || !serviceId.trim()) {
+    throw new IntegrationAdminServiceError('Service id is required.', 400, 'integration_service_id_required');
   }
+  if (!isValidIntegrationServiceId(serviceId)) {
+    throw new IntegrationAdminServiceError('Service id must contain 1–40 lowercase letters, digits or hyphens, starting with a letter or digit.', 400, 'invalid_integration_service_id');
+  }
+  const serviceExists = () => new IntegrationAdminServiceError(
+    'This Integration Service already exists. Creation cannot return its original credential or replace it.',
+    409, 'integration_service_exists', { serviceId, recovery: 'new_service_id_or_authorized_operator_rotation' },
+  );
+  if (await currentRecord(store, serviceId)) throw serviceExists();
   const generated = createIntegrationApiKey(serviceId);
   const credential = normalizeInput(input, generated.secretHash);
+  assertExecutionConfiguration(credential);
   const timestamp = now.toISOString();
   const enabled = typeof input.enabled === 'boolean' ? input.enabled : true;
   let webhook: IntegrationWebhookConfig | undefined;
@@ -200,7 +235,7 @@ export async function createIntegrationAdminService(
     profile,
     createdAt: timestamp, updatedAt: timestamp,
   };
-  await store.putCredential(record);
+  if (!await store.createCredential(record)) throw serviceExists();
   return {
     service: summary(record, 'durable'),
     apiKey: generated.apiKey,
@@ -219,6 +254,7 @@ export async function updateIntegrationAdminService(
   if (!current) throw new IntegrationAdminServiceError('Integration Service was not found.', 404, 'integration_service_not_found');
   const credential = normalizeInput({ ...input, serviceId }, current.credential.secretHash);
   const enabled = typeof input.enabled === 'boolean' ? input.enabled : current.enabled;
+  if (enabled) assertExecutionConfiguration(credential);
   const profile = normalizeProfile(input.profile, current.profile ?? DEFAULT_INTEGRATION_PROFILE);
   const updated: StoredIntegrationCredential = {
     version: 1,

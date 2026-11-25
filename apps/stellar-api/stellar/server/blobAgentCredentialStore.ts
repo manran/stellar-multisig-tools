@@ -87,6 +87,10 @@ export const blobAgentCredentialStore: AgentCredentialStore = {
     return putJson(usagePath(credentialId), { lastUsedAt: usedAt }, true);
   },
 
+  getIdempotency(credentialId, hash) {
+    return readJson<StoredAgentIdempotencyClaim>(idempotencyPath(credentialId, hash));
+  },
+
   async claimIdempotency(claim) {
     const pathname = idempotencyPath(claim.credentialId, claim.idempotencyHash);
     const existing = await readJson<StoredAgentIdempotencyClaim>(pathname);

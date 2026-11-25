@@ -6,13 +6,11 @@ import {
   runtimeSigningRequestStore,
   runtimeSorobanIntentStore,
 } from '../server/coordinationStores.js';
-import { authConfigForRequest } from '../server/authConfig.js';
-import { AuthServiceError, requirePrivateWorkspaceSession } from '../server/authService.js';
+import { AuthServiceError } from '../server/authService.js';
+import { CallerAuthenticationError, signerWorkspaceCallerFromRequest } from '../server/callerAuthentication.js';
+import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import {
   AgentCredentialServiceError,
-  authenticateAgentCredential,
-  looksLikeAgentCredential,
-  requireAgentAccess,
 } from '../server/agentCredentialService.js';
 import {
   BoxServiceError,
@@ -50,14 +48,9 @@ function bearerToken(request: Request): string | null {
 
 async function activityViewer(request: Request): Promise<ActivityViewer> {
   const bearer = bearerToken(request);
-  if (bearer && looksLikeAgentCredential(bearer)) {
-    const credential = await authenticateAgentCredential(blobAgentCredentialStore, bearer);
-    requireAgentAccess(credential, 'read');
-    await blobAgentCredentialStore.touchCredential(credential.credentialId, new Date().toISOString());
-    return { address: credential.principal.address, network: credential.principal.network, kind: 'agent' };
-  }
   if (bearer && looksLikeTreasuryAuditCredential(bearer)) {
     const credential = await authenticateTreasuryAuditKey(blobBoxStore, bearer);
+    assertDeploymentNetwork(credential.box.network);
     await blobBoxStore.touchAuditKey(credential.keyId, new Date().toISOString());
     return {
       address: '',
@@ -66,14 +59,10 @@ async function activityViewer(request: Request): Promise<ActivityViewer> {
       auditAccountId: credential.box.accountId,
     };
   }
-  if (bearer) throw new BoxServiceError('Invalid API credential.', 401, 'invalid_api_credential');
-  const session = await requirePrivateWorkspaceSession(
-    blobAuthStore,
-    request,
-    authConfigForRequest(request),
-    'Unlock private data to view Activity.',
+  const caller = await signerWorkspaceCallerFromRequest(
+    blobAgentCredentialStore, blobAuthStore, request, 'read', 'Unlock private data to view Activity.',
   );
-  return { address: session.address, network: session.network, kind: 'human' };
+  return { address: caller.address, network: caller.network, kind: caller.actor };
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -189,7 +178,7 @@ export async function GET(request: Request): Promise<Response> {
   } catch (cause) {
     if (cause instanceof AgentCredentialServiceError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
     if (cause instanceof BoxServiceError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
-    if (cause instanceof AuthServiceError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
+    if (cause instanceof AuthServiceError || cause instanceof CallerAuthenticationError || cause instanceof DeploymentNetworkPolicyError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
     if (cause instanceof RequestStorageUnavailableError) return noStoreJson({ error: cause.message, code: 'storage_not_configured' }, 503);
     console.error('Activity API error', cause);
     return noStoreJson({ error: 'Activity is temporarily unavailable.', code: 'internal_error' }, 500);

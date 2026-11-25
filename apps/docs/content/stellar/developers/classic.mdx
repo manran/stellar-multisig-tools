@@ -27,6 +27,8 @@ The response is the ordinary Request/Proposal lifecycle used by Human flows.
 
 **Manage execution myself:** your service owns transaction source/sequence/submission for Treasuries explicitly configured for external execution.
 
+Check `capabilities.classicManagedExecution.testnet` from runtime-config before creating a semantic payment. If false, use [prepared XDR](/stellar/developers/testnet-quickstart#3-prepare-and-create-a-classic-request) with either execution owner. For external execution, submit only the fully authorized `mergedXdr` on the fixed network, then GET the same Request to reconcile confirmed on-chain evidence.
+
 **No silent rewrite:** raw XDR is never silently rewritten into a managed-channel transaction. Managed reconstruction is available for semantic creation because the business intent is explicit.
 
 The managed channel is pre-authorized only for transaction-source authority. It never becomes a Treasury signer.

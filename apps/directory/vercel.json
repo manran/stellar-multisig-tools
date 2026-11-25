@@ -2,6 +2,13 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "routes": [
     {
+      "src": "/",
+      "headers": {
+        "Link": "<https://stellar-testnet.multisig.tools/.well-known/api-catalog>; rel=\"api-catalog\"; type=\"application/linkset+json\", <https://api-testnet.multisig.tools/stellar/openapi.json>; rel=\"service-desc\"; type=\"application/vnd.oai.openapi+json\", <https://docs.multisig.tools/stellar/developers/agent-quickstart>; rel=\"service-doc\", </llms.txt>; rel=\"describedby\"; type=\"text/plain\""
+      },
+      "continue": true
+    },
+    {
       "src": "/(.*)",
       "headers": {
         "Content-Security-Policy": "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:",

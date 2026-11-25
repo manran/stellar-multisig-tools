@@ -17,14 +17,15 @@ import {
 } from '../../../../packages/stellar-core/src/sorobanCustomAuthorization.js';
 import { authorizationEntriesFromPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
 import { isValidStellarAccountId, loadAccount, loadNetworkParameters } from '../../../../packages/stellar-core/src/horizon.js';
-import type { SorobanIntentStore, StoredSorobanIntentAuthorizationContribution } from './sorobanIntentStore.js';
+import { successfulSorobanExecution, assertSorobanIntentNotExecuted, assertSorobanExecutionResolved, type SorobanIntentStore, type StoredSorobanIntentAuthorizationContribution } from './sorobanIntentStore.js';
 
 export type SorobanIntentAuthorizationStatus =
   | 'awaiting_authorization'
   | 'authorization_ready'
   | 'expired'
   | 'blocked'
-  | 'cancelled';
+  | 'cancelled'
+  | 'completed';
 
 export class SorobanIntentAuthorizationServiceError extends Error {
   constructor(message: string, readonly status: number, readonly code: string) {
@@ -40,6 +41,8 @@ interface AuthorizationOptions {
   accountLoader?: AccountLoader;
   networkParametersLoader?: NetworkParametersLoader;
   contributionActor?: AgentActorProvenance;
+  /** Only for owner-authorized history and service-side projections, never live signer access checks. */
+  terminalReceiptOnly?: boolean;
 }
 
 export interface SorobanIntentAuthorizationSnapshot {
@@ -230,6 +233,16 @@ export async function getSorobanIntentAuthorization(
   const allContributions = await store.listContributions(id);
   const contributions = allContributions.filter((contribution) =>
     contributionBelongsToCurrentPlan(stored, contribution));
+  if (options.terminalReceiptOnly) {
+    const receipt = successfulSorobanExecution(await (store.listExecutionObservations?.(id) ?? Promise.resolve([])));
+    if (receipt) return {
+      id: stored.id, network: stored.network, intentDigest: stored.intent.intentDigest,
+      authorizationPlanDigest: stored.authorizationPlan.authorizationPlanDigest,
+      executionBinding: stored.authorizationPlan.executionBinding, status: 'completed',
+      statusDetail: 'Execution confirmed in ledger ' + receipt.ledger + '. Current signer weights and authorization validity are not required to read a completed Intent.',
+      authorizationEntriesXdr: [], contributionCount: contributions.length, authorizers: [],
+    };
+  }
   const entries = await applyContributions(
     authorizationEntriesFromPlan(stored.authorizationPlan),
     stored.network,
@@ -289,11 +302,13 @@ export async function contributeSorobanIntentAuthorization(
   if (!isValidStellarAccountId(input.signerAddress)) {
     throw new SorobanIntentAuthorizationServiceError('A valid Stellar signer address is required.', 400, 'invalid_signer');
   }
+  await assertSorobanIntentNotExecuted(store, id);
   const before = await getSorobanIntentAuthorization(store, id, options);
   const target = before.authorizers.find((item) => item.entryIndex === input.entryIndex);
   if (target?.signerEvidence.some((signer) => signer.publicKey === input.signerAddress)) {
     return { authorization: before, added: false };
   }
+  await assertSorobanExecutionResolved(store, id);
   if (before.status !== 'awaiting_authorization') {
     throw new SorobanIntentAuthorizationServiceError(
       'This Soroban Intent is not accepting more authorization signatures.',
@@ -371,5 +386,6 @@ export async function contributeSorobanIntentAuthorization(
       'intent_cancelled',
     );
   }
+  await assertSorobanIntentNotExecuted(store, id);
   return { authorization: await getSorobanIntentAuthorization(store, id, options), added: true };
 }

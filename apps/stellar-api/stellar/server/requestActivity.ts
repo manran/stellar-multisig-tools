@@ -12,6 +12,7 @@ import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/
 import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { StellarNetwork, StellarSigner } from '../../../../packages/stellar-core/src/types.js';
 import { isValidSigningRequestId } from './requestLocator.js';
+import { isExternalClassicRequest, successfulClassicEvidence } from './requestStore.js';
 import type {
   SigningRequestStore,
   StoredSigningRequestReadFacts,
@@ -295,8 +296,11 @@ async function activityItemForRequest(
     ? Promise.resolve(readFacts)
     : Promise.all([
         store.listContributions(request.id),
-        store.getSubmission(request.id, request.transactionHash),
-      ]).then(([contributions, submission]) => ({ contributions, submission }));
+        isExternalClassicRequest(request) ? store.getExecutionEvidence?.(request.id) ?? null : null,
+      ]).then(async ([contributions, executionEvidence]) => ({
+        contributions, executionEvidence,
+        submission: await store.getSubmission(request.id, request.transactionHash),
+      }));
   const [facts, storedEvents, coordinationEvents, noteRevisions, participant, participants] = await Promise.all([
     factsPromise,
     store.listActivityEvents?.(request.id) ?? Promise.resolve([]),
@@ -307,7 +311,7 @@ async function activityItemForRequest(
     store.getRequestParticipant?.(request.id, address) ?? Promise.resolve(null),
     store.listRequestParticipants?.(request.id) ?? Promise.resolve([]),
   ]);
-  const { contributions, submission } = facts;
+  const { contributions, submission, executionEvidence } = facts;
   const projected = projectContributionEvents(
     request,
     contributions,
@@ -348,6 +352,7 @@ async function activityItemForRequest(
     createdAt: request.createdAt,
     expiresAt: request.expiresAt,
     accountIds,
+    ...(isExternalClassicRequest(request) ? { executionOutcome: submission ? successfulClassicEvidence(submission) : executionEvidence ?? { outcome: 'unknown' as const, observed: false as const } } : {}),
     events,
     ...(coordinationEvents.length > 0 ? {
       coordinationEvents: [...coordinationEvents].sort((a, b) =>

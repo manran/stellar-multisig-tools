@@ -168,6 +168,32 @@ test('large numeric drift requires explicit review', () => {
   assert.equal(diff.maxChangeBasisPoints, 1000);
 });
 
+test('CAP-84 muxed destination ID changes require reauthorization, even at the same contract', () => {
+  const source = Keypair.random().publicKey();
+  function transfer(id: bigint, amount: bigint) {
+    const data = xdr.ScVal.scvMap([
+      new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol('amount'), val: nativeToScVal(amount, { type: 'i128' }) }),
+      new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol('to_muxed_id'), val: xdr.ScVal.scvU64(id) }),
+    ]);
+    const event = new xdr.ContractEvent({
+      ext: xdr.ExtensionPoint.v0(), contractId: null, type: xdr.ContractEventType.contract,
+      body: xdr.ContractEventBody.v0(new xdr.ContractEventV0({
+        topics: [xdr.ScVal.scvSymbol('transfer'), Address.fromString(source).toScVal(), Address.fromString(CONTRACT).toScVal()],
+        data,
+      })),
+    });
+    return new xdr.DiagnosticEvent({ inSuccessfulContractCall: true, event }).toXdr('base64');
+  }
+  const first = sorobanEffectsSnapshot([], [transfer(18446744073709551614n, 100n)]);
+  const moved = sorobanEffectsSnapshot([], [transfer(18446744073709551615n, 100n)]);
+  const changedAmount = sorobanEffectsSnapshot([], [transfer(18446744073709551614n, 99n)]);
+  assert.match(first.events[0].data, /18446744073709551614/);
+  assert.equal(first.numericEffects.length, 1);
+  assert.equal(compareSorobanEffects(first, moved).kind, 'structural');
+  assert.equal(compareSorobanEffects(first, moved).requiresReauthorization, true);
+  assert.equal(compareSorobanEffects(first, changedAmount).kind, 'numeric');
+});
+
 test('recipient or event-topic changes remain structural even when amounts are similar', () => {
   const expected = sorobanEffectsSnapshot([], [event('contract', true, 100, 'transfer')]);
   const current = sorobanEffectsSnapshot([], [event('contract', true, 99, 'mint')]);

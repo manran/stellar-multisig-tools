@@ -76,7 +76,7 @@ export default function StellarAccountControl() {
         <div className="absolute right-0 z-50 mt-2 w-[min(21rem,calc(100vw-1rem))] rounded-2xl border border-black/10 bg-white p-2 shadow-xl dark:border-white/15 dark:bg-[#151515]">
           <div className="px-3 py-2">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-sm font-semibold">{alias || (networkSource === 'application' ? 'Selected hardware wallet' : 'Selected wallet')}</div>
+              <div className="text-sm font-semibold">{alias || 'Selected wallet'}</div>
               {networkLabel && <span className={`text-xs font-semibold ${networkTextClass}`}>{networkLabel}</span>}
             </div>
             <div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{address}</div>
@@ -84,7 +84,7 @@ export default function StellarAccountControl() {
 
           {networkSource === 'application' && network && !fixedDeploymentNetwork && (
             <div className="my-1 border-t border-black/10 px-3 py-3 dark:border-white/10">
-              <div className="flex items-center gap-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400"><Globe2 className="h-3.5 w-3.5" />Hardware wallet network</div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400"><Globe2 className="h-3.5 w-3.5" />Signing network</div>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {(['public', 'testnet'] as StellarNetwork[]).map((candidate) => {
                   const selected = candidate === network;
@@ -102,7 +102,7 @@ export default function StellarAccountControl() {
                   );
                 })}
               </div>
-              <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Ledger and Trezor use the selected MultiSig Tools network context; the device itself does not have a Stellar network setting. This hardware address stays selected after unplugging until you choose another wallet or sign out; the device is contacted only when an action needs it.</p>
+              <p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">This wallet uses the selected MultiSig Tools network context. The selected address stays active until you choose another wallet or sign out. Your wallet is contacted when you explicitly request an action.</p>
             </div>
           )}
 
@@ -115,7 +115,7 @@ export default function StellarAccountControl() {
                 className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-emerald-700 hover:bg-emerald-500/5 disabled:opacity-50 dark:text-emerald-300"
               >
                 {authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                {authBusy ? 'Confirming wallet…' : 'Sign in to workspace'}
+                {authBusy ? 'Confirming wallet…' : 'Confirm wallet'}
               </button>
             )}
             <button
@@ -169,10 +169,10 @@ export default function StellarAccountControl() {
       type="button"
       disabled={busy || authBusy}
       onClick={() => void signIn()}
-      className="flex items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-semibold shadow-sm transition hover:border-emerald-500/30 hover:bg-emerald-500/[0.04] disabled:opacity-50 dark:border-white/15 dark:bg-white/5 dark:hover:border-emerald-400/30 sm:px-3.5"
+      className="mst-action-secondary disabled:opacity-50"
     >
-      {busy || authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />}
-      <span>{busy ? 'Opening wallets…' : authBusy ? 'Confirming…' : 'Sign in'}</span>
+      {busy || authBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <WalletCards className="h-4 w-4" />}
+      <span>{busy ? 'Opening wallets…' : authBusy ? 'Confirming…' : 'Connect wallet'}</span>
     </button>
   );
 }

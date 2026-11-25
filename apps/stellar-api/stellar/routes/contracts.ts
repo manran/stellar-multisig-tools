@@ -2,13 +2,11 @@ import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js'
 import { blobAuthStore } from '../server/blobAuthStore.js';
 import { blobContractWorkspaceStore } from '../server/blobContractWorkspaceStore.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
-import { authConfigForRequest } from '../server/authConfig.js';
-import { AuthServiceError, requirePrivateWorkspaceSession } from '../server/authService.js';
-import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
+import { AuthServiceError } from '../server/authService.js';
+import { CallerAuthenticationError, signerWorkspaceCallerFromRequest } from '../server/callerAuthentication.js';
+import { DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import {
   AgentCredentialServiceError,
-  authenticateAgentCredential,
-  requireAgentAccess,
 } from '../server/agentCredentialService.js';
 import {
   ContractWorkspaceServiceError,
@@ -46,6 +44,7 @@ function errorResponse(cause: unknown): Response {
   if (
     cause instanceof RequestBodyError
     || cause instanceof AuthServiceError
+    || cause instanceof CallerAuthenticationError
     || cause instanceof AgentCredentialServiceError
     || cause instanceof ContractWorkspaceServiceError
     || cause instanceof DeploymentNetworkPolicyError
@@ -59,23 +58,11 @@ function errorResponse(cause: unknown): Response {
   return json({ error: 'Contract workspace is temporarily unavailable.', code: 'internal_error' }, 500);
 }
 async function principalFor(request: Request, requiredAccess: AgentAccessLevel): Promise<SignerPrincipalRef> {
-  const authorization = request.headers.get('authorization') ?? '';
-  const bearer = /^Bearer\s+(.+)$/i.exec(authorization);
-  if (bearer) {
-    const credential = await authenticateAgentCredential(blobAgentCredentialStore, bearer[1].trim());
-    requireAgentAccess(credential, requiredAccess);
-    assertDeploymentNetwork(credential.principal.network);
-    await blobAgentCredentialStore.touchCredential(credential.credentialId, new Date().toISOString());
-    return credential.principal;
-  }
-  const session = await requirePrivateWorkspaceSession(
-    blobAuthStore,
-    request,
-    authConfigForRequest(request),
+  const caller = await signerWorkspaceCallerFromRequest(
+    blobAgentCredentialStore, blobAuthStore, request, requiredAccess,
     'Unlock the signer workspace to use saved contracts.',
   );
-  assertDeploymentNetwork(session.network);
-  return { type: 'signer', network: session.network, address: session.address };
+  return { type: 'signer', address: caller.address, network: caller.network };
 }
 
 function contractIdFromBody(body: Record<string, unknown>): string {

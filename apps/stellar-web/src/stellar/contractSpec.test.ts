@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Keypair, scValToNative, xdr } from '@stellar/stellar-sdk/base';
+import { Address, Keypair, StrKey, scValToNative, xdr } from '@stellar/stellar-sdk/base';
 import { Spec } from '@stellar/stellar-sdk/contract';
 import {
   contractArgumentsToScVals,
@@ -108,6 +108,38 @@ test('guided arguments encode against the exact contract spec instead of guessin
   assert.equal(args[1]?.type, 'scvAddress');
   assert.equal(scValToNative(args[2]!), 42n);
   assert.equal(scValToNative(args[3]!), true);
+});
+
+test('Protocol 30 guided MuxedAddress preserves W destinations and rejects them for plain Address', () => {
+  const contract = StrKey.decodeContract(CONTRACT_ID);
+  const destination = Address.muxedContract(Buffer.concat([contract, Buffer.alloc(8, 255)])).toString();
+  const spec = specWith(
+    fn('pay', [input('to', xdr.ScSpecTypeDef.scSpecTypeMuxedAddress())]),
+    fn('plain', [input('to', xdr.ScSpecTypeDef.scSpecTypeAddress())]),
+    fn('optional', [input('to', xdr.ScSpecTypeDef.scSpecTypeOption(new xdr.ScSpecTypeOption({
+      valueType: xdr.ScSpecTypeDef.scSpecTypeMuxedAddress(),
+    })))]),
+  );
+  assert.equal(StrKey.isValidMuxedContract(destination), true);
+  assert.equal(StrKey.isValidContract(destination), false);
+  assert.equal(StrKey.isValidEd25519PublicKey(destination), false);
+  const [value] = contractArgumentsToScVals(spec, 'pay', { to: destination });
+  assert.equal(value.type, 'scvAddress');
+  if (value.type !== 'scvAddress') throw new Error('Expected address ScVal');
+  const address = value.value;
+  assert.equal(address.type, 'scAddressTypeMuxedContract');
+  if (address.type !== 'scAddressTypeMuxedContract') throw new Error('Expected muxed contract');
+  assert.equal(address.value.id, 18446744073709551615n);
+  assert.equal(scValToNative(xdr.ScVal.fromXdr(value.toXdr('base64'), 'base64')), destination);
+  assert.equal(scValToNative(contractArgumentsToScVals(spec, 'optional', { to: destination })[0]), destination);
+  assert.equal(scValToNative(contractArgumentsToScVals(spec, 'pay', { to: CONTRACT_ID })[0]), CONTRACT_ID);
+  const account = Keypair.random().publicKey();
+  assert.equal(scValToNative(contractArgumentsToScVals(spec, 'pay', { to: account })[0]), account);
+  const muxedAccount = Address.muxedAccount(Buffer.concat([StrKey.decodeEd25519PublicKey(account), Buffer.alloc(8, 7)])).toString();
+  assert.equal(scValToNative(contractArgumentsToScVals(spec, 'pay', { to: muxedAccount })[0]), muxedAccount);
+  assert.throws(() => contractArgumentsToScVals(spec, 'plain', { to: destination }), /MuxedAddress/);
+  assert.throws(() => contractArgumentsToScVals(spec, 'plain', { to: muxedAccount }), /MuxedAddress/);
+  assert.throws(() => contractArgumentsToScVals(spec, 'pay', { to: destination.slice(0, -1) + 'A' }), /address/i);
 });
 
 test('guided Option<Address> encodes omitted value as None and address as Some', () => {

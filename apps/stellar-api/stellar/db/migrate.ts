@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { PoolClient } from 'pg';
 import { coordinationPool } from './postgres.js';
+import { sorobanPlanAuthorizerAccounts, type SorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
 
 const MIGRATION_FILE = /^([0-9]{4}_[a-z0-9_]+)\.sql$/;
 const ADVISORY_LOCK = 'mst_stellar:migrations';
@@ -15,6 +16,28 @@ async function appliedVersions(client: PoolClient): Promise<Set<string>> {
     'SELECT version FROM mst_stellar.schema_migrations ORDER BY version',
   );
   return new Set(result.rows.map((row) => row.version));
+}
+
+/** Backfill existing plans without a live Stellar dependency. The row lock
+ * protects the authorizer index of any concurrent replan. */
+async function backfillSorobanAuthorizerAccounts(client: PoolClient): Promise<void> {
+  for (;;) {
+    await client.query('BEGIN');
+    try {
+      const result = await client.query<{ id: string; authorization_plan: SorobanAuthorizationPlan }>(
+        'SELECT id, authorization_plan FROM mst_stellar.soroban_intents WHERE authorizer_accounts IS NULL ORDER BY id LIMIT 100 FOR UPDATE',
+      );
+      for (const row of result.rows) {
+        await client.query('UPDATE mst_stellar.soroban_intents SET authorizer_accounts = $2 WHERE id = $1',
+          [row.id, sorobanPlanAuthorizerAccounts(row.authorization_plan)]);
+      }
+      await client.query('COMMIT');
+      if (!result.rowCount) return;
+    } catch (cause) {
+      await client.query('ROLLBACK');
+      throw cause;
+    }
+  }
 }
 
 export async function applyCoordinationMigrations(
@@ -45,6 +68,7 @@ export async function applyCoordinationMigrations(
       known.add(version);
       applied.push(version);
     }
+    if (known.has('0021_soroban_discovery_and_replay')) await backfillSorobanAuthorizerAccounts(client);
     return applied;
   } finally {
     await client.query('SELECT pg_advisory_unlock(hashtext($1))', [ADVISORY_LOCK]).catch(() => undefined);

@@ -196,8 +196,9 @@ test('Operational tools connect decisions to the existing secure workflow', () =
   assert.match(agentAccess, /pendingRevokeId === credential\.credentialId/);
   assert.match(agentAccess, /Confirm revoke/);
   assert.match(agentAccess, /setPendingRevokeId\(credential\.credentialId\)/);
-  assert.match(agentAccess, /setNewSecret\(body\.apiKey\)/);
-  assert.ok(agentAccess.indexOf('Current agents') < agentAccess.indexOf('Connect another agent'));
+  assert.match(agentAccess, /setNewSecret\(exchanged\.apiKey\)/);
+  assert.match(agentAccess, /approvePairing\(created\.requestId\)/);
+  assert.ok(agentAccess.indexOf('Current agents') < agentAccess.indexOf('Create another manual credential'));
   assert.match(stylesheet, /\.mst-agent-danger-action/);
   assert.match(stylesheet, /\.mst-contacts-search/);
   assert.match(stylesheet, /\.mst-treasury-detail-actions/);
@@ -325,7 +326,8 @@ test('Human CTAs have semantic Action ownership without turning actions into sta
 test('Proposal signing and sharing use semantic actions', () => {
   const signing = source('../SigningGuidance.tsx');
   assert.match(signing, /import \{ ActionButton \} from '\.\/MultiSigUi'/);
-  assert.match(signing, /<ActionButton variant=\{walletAlreadySigned \? 'secondary' : 'primary'\}/);
+  assert.match(signing, /<ActionButton variant="primary" disabled=\{walletBusy\}/);
+  assert.match(signing, /walletAlreadySigned \? \(/);
   assert.match(signing, /<ActionButton variant="secondary" disabled=\{shareBusy\}/);
   assert.match(signing, /<ActionButton\s+variant="secondary"\s+size="sm"/);
   assert.match(signing, /aria-busy=\{walletBusy\}/);

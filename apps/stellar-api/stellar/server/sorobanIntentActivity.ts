@@ -16,8 +16,9 @@ export async function listSorobanIntentActivityItems(
   address: string,
   network: StellarNetwork,
 ): Promise<SorobanIntentWorkActivityItem[]> {
-  if (!store.listIntentsBySigner) return [];
-  const candidates = await store.listIntentsBySigner(network, address);
+  const lookup = store.listIntentsByActivitySigner ?? store.listIntentsBySigner;
+  if (!lookup) return [];
+  const candidates = await lookup.call(store, network, address);
   const items = await Promise.all(candidates.map(async (stored) => {
     if (stored.network !== network) return null;
     const [contributions, preparations, observations] = await Promise.all([

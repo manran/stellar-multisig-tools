@@ -22,6 +22,10 @@ class MemoryStore implements IntegrationCredentialStore {
   values = new Map<string, StoredIntegrationCredential>();
   async getCredential(serviceId: string) { return this.values.get(serviceId) ?? null; }
   async listCredentials() { return [...this.values.values()]; }
+  async createCredential(record: StoredIntegrationCredential) {
+    if (this.values.has(record.credential.serviceId)) return false;
+    this.values.set(record.credential.serviceId, record); return true;
+  }
   async putCredential(record: StoredIntegrationCredential) { this.values.set(record.credential.serviceId, record); }
 }
 
@@ -188,6 +192,7 @@ test('runtime Integration registry becomes fail-closed when operator administrat
   const unavailable: IntegrationCredentialStore = {
     async getCredential() { throw new RequestStorageUnavailableError(); },
     async listCredentials() { throw new RequestStorageUnavailableError(); },
+    async createCredential() { throw new RequestStorageUnavailableError(); },
     async putCredential() { throw new RequestStorageUnavailableError(); },
   };
   try {

@@ -1,4 +1,4 @@
 {
   "title": "Transactions",
-  "pages": ["payment", "batch-payment", "claimable-payment", "multi-party"]
+  "pages": ["payment", "templates", "batch-payment", "claimable-payment", "multi-party"]
 }

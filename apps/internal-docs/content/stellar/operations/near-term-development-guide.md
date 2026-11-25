@@ -262,6 +262,41 @@ The first developer decision page is **Choose your integration**:
 - On my site — integrator owns UI/wallet UX; MST remains authority verifier.
 - Full Headless — Browser/Server/Agent/executor orchestration is integrator-owned.
 
+## 8a. Mandatory horizontal review and independent acceptance (2026-11-25)
+
+This section governs current product engineering acceptance. Earlier closure statements in this guide are historical evidence, not a waiver of this gate. Keep the feature freeze: fix established defects before adding capabilities.
+
+### Work cycle
+
+1. **Design:** state the business outcome, authority boundaries and invariants. Identify the affected user, Agent and Integration journeys.
+2. **Implement:** reuse the canonical workflow and shared components. Write targeted tests that can fail before the fix.
+3. **Vertical verification:** run affected unit, storage and browser/HTTP tests. Verify the intended workflow.
+4. **Horizontal review:** examine the whole affected lifecycle across surfaces, roles, state transitions and failure paths. Look for counterexamples to the design, not only errors in the changed files.
+5. **Independent black-box acceptance:** for a product milestone, hand a fresh reviewer only the public Testnet entry URL, business objective, and safety boundary. The reviewer discovers the public API and permissions without implementation hints, expected internal steps, or other actors' private task IDs. Use a genuinely separate reviewer/context when possible. A same-author source review or a deterministic scripted smoke is not independent black-box acceptance.
+6. **Remediate and close:** rank findings, reproduce material ones, fix the underlying invariant, add regression tests, and repeat the affected horizontal checks. Update public docs and operation discovery with any behavior change.
+
+### Horizontal review matrix
+
+Choose applicable intersections, and record why a dimension is not applicable. Reuse this matrix; do not create a parallel workflow engine or duplicate business rules.
+
+| Dimension | Required questions |
+| --- | --- |
+| Role and authority | Human, MSA Read/Write/Sign, MSI, MTA, and scoped browser capabilities: do permitted actions, denials, rotation/revocation, and resource ownership agree? Does discovery grant no authority? |
+| Business lifecycle | Classic Request and Soroban Intent; managed/external execution: are every transition, terminal result, cancellation, expiry, replan and retry governed by the same facts? |
+| Identity and history | Add/remove/rotate a signer while work is pending. Can new eligible signers discover it? Can historical participants retain their own authorized evidence without gaining current signing authority? |
+| Projection and contract | For the same resource and actor, compare create/replay, detail, Inbox, Activity, Webhook, Human UI, Operation Registry, OpenAPI and task docs. Does each surface show the same state, scope and executable next action? |
+| Completeness and scale | Use empty, single-item, limit, limit-plus-one, and multi-page fixtures. Test deduplication and concurrent inserts/updates. Missing tasks, failed upstream reads or truncated pages must not masquerade as complete empty results. |
+| Fault and retry | Inject lost HTTP responses, RPC/Horizon errors and incomplete history, stale evidence, database failures and concurrent writes. Retry with the same idempotency key. Verify no duplicate business execution and distinguish unknown from failed. |
+| Real deployment | Verify the actual dependency's response fields, network, running commit, migration compatibility and advertised runtime capabilities. Separate local fixtures, real Testnet chain tests, actual wallet interaction and independent reviewer results. |
+
+### Release evidence
+
+For each review record the commit/deployment, tested scenario and actor, expected invariant, observed result, severity, exact evidence or reproduction, and PASS/FAIL/BLOCKED. A test count is not a completeness claim. Identify which judgments come from source inspection and which from executed tests.
+
+P0 and release-blocking P1 findings must be closed and regression-verified before a milestone is called ready. A deliberately bounded Testnet repair deployment may precede final acceptance if its remaining gaps are recorded. A blocked independent review is still BLOCKED, not PASS. Never remove security constraints, use real wallets, publish additional ports, or bypass a tool safety gate to obtain a pass. Mainnet changes remain separately authorized.
+
+Latest review: [2026-11-25 horizontal review](horizontal-review-2026-11-25).
+
 ## 8. Verification contract
 
 Every redesigned page must pass:

@@ -28,8 +28,38 @@ const parameter = (
 
 function operationParameters(path: string, method: string): OpenApiObject[] {
   const values: OpenApiObject[] = [];
+  if (path === '/inbox') {
+    values.push(
+      parameter('limit', 'query', false, { type: 'integer', minimum: 1, maximum: 100, default: 50 }, 'Maximum combined Request and Intent tasks on this page.'),
+      parameter('cursor', 'query', false, { type: 'string' }, 'Opaque nextCursor from the previous Inbox page. Each page revalidates live signer access.'),
+    );
+  }
+  if (path === '/activity') {
+    values.push(
+      parameter('view', 'query', false, { type: 'string', const: 'work' }, 'Use work for unified personal Classic and Soroban Activity. Omit for Classic history.'),
+      parameter('account', 'query', false, { type: 'string', pattern: '^G[A-Z2-7]{55}$' }, 'Optional Treasury account. An Audit credential is bound to its own Treasury.'),
+      parameter('request', 'query', false, { type: 'string' }, 'Optional Classic Request id for detail.'),
+      parameter('cursor', 'query', false, { type: 'string' }, 'Opaque nextCursor from the previous page.'),
+    );
+  }
   if (path === '/integration-execution') {
     values.push(parameter('network', 'query', true, schema('StellarNetwork'), 'Must match both this deployment and the Integration credential scope.'));
+  }
+  if (path === '/auth' && method === 'get') {
+    values.push(
+      parameter('account', 'query', false, { type: 'string', pattern: '^G[A-Z2-7]{55}$' }, 'Signer G address. Omit only to inspect current session.'),
+      parameter('network', 'query', false, schema('StellarNetwork'), 'Required for a challenge; must match the fixed deployment.'),
+      parameter('unlock_seconds', 'query', false, { type: 'integer', enum: [900, 3600, 28800] }, 'Requested session duration; defaults to 3600.'),
+    );
+  }
+  if (['/agent-grants', '/agent-access', '/intent', '/request', '/payment-prepare', '/account-create-prepare'].includes(path)) {
+    values.push(parameter('x-multisig-session-address', 'header', path === '/agent-access', { type: 'string', pattern: '^G[A-Z2-7]{55}$' }, 'Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials.'));
+  }
+  if (path === '/agent-grants' && method === 'get') {
+    values.push(
+      parameter('id', 'query', true, { type: 'string', pattern: '^[a-f0-9]{32}$' }, 'Pairing request ID, not the secret device code.'),
+      parameter('challenge', 'query', false, { type: 'string', const: '1' }, 'Wallet approval challenge; requires a matching Human session.'),
+    );
   }
   if (path === '/contract-interface') {
     values.push(
@@ -45,7 +75,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
   }
   if (path === '/request' && method === 'get') {
     values.push(
-      parameter('view', 'query', false, { type: 'string', enum: ['history'] }, 'Request retained history projection.'),
+      parameter('view', 'query', false, { type: 'string', enum: ['history', 'reconciliation'] }, 'Retained signer history, or external Classic execution reconciliation for the owning Integration.'),
       parameter('account', 'query', false, { type: 'string', pattern: '^G[A-Z2-7]{55}$' }, 'Optional Treasury scope for history.'),
     );
   }
@@ -65,6 +95,9 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
 }
 
 function requestBody(path: string, method: string): OpenApiObject | undefined {
+  if (path === '/auth' && method === 'post') return body(schema('SignerAuthExchangeInput'));
+  if (path === '/agent-access' && method === 'delete') return body({ type: 'object', required: ['credentialId'], properties: { credentialId: { type: 'string', minLength: 1 } }, additionalProperties: false });
+  if (path === '/agent-grants' && method === 'post') return body(schema('AgentGrantActionInput'));
   if (path === '/integration-testnet' && method === 'post') return body(schema('TestnetIntegrationCreateInput'));
   if (path === '/intent' && method === 'post') return body(schema('ContractIntentCreateInput'));
   if (path === '/intent' && method === 'patch') return body(schema('ContractIntentContributionInput'));
@@ -74,13 +107,22 @@ function requestBody(path: string, method: string): OpenApiObject | undefined {
   if (path === '/contracts' && (method === 'put' || method === 'delete')) return body(schema('ContractWorkspaceInput'));
   if (path === '/payment-prepare' && method === 'post') return body(schema('ClassicPaymentPrepareInput'));
   if (path === '/account-create-prepare' && method === 'post') return body(schema('ClassicCreateAccountPrepareInput'));
+  if (path === '/address-book' && method === 'put') return body(schema('ContactSaveInput'));
+  if (path === '/address-book' && method === 'delete') return body(schema('ContactDeleteInput'));
   if (path === '/request' && method === 'post') return body(schema('ProposalCreateInput'));
   if (path === '/request' && method === 'patch') return body(schema('ProposalPatchInput'));
   return undefined;
 }
 
 function successSchema(path: string, method: string): OpenApiObject {
+  if (path === '/auth') return method === 'get' ? { oneOf: [schema('SignerAuthChallenge'), schema('SignerAuthStatus')] } : schema('SignerAuthSession');
+  if (path === '/agent-access') return schema('SignerAgentAccessResult');
   if (path === '/runtime-config') return schema('RuntimeConfigResult');
+  if (path === '/inbox') return schema('SignerInboxResult');
+  if (path === '/activity') return schema('SignerActivityResult');
+  if (path === '/treasuries') return schema('SignerTreasuriesResult');
+  if (path === '/address-book') return schema(method === 'get' ? 'ContactListResult' : method === 'put' ? 'ContactSaveResult' : 'ContactDeleteResult');
+  if (path === '/agent-grants') return schema('AgentGrantResult');
   if (path === '/integration-testnet') return schema('TestnetIntegrationCreateResult');
   if (path === '/integration-execution') return schema('IntegrationExecutionInspectResult');
   if (path === '/contract-interface') return schema('ContractInterfaceResult');
@@ -95,25 +137,28 @@ function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/contracts' && method === 'delete') return schema('ContractWorkspaceForgetResult');
   if (path === '/payment-prepare') return schema('ClassicPaymentPrepareResult');
   if (path === '/account-create-prepare') return schema('ClassicCreateAccountPrepareResult');
-  if (path === '/request') return schema('ProposalResult');
+  if (path === '/request') return method === 'get' ? { oneOf: [schema('ProposalResult'), schema('ClassicExecutionReconcileResult')] } : schema('ProposalResult');
   return { type: 'object', additionalProperties: true };
 }
 
 function security(path: string, method: string, access: HeadlessOperationAccess): OpenApiObject[] {
+  if (path === '/agent-grants') return [{}, { humanBearer: [] }, { humanSession: [] }]; // Public actions need no session; challenge/approve/deny require Human session.
+  if (path === '/agent-access') return [{ humanBearer: [] }, { humanSession: [] }];
   if (access === 'public') return [];
   if (path === '/intent') {
-    if (method === 'patch') return [{ agentBearer: [] }, { humanSession: [] }, { intentCapability: [] }];
-    if (method === 'get') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }, { intentCapability: [] }];
-    return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
+    if (method === 'patch') return [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { intentCapability: [] }];
+    if (method === 'get') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { intentCapability: [] }];
+    return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
   }
   if (path === '/integration-execution') return [{ integrationBearer: [] }];
-  if (path === '/contracts') return [{ agentBearer: [] }, { humanSession: [] }];
-  if (path === '/payment-prepare' || path === '/account-create-prepare') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }];
-  if (path === '/request' && method === 'put') return [{ integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
-  if (path === '/request' && (method === 'post' || method === 'get')) {
-    return [{ agentBearer: [] }, { integrationBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
-  }
-  return [{ agentBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
+  if (path === '/treasuries') return [{ agentBearer: [] }];
+  if (path === '/activity') return [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { treasuryAuditBearer: [] }];
+  if (['/contracts', '/inbox', '/address-book'].includes(path)) return [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
+  if (path === '/payment-prepare' || path === '/account-create-prepare') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
+  if (path === '/request' && method === 'put') return [{ integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
+  if (path === '/request' && method === 'post') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }];
+  if (path === '/request' && method === 'get') return [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
+  return [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { requestCapability: [] }];
 }
 
 function transportOperationId(path: string, method: string, operations: readonly HeadlessOperationDescriptor[]): string {
@@ -143,7 +188,11 @@ function openApiPaths(): OpenApiObject {
         }
       : method === 'post' && path === '/integration-testnet'
         ? { '201': response('Created.', successSchema(path, method)) }
-        : { '200': response('Successful operation.', successSchema(path, method)) };
+        : method === 'post' && path === '/agent-grants'
+          ? { '200': response('Pairing status or decision.', successSchema(path, method)), '201': response('Pairing request created.', successSchema(path, method)) }
+          : method === 'put' && path === '/intent'
+            ? { '200': response('Successful operation.', successSchema(path, method)), '201': response('Browser authorization capability issued.', schema('BrowserAuthorizationIssueResult')) }
+            : { '200': response('Successful operation.', successSchema(path, method)) };
     const pathItem = (paths[path] ?? {}) as OpenApiObject;
     pathItem[method] = {
       operationId: transportOperationId(path, method, operations),
@@ -157,10 +206,18 @@ function openApiPaths(): OpenApiObject {
         '400': response('Invalid request.', schema('ApiError')),
         '401': response('Authentication required.', schema('ApiError')),
         '403': response('Access denied.', schema('ApiError')),
-        '409': response('State or deployment-network conflict.', schema('ApiError')),
+        '404': response('Resource not found.', schema('ApiError')),
+        '409': response('State or configuration conflict. Change the input, configuration or resource state before retrying.', schema('ApiError')),
+        '410': response('Resource or capability expired.', schema('ApiError')),
+        ...(request ? {
+          '413': response('Request body too large.', schema('ApiError')),
+          '415': response('Unsupported media type; use application/json.', schema('ApiError')),
+        } : {}),
         '429': response('Rate limited.', schema('ApiError')),
         '500': response('Internal error.', schema('ApiError')),
+        '502': response('Upstream service returned an invalid or unavailable response.', schema('ApiError')),
         '503': response('Dependency unavailable.', schema('ApiError')),
+        '504': response('Upstream outcome may be unknown.', schema('ApiError')),
       },
       'x-multisig-operation-ids': operations.map((item) => item.id),
       'x-multisig-access': operations.map((item) => item.access),
@@ -178,11 +235,67 @@ const contractId = { type: 'string', pattern: '^C[A-Z2-7]{55}$' };
 const accountId = { type: 'string', pattern: '^G[A-Z2-7]{55}$' };
 const timestamp = { type: 'string', format: 'date-time' };
 
+function grantPreviewSchema(extra: OpenApiObject = {}, required: string[] = []): OpenApiObject {
+  return {
+    type: 'object',
+    required: ['requestId', 'userCode', 'label', 'access', 'network', 'expiresAt', 'status', ...required],
+    properties: {
+      requestId: { type: 'string', pattern: '^[a-f0-9]{32}$' }, userCode: { type: 'string' }, label: { type: 'string' },
+      access: { enum: ['read', 'write', 'sign'] }, network: { const: 'testnet' },
+      expiresAt: timestamp, status: { enum: ['pending', 'approved', 'denied'] }, ...extra,
+    },
+    additionalProperties: false,
+  };
+}
+
+// Terminal outcomes require their matching evidence and forbid contradictory evidence.
+function executionOutcomeBranches(): OpenApiObject[] {
+  return [
+    { properties: { outcome: { const: 'unknown' }, observed: { const: false } },
+      not: { anyOf: [{ required: ['observation'] }, { required: ['nonInclusionProof'] }] } },
+    { required: ['nonInclusionProof'], properties: { outcome: { const: 'not_included' }, observed: { const: false } },
+      not: { required: ['observation'] } },
+    ...(['successful', 'failed'] as const).map((outcome) => ({
+      required: ['observation'],
+      properties: { outcome: { const: outcome }, observed: { const: true },
+        observation: { properties: { successful: { const: outcome === 'successful' } } } },
+      not: { required: ['nonInclusionProof'] },
+    })),
+  ];
+}
+
+/** Compact task/job completion must never contradict its receipt. */
+function completedExecutionProjection(task: boolean): OpenApiObject {
+  return {
+    if: { properties: { state: { const: 'completed' } } },
+    then: { required: ['result'], properties: {
+      result: { properties: { successful: { const: true } } }, nextActions: { maxItems: 0 }, unresolvedTransactionHashes: { maxItems: 0 },
+      ...(task ? { signatureRequired: { const: false } } : { actionCalls: { maxProperties: 0 } }),
+    } },
+    else: { not: { required: ['result'], properties: { result: { properties: { successful: { const: true } } } } } },
+  };
+}
+
+const submissionProperties = {
+  transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+  ledger: { type: 'integer', minimum: 1 },
+  submittedAt: timestamp,
+  ledgerTransactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$', description: 'Actual ledger envelope hash if a fee bump wrapped the Request transaction.' },
+};
+const classicExecutionEvidenceProperties = {
+  outcome: { type: 'string', enum: ['unknown', 'not_included', 'failed', 'successful'] },
+  observed: { type: 'boolean' },
+  nonInclusionProof: schema('ClassicExecutionNonInclusionProof'),
+  observation: schema('ClassicExecutionObservation'),
+};
+
 const components: OpenApiObject = {
   securitySchemes: {
     agentBearer: { type: 'http', scheme: 'bearer', description: 'Signer Agent credential (msa_...). Human SEP-10 bearer sessions are also accepted where documented.' },
     integrationBearer: { type: 'http', scheme: 'bearer', description: 'Non-signer external service credential (msi_...). Deployment scope restricts networks, Classic source accounts, Soroban contracts/methods, and Soroban execution source accounts.' },
-    humanSession: { type: 'apiKey', in: 'cookie', name: 'mst_auth', description: 'Human SEP-10 session cookie.' },
+    treasuryAuditBearer: { type: 'http', scheme: 'bearer', description: 'Treasury Audit credential (mta_...), read-only Activity for its one bound Treasury; no personal signer workspace access.' },
+    humanSession: { type: 'apiKey', in: 'cookie', name: 'mst_auth', description: 'Human wallet-authenticated session cookie.' },
+    humanBearer: { type: 'http', scheme: 'bearer', description: 'Short-lived Human wallet session token from POST /auth. Separate from msa and msi credentials.' },
     requestCapability: { type: 'apiKey', in: 'header', name: 'x-multisig-capability', description: 'Private share capability paired with x-multisig-request-id.' },
     intentCapability: { type: 'apiKey', in: 'header', name: 'x-multisig-intent-capability', description: 'Short-lived signer/origin/current-plan Browser authorization capability (mic_...) paired with x-multisig-intent-id.' },
   },
@@ -200,21 +313,121 @@ const components: OpenApiObject = {
       },
       additionalProperties: false,
     },
+    SignerAuthChallenge: {
+      type: 'object', required: ['message', 'transaction', 'network', 'network_passphrase', 'signing_key', 'unlock_seconds'],
+      properties: { message: { type: 'string' }, transaction: xdr, network: stellarNetwork, network_passphrase: { type: 'string' }, signing_key: accountId, unlock_seconds: { type: 'integer' } },
+      additionalProperties: false,
+    },
+    SignerAuthExchangeInput: {
+      type: 'object', required: ['network'],
+      properties: { network: stellarNetwork, mode: { type: 'string', const: 'sep53' }, transaction: xdr, challenge: xdr, signature: { type: 'string' }, unlock_seconds: { type: 'integer', enum: [900, 3600, 28800] } },
+      oneOf: [{ required: ['transaction'], not: { required: ['mode'] } }, { required: ['mode', 'challenge', 'signature'] }],
+      description: 'Sign the exact sequence-zero challenge or SEP-53 message with the selected signer. Never broadcast the challenge or send a private key.',
+      additionalProperties: false,
+    },
+    SignerAuthSession: {
+      type: 'object', required: ['token', 'address', 'network', 'expires_at'],
+      properties: { token: { type: 'string' }, address: accountId, network: stellarNetwork, expires_at: { type: 'integer' } },
+      additionalProperties: false,
+    },
+    SignerAuthStatus: {
+      type: 'object', required: ['unlocked', 'authenticated'],
+      properties: { unlocked: { type: 'boolean' }, authenticated: { type: 'boolean' }, address: accountId, network: stellarNetwork, expires_at: { type: 'integer' } },
+      additionalProperties: false,
+    },
+    SignerAgentAccessResult: {
+      type: 'object', required: ['principal'],
+      properties: { principal: { type: 'object', additionalProperties: true }, credentials: { type: 'array', items: { type: 'object', additionalProperties: true } }, credential: { type: 'object', additionalProperties: true } },
+      additionalProperties: false,
+    },
+    AgentGrantActionInput: {
+      oneOf: ['AgentGrantRequestInput', 'AgentGrantPollInput', 'AgentGrantApproveInput', 'AgentGrantDenyInput'].map(schema),
+    },
+    AgentGrantRequestInput: {
+      type: 'object', required: ['action', 'label', 'access', 'network'],
+      properties: { action: { const: 'request' }, label: { type: 'string', minLength: 1, maxLength: 80 }, access: { type: 'string', enum: ['read', 'write', 'sign'] }, network: { const: 'testnet' } },
+      additionalProperties: false,
+    },
+    AgentGrantPollInput: {
+      type: 'object', required: ['action', 'deviceCode'],
+      properties: { action: { const: 'poll' }, deviceCode: { type: 'string', pattern: '^mgd_[a-f0-9]{32}_[A-Za-z0-9_-]{43}$' } },
+      additionalProperties: false,
+    },
+    AgentGrantApproveInput: {
+      type: 'object', required: ['action', 'requestId', 'mode'],
+      properties: { action: { const: 'approve' }, requestId: { type: 'string', pattern: '^[a-f0-9]{32}$' },
+        mode: { type: 'string', enum: ['sep53', 'transaction'] }, signature: { type: 'string', minLength: 1 }, transaction: xdr },
+      oneOf: [
+        { required: ['signature'], properties: { mode: { const: 'sep53' } }, not: { required: ['transaction'] } },
+        { required: ['transaction'], properties: { mode: { const: 'transaction' } }, not: { required: ['signature'] } },
+      ],
+      additionalProperties: false,
+    },
+    AgentGrantDenyInput: {
+      type: 'object', required: ['action', 'requestId'],
+      properties: { action: { const: 'deny' }, requestId: { type: 'string', pattern: '^[a-f0-9]{32}$' } },
+      additionalProperties: false,
+    },
+    AgentGrantPreview: grantPreviewSchema(),
+    AgentGrantRequestResult: grantPreviewSchema({
+      status: { const: 'pending' },
+      deviceCode: { type: 'string', pattern: '^mgd_[a-f0-9]{32}_[A-Za-z0-9_-]{43}$' },
+      verificationUri: { type: 'string', format: 'uri' },
+      intervalSeconds: { type: 'integer', minimum: 1 },
+    }, ['deviceCode', 'verificationUri', 'intervalSeconds']),
+    AgentGrantChallengeResult: grantPreviewSchema({
+      status: { const: 'pending' },
+      message: { type: 'string', minLength: 1 }, transaction: xdr, signer: accountId,
+    }, ['message', 'transaction', 'signer']),
+    AgentGrantPollResult: {
+      oneOf: [
+        { type: 'object', required: ['status'], properties: { status: { enum: ['authorization_pending', 'access_denied'] } }, additionalProperties: false },
+        { type: 'object', required: ['status', 'apiKey', 'credential'],
+          properties: { status: { const: 'approved' }, apiKey: { type: 'string', pattern: '^msa_[A-Za-z0-9_-]{12}_[A-Za-z0-9_-]{43}$' }, credential: { type: 'object', required: ['credentialId', 'principal', 'access'], additionalProperties: true } }, additionalProperties: false },
+      ],
+    },
+    AgentGrantDecisionResult: {
+      type: 'object', required: ['status'], properties: { status: { enum: ['approved', 'denied'] } }, additionalProperties: false,
+    },
+    AgentGrantResult: {
+      description: 'Transport union. Use the per-operation contract to distinguish Human consent from successful credential delivery.',
+      oneOf: ['AgentGrantPreview', 'AgentGrantRequestResult', 'AgentGrantChallengeResult', 'AgentGrantPollResult', 'AgentGrantDecisionResult'].map(schema),
+    },
+    AgentGrantRecoveryError: {
+      type: 'object', required: ['error', 'code', 'details'],
+      properties: {
+        error: { type: 'string' }, code: { enum: ['already_exchanged', 'exchange_outcome_unknown', 'grant_expired', 'agent_credential_limit_reached', 'agent_credential_conflict', 'agent_pairing_rate_limited'] },
+        details: { type: 'object', required: ['requestId', 'recoveryOperations'], properties: {
+          requestId: { type: 'string', pattern: '^[a-f0-9]{32}$' },
+          credentialId: { type: 'string', pattern: '^[A-Za-z0-9_-]{12}$' },
+          recoveryOperations: { type: 'array', items: { type: 'string' } },
+        }, additionalProperties: false },
+      }, additionalProperties: false,
+    },
+    TestnetIntegrationExistsError: {
+      type: 'object', required: ['error', 'code', 'details'],
+      properties: {
+        error: { type: 'string' }, code: { const: 'integration_service_exists' },
+        details: { type: 'object', required: ['serviceId', 'recovery'],
+          properties: { serviceId: { type: 'string' }, recovery: { const: 'new_service_id_or_authorized_operator_rotation' } }, additionalProperties: false },
+      }, additionalProperties: false,
+    },
     TestnetIntegrationCreateInput: {
       type: 'object',
       required: ['serviceId', 'label'],
       anyOf: [
-        { required: ['classicSourceAccounts'] },
-        { required: ['sorobanContracts'] },
+        { required: ['classicSourceAccounts'], properties: { classicSourceAccounts: { minItems: 1 } } },
+        { required: ['sorobanContracts'], properties: { sorobanContracts: { minItems: 1 } } },
       ],
       properties: {
         serviceId: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{0,39}$' },
         label: { type: 'string', minLength: 1, maxLength: 80 },
-        classicSourceAccounts: { type: 'array', minItems: 1, items: accountId },
+        enabled: { type: 'boolean', description: 'Optional compatibility field; self-service always creates an enabled profile.' },
+        networks: { type: 'array', items: stellarNetwork, description: 'Optional compatibility field; self-service always uses Testnet.' },
+        classicSourceAccounts: { type: 'array', items: accountId },
         classicExternalExecutionSourceAccounts: { type: 'array', items: accountId },
         sorobanContracts: {
           type: 'array',
-          minItems: 1,
           items: {
             type: 'object',
             required: ['contractId', 'methods'],
@@ -226,7 +439,7 @@ const components: OpenApiObject = {
                   {
                     type: 'object',
                     required: ['mode'],
-                    properties: { mode: { type: 'string', const: 'multisigtools' } },
+                    properties: { mode: { type: 'string', const: 'multisigtools', description: 'Requires runtime-config capabilities.sorobanManagedExecution for the selected network.' } },
                     additionalProperties: false,
                   },
                   {
@@ -297,8 +510,13 @@ const components: OpenApiObject = {
         fixedNetwork: { oneOf: [stellarNetwork, { type: 'null' }] },
         capabilities: {
           type: 'object',
-          required: ['classicManagedExecution'],
+          required: ['classicManagedExecution', 'sorobanManagedExecution'],
           properties: {
+            sorobanManagedExecution: {
+              type: 'object', required: ['testnet', 'public'],
+              properties: { testnet: { type: 'boolean' }, public: { type: 'boolean' } },
+              additionalProperties: false,
+            },
             classicManagedExecution: {
               type: 'object',
               required: ['testnet', 'public'],
@@ -540,7 +758,7 @@ const components: OpenApiObject = {
         intentDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
         authorizationPlanDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' },
         executionBinding: { type: 'string', const: 'detached' },
-        status: { type: 'string', enum: ['awaiting_authorization', 'authorization_ready', 'expired', 'blocked', 'cancelled'] },
+        status: { type: 'string', enum: ['awaiting_authorization', 'authorization_ready', 'expired', 'blocked', 'cancelled', 'completed'] },
         statusDetail: { type: 'string' },
         authorizationEntriesXdr: { type: 'array', items: { type: 'string' } },
         contributionCount: { type: 'integer', minimum: 0 },
@@ -550,23 +768,28 @@ const components: OpenApiObject = {
     },
     IntegrationSorobanJob: {
       type: 'object',
-      required: ['version', 'id', 'kind', 'network', 'state', 'nextActions', 'reviewUrl'],
+      required: ['version', 'id', 'kind', 'network', 'state', 'nextActions', 'actionCalls', 'reviewUrl'],
       properties: {
         version: operationVersion,
         id: { type: 'string', minLength: 1 },
         kind: { type: 'string', const: 'soroban_contract' },
         network: stellarNetwork,
-        state: { type: 'string', enum: ['waiting_for_authorization', 'ready', 'executing', 'completed', 'expired', 'failed', 'cancelled'] },
+        state: { type: 'string', enum: ['waiting_for_authorization', 'ready', 'executing', 'execution_unknown', 'completed', 'expired', 'failed', 'cancelled'] },
         nextActions: {
           type: 'array',
           uniqueItems: true,
           items: { type: 'string', enum: ['prepare_execution', 'submit_execution', 'reconcile_execution', 'refresh_execution', 'replan', 'cancel'] },
         },
+        actionCalls: { type: 'object', description: 'Resolve each offered action by operationId and bodyDefaults. External submission is not an MST API call; use the exact prepared and authorized XDR matching transactionHash.', additionalProperties: { oneOf: [
+          { type: 'object', required: ['operationId', 'bodyDefaults'], properties: { operationId: { type: 'string' }, bodyDefaults: { type: 'object', required: ['action'], properties: { action: { type: 'string' } }, additionalProperties: false }, reviewRequired: { const: true, description: 'Review the resolved prior attempt and current authorization before continuing this same Intent. This is a caller decision, not a new grant of signing authority.' } }, additionalProperties: false },
+          { type: 'object', required: ['transport', 'transactionHash'], properties: { transport: { const: 'external_stellar_submission' }, transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' } }, additionalProperties: false },
+        ] } },
         reviewUrl: { type: 'string', format: 'uri' },
         waitingFor: { type: 'array', uniqueItems: true, items: { oneOf: [accountId, contractId] } },
         expiresAtLedger: { type: 'integer', minimum: 1 },
         externalReference: { type: 'string' },
-        reason: { type: 'string', enum: ['authorization_blocked', 'execution_failed'] },
+        reason: { type: 'string', enum: ['authorization_blocked', 'execution_failed', 'execution_unavailable', 'execution_outcome_unknown'] },
+        unresolvedTransactionHashes: { type: 'array', uniqueItems: true, items: { type: 'string', pattern: '^[0-9a-f]{64}$' }, description: 'Reconcile every unresolved prepared hash before preparing or replanning.' },
         execution: {
           type: 'object',
           required: ['owner', 'executor', 'transactionHash', 'preparedAt', 'validUntil'],
@@ -590,26 +813,31 @@ const components: OpenApiObject = {
           additionalProperties: false,
         },
       },
+      allOf: [completedExecutionProjection(false)],
       additionalProperties: false,
     },
     AgentTask: {
       type: 'object',
-      required: ['version', 'id', 'kind', 'network', 'state', 'nextActions'],
+      required: ['version', 'id', 'kind', 'network', 'state', 'signatureRequired', 'nextActions'],
       properties: {
         version: operationVersion,
         id: { type: 'string', minLength: 1 },
         kind: { type: 'string', enum: ['classic_transaction', 'soroban_contract'] },
         network: stellarNetwork,
-        state: { type: 'string', enum: ['action_required', 'waiting', 'completed', 'expired', 'failed', 'cancelled'] },
+        state: { type: 'string', enum: ['action_required', 'waiting', 'completed', 'execution_unknown', 'expired', 'failed', 'cancelled'], description: 'action_required means a required task action is available to the current credential; read-only pending work is waiting. execution_unknown means the external Classic payment outcome is unresolved despite a closed or blocked signing task.' },
+        signatureRequired: { type: 'boolean', description: 'This signer still has a pending signature or authorization decision, independently of the credential scope. A Read Agent can use this signal to notify the signer.' },
         nextActions: {
           type: 'array',
           items: {
             type: 'object',
-            required: ['code', 'requiredAccess', 'available'],
+            required: ['code', 'operationId', 'requiredAccess', 'available'],
             properties: {
-              code: { type: 'string', enum: ['contribute_signature', 'contribute_authorization', 'decline', 'prepare_execution', 'refresh_execution', 'replan', 'cancel'] },
+              operationId: { type: 'string', description: 'Resolve this exact call in x-multisig-operations. Use the task id in the required resource header.' },
+              bodyDefaults: { type: 'object', additionalProperties: { type: 'string' } },
+              code: { type: 'string', enum: ['contribute_signature', 'contribute_authorization', 'decline', 'prepare_execution', 'refresh_execution', 'reconcile_execution', 'replan', 'cancel'] },
               requiredAccess: { type: 'string', enum: ['write', 'sign'] },
               available: { type: 'boolean' },
+              reviewRequired: { const: true, description: 'Review the resolved prior attempt before continuing this same Intent; availability alone does not authorize a retry.' },
             },
             additionalProperties: false,
           },
@@ -617,6 +845,8 @@ const components: OpenApiObject = {
         waitingFor: { type: 'array', uniqueItems: true, items: { oneOf: [accountId, contractId] } },
         expiresAt: timestamp,
         expiresAtLedger: { type: 'integer', minimum: 1 },
+        executionOutcome: schema('ClassicExecutionEvidence'),
+        unresolvedTransactionHashes: { type: 'array', uniqueItems: true, items: { type: 'string', pattern: '^[0-9a-f]{64}$' } },
         result: {
           type: 'object',
           required: ['transactionHash', 'ledger', 'successful'],
@@ -628,6 +858,19 @@ const components: OpenApiObject = {
           additionalProperties: false,
         },
       },
+      allOf: [completedExecutionProjection(true),
+        { if: { properties: { state: { const: 'execution_unknown' } } }, then: { required: ['executionOutcome'], properties: { kind: { const: 'classic_transaction' }, executionOutcome: { properties: { outcome: { const: 'unknown' } } }, signatureRequired: { const: false }, nextActions: { maxItems: 0 } }, not: { required: ['result'] } } },
+        { if: { required: ['executionOutcome'] }, then: { properties: { kind: { const: 'classic_transaction' } } } },
+        { if: { required: ['executionOutcome'], properties: { executionOutcome: { properties: { outcome: { const: 'unknown' } } } } }, then: { properties: { state: { enum: ['action_required', 'waiting', 'execution_unknown'] } }, not: { required: ['result'] } } },
+        { if: { required: ['executionOutcome'], properties: { executionOutcome: { properties: { outcome: { const: 'failed' } } } } }, then: { required: ['result'], properties: { state: { const: 'failed' }, result: { properties: { successful: { const: false } } } } } },
+        { if: { required: ['executionOutcome'], properties: { executionOutcome: { properties: { outcome: { const: 'successful' } } } } }, then: { properties: { state: { const: 'completed' } } } },
+        { if: { required: ['executionOutcome'], properties: { executionOutcome: { properties: { outcome: { const: 'not_included' } } } } }, then: { properties: { state: { const: 'expired' } }, not: { required: ['result'] } } },
+      ],
+      additionalProperties: false,
+    },
+    SorobanExecutionNonInclusionProof: {
+      type: 'object', required: ['oldestLedger', 'latestLedger', 'latestLedgerClosedAt', 'checkedAt'],
+      properties: { oldestLedger: { type: 'integer', minimum: 1 }, latestLedger: { type: 'integer', minimum: 1 }, latestLedgerClosedAt: timestamp, checkedAt: timestamp },
       additionalProperties: false,
     },
     SorobanIntentEvidenceEvent: {
@@ -636,7 +879,7 @@ const components: OpenApiObject = {
       properties: {
         version: operationVersion,
         eventId: { type: 'string', minLength: 1 },
-        type: { type: 'string', enum: ['intent_created', 'intent_cancelled', 'authorization_added', 'authorization_plan_revised', 'execution_prepared', 'execution_confirmed', 'execution_failed'] },
+        type: { type: 'string', enum: ['intent_created', 'intent_cancelled', 'authorization_added', 'authorization_plan_revised', 'execution_prepared', 'execution_not_included', 'execution_confirmed', 'execution_failed'] },
         occurredAt: timestamp,
         actorAddress: accountId,
         actor: { type: 'object', additionalProperties: true },
@@ -652,10 +895,15 @@ const components: OpenApiObject = {
         effectsAccepted: { type: 'boolean' },
         validUntil: { oneOf: [timestamp, { type: 'null' }] },
         latestLedger: { type: 'integer', minimum: 1 },
+        nonInclusionProof: schema('SorobanExecutionNonInclusionProof'),
         ledger: { type: 'integer', minimum: 1 },
         successful: { type: 'boolean' },
         observedAt: timestamp,
       },
+      allOf: [
+        { if: { properties: { type: { const: 'execution_not_included' } } }, then: { required: ['transactionHash', 'nonInclusionProof'], not: { anyOf: [{ required: ['ledger'] }, { required: ['successful'] }] } }, else: { not: { required: ['nonInclusionProof'] } } },
+        ...(['execution_confirmed', 'execution_failed'] as const).map((type) => ({ if: { properties: { type: { const: type } } }, then: { required: ['transactionHash', 'ledger', 'successful', 'observedAt'], properties: { successful: { const: type === 'execution_confirmed' } } } })),
+      ],
       additionalProperties: false,
     },
     ContractIntentCreateResult: {
@@ -729,7 +977,7 @@ const components: OpenApiObject = {
         authorizationPlanDigest: { type: 'string', minLength: 1 },
         authorizationPlanRevision: { type: 'integer', minimum: 1 },
         signerAddress: accountId,
-        status: { type: 'string', enum: ['awaiting_authorization', 'authorization_ready', 'expired', 'blocked', 'cancelled'] },
+        status: { type: 'string', enum: ['awaiting_authorization', 'authorization_ready', 'expired', 'blocked', 'cancelled', 'completed'] },
         expiresAt: timestamp,
         challenges: { type: 'array', items: schema('BrowserAuthorizationChallenge') },
         hostedReviewUrl: { type: 'string', format: 'uri' },
@@ -787,7 +1035,7 @@ const components: OpenApiObject = {
         { required: ['action'] },
       ],
       properties: {
-        action: { type: 'string', enum: ['prepare_execution', 'refresh_execution'], description: 'prepare_execution materializes the current execution package. refresh_execution deliberately materializes a fresh package after a lost, stale, or failed prior attempt. Both reuse the already-bound executor.' },
+        action: { type: 'string', enum: ['prepare_execution', 'refresh_execution'], description: 'Prepare an execution package. Refresh is allowed only after every previous hash has a verified failed receipt or proven non-inclusion. A lost response, timeout, or local expiry is not proof.' },
         executor: { ...accountId, description: 'Preferred executor field. Integration callers may omit it when the Intent already snapshotted an executor. If unresolved, providing it binds the executor for this Intent.' },
         executionSource: { ...accountId, deprecated: true, description: 'Legacy alias for executor.' },
         acceptedEffectsDigest: { type: 'string', pattern: '^[0-9a-f]{64}$', description: 'Explicit acceptance of the exact current effects digest after reviewing a critical numeric-only diff. Structural changes cannot be accepted here and require a fresh authorization-plan revision. Integration Services cannot use this field.' },
@@ -890,17 +1138,22 @@ const components: OpenApiObject = {
     },
     ContractIntentExecutionReconcileResult: {
       type: 'object',
-      required: ['operation', 'version', 'transactionHash', 'observed', 'replayed'],
+      required: ['operation', 'version', 'transactionHash', 'observed', 'replayed', 'outcome'],
       properties: {
         operation: { type: 'string', const: 'contract.intent.execution.reconcile' },
         version: operationVersion,
         transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
         observed: { type: 'boolean' },
         replayed: { type: 'boolean' },
+        outcome: { type: 'string', enum: ['unknown', 'not_included', 'failed', 'successful'] },
+        nonInclusionProof: schema('SorobanExecutionNonInclusionProof'),
         observation: schema('SorobanIntentExecutionObservation'),
+        projectionNotRefreshed: { const: true, description: 'Reconciliation evidence is authoritative; the current Job or Task was not refreshed. Inspect the Intent again before further actions.' },
         job: schema('IntegrationSorobanJob'),
         task: schema('AgentTask'),
       },
+      oneOf: executionOutcomeBranches(),
+      allOf: [{ if: { required: ['projectionNotRefreshed'] }, then: { not: { anyOf: [{ required: ['job'] }, { required: ['task'] }] } } }],
       additionalProperties: false,
     },
     ContractIntentReplanResult: {
@@ -1233,7 +1486,7 @@ const components: OpenApiObject = {
       required: ['network'],
       oneOf: [
         { required: ['xdr'] },
-        { required: ['payment'], description: 'Semantic Classic payment creation is available to Integration Service callers. When the Treasury uses MultiSigTools-managed execution, MST supplies the transaction source, sequence, fee and submission while the Treasury remains the Payment operation source and authorization authority.' },
+        { required: ['payment'], description: 'Semantic Classic payment creation is available to Integration Service callers. For MST-managed semantic execution, runtime capabilities.classicManagedExecution must be true for the selected network. Otherwise prepare an unsigned payment with integration.classic.payment.prepare and create a Request using its xdr, or explicitly configure external execution.' },
       ],
       properties: {
         network: stellarNetwork,
@@ -1248,9 +1501,9 @@ const components: OpenApiObject = {
     },
     ProposalPatchInput: {
       oneOf: [
-        { type: 'object', required: ['signedXdr'], properties: { signedXdr: xdr }, additionalProperties: false },
-        { type: 'object', required: ['decision'], properties: { decision: { type: 'string', const: 'decline' } }, additionalProperties: false },
-        { type: 'object', required: ['retainActivity'], properties: { retainActivity: { type: 'boolean', const: true } }, additionalProperties: false },
+        { type: 'object', description: 'Requires valid signer authorization; Agent callers require Sign access.', required: ['signedXdr'], properties: { signedXdr: xdr }, additionalProperties: false, 'x-multisig-access': 'principal:sign' },
+        { type: 'object', description: 'Requires a Human signer session or an Agent credential with Write access.', required: ['decision'], properties: { decision: { type: 'string', const: 'decline' } }, additionalProperties: false, 'x-multisig-access': 'principal:write' },
+        { type: 'object', description: 'Human only: verified current signer session (bearer or cookie), while the Proposal is active. Agent and Integration credentials cannot retain Activity.', required: ['retainActivity'], properties: { retainActivity: { type: 'boolean', const: true } }, additionalProperties: false, 'x-multisig-access': 'human' },
       ],
     },
     SorobanRequestOrigin: {
@@ -1265,6 +1518,36 @@ const components: OpenApiObject = {
         effectsDigest: { type: 'string', minLength: 1 },
       },
       additionalProperties: false,
+    },
+    SigningRequestSubmission: {
+      type: 'object', required: ['transactionHash', 'ledger', 'submittedAt'],
+      properties: submissionProperties, additionalProperties: false,
+    },
+    ClassicExecutionObservation: {
+      type: 'object', required: ['transactionHash', 'ledger', 'submittedAt', 'successful'],
+      properties: { ...submissionProperties, successful: { type: 'boolean' } }, additionalProperties: false,
+    },
+    ClassicExecutionNonInclusionProof: {
+      type: 'object', required: ['oldestLedger', 'latestLedger', 'oldestLedgerClosedAt', 'latestLedgerClosedAt', 'validAfter', 'validUntil', 'checkedAt'],
+      properties: {
+        oldestLedger: { type: 'integer', minimum: 1 }, latestLedger: { type: 'integer', minimum: 1 },
+        oldestLedgerClosedAt: timestamp, latestLedgerClosedAt: timestamp, validAfter: timestamp, validUntil: timestamp, checkedAt: timestamp,
+      },
+      description: 'Healthy RPC history starts strictly before the signed lower time bound and extends strictly beyond the signed upper time bound; the subsequent exact hash lookup returned NOT_FOUND.',
+      additionalProperties: false,
+    },
+    ClassicExecutionEvidence: {
+      type: 'object', required: ['outcome', 'observed'], properties: classicExecutionEvidenceProperties,
+      oneOf: executionOutcomeBranches(), additionalProperties: false,
+    },
+    ClassicExecutionReconcileResult: {
+      type: 'object', required: ['operation', 'version', 'requestId', 'network', 'transactionHash', 'replayed', 'outcome', 'observed'],
+      properties: {
+        operation: { const: 'integration.request.execution.reconcile' }, version: operationVersion,
+        requestId: { type: 'string' }, network: stellarNetwork, transactionHash: submissionProperties.transactionHash,
+        replayed: { type: 'boolean' }, ...classicExecutionEvidenceProperties,
+      },
+      oneOf: executionOutcomeBranches(), additionalProperties: false,
     },
     SigningRequest: {
       type: 'object',
@@ -1282,11 +1565,92 @@ const components: OpenApiObject = {
         status: { type: 'string', enum: ['awaiting_signatures', 'waiting_preconditions', 'ready', 'submitted', 'expired', 'stale', 'blocked'] },
         statusReason: { type: 'string' },
         statusDetail: { type: 'string' },
-        submission: { type: 'object', additionalProperties: true },
+        creatorAddress: accountId,
+        proposerAddress: accountId,
+        template: { type: 'object', additionalProperties: true },
+        submission: schema('SigningRequestSubmission'),
+        executionOutcome: schema('ClassicExecutionEvidence'),
         execution: schema('RequestExecution'),
         sorobanOrigin: schema('SorobanRequestOrigin'),
       },
+      allOf: [
+        { if: { properties: { status: { const: 'submitted' } } }, then: { required: ['submission'] }, else: { not: { required: ['submission'] } } },
+        { if: { required: ['execution'], properties: { execution: { properties: { mode: { const: 'external' } } } } }, then: { required: ['executionOutcome'] } },
+        { if: { required: ['executionOutcome'], properties: { executionOutcome: { properties: { outcome: { const: 'successful' } } } } }, then: { properties: { status: { const: 'submitted' } } } },
+        { if: { required: ['executionOutcome'], properties: { executionOutcome: { properties: { outcome: { const: 'failed' } } } } }, then: { properties: { status: { const: 'blocked' } } } },
+        { if: { required: ['executionOutcome'], properties: { executionOutcome: { properties: { outcome: { const: 'not_included' } } } } }, then: { properties: { status: { const: 'expired' } } } },
+        { if: { required: ['executionOutcome'], properties: { status: { const: 'submitted' } } }, then: { properties: { executionOutcome: { properties: { outcome: { const: 'successful' } } } } } },
+      ],
       additionalProperties: false,
+    },
+    ContactDeleteInput: {
+      type: 'object', required: ['address', 'subject_type'],
+      properties: { address: accountId, subject_type: { type: 'string', enum: ['account', 'signer'] } },
+      additionalProperties: false,
+    },
+    ContactSaveInput: {
+      type: 'object', required: ['address', 'subject_type', 'label'],
+      properties: {
+        address: accountId, subject_type: { type: 'string', enum: ['account', 'signer'] },
+        label: { type: 'string', minLength: 1, maxLength: 64 },
+        notification_email: { type: ['string', 'null'], maxLength: 254, description: 'Optional private contact metadata. Null or empty clears the email; omit to leave it unchanged.' },
+      },
+      additionalProperties: false,
+    },
+    Contact: {
+      type: 'object', required: ['address', 'subject_type', 'label', 'created_at', 'updated_at'],
+      properties: {
+        address: accountId, subject_type: { type: 'string', enum: ['account', 'signer'] },
+        label: { type: 'string' }, notification_email: { type: 'string' }, created_at: timestamp, updated_at: timestamp,
+      }, additionalProperties: false,
+    },
+    ContactListResult: { type: 'object', required: ['address', 'entries'], properties: { address: accountId, entries: { type: 'array', items: schema('Contact') } }, additionalProperties: false },
+    ContactSaveResult: { type: 'object', required: ['entry'], properties: { entry: schema('Contact') }, additionalProperties: false },
+    ContactDeleteResult: { type: 'object', required: ['deleted'], properties: { deleted: { type: 'boolean', const: true } }, additionalProperties: false },
+    SignerTreasuriesResult: {
+      type: 'object', required: ['principal', 'treasuries'],
+      properties: {
+        principal: schema('Principal'),
+        treasuries: { type: 'array', items: {
+          type: 'object', required: ['accountId', 'thresholds', 'signers'],
+          properties: {
+            accountId, name: { type: 'string' },
+            thresholds: { type: 'object', required: ['low', 'medium', 'high'], properties: { low: { type: 'integer' }, medium: { type: 'integer' }, high: { type: 'integer' } } },
+            signers: { type: 'array', items: { type: 'object', required: ['key', 'type', 'weight'], properties: { key: { type: 'string' }, type: { type: 'string' }, weight: { type: 'integer' } } } },
+          },
+        } },
+      },
+      additionalProperties: false,
+    },
+    SignerActivityResult: {
+      type: 'object', required: ['network', 'actor'],
+      properties: {
+        address: accountId, network: stellarNetwork, actor: { type: 'string', enum: ['human', 'agent', 'treasury_audit'] }, accountId,
+        items: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        item: { type: 'object', additionalProperties: true },
+        workItems: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        nextCursor: { type: 'string' },
+      },
+      anyOf: [{ required: ['items'] }, { required: ['workItems'] }],
+      additionalProperties: false,
+    },
+    SignerInboxResult: {
+      type: 'object',
+      required: ['address', 'network', 'actor', 'complete', 'pending_count', 'action_count', 'requests'],
+      properties: {
+        address: accountId,
+        network: stellarNetwork,
+        actor: { type: 'string', enum: ['agent', 'human'] },
+        complete: { type: 'boolean', description: 'True on the last page of this live enumeration; not a point-in-time ledger snapshot.' },
+        nextCursor: { type: 'string', description: 'Present when complete is false. Continue before treating absent tasks as cleared.' },
+        pending_count: { type: 'integer', minimum: 0, description: 'Number of returned work items on this page.' },
+        action_count: { type: 'integer', minimum: 0, description: 'For Agent callers, the number of tasks on this page with at least one nextAction whose available flag is true.' },
+        signature_required_count: { type: 'integer', minimum: 0, description: 'For Agent callers, the number of returned tasks with signatureRequired=true, regardless of scope.' },
+        requests: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        intents: { type: 'array', items: { type: 'object', additionalProperties: true }, description: 'Pending Soroban Intents visible to the authenticated signer.' },
+        tasks: { type: 'array', items: schema('AgentTask'), description: 'Present for Agent callers. A classic_transaction task refers to a Request; a soroban_contract task refers to an Intent. Both counts include both kinds.' },
+      },
+      additionalProperties: true,
     },
     ProposalResult: {
       type: 'object',
@@ -1299,6 +1663,7 @@ const components: OpenApiObject = {
         access: { type: 'object', additionalProperties: true },
         context: { type: 'object', additionalProperties: true },
         history: { type: 'object', additionalProperties: true },
+        coordination: { type: 'object', additionalProperties: true },
         addedSignatureCount: { type: 'integer', minimum: 0 },
         duplicateSignatureCount: { type: 'integer', minimum: 0 },
         decision: { type: 'string', enum: ['declined'] },
@@ -1309,21 +1674,223 @@ const components: OpenApiObject = {
   },
 };
 
+/** Retry policy is deliberately conservative. A transport failure is not
+ * evidence that a mutation did not commit. A 409 is not universally retryable. */
+function logicalOperationRetry(operation: HeadlessOperationDescriptor): OpenApiObject {
+  const { id, effect, path } = operation;
+  const replay = ['proposal.create', 'integration.request.create', 'contract.intent.create', 'integration.intent.create'].includes(id);
+  const inspectId = operation.access.startsWith('browser:') ? 'integration.intent.browser.inspect'
+    : path === '/intent' ? (id.startsWith('integration.') ? 'integration.intent.inspect' : 'contract.intent.inspect')
+    : path === '/request' ? (id.startsWith('integration.') ? 'integration.request.inspect' : 'proposal.inspect') : undefined;
+  const reconcileId = id.startsWith('integration.') ? 'integration.intent.execution.reconcile' : 'contract.intent.execution.reconcile';
+  const rule = (strategy: string, nextOperationIds: string[] = [], condition?: string) =>
+    ({ strategy, nextOperationIds, ...(condition ? { condition } : {}) });
+  const onError: OpenApiObject = {};
+  let transportFailure = effect === 'none' ? rule('retry_same_request')
+    : inspectId && operation.access !== 'human' ? rule('inspect_then_decide', [inspectId]) : rule('human_review');
+  let idempotencyKey = replay ? 'required' : 'not_used';
+  if (replay) {
+    transportFailure = rule('retry_same_request', [], 'Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty.');
+    onError.idempotency_conflict = rule('stop', [], 'Do not change the payload or key merely to bypass a conflict.');
+  }
+  if (id === 'agent.grant.request') {
+    transportFailure = rule('start_new_request', [id], 'If no verification URL was delivered, the unapproved request expires. Send only the new approval link.');
+  }
+  if (id === 'agent.grant.poll') {
+    transportFailure = rule('retry_same_request', [id], 'Poll with the same deviceCode at the returned interval. A consumed claim cannot mint again.');
+    const recover = rule('human_recovery', ['agent.access.list', 'agent.access.revoke', 'agent.grant.request'],
+      'Use details.credentialId to identify the exact reserved credential; check again if issuance is still uncertain. Revoke any issued credential before a fresh Human-approved pairing. No secret is returned again.');
+    for (const code of ['already_exchanged', 'exchange_outcome_unknown', 'grant_expired', 'agent_credential_limit_reached', 'agent_credential_conflict', 'agent_pairing_rate_limited']) {
+      onError[code] = { ...recover, responseSchema: schema('AgentGrantRecoveryError') };
+    }
+  }
+  if (id === 'agent.grant.approve' || id === 'agent.grant.deny') {
+    transportFailure = rule('inspect_then_decide', ['agent.grant.inspect'], 'Read the pairing status before repeating a decision.');
+    onError.grant_already_decided = transportFailure;
+    onError.grant_expired = rule('stop');
+  }
+  if (id === 'integration.testnet.create') {
+    idempotencyKey = 'unsupported';
+    transportFailure = rule('retry_same_request', [id], 'Keep the original serviceId and payload. Atomic create-only: a retry either creates the previously absent profile or returns a conflict, never replaces a credential.');
+    onError.integration_service_exists = { ...rule('human_recovery', [], 'No public recovery of an existing secret. For a disposable Testnet profile, obtain approval to use a new unique serviceId; for the existing profile, an authorized operator must rotate its credential.'), responseSchema: schema('TestnetIntegrationExistsError') };
+    onError.idempotency_key_unsupported = rule('correct_input', [], 'Do not send Idempotency-Key for this operation.');
+  }
+  let onOutcome: OpenApiObject | undefined;
+  if (id.endsWith('.execution.reconcile')) {
+    transportFailure = rule('retry_same_request', [id], 'Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion.');
+    onOutcome = {
+      unknown: rule('retry_same_request_with_backoff', [id], 'Do not create or sign a replacement while execution remains unknown. Stop automatic polling and escalate for manual reconciliation if bounded retries do not resolve it, or the signed validity window or historical coverage is unavailable.'),
+      successful: rule('complete', [], 'Retain the verified ledger receipt. Do not repeat the business payment.'),
+      failed: rule('human_review', [], 'The transaction was included but failed. Review the receipt before a separately authorized replacement.'),
+      not_included: rule('human_review', [], 'The original validity window is closed and non-inclusion is verified. Review before a separately authorized replacement.'),
+    };
+    if (path === '/intent') {
+      const review = rule('inspect_then_decide', [inspectId!], 'Review the resolved attempt and current Intent before another attempt. Continue only the SAME Intent if all released hashes are resolved, current AUTH and effects allow it, and the caller explicitly decides to retry. Use replan and fresh AUTH when required. Actions marked reviewRequired are technically available, not automatic permission. Never create another business payment to recover this one.');
+      onOutcome.failed = review;
+      onOutcome.not_included = review;
+    }
+  }
+  if (id.endsWith('.execution.prepare') || id.endsWith('.replan')) {
+    onError.intent_execution_outcome_unknown = rule('reconcile_first', [inspectId!, reconcileId], 'Reconcile every unresolvedTransactionHash before creating another execution package or plan.');
+    onError.intent_already_executed = rule('inspect_terminal', [inspectId!]);
+    onError.intent_execution_effects_reauthorization_required = rule('review_and_reauthorize', [inspectId!, id.startsWith('integration.') ? 'integration.intent.replan' : 'contract.intent.replan']);
+    if (!id.startsWith('integration.')) onError.intent_execution_effects_review_required = rule('human_review', [inspectId!], 'Review the exact effects digest before accepting it.');
+  }
+  if (id === 'agent.access.revoke') transportFailure = rule('inspect_then_decide', ['agent.access.list']);
+  if (id === 'agent.access.list') onError.agent_credential_not_found = rule('stop');
+  if (path === '/address-book' && effect !== 'none') transportFailure = rule('inspect_then_decide', ['signer.contacts.list']);
+  if (path === '/contracts' && effect !== 'none') transportFailure = rule('inspect_then_decide', ['contract.workspace.list']);
+  if (effect === 'network-submit') {
+    transportFailure = rule(operation.access === 'human' ? 'human_review' : 'inspect_then_decide', operation.access === 'human' ? [] : [inspectId!], 'Check the existing Request and exact Stellar transaction hash; do not create a second payment.');
+  }
+  const defaultError = rule('stop_and_inspect', inspectId && operation.access !== 'human' ? [inspectId] : []);
+  const retryable = transportFailure.strategy === 'retry_same_request';
+  const onHttpStatus = {
+    '400': rule('correct_input'), '401': rule('authenticate'), '403': rule('stop'),
+    '409': defaultError, '410': rule('stop'), '413': rule('correct_input'), '415': rule('correct_input'),
+    ...Object.fromEntries(['429', '500', '502', '503', '504'].map((status) => [status, retryable
+      ? { ...transportFailure, strategy: 'retry_same_request_with_backoff' } : transportFailure])),
+  };
+  return { idempotencyKey, transportFailure, onError, onHttpStatus, defaultError, ...(onOutcome ? { onOutcome } : {}) };
+}
+
+/** Canonical logical calls, narrower than their shared HTTP transport. Keep
+ * the existing paths for generic OpenAPI clients; resolve this table for Agents. */
+function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
+  const definitions = components.schemas as Record<string, OpenApiObject>;
+  const objectBody = (name: string, keys: string[], required: string[], extra: OpenApiObject = {}) => body({
+    type: 'object', required,
+    properties: Object.fromEntries(keys.map((key) => [key, (definitions[name].properties as OpenApiObject)[key]])),
+    additionalProperties: false, ...extra,
+  });
+  return Object.fromEntries(HEADLESS_OPERATION_CATALOG.map((operation) => {
+    const { id, path, method, access, effect } = operation;
+    const transport = (paths[path] as OpenApiObject)[method.toLowerCase()] as OpenApiObject;
+    let parameters = ((transport.parameters ?? []) as OpenApiObject[]).filter((p) =>
+      (p.name !== 'x-multisig-session-address' || access === 'human')
+      && p.name !== 'x-multisig-capability'
+      && (p.name !== 'X-MultiSig-Intent-Capability' || access.startsWith('browser:')));
+    parameters = parameters.map((p) => ({
+      ...p,
+      ...((p.name === 'Idempotency-Key' || p.name === 'x-multisig-session-address'
+        || p.name === 'X-MultiSig-Intent-Capability'
+        || (id === 'signer.auth.challenge' && ['account', 'network'].includes(String(p.name))))
+        ? { required: true } : {}),
+    }));
+    if (access === 'treasury:audit') parameters = parameters.filter((p) => p.name !== 'view');
+    let request = transport.requestBody as OpenApiObject | undefined;
+    let result: OpenApiObject | undefined;
+    let statuses: string[] | undefined;
+    let dispatch: OpenApiObject | undefined;
+    const security = access === 'public' ? []
+      : access === 'human' ? [{ humanBearer: [] }, { humanSession: [] }]
+      : access.startsWith('principal:') ? [{ agentBearer: [] }]
+      : access.startsWith('integration:') ? [{ integrationBearer: [] }]
+      : access.startsWith('browser:') ? [{ intentCapability: [] }]
+      : [{ treasuryAuditBearer: [] }];
+    const grant = id.startsWith('agent.grant.');
+    if (grant) {
+      const action = id.split('.').at(-1)!;
+      if (action === 'inspect') {
+        parameters = parameters.filter((p) => p.name !== 'challenge');
+        result = schema('AgentGrantPreview');
+      } else if (action === 'challenge') {
+        parameters = parameters.map((p) => p.name === 'challenge' ? { ...p, required: true } : p);
+        dispatch = { query: { challenge: '1' } };
+        result = schema('AgentGrantChallengeResult');
+      } else {
+        const suffix = action[0].toUpperCase() + action.slice(1);
+        request = body(schema('AgentGrant' + suffix + 'Input'));
+        dispatch = { body: { action } };
+        result = action === 'approve' || action === 'deny'
+          ? { type: 'object', required: ['status'], properties: { status: { const: action === 'approve' ? 'approved' : 'denied' } }, additionalProperties: false }
+          : schema(action === 'request' ? 'AgentGrantRequestResult' : 'AgentGrantPollResult');
+        statuses = [action === 'request' ? '201' : '200'];
+      }
+    } else if (id === 'signer.auth.challenge') {
+      result = schema('SignerAuthChallenge');
+    } else if (path === '/intent') {
+      const integration = access.startsWith('integration:');
+      if (method === 'POST') {
+        request = objectBody('ContractIntentCreateInput',
+          ['network', 'contractId', 'method', 'arguments', 'externalReference', integration ? 'executor' : 'privateNote'],
+          ['network', 'contractId', 'method', 'arguments']);
+        result = schema('ContractIntentCreateResult');
+      } else if (method === 'GET') {
+        result = schema(access === 'browser:read' ? 'BrowserAuthorizationInspectResult' : 'ContractIntentInspectResult');
+      } else if (method === 'PATCH') {
+        result = schema(access === 'browser:sign' ? 'BrowserAuthorizationContributionResult' : 'ContractIntentContributionResult');
+      } else if (method === 'PUT') {
+        statuses = [id.endsWith('.browser.issue') ? '201' : '200'];
+        if (id.endsWith('.execution.prepare')) {
+          request = objectBody('ContractIntentExecutionInput', integration
+            ? ['action', 'executor'] : ['action', 'executor', 'acceptedEffectsDigest'],
+          integration ? ['action'] : ['action', 'executor']);
+          dispatch = { body: { action: 'prepare_execution' }, actionValues: ['prepare_execution', 'refresh_execution'] };
+          result = schema('ContractIntentExecutionResult');
+        } else {
+          const branch = id.endsWith('.execution.reconcile') ? ['ContractIntentExecutionReconcile', 'reconcile_execution']
+            : id.endsWith('.replan') ? ['ContractIntentReplan', 'replan']
+            : id.endsWith('.cancel') ? ['ContractIntentCancel', 'cancel']
+            : ['BrowserAuthorizationIssue', 'issue_browser_authorization'];
+          request = body(schema(branch[0] + 'Input'));
+          result = schema(branch[0] + 'Result');
+          dispatch = { body: { action: branch[1] } };
+        }
+      }
+    } else if (path === '/request' && method === 'GET') {
+      if (id === 'integration.request.execution.reconcile') {
+        parameters = parameters.filter((p) => p.name !== 'view' && p.name !== 'account');
+        parameters.push(parameter('view', 'query', true, { const: 'reconciliation' }, 'Verify the exact stored hash of this external Classic Request.'));
+        dispatch = { query: { view: 'reconciliation' } };
+        result = schema('ClassicExecutionReconcileResult');
+      } else {
+        parameters = parameters.filter((p) => access !== 'integration:read' || (p.name !== 'view' && p.name !== 'account'))
+          .map((p) => p.name === 'view' ? { ...p, schema: { const: 'history' } } : p);
+        result = schema('ProposalResult');
+      }
+    } else if (path === '/request' && method === 'POST') {
+      request = access === 'principal:write'
+        ? objectBody('ProposalCreateInput', ['network', 'xdr', 'externalReference', 'privateNote'], ['network', 'xdr'])
+        : objectBody('ProposalCreateInput', ['network', 'xdr', 'payment', 'externalReference', 'privateCommitment'], ['network'], {
+          oneOf: [
+            { required: ['xdr'], not: { required: ['payment'] } },
+            { required: ['payment'], not: { anyOf: [{ required: ['xdr'] }, { required: ['privateCommitment'] }] } },
+          ],
+        });
+    } else if (path === '/request' && method === 'PATCH') {
+      request = body((definitions.ProposalPatchInput.oneOf as OpenApiObject[]).find((item) => item['x-multisig-access'] === access)!);
+      if (id === 'proposal.decline') dispatch = { body: { decision: 'decline' } };
+      if (id === 'proposal.activity.retain') dispatch = { body: { retainActivity: true } };
+    } else if (path === '/request' && method === 'PUT' && access === 'human') {
+      request = { ...body({ type: 'object', properties: { acceptedEffectsDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' } }, additionalProperties: false }), required: false };
+    }
+    const responses = Object.fromEntries(Object.entries(transport.responses as OpenApiObject)
+      .filter(([status]) => !status.startsWith('2') || !statuses || statuses.includes(status))
+      .map(([status, value]) => [status, status.startsWith('2') && result ? response(status === '201' ? 'Created.' : 'Successful operation.', result) : value]));
+    const retry = logicalOperationRetry(operation);
+    return [id, { operationId: id, method, path, access, effect, security, parameters,
+      ...(request ? { requestBody: request } : {}), ...(dispatch ? { dispatch } : {}), responses, retry }];
+  }));
+}
+
 export function createOpenApiDocument(
   origin = '/',
   deploymentNetwork: 'public' | 'testnet' | 'dual' = 'dual',
 ): OpenApiObject {
+  const paths = openApiPaths();
   return {
     openapi: '3.1.1',
+    'x-multisig-operations': logicalOperationContracts(paths),
     'x-multisig-deployment-network': deploymentNetwork,
     jsonSchemaDialect: 'https://json-schema.org/draft/2020-12/schema',
     info: {
       title: 'MultiSigTools Headless Operations',
       version: '1.0.0',
-      description: 'Composable Stellar coordination operations for Human, signer Agent, bot, script, wallet, plugin, MCP, CLI, and scoped external-service consumers. Building or preparing XDR never grants signer authority. MultiSigTools submission remains Human-only; Integration-owned work may designate an external executor.',
+      description: 'Composable Stellar coordination operations for Human, signer Agent, bot, script, wallet, plugin, MCP, CLI, and scoped external-service consumers. Building or preparing XDR never grants signer authority. Signer Agent credentials cannot directly submit. Integration-owned Requests may be automatically submitted at quorum, retried by their Integration, or designated for external execution.',
     },
     servers: [{ url: origin }],
-    paths: openApiPaths(),
+    paths,
     components,
     externalDocs: {
       description: 'MultiSig Tools developer integration and authority guide',

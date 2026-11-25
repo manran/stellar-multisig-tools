@@ -446,3 +446,38 @@ test('Postgres delegated Request is grant-locked, tracks proposer separately, an
   assert.equal(grants.rows[0].revoked_by_address, fixtureValue.creator.publicKey());
   assert.equal(grants.rows[1].revoked_at, null);
 });
+
+
+test('Classic terminal execution evidence persists and emits one change; confirmed success wins', {
+  skip: !TEST_URL || !RESET_ALLOWED,
+}, async () => {
+  const pool = coordinationPool();
+  const store = createPostgresSigningRequestStore(pool, new MemoryPrivateStore());
+  const { request } = fixture('PGREQEST00000099');
+  await store.createRequest(request);
+  const proof = {
+    outcome: 'not_included' as const, observed: false as const,
+    nonInclusionProof: {
+      oldestLedger: 1, latestLedger: 10, oldestLedgerClosedAt: '2026-09-17T23:59:00.000Z',
+      latestLedgerClosedAt: '2026-09-18T01:01:00.000Z',
+      validAfter: '2026-09-18T00:00:00.000Z', validUntil: '2026-09-18T01:00:00.000Z',
+      checkedAt: '2026-09-18T01:02:00.000Z',
+    },
+  };
+  await store.putExecutionEvidence!(request.id, proof);
+  await store.putExecutionEvidence!(request.id, proof);
+  assert.deepEqual(await store.getExecutionEvidence!(request.id), proof);
+  assert.equal(await store.getSubmission(request.id, request.transactionHash), null);
+  const failed = { outcome: 'failed' as const, observed: true as const,
+    observation: { transactionHash: request.transactionHash, ledger: 9, submittedAt: '2026-09-18T00:30:00.000Z', successful: false as const } };
+  await store.putExecutionEvidence!(request.id, failed);
+  await store.putExecutionEvidence!(request.id, proof);
+  assert.deepEqual(await store.getExecutionEvidence!(request.id), failed);
+  const receipt = { version: 1 as const, transactionHash: request.transactionHash, ledger: 9,
+    submittedAt: '2026-09-18T00:30:00.000Z', ledgerTransactionHash: 'b'.repeat(64) };
+  await store.putSubmission(request.id, receipt);
+  await store.putExecutionEvidence!(request.id, proof);
+  assert.deepEqual(await store.getSubmission(request.id, request.transactionHash), receipt);
+  const events = await pool.query("SELECT payload->>'change' AS change FROM mst_stellar.integration_outbox WHERE resource_id=$1 AND payload->>'change' IN ('execution_not_included','execution_failed','execution_confirmed') ORDER BY payload->>'change'", [request.id]);
+  assert.deepEqual(events.rows.map((row) => row.change), ['execution_confirmed', 'execution_failed', 'execution_not_included']);
+});

@@ -92,6 +92,24 @@ test('follows Horizon pagination beyond the first 200 signer accounts', async ()
   assert.equal(calls, 2); assert.deepEqual(accounts.map((account) => account.accountId), [a, b]);
 });
 
+test('fresh discovery bypasses cached membership and refuses stale fallback on upstream failure', async () => {
+  const signer = Keypair.random().publicKey();
+  const before = Keypair.random().publicKey(), after = Keypair.random().publicKey();
+  let current = before, status = 200;
+  const fetchImpl: typeof fetch = async () => status === 200 ? signerResponse(current, signer) : Response.json({}, { status });
+  assert.equal((await loadAccountsForSigner(signer, 'testnet', undefined, fetchImpl))[0].accountId, before);
+  current = after;
+  assert.equal((await loadAccountsForSigner(signer, 'testnet', undefined, fetchImpl, { fresh: true }))[0].accountId, after);
+  status = 429;
+  await assert.rejects(() => loadAccountsForSigner(signer, 'testnet', undefined, fetchImpl, { fresh: true }), /rate limited/);
+});
+
+test('fresh signer discovery rejects a malformed or truncated collection', async () => {
+  const signer = Keypair.random().publicKey(), account = Keypair.random().publicKey();
+  await assert.rejects(() => loadAccountsForSigner(signer, 'testnet', undefined, async () => Response.json({}), { fresh: true }), /invalid records/);
+  await assert.rejects(() => loadAccountsForSigner(signer, 'testnet', undefined, async () => Response.json({ _embedded: { records: Array.from({ length: 200 }, () => accountResponse(account, signer, 1)) } }), { fresh: true }), /truncated page/);
+});
+
 test('reuses a recent signer-account result instead of hitting Horizon again', async () => {
   const signer = Keypair.random().publicKey();
   const account = Keypair.random().publicKey();

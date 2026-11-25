@@ -21,6 +21,7 @@ import {
   type NetworkParametersLoader,
 } from './requestService.js';
 import type { SigningRequestStore, StoredSigningRequest } from './requestStore.js';
+import { configuredClassicManagedChannels } from './classicManagedChannelConfig.js';
 import type { ClassicManagedChannelLeaseStore } from './classicManagedChannelStore.js';
 import type { ClassicManagedChannelCreatorMonitorStore } from './classicManagedChannelCreatorMonitorStore.js';
 import {
@@ -334,12 +335,16 @@ export async function createIntegrationPaymentSigningRequest(
     });
   }
 
+  const managedChannels = options.managedChannels ?? configuredClassicManagedChannels(normalized.network);
+  if (managedChannels.length === 0) {
+    throw new ClassicManagedChannelServiceError('MultiSigTools-managed Classic execution is not configured for this network.', 409, 'managed_classic_execution_unavailable');
+  }
   const channelStore = options.managedChannelStoreFactory?.();
   if (!channelStore) {
     throw new ClassicManagedChannelServiceError(
       'MultiSigTools-managed Classic execution requires managed channel storage.',
       503,
-      'managed_classic_execution_unavailable',
+      'managed_classic_execution_storage_unavailable',
     );
   }
 

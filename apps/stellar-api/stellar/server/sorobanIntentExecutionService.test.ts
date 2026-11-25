@@ -89,6 +89,21 @@ function fixture(effects: SorobanEffectsSnapshot = emptySorobanEffectsSnapshot()
   return { stored, authorization, authEntry };
 }
 
+test('observed success blocks preparation before any network lookup, regardless of revision', async () => {
+  const f = fixture();
+  const source = Keypair.random();
+  const store: SorobanIntentStore = new MemoryIntentStore(f.stored);
+  store.listExecutionObservations = async () => [{
+    version: 1, transactionHash: 'a'.repeat(64), authorizationPlanDigest: 'b'.repeat(64),
+    authorizationPlanRevision: 1, executionSource: source.publicKey(), ledger: 123,
+    successful: true, observedAt: '2026-09-16T00:00:00.000Z',
+  }];
+  await assert.rejects(() => prepareSorobanIntentExecution(store, f.stored.id, source.publicKey(), {
+    authorization: f.authorization,
+    accountLoader: async () => { throw new Error('network lookup must not run'); },
+  }), { code: 'intent_already_executed' });
+});
+
 test('execution late-binds a fresh source and preserves finalized detached AUTH', async () => {
   const f = fixture();
   const source = Keypair.random();
@@ -183,7 +198,7 @@ test('execution refuses to materialize before detached AUTH is ready', async () 
 });
 
 
-test('execution can be rematerialized with a fresh source sequence without changing detached AUTH', async () => {
+test('execution can be rematerialized only after the previous attempt is resolved', async () => {
   const f = fixture();
   const source = Keypair.random();
   const store = new MemoryIntentStore(f.stored);
@@ -196,6 +211,8 @@ test('execution can be rematerialized with a fresh source sequence without chang
   };
   const first = await prepareSorobanIntentExecution(store, f.stored.id, source.publicKey(), options);
   sequence = '8';
+  await assert.rejects(() => prepareSorobanIntentExecution(store, f.stored.id, source.publicKey(), options), (cause: unknown) => (cause as { code?: string }).code === 'intent_execution_outcome_unknown');
+  store.preparations[0].nonInclusionProof = { oldestLedger: 1, latestLedger: 200, latestLedgerClosedAt: new Date(Date.parse(first.validUntil!) + 1000).toISOString(), checkedAt: new Date(Date.parse(first.validUntil!) + 2000).toISOString() };
   const second = await prepareSorobanIntentExecution(store, f.stored.id, source.publicKey(), options);
   assert.equal(first.transactionSequence, '8');
   assert.equal(second.transactionSequence, '9');

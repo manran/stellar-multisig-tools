@@ -1,11 +1,11 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Braces, Clock3, FileInput, KeyRound, LoaderCircle, RefreshCw, Send, ShieldCheck, UserPlus, UsersRound } from 'lucide-react';
 import PaymentComposer from './PaymentComposer';
 import TemplateProposerComposer from './TemplateProposerComposer';
 import ClaimablePaymentComposer from './ClaimablePaymentComposer';
 import TransferComposer from './TransferComposer';
-import { ActionButton, NetworkFallbackChoice, WorkflowProgress } from './MultiSigUi';
+import { ActionButton, NetworkFallbackChoice, PageHeader, WorkflowProgress } from './MultiSigUi';
 import type { NetworkFallbackChoiceSource } from './MultiSigUi';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useStellarWallet } from './StellarWalletContext';
@@ -14,11 +14,9 @@ import { isValidStellarAccountId } from '../../../packages/stellar-core/src/hori
 import { resolveStellarNetwork } from './stellar/networkPreference';
 import { inspectTransactionXdr } from '../../../packages/stellar-core/src/transactionXdr';
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
-import type { ReusableTemplateSummary } from '../../../packages/stellar-core/src/reusableTemplate';
-import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
 import { navigateWorkspace, stellarHref, stellarHrefWithSearch } from './workspaceNavigation';
 import { parseTreasuryRoute } from './treasuryNavigation';
-import { isWalletUserRejected } from './stellar/walletKit';
+import useSavedTemplates from './useSavedTemplates';
 
 const ContractCallComposer = lazy(() => import('./ContractCallComposer'));
 
@@ -41,131 +39,30 @@ function ChoiceRow({ href, icon, title, description, network, badge }: { href: s
   );
 }
 
-function TemplateGrantControls({ template, sessionAddress, network }: { template: ReusableTemplateSummary; sessionAddress: string; network: StellarNetwork }) {
-  const [address, setAddress] = useState('');
-  const [proposers, setProposers] = useState(template.proposerAddresses ?? []);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  if (!sessionAddress || template.ownerAddress !== sessionAddress || template.kind !== 'payment') return null;
-
-  async function update(action: 'grant' | 'revoke', proposerAddress: string) {
-    setBusy(true); setError('');
-    try {
-      const response = await fetch('/api/templates', {
-        method: 'PATCH',
-        headers: { ...privateSessionAddressHeaders(sessionAddress), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ network, templateId: template.id, proposerAddress, action }),
-      });
-      const body = await response.json() as { proposerAddresses?: string[]; error?: string };
-      if (!response.ok || !Array.isArray(body.proposerAddresses)) throw new Error(body.error || 'Unable to update Template permission.');
-      setProposers(body.proposerAddresses);
-      if (action === 'grant') setAddress('');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to update Template permission.');
-    } finally { setBusy(false); }
-  }
-  return (
-    <details className="mt-3 text-sm">
-      <summary className="cursor-pointer font-semibold text-[var(--color-accent)]">Allow another wallet to request payments</summary>
-      <p className="mt-2 leading-6 text-[var(--color-ink-2)]">This wallet can prepare payments from the Template. Treasury signers still approve each transaction.</p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <input aria-label="Proposer G address" value={address} onChange={(event) => setAddress(event.target.value.trim())}
-          placeholder="G... wallet address" className="mst-request-control min-w-0 flex-1 font-mono text-xs" />
-        <ActionButton type="button" variant="secondary" disabled={!isValidStellarAccountId(address) || address === sessionAddress || busy}
-          onClick={() => void update('grant', address)}>Allow</ActionButton>
-      </div>
-      {proposers.length > 0 && <ul className="mt-3 space-y-2">
-        {proposers.map((proposer) => <li key={proposer} className="flex min-w-0 items-center gap-3 rounded-lg border border-[var(--color-rule)] bg-[var(--color-paper-2)] px-3 py-1.5 text-xs">
-          <span className="min-w-0 flex-1 truncate font-mono" title={proposer}>
-            {`${proposer.slice(0, 10)}…${proposer.slice(-8)}`}
-          </span>
-          <button type="button" onClick={() => void navigator.clipboard.writeText(proposer).catch(() => setError('Could not copy this address.'))}
-            className="min-h-11 shrink-0 font-semibold text-[var(--color-action)]">Copy</button>
-          <button type="button" disabled={busy} onClick={() => void update('revoke', proposer)}
-            className="min-h-11 shrink-0 font-semibold text-[var(--color-danger)] disabled:opacity-40">Revoke</button>
-        </li>)}
-      </ul>}
-      {error && <p role="alert" className="mt-2 text-xs text-[var(--color-danger)]">{error}</p>}
-    </details>
-  );
-}
-
 function NewTransactionChoices() {
-  const { sessionNetwork, sessionAddress, privateUnlocked, busy, authBusy, unlock } = useStellarWallet();
-  const [templateLoad, setTemplateLoad] = useState<{
-    scope: string;
-    status: 'loading' | 'ready' | 'error' | 'unlock_required';
-    items: ReusableTemplateSummary[];
-  } | null>(null);
-  const [templateRetry, setTemplateRetry] = useState(0);
-  const [templateUnlockError, setTemplateUnlockError] = useState('');
+  const { sessionNetwork } = useStellarWallet();
   const route = parseTreasuryRoute(window.location.search);
   const proposalAccount = isValidStellarAccountId(route.accountId) ? route.accountId : '';
   const proposalNetwork = resolveStellarNetwork(route.network, sessionNetwork);
   const paymentHref = stellarHrefWithSearch('/new/payment', { fresh: '1', account: proposalAccount, network: proposalNetwork });
   const createAccountHref = stellarHrefWithSearch('/new/create-account', { fresh: '1', account: proposalAccount, network: proposalNetwork });
-  const templateScope = privateUnlocked && sessionAddress ? `${sessionAddress}:${proposalNetwork}` : '';
-  // A previous wallet's response must not appear while the new scope is loading.
-  const currentTemplates = templateScope && templateLoad?.scope === templateScope ? templateLoad : null;
-  const templateLoading = Boolean(templateScope && (!currentTemplates || currentTemplates.status === 'loading'));
+  const {
+    sessionAddress, templateScope, currentTemplates, templateLoading,
+    templateUnlockError, busy, authBusy, showTemplates, retryTemplates,
+  } = useSavedTemplates(proposalNetwork);
   const networkLabel = proposalNetwork === 'testnet' ? 'Testnet' : 'Mainnet';
   const accentClass = proposalNetwork === 'testnet'
     ? 'text-sky-700 dark:text-sky-300'
     : 'text-emerald-700 dark:text-emerald-300';
 
-  useEffect(() => {
-    setTemplateUnlockError('');
-    if (!templateScope) {
-      setTemplateLoad(null);
-      return;
-    }
-    const controller = new AbortController();
-    setTemplateLoad({ scope: templateScope, status: 'loading', items: [] });
-    void fetch(`/api/templates?network=${proposalNetwork}`, {
-      headers: privateSessionAddressHeaders(sessionAddress),
-      cache: 'no-store',
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (response.status === 401 || response.status === 403) {
-          if (!controller.signal.aborted) setTemplateLoad({ scope: templateScope, status: 'unlock_required', items: [] });
-          return;
-        }
-        const body = await response.json() as { address?: string; templates?: ReusableTemplateSummary[] };
-        if (!response.ok || !Array.isArray(body.templates)) throw new Error('Unable to load templates.');
-        if (controller.signal.aborted) return;
-        if (body.address !== sessionAddress || body.templates.some((item) => item.network !== proposalNetwork)) {
-          setTemplateLoad({ scope: templateScope, status: 'unlock_required', items: [] });
-          return;
-        }
-        setTemplateLoad({ scope: templateScope, status: 'ready', items: body.templates });
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setTemplateLoad({ scope: templateScope, status: 'error', items: [] });
-      });
-    return () => controller.abort();
-  }, [templateScope, sessionAddress, proposalNetwork, templateRetry]);
-
-  async function showTemplates() {
-    setTemplateUnlockError('');
-    try {
-      await unlock(undefined, proposalNetwork);
-      setTemplateRetry((value) => value + 1);
-    } catch (cause) {
-      if (!isWalletUserRejected(cause)) {
-        setTemplateUnlockError(cause instanceof Error ? cause.message : 'Unable to confirm this wallet. Try again.');
-      }
-    }
-  }
-
   return (
     <main className="mst-workbench-page">
       <div className="mx-auto max-w-6xl">
-        <header className="mst-page-intro">
-          <h1>New proposal</h1>
-          <p>What would you like to authorize?</p>
-          {proposalAccount && <div className="mt-3 text-xs text-[var(--color-muted)]">From <span className="font-mono" title={proposalAccount}>{proposalAccount.slice(0, 8)}…{proposalAccount.slice(-8)}</span></div>}
-        </header>
+        <PageHeader
+          title="New proposal"
+          description="What would you like to authorize?"
+          meta={proposalAccount ? <span>From <span className="font-mono" title={proposalAccount}>{proposalAccount.slice(0, 8)}…{proposalAccount.slice(-8)}</span></span> : undefined}
+        />
 
         <div className="mst-compose-layout">
           <section className="mst-compose-primary" aria-labelledby="primary-action">
@@ -191,6 +88,7 @@ function NewTransactionChoices() {
           <div className="mst-compose-templates__header">
             <h2 id="saved-templates">Your templates</h2>
             <p>Start with a saved payment setup. Each new proposal is reviewed before signing.</p>
+            <a href={stellarHref('/templates')} className="mt-2 inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-[var(--color-action)]">Manage templates <ArrowRight className="h-4 w-4" /></a>
           </div>
 
           {!templateScope && (
@@ -208,7 +106,7 @@ function NewTransactionChoices() {
           {currentTemplates?.status === 'error' && (
             <div className="mt-3 border-y border-[var(--color-rule)] py-4">
               <p role="alert" className="text-sm text-[var(--color-ink-2)]">Could not load your templates. Try again, or start a payment above.</p>
-              <ActionButton variant="secondary" className="mt-3" onClick={() => setTemplateRetry((value) => value + 1)}><RefreshCw className="h-4 w-4" />Retry templates</ActionButton>
+              <ActionButton variant="secondary" className="mt-3" onClick={() => retryTemplates()}><RefreshCw className="h-4 w-4" />Retry templates</ActionButton>
             </div>
           )}
 
@@ -238,7 +136,6 @@ function NewTransactionChoices() {
                     <p className="mst-work-row__copy">{template.definition.recipients.length} recipient{template.definition.recipients.length === 1 ? '' : 's'} · Source <span className="font-mono" title={template.definition.source}>{template.definition.source.slice(0, 8)}…{template.definition.source.slice(-8)}</span></p>
                     {template.definition.autoRemind && <p className="mt-1 text-xs font-medium text-[var(--color-ink-2)]">Automatic email reminders enabled</p>}
                     {template.ownerAddress && template.ownerAddress !== sessionAddress && <p className="mt-1 text-xs font-semibold text-[var(--color-accent)]">You are authorized to initiate payments from this Template.</p>}
-                    <TemplateGrantControls template={template} sessionAddress={sessionAddress} network={proposalNetwork} />
                     {proposalAccount && template.definition.source !== proposalAccount && <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">This template uses a different source account.</p>}
                   </div>
                   <a
@@ -270,7 +167,6 @@ function NewTransactionChoices() {
           </div>
         </details>
 
-        <p className="mt-5 text-sm text-neutral-500 dark:text-neutral-400">Nothing is signed or submitted from this screen. The next step is always Review.</p>
       </div>
     </main>
   );

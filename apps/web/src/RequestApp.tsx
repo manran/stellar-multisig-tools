@@ -860,7 +860,7 @@ async function submitRequest(acceptedEffectsDigest?: string) {
 
                   {(snapshot.status === 'expired' || snapshot.status === 'stale' || snapshot.status === 'blocked') && (
                     <section className="rounded-2xl border border-red-500/25 bg-red-500/[0.07] p-5 text-sm">
-                      <div className="flex gap-3"><CircleAlert className="h-5 w-5 shrink-0 text-red-500" /><div><div className="font-semibold">This transaction cannot continue in its current state.</div><div className="mt-1 opacity-65">{snapshot.statusDetail}</div></div></div>
+                      <div className="flex gap-3"><CircleAlert className="h-5 w-5 shrink-0 text-red-500" /><div><div className="font-semibold">{snapshot.executionOutcome?.outcome === 'unknown' ? 'Payment outcome unknown' : snapshot.executionOutcome?.outcome === 'failed' ? 'Execution failed on Stellar' : snapshot.executionOutcome?.outcome === 'not_included' ? 'Verified not included' : 'This transaction cannot continue in its current state.'}</div><div className="mt-1 opacity-65">{snapshot.statusDetail}</div>{snapshot.executionOutcome?.outcome === 'unknown' && <div className="mt-1 opacity-65">The owning Integration must reconcile the original transaction before any replacement payment.</div>}</div></div>
                     </section>
                   )}
 

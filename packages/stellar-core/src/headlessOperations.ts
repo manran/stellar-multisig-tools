@@ -5,6 +5,7 @@ export type HeadlessOperationAccess =
   | 'principal:sign'
   | 'integration:read'
   | 'integration:write'
+  | 'treasury:audit'
   | 'browser:read'
   | 'browser:sign'
   | 'human';
@@ -28,7 +29,47 @@ export interface HeadlessOperationDescriptor {
 export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] = [
   {
     id: 'runtime.config.inspect', version: 1, method: 'GET', path: '/runtime-config',
-    access: 'public', effect: 'none', summary: 'Read the deployment-owned Stellar network policy.',
+    access: 'public', effect: 'none', summary: 'Read the deployment-owned Stellar network policy and Classic/Soroban managed execution availability.',
+  },
+  {
+    id: 'signer.auth.challenge', version: 1, method: 'GET', path: '/auth',
+    access: 'public', effect: 'none', summary: 'Request a wallet authentication challenge for a signer address and network; a session requires a valid signature.',
+  },
+  {
+    id: 'signer.auth.exchange', version: 1, method: 'POST', path: '/auth',
+    access: 'public', effect: 'private-state', summary: 'Exchange a signer-approved SEP-10 challenge or SEP-53 message signature for a short-lived private Human session.',
+  },
+  {
+    id: 'agent.grant.inspect', version: 1, method: 'GET', path: '/agent-grants',
+    access: 'public', effect: 'none', summary: 'Inspect a short-lived Testnet Agent pairing request without credentials.',
+  },
+  {
+    id: 'agent.grant.challenge', version: 1, method: 'GET', path: '/agent-grants',
+    access: 'human', effect: 'none', summary: 'Prepare the distinct Agent approval challenge with id and challenge=1, using a Human session and matching signer address header.',
+  },
+  {
+    id: 'agent.grant.request', version: 1, method: 'POST', path: '/agent-grants',
+    access: 'public', effect: 'private-state', summary: 'Start a short-lived Agent pairing and receive a one-time device secret.',
+  },
+  {
+    id: 'agent.grant.poll', version: 1, method: 'POST', path: '/agent-grants',
+    access: 'public', effect: 'private-state', summary: 'Exchange the approved one-time device secret for the signer Agent credential exactly once.',
+  },
+  {
+    id: 'agent.grant.approve', version: 1, method: 'POST', path: '/agent-grants',
+    access: 'human', effect: 'private-state', summary: 'Human signer approves a request with a distinct wallet consent signature.',
+  },
+  {
+    id: 'agent.grant.deny', version: 1, method: 'POST', path: '/agent-grants',
+    access: 'human', effect: 'private-state', summary: 'Human signer denies a pending pairing using a matching verified session.',
+  },
+  {
+    id: 'agent.access.list', version: 1, method: 'GET', path: '/agent-access',
+    access: 'human', effect: 'none', summary: 'List the authenticated signer\'s Agent credential summaries; secrets are never returned.',
+  },
+  {
+    id: 'agent.access.revoke', version: 1, method: 'DELETE', path: '/agent-access',
+    access: 'human', effect: 'private-state', summary: 'Revoke one credential belonging to the authenticated signer using its credentialId.',
   },
   {
     id: 'integration.testnet.create', version: 1, method: 'POST', path: '/integration-testnet',
@@ -40,7 +81,7 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
   },
   {
     id: 'contract.intent.create', version: 1, method: 'POST', path: '/intent',
-    access: 'principal:write', effect: 'coordination-state', summary: 'Create a source-free Soroban Intent and discover its authorization plan.',
+    access: 'principal:write', effect: 'coordination-state', summary: 'Create a source-free Soroban Intent and discover its authorization plan. An Agent Principal must be a current signer for at least one required authorizer unless no authorization is required.',
   },
   {
     id: 'integration.intent.create', version: 1, method: 'POST', path: '/intent',
@@ -68,19 +109,19 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
   },
   {
     id: 'contract.intent.execution.prepare', version: 1, method: 'PUT', path: '/intent',
-    access: 'principal:write', effect: 'none', summary: 'Late-bind an execution source, compare enforcing effects with reviewed evidence, and prepare the final unsigned Soroban transaction.',
+    access: 'principal:write', effect: 'coordination-state', summary: 'Late-bind an execution source, compare enforcing effects with reviewed evidence, and prepare the final unsigned Soroban transaction.',
   },
   {
     id: 'integration.intent.execution.prepare', version: 1, method: 'PUT', path: '/intent',
-    access: 'integration:write', effect: 'none', summary: 'Resolve the Integration executor, enforce reviewed effects, and prepare or refresh the final unsigned Soroban execution package.',
+    access: 'integration:write', effect: 'coordination-state', summary: 'Resolve the Integration executor, enforce reviewed effects, and prepare or refresh the final unsigned Soroban execution package only after prior hashes are resolved.',
   },
   {
     id: 'contract.intent.execution.reconcile', version: 1, method: 'PUT', path: '/intent',
-    access: 'principal:write', effect: 'coordination-state', summary: 'Independently verify a persisted Soroban execution preparation against Stellar and retain the observed ledger result.',
+    access: 'principal:write', effect: 'coordination-state', summary: 'Independently verify a persisted Soroban execution preparation against Stellar and retain the observed ledger result or verified non-inclusion.',
   },
   {
     id: 'integration.intent.execution.reconcile', version: 1, method: 'PUT', path: '/intent',
-    access: 'integration:write', effect: 'coordination-state', summary: 'Independently verify an Integration-owned Soroban execution preparation against Stellar and retain the observed ledger result.',
+    access: 'integration:write', effect: 'coordination-state', summary: 'Independently verify an Integration-owned Soroban execution preparation against Stellar and retain the observed ledger result or verified non-inclusion.',
   },
   {
     id: 'contract.intent.replan', version: 1, method: 'PUT', path: '/intent',
@@ -143,6 +184,34 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'integration:write', effect: 'none', summary: 'Prepare a scoped external-service CreateAccount transaction without silently treating it as Payment.',
   },
   {
+    id: 'signer.inbox.list', version: 1, method: 'GET', path: '/inbox',
+    access: 'principal:read', effect: 'none', summary: 'Discover pending Classic Requests and Soroban Intents for the authenticated signer. Follow nextCursor until complete=true; counts apply to the returned page. signatureRequired identifies signatures to notify the signer about; action_count counts tasks actionable by this credential.',
+  },
+  {
+    id: 'signer.contacts.list', version: 1, method: 'GET', path: '/address-book',
+    access: 'principal:read', effect: 'none', summary: 'Read private saved contacts and optional notification email metadata belonging to this signer.',
+  },
+  {
+    id: 'signer.contacts.save', version: 1, method: 'PUT', path: '/address-book',
+    access: 'principal:write', effect: 'private-state', summary: 'Save a signer-owned contact alias or notification email. Contacts do not confer signing authority.',
+  },
+  {
+    id: 'signer.contacts.delete', version: 1, method: 'DELETE', path: '/address-book',
+    access: 'principal:write', effect: 'private-state', summary: 'Remove a contact alias from this signer workspace.',
+  },
+  {
+    id: 'signer.treasuries.list', version: 1, method: 'GET', path: '/treasuries',
+    access: 'principal:read', effect: 'none', summary: 'Discover shared-control Treasuries for an MSA signer, with current thresholds and signer weights.',
+  },
+  {
+    id: 'signer.activity.list', version: 1, method: 'GET', path: '/activity',
+    access: 'principal:read', effect: 'none', summary: 'Read personal retained Activity, including unified Classic and Soroban work with view=work, or authorized Treasury Activity.',
+  },
+  {
+    id: 'treasury.audit.activity.list', version: 1, method: 'GET', path: '/activity',
+    access: 'treasury:audit', effect: 'none', summary: 'Read only the Treasury Activity bound to an MTA Audit credential; personal work and other Treasuries are denied.',
+  },
+  {
     id: 'proposal.create', version: 1, method: 'POST', path: '/request',
     access: 'principal:write', effect: 'coordination-state', summary: 'Create a Signing Request from exact transaction XDR.',
   },
@@ -155,12 +224,24 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'principal:read', effect: 'none', summary: 'Read current Signing Request state and evidence.',
   },
   {
+    id: 'integration.request.execution.reconcile', version: 1, method: 'GET', path: '/request',
+    access: 'integration:read', effect: 'none', summary: 'Verify the owning Integration\'s exact external Classic transaction hash, preserving successful/failed ledger evidence or proven non-inclusion. Unknown never authorizes a replacement.',
+  },
+  {
     id: 'integration.request.inspect', version: 1, method: 'GET', path: '/request',
     access: 'integration:read', effect: 'none', summary: "Read an external service's own Classic multisig Request and merged authorization evidence.",
   },
   {
     id: 'proposal.contribute', version: 1, method: 'PATCH', path: '/request',
     access: 'principal:sign', effect: 'coordination-state', summary: 'Add attributable Stellar authorization to a Signing Request.',
+  },
+  {
+    id: 'proposal.decline', version: 1, method: 'PATCH', path: '/request',
+    access: 'principal:write', effect: 'coordination-state', summary: 'Record a current signer decision to decline an active Proposal.',
+  },
+  {
+    id: 'proposal.activity.retain', version: 1, method: 'PATCH', path: '/request',
+    access: 'human', effect: 'private-state', summary: 'Retain an active Proposal in a verified Human signer Activity; Agent credentials cannot perform this operation.',
   },
   {
     id: 'proposal.submit', version: 1, method: 'PUT', path: '/request',

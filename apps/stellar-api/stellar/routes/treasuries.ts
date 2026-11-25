@@ -6,6 +6,7 @@ import {
   authenticateAgentCredential,
   requireAgentAccess,
 } from '../server/agentCredentialService.js';
+import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import { noStoreJson } from '../server/httpResponse.js';
 import { loadAccountsForSigner } from '../../../../packages/stellar-core/src/signerAccounts.js';
 import { hasSharedSigningControl } from '../../../../packages/stellar-core/src/treasuryModel.js';
@@ -23,6 +24,7 @@ export async function GET(request: Request): Promise<Response> {
     const credential = await authenticateAgentCredential(blobAgentCredentialStore, bearerToken(request));
     requireAgentAccess(credential, 'read');
     const { principal } = credential;
+    assertDeploymentNetwork(principal.network);
     const accounts = (await loadAccountsForSigner(principal.address, principal.network)).filter(hasSharedSigningControl);
     const treasuries = await Promise.all(accounts.map(async (account) => {
       const metadata = await blobBoxStore.getMetadata(treasuryBoxRef(principal.network, account.accountId));
@@ -36,7 +38,7 @@ export async function GET(request: Request): Promise<Response> {
     await blobAgentCredentialStore.touchCredential(credential.credentialId, new Date().toISOString());
     return noStoreJson({ principal, treasuries });
   } catch (cause) {
-    if (cause instanceof AgentCredentialServiceError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
+    if (cause instanceof AgentCredentialServiceError || cause instanceof DeploymentNetworkPolicyError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
     if (cause instanceof RequestStorageUnavailableError) return noStoreJson({ error: cause.message, code: 'storage_not_configured' }, 503);
     console.error('Signer treasuries API error', cause);
     return noStoreJson({ error: 'Treasury discovery is temporarily unavailable.', code: 'internal_error' }, 500);
