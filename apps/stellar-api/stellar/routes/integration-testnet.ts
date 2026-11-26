@@ -3,7 +3,7 @@ import {
   configuredDeploymentNetwork,
   DeploymentNetworkPolicyError,
 } from '../server/deploymentNetworkPolicy.js';
-import { noStoreJson } from '../server/httpResponse.js';
+import { apiErrorBody, noStoreJson } from '../server/httpResponse.js';
 import {
   IntegrationAdminServiceError,
 } from '../server/integrationAdminService.js';
@@ -24,7 +24,7 @@ function errorResponse(cause: unknown): Response {
     cause instanceof RequestBodyError
     || cause instanceof DeploymentNetworkPolicyError
   ) {
-    return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
+    return noStoreJson(apiErrorBody(cause), cause.status);
   }
   if (cause instanceof RequestStorageUnavailableError) {
     return noStoreJson({ error: cause.message, code: 'integration_self_service_storage_unavailable' }, 503);

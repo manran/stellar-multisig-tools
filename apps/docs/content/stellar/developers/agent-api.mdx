@@ -11,7 +11,7 @@ New to MST? Start with the [Agent quickstart](/stellar/developers/agent-quicksta
 
 **Read:** read saved contracts, personal contacts, accessible Treasury metadata, Inbox, Activity, Request details, and status.
 
-**Write:** includes Read. Manage saved context, create Requests/Intents within signer scope, refresh/freeze preparation, reconcile released Soroban execution hashes, and decline. If execution remains unresolved, reconcile before preparing or re-planning; never interpret a timeout or local expiry as a failed transaction.
+**Write:** includes Read. Manage saved context, create Requests/Intents within signer scope, prepare, resume or refresh execution, reconcile released Soroban execution hashes, and decline. If execution remains unresolved, reconcile before preparing or re-planning; never interpret a timeout or local expiry as a failed transaction.
 
 **Sign:** includes Write. Contribute valid Stellar transaction signatures or detached Soroban authorization attributable to the credential Principal.
 
@@ -37,6 +37,8 @@ Retaining a Proposal in Human Activity (`PATCH /request` with `retainActivity: t
 Use `GET /treasuries` for Treasury metadata, `GET /address-book` for contacts, and `GET /activity?view=work` for unified Request and Intent activity. The operation registry and OpenAPI describe the supported methods, credential scopes, and effects.
 
 Inbox pagination returns page-local counts. On the first page, add `includeTotals=1` to request a separate live count. Read `total_pending_count` only when `total_pending_count_complete` is true. Otherwise `total_pending_count_lower_bound` reports at least 501 items. This is not a frozen snapshot: later pages revalidate signer access.
+
+Human Inbox returns requests and intents with action_counts. Agent Inbox additionally returns tasks, signature_required_count and credential-specific available actions. Counts are page-local unless includeTotals is requested.
 
 An Inbox HTTP 503 means discovery is incomplete, not that there are no pending tasks. Preserve existing reminders and retry later. Intent execution preparation can durably change coordination state; treat it as a Write operation.
 

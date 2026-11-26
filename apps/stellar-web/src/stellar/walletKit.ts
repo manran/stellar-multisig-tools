@@ -75,6 +75,13 @@ async function loadHardwareWalletModules() {
   ];
 }
 
+const FALLBACK_WALLET_ICON = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="20" fill="#e1e8e4"/><rect x="8" y="12" width="24" height="17" rx="3" fill="none" stroke="#315b4c" stroke-width="2"/><path d="M25 18h7v6h-7z" fill="#315b4c"/></svg>');
+
+export function walletIconForCsp(icon: string): string {
+  // Keep the current image policy. Other providers use a local generic icon.
+  return /^(?:https:\/\/stellar\.creit\.tech\/wallet-icons\/|data:image\/)/.test(icon) ? icon : FALLBACK_WALLET_ICON;
+}
+
 async function loadKit(includeHardwareWallets = false) {
   const [{ StellarWalletsKit }, { defaultModules }, { selectedModuleId }] = await Promise.all([
     import('@creit.tech/stellar-wallets-kit/sdk'),
@@ -87,7 +94,9 @@ async function loadKit(includeHardwareWallets = false) {
 
   if (!initialized || (shouldLoadHardwareWallets && !hardwareModulesLoaded)) {
     const hardwareModules = shouldLoadHardwareWallets ? await loadHardwareWalletModules() : [];
-    StellarWalletsKit.init({ modules: [...nameVarialWallet(defaultModules()), ...hardwareModules] });
+    const modules = [...nameVarialWallet(defaultModules()), ...hardwareModules];
+    for (const module of modules) module.productIcon = walletIconForCsp(module.productIcon);
+    StellarWalletsKit.init({ modules });
     initialized = true;
     hardwareModulesLoaded = hardwareModulesLoaded || shouldLoadHardwareWallets;
   }
@@ -155,6 +164,7 @@ export function walletActionErrorMessage(cause: unknown, fallback: string): stri
   if (lower.includes('0x5515') || lower.includes('locked device') || lower.includes('device is locked')) {
     return 'Ledger is locked. Unlock the device, open the Stellar app, then try again. (Ledger 0x5515)';
   }
+  if (isWalletUserRejected(cause)) return 'You did not approve the wallet request. You can try again.';
   return message || fallback;
 }
 
@@ -199,6 +209,65 @@ export function isWalletAuthEntrySigningUnsupported(cause: unknown): boolean {
   );
 }
 
+/** Keep the Kit's wallet and hardware-account selection logic; provide native modal
+ * focus containment and keyboard semantics for its pinned 2.6.0 list UI. */
+async function accessibleWalletSelection(kit: Awaited<ReturnType<typeof loadKit>>) {
+  const { closeEvent } = await import('@creit.tech/stellar-wallets-kit/state');
+  const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const dialog = document.createElement('dialog');
+  dialog.className = 'mst-wallet-dialog';
+  dialog.setAttribute('aria-label', 'Choose a wallet');
+  const observer = new MutationObserver(() => enhance());
+  let cancelRequested = false;
+  let cancelTimer: ReturnType<typeof setTimeout> | undefined;
+  function closeWhenReady() {
+    // The Kit subscribes to closeEvent after refreshing wallet availability.
+    // Retry the close event only while a requested cancellation is pending.
+    if (!cancelRequested || !dialog.open) return;
+    closeEvent.next();
+    cancelTimer = setTimeout(closeWhenReady, 100);
+  }
+  function enhance() {
+    for (const row of dialog.querySelectorAll<HTMLElement>('li')) {
+      // The upstream auth and hardware-account lists use clickable li elements.
+      if (!row.className.includes('cursor-pointer')) continue;
+      row.tabIndex = 0;
+      row.setAttribute('role', 'button');
+    }
+    for (const header of dialog.querySelectorAll('header')) {
+      const buttons = [...header.querySelectorAll('button')];
+      const close = buttons.at(-1);
+      if (close && !close.getAttribute('aria-label')) close.setAttribute('aria-label', 'Close wallet selection');
+      if (buttons.length > 1 && !buttons[0].getAttribute('aria-label')) {
+        buttons[0].setAttribute('aria-label', header.textContent?.includes('Connect Wallet') ? 'Wallet help' : 'Back');
+      }
+    }
+    if (document.activeElement === dialog || document.activeElement === document.body) {
+      dialog.querySelector<HTMLElement>('button, li[role="button"]')?.focus();
+    }
+  }
+  dialog.addEventListener('keydown', event => {
+    const row = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('li[role="button"]') : null;
+    if (row && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); row.click(); }
+  });
+  dialog.addEventListener('cancel', event => {
+    event.preventDefault();
+    if (!cancelRequested) { cancelRequested = true; closeWhenReady(); }
+  });
+  document.body.appendChild(dialog);
+  observer.observe(dialog, { childList: true, subtree: true });
+  try {
+    dialog.showModal();
+    return await kit.authModal({ container: dialog });
+  } finally {
+    observer.disconnect();
+    if (cancelTimer !== undefined) clearTimeout(cancelTimer);
+    dialog.close();
+    dialog.remove();
+    if (previousFocus?.isConnected) previousFocus.focus();
+  }
+}
+
 export async function connectWalletIdentity(preferredNetwork?: StellarNetwork): Promise<WalletIdentity> {
   if (walletSelectionPending) throw new Error('Finish the current wallet selection first.');
   walletSelectionPending = true;
@@ -209,7 +278,7 @@ export async function connectWalletIdentity(preferredNetwork?: StellarNetwork): 
     const previous = { address: activeAddress.value, module: selectedModuleId.value, network: selectedNetwork.value };
     try {
       if (preferredNetwork) setKitNetworkContext(kit, preferredNetwork);
-      const { address } = await kit.authModal();
+      const { address } = await accessibleWalletSelection(kit);
       if (!address) throw new Error('No Stellar account was selected.');
       return { address, ...await currentWalletNetwork(kit) };
     } catch (cause) {

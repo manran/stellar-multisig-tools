@@ -11,6 +11,7 @@ export interface RequestWorkActivityItem {
 
 export interface SorobanIntentWorkActivityItem {
   kind: 'soroban_intent';
+  callTitle?: string;
   workId: string;
   activityAt: string;
   intentId: string;

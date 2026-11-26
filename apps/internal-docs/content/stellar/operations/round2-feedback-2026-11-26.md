@@ -80,3 +80,17 @@ Base: b3e3912204b1845f2c85658f907f865ac2c54281.
 - U13/U14 partial: contrast adjustments, skip link, empty contacts wording, route reset, unknown workspace route, metadata and static asset caching. Browser/axe/mobile acceptance remains open.
 
 Remaining work: comprehensive structured input diagnostics, error-code catalogue, ABI-aware summaries/precision, webhook and end-to-end integration docs, accessibility/browser and full independent Testnet acceptance. This is not a closure of all 49 feedback items. No new migrations or deployment in this batch.
+
+
+## Fifth repair batch: error contracts, integration documentation and wallet interaction
+
+Base: 63eafb238c359de65cfb06c56728205d4ceeec51.
+
+- A6/S2: shared structured field diagnostics for common validation errors and a generated OpenAPI error catalogue of 349 statically identified and explicitly enumerated codes, including HTTP status and caller action. A regression checks catalogue drift. Dynamically produced provider errors are not claimed to be exhaustive.
+- D2/D5/D7/D9/D10/D11/D12/D13: publish Soroban execution and reconciliation, browser capabilities, Classic creation, Webhook registration and signature verification, retry schedules, integration modes, operation terminology, state and error reference, and version history. Add links to the root Directory and both llms.txt files. Webhook payload schemas are included in OpenAPI.
+- A11/U2: derive compact Inbox, Dashboard and Activity titles from the stored invocation; display exact native XLM amounts and use a generic method title for other contracts. Do not infer non-native asset decimals or symbols.
+- U7/U14: keep Wallet Kit inside a native focus-contained dialog with accessible selection, Escape handling and focus return. Preserve existing wallet icon CSP rather than expand its trusted origins. Add header theme toggle, require a successful contract load before save/new call, sort contract workspace methods, and normalize payment amount whitespace with explicit decimal separator guidance.
+
+Verification: 1008/1008 regular tests passed, API/Core/Web/Directory builds passed, and the independent documentation build passed. No new database migrations. No deployment, external transaction replay, real-wallet/browser/mobile or axe acceptance claimed.
+
+Outstanding: comprehensive per-operation OpenAPI examples, generic ABI-aware summaries and non-native token precision, deployed edge/rate-limit behavior, remaining form/accessibility details and full independent Testnet acceptance. Existing wire names remain compatible rather than being silently renamed. This batch does not close all 49 original findings.

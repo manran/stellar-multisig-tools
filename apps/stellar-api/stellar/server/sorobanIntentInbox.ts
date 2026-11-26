@@ -1,3 +1,4 @@
+import { sorobanIntentCallTitle } from '../../../../packages/stellar-core/src/sorobanInspection.js';
 import type { AgentAccessLevel } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 import { projectSorobanAgentTask } from './agentTaskProjection.js';
 import type { InboxSorobanIntentSnapshot } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
@@ -83,6 +84,7 @@ function snapshot(
 ): InboxSorobanIntentSnapshot {
   return {
     id: stored.id,
+    callTitle: sorobanIntentCallTitle(stored.intent.hostFunctionXdr, stored.network),
     network: stored.network,
     createdAt: stored.createdAt,
     ...(stored.creatorAddress ? { creatorAddress: stored.creatorAddress } : {}),

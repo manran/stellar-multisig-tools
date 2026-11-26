@@ -43,6 +43,58 @@ Classic and Soroban creation/inspection responses expose their respective Integr
 
 ## Webhook verification
 
+### Register and manage delivery
+
+Set the optional webhook object when creating a Testnet Integration Profile:
+
+```json
+{ "webhook": { "url": "https://your-service.example/mst/webhook", "enabled": true } }
+```
+
+Include this field in the existing Profile creation body, not as a separate API call. The successful response returns `webhookSecret` once (alongside `apiKey`). Store it in your server-side secret store. The URL must be a publicly reachable HTTPS endpoint; do not use a private network target.
+
+Inspect the registered URL, enabled status and secret version using `GET /integration-execution?network=testnet`. Changing an existing URL, disabling delivery, rotating the signing secret or redelivering a terminal event requires an authorized operator via the Integration administration surface; the public self-service API cannot do these operations.
+
+### Event and delivery contract
+
+All notifications use event type `work.changed` and schema `multisigtools-integration-webhook-v1`. The payload is a snapshot of current work, not an immutable list of individual state transitions. For Classic work, `data.projection.type` is `classic_request` and `data.projection.request` contains the transaction hash, counts, status, reason and available terminal evidence. For Soroban work, the type is `soroban_job` and `data.projection.job` contains its current actions and evidence.
+
+```json
+{
+  "schema": "multisigtools-integration-webhook-v1",
+  "id": "<event-id>",
+  "type": "work.changed",
+  "createdAt": "2026-11-26T00:00:00Z",
+  "serviceId": "your-service-id",
+  "data": {
+    "work": {
+      "kind": "classic_request",
+      "id": "<request-id>",
+      "network": "testnet"
+    },
+    "projection": {
+      "type": "classic_request",
+      "request": {
+        "version": 1,
+        "id": "<request-id>",
+        "network": "testnet",
+        "transactionHash": "<64-character-hash>",
+        "createdAt": "2026-11-26T00:00:00Z",
+        "expiresAt": "2026-11-27T00:00:00Z",
+        "contributionCount": 0,
+        "signatureCount": 0,
+        "status": "awaiting_signatures",
+        "statusReason": "signatures_required"
+      }
+    }
+  }
+}
+```
+
+The OpenAPI `webhooks.workChanged` entry defines the payload and headers. A successful HTTP 2xx acknowledges delivery. HTTP 408, 425, 429 and 5xx, or a transport failure, are retried after 5 seconds, 30 seconds, 2 minutes, 10 minutes, 1 hour, 6 hours and 12 hours. After these seven retries the event is terminal. Other non-2xx responses fail permanently; delivery does not follow redirects. An operator can explicitly redeliver a terminal event. Never use webhook order to infer settlement.
+
+### Verify the signature
+
 Webhook signing uses Standard Webhooks. Verify the raw request body before JSON parsing.
 
 ```ts
@@ -63,9 +115,19 @@ const event = new Webhook(process.env.MULTISIG_WEBHOOK_SECRET!)
 
 MultiSig Tools may retry automatically and an operator may explicitly redeliver a terminal webhook. Redelivery keeps the same `webhook-id` / event `id`; treat it as another delivery attempt of the same event, not a new business event. Record an event as processed only after your handler has completed the work you intend to deduplicate.
 
+## Authorization experience
+
+| UI name | Profile value | Responsibility |
+| --- | --- | --- |
+| Hosted | hosted | Signers use the MST review page. |
+| On my site / Native | native | Your browser handles signer UI with a scoped capability. |
+| Full Headless | headless | Your service orchestrates the documented API calls. |
+
+The profile value records the chosen integration experience. It does not grant signing authority, alter the Stellar network, or select transaction execution ownership. Credential scopes and live account policy control those independently.
+
 ## Error handling
 
-Branch on stable error codes, not message text.
+Branch on stable error codes, not message text. See the [state and error reference](/stellar/developers/reference) and the machine-readable `x-multisig-errors` directory in OpenAPI. Validation errors can include `details.field`, `allowedValues` and `expectedType`. The operation-specific retry contract is authoritative.
 
 | HTTP | Meaning | Caller action |
 | --- | --- | --- |

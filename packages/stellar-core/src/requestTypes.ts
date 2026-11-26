@@ -211,7 +211,7 @@ export interface SigningRequestApiError {
   code: string;
   network?: StellarNetwork;
   requestStatus?: SigningRequestStatus;
-  details?: { effectsDiff?: SorobanEffectsDiff };
+  details?: { effectsDiff?: SorobanEffectsDiff; field?: string; allowedValues?: readonly (string | number)[]; expectedType?: string };
 }
 
 

@@ -19,7 +19,27 @@ curl -sS -X POST https://api-testnet.multisig.tools/stellar/request \
   -d @payment.json
 ```
 
-The response is the ordinary Request/Proposal lifecycle used by Human flows.
+Create `payment.json` with the semantic business payment:
+
+```json
+{
+  "network": "testnet",
+  "payment": {
+    "sourceAccount": "<treasury-G-address>",
+    "payments": [{
+      "destination": "<funded-recipient-G-address>",
+      "amount": "1",
+      "asset": { "type": "native" }
+    }],
+    "lifetimeSeconds": 3600
+  },
+  "externalReference": "payroll-test-001"
+}
+```
+
+Replace the address placeholders. The amount is a decimal string in XLM; lifetimeSeconds accepts 3600, 86400 or 604800.
+
+The response includes the ordinary Request and the owning Integration's `job`. Share `job.reviewUrl` with signers. Do not create another Request just because a submission response was lost.
 
 ## Execution ownership
 
@@ -28,6 +48,16 @@ The response is the ordinary Request/Proposal lifecycle used by Human flows.
 **Manage execution myself:** your service owns transaction source/sequence/submission for Treasuries explicitly configured for external execution.
 
 Check `capabilities.classicManagedExecution.testnet` from runtime-config before creating a semantic payment. If false, use [prepared XDR](/stellar/developers/testnet-quickstart#3-prepare-and-create-a-classic-request) with either execution owner. For external execution, submit only the fully authorized `mergedXdr` on the fixed network, then GET the same Request to reconcile confirmed on-chain evidence.
+
+These three execution choices are distinct:
+
+| Request creation | Transaction source and fees | Final broadcast |
+| --- | --- | --- |
+| Semantic managed Classic | MST-managed channel; requires managed availability | MST |
+| Prepared XDR, default policy | Source in supplied XDR | MST at quorum |
+| Prepared XDR, external policy | Source in supplied XDR | Your service |
+
+`classicManagedExecution` and `classic.managedAvailable` indicate availability of a managed **transaction source**, not whether MST can broadcast an already authorized XDR envelope. The external execution scope controls the latter.
 
 **No silent rewrite:** raw XDR is never silently rewritten into a managed-channel transaction. Managed reconstruction is available for semantic creation because the business intent is explicit.
 

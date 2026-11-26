@@ -94,7 +94,7 @@ import {
 } from '../../../../packages/stellar-core/src/sorobanRpc.js';
 import { assertKnownRequestFields, readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
-import { noStoreJson } from '../server/httpResponse.js';
+import { apiErrorBody, noStoreJson } from '../server/httpResponse.js';
 import {
   assertCoordinationWritesEnabled,
   CoordinationWriteFrozenError,
@@ -154,10 +154,10 @@ interface AuthorizedRequest {
 
 function errorResponse(cause: unknown): Response {
   if (cause instanceof DeploymentNetworkPolicyError) {
-    return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
+    return noStoreJson(apiErrorBody(cause), cause.status);
   }
   if (cause instanceof RequestBodyError) {
-    return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
+    return noStoreJson(apiErrorBody(cause) satisfies SigningRequestApiError, cause.status);
   }
   if (
     cause instanceof CallerAuthenticationError
@@ -173,7 +173,7 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof ReusableTemplateStorageUnavailableError
     || cause instanceof RequestAssignmentServiceError
   ) {
-    return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
+    return noStoreJson(apiErrorBody(cause) satisfies SigningRequestApiError, cause.status);
   }
   if (cause instanceof SigningRequestServiceError) {
     return noStoreJson({
@@ -183,7 +183,7 @@ function errorResponse(cause: unknown): Response {
     } satisfies SigningRequestApiError, cause.status);
   }
   if (cause instanceof SemanticRateLimitError || cause instanceof CoordinationWriteFrozenError) {
-    return noStoreJson({ error: cause.message, code: cause.code } satisfies SigningRequestApiError, cause.status);
+    return noStoreJson(apiErrorBody(cause) satisfies SigningRequestApiError, cause.status);
   }
   if (cause instanceof RequestStorageUnavailableError) {
     return noStoreJson({ error: cause.message, code: 'storage_not_configured' } satisfies SigningRequestApiError, 503);

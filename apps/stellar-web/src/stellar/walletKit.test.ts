@@ -7,6 +7,7 @@ import {
   isWalletSelectionCancelled,
   nameVarialWallet,
   walletActionErrorMessage,
+  walletIconForCsp,
 } from './walletKit.js';
 
 test('only known interactive popup wallets use a cached identity', () => {
@@ -59,4 +60,15 @@ test('detects wallets that explicitly do not support detached Soroban auth-entry
   assert.equal(isWalletAuthEntrySigningUnsupported({ code: -3, message: 'Trezor Wallets do not support the "signAuthEntry" method' }), true);
   assert.equal(isWalletAuthEntrySigningUnsupported(new Error('User rejected the request.')), false);
   assert.equal(isWalletAuthEntrySigningUnsupported(new Error('Network request failed.')), false);
+});
+
+test('rejected wallet actions get an actionable message', () => {
+  assert.equal(walletActionErrorMessage(new Error('The user rejected this request.'), 'fallback'), 'You did not approve the wallet request. You can try again.');
+});
+
+test('wallet icons obey the existing content security policy', () => {
+  const allowed = 'https://stellar.creit.tech/wallet-icons/freighter.png';
+  assert.equal(walletIconForCsp(allowed), allowed);
+  assert.match(walletIconForCsp('https://storage.herewallet.app/logo.png'), /^data:image\/svg\+xml,/);
+  assert.match(walletIconForCsp('https://stellar.creit.tech.evil.test/logo.png'), /^data:image\/svg\+xml,/);
 });

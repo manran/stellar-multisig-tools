@@ -38,7 +38,7 @@ import {
 } from '../server/deploymentNetworkPolicy.js';
 import { createHumanSorobanIntent } from '../server/humanSorobanIntentService.js';
 import { createImportedSorobanIntent } from '../server/importedSorobanIntentService.js';
-import { noStoreJson, publicCorsHeaders } from '../server/httpResponse.js';
+import { apiErrorBody, noStoreJson, publicCorsHeaders } from '../server/httpResponse.js';
 import {
   assertCoordinationWritesEnabled,
   CoordinationWriteFrozenError,
@@ -127,17 +127,17 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof SorobanBrowserAuthorizationServiceError
     || cause instanceof BrowserAuthorizationStorageUnavailableError
   ) {
-    return json({ error: cause.message, code: cause.code }, cause.status);
+    return json(apiErrorBody(cause), cause.status);
   }
   if (cause instanceof SorobanSimulationError) {
     return json({ error: cause.message, code: 'soroban_simulation_' + cause.kind }, cause.kind === 'invalid' || cause.kind === 'unsupported' ? 400 : 503);
   }
   if (cause instanceof SorobanIntentPlanningError) {
     const status = cause.code === 'source_account_auth_unsupported' || cause.code === 'contract_account_auth_unsupported' ? 409 : 503;
-    return json({ error: cause.message, code: cause.code }, status);
+    return json(apiErrorBody(cause), status);
   }
   if (cause instanceof SemanticRateLimitError) {
-    return json({ error: cause.message, code: cause.code }, cause.status);
+    return json(apiErrorBody(cause), cause.status);
   }
   if (cause instanceof RequestStorageUnavailableError) {
     return json({ error: cause.message, code: 'storage_not_configured' }, 503);

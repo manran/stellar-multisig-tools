@@ -10,7 +10,7 @@ function json(data: unknown, status = 200): Response {
 
 function errorResponse(cause: unknown): Response {
   if (cause instanceof ContractCallServiceError || cause instanceof DeploymentNetworkPolicyError) {
-    return json({ error: cause.message, code: cause.code }, cause.status);
+    return json({ error: cause.message, code: cause.code, ...(cause.code === 'invalid_contract' ? { details: { field: 'contract' } } : {}) }, cause.status);
   }
   console.error('Contract interface API error', cause);
   return json({ error: 'Contract interface is temporarily unavailable.', code: 'internal_error' }, 500);

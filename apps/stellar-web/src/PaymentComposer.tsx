@@ -39,7 +39,7 @@ function shortAddress(address: string) {
 }
 
 function validAmount(value: string) {
-  return /^(?:0|[1-9]\d*)(?:\.\d{1,7})?$/.test(value) && Number(value) > 0;
+  return /^(?:0|[1-9]\d*)(?:\.\d{1,7})?$/.test(value.trim()) && Number(value.trim()) > 0;
 }
 
 function emptyRecipient(): PaymentRecipientDraft {
@@ -114,7 +114,7 @@ export default function PaymentComposer({ network }: Props) {
     for (const row of recipientDetails) {
       if (!row.asset || !row.amountValid) continue;
       try {
-        totals.set(row.asset.key, (totals.get(row.asset.key) ?? 0n) + stellarAmountToStroops(row.recipient.amount));
+        totals.set(row.asset.key, (totals.get(row.asset.key) ?? 0n) + stellarAmountToStroops(row.recipient.amount.trim()));
       } catch {
         // Field validation owns malformed amounts.
       }
@@ -598,7 +598,7 @@ export default function PaymentComposer({ network }: Props) {
                         {action === 'create_account' ? <div className="mst-transaction-static-field">XLM <span className="ml-1 font-normal text-neutral-400">required for CreateAccount</span></div> : <PaymentAssetPicker assets={assets} value={recipient.assetKey} onChange={(assetKey) => updateRecipient(index, { assetKey })} disabled={!sourceAccount} ariaLabel={`Recipient ${index + 1} asset`} />}
                       </div>
                     </div>
-                    {recipient.amount && !amountValid && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Enter an amount greater than 0 with up to 7 decimal places.</div>}
+                    {recipient.amount && !amountValid && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Enter an amount greater than 0 with up to 7 decimal places. Use a period as the decimal separator, without grouping separators.</div>}
                     {sourceAccount && action === 'payment' && !asset && <div className="mt-2 text-sm text-red-700 dark:text-red-300">This asset is no longer available from this treasury. Choose an available asset before continuing.</div>}
                   </div>
                 );

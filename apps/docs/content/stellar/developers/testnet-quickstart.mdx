@@ -43,6 +43,22 @@ Replace the example serviceId with a unique lowercase ID (1–40 letters, digits
 
 Use a lowercase service ID of 1–40 letters, digits or hyphens, starting with a letter or digit. Invalid IDs return HTTP 400 (`invalid_integration_service_id`); the API does not silently lowercase them.
 
+Example creation response (identifiers and key are illustrative):
+
+```json
+{
+  "operation": "integration.testnet.create",
+  "version": 1,
+  "service": {
+    "serviceId": "my-testnet-app-replace-me",
+    "label": "My Testnet App",
+    "enabled": true,
+    "networks": ["testnet"]
+  },
+  "apiKey": "<one-time-msi-key>"
+}
+```
+
 Store the returned one-time `msi_*` credential directly in your server-side or Agent secret store. Profile creation is atomic create-only, not idempotent credential delivery; do not send `Idempotency-Key`. If the response is lost, retry the same service ID and payload. HTTP 409 `integration_service_exists` means that ID is occupied; the original key cannot be retrieved or replaced through public self-service. For a disposable Testnet profile, obtain approval to use a new unique service ID. For an existing profile that must be retained, an authorized operator must rotate its key. Never treat an occupied ID as proof that you own it.
 
 The default profile lets MST submit the authorized Request. To own final submission yourself, include the same Treasury in `classicExternalExecutionSourceAccounts` when creating the profile. The prepared-XDR path below works without managed transaction-source channels.
@@ -94,13 +110,15 @@ The sample addresses are documentation fixtures, not funded accounts.
 
 ## 4. Open Hosted review
 
-Use the returned Request id:
+Use the returned `job.reviewUrl`. It contains the Request ID as a fragment:
 
 ```text
 https://stellar-testnet.multisig.tools/s#<request-id>
 ```
 
-The `#` fragment contains the Request ID. The site reads it in the browser; `?request=...` does **not** open a Proposal. Testnet is selected by the site address, not by a `network` query parameter.
+The `#` fragment contains the Request ID. The site reads it in the browser; the fragment form is canonical. Older public ID query links are accepted for compatibility. Testnet is selected by the site address, not by a `network` query parameter.
+
+Classic lifetimeSeconds accepts 3600, 86400 or 604800. A wallet session unlock_seconds accepts 900, 3600 or 28800.
 
 Each Treasury signer opens the Proposal, reviews the transaction, and signs with their own Stellar wallet. When the required authorization is complete, MST-managed Integration Requests can submit automatically. An authorized participant can confirm submission or retry if necessary and open the [transaction receipt](/stellar/start/sign-a-proposal#after-submission).
 

@@ -13,7 +13,7 @@ import {
   treasuryBoxRef,
 } from '../server/boxService.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
-import { noStoreJson } from '../server/httpResponse.js';
+import { apiErrorBody, noStoreJson } from '../server/httpResponse.js';
 import {
   beforeFirstDurableWrite,
   enforceSemanticRateLimit,
@@ -30,10 +30,10 @@ const MAX_BODY_BYTES = 32 * 1024;
 const MAX_BATCH_TREASURY_ACCOUNTS = 50;
 
 function errorResponse(cause: unknown): Response {
-  if (cause instanceof RequestBodyError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
-  if (cause instanceof AuthServiceError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
-  if (cause instanceof BoxServiceError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
-  if (cause instanceof SemanticRateLimitError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
+  if (cause instanceof RequestBodyError) return noStoreJson(apiErrorBody(cause), cause.status);
+  if (cause instanceof AuthServiceError) return noStoreJson(apiErrorBody(cause), cause.status);
+  if (cause instanceof BoxServiceError) return noStoreJson(apiErrorBody(cause), cause.status);
+  if (cause instanceof SemanticRateLimitError) return noStoreJson(apiErrorBody(cause), cause.status);
   if (cause instanceof RequestStorageUnavailableError) return noStoreJson({ error: cause.message, code: 'storage_not_configured' }, 503);
   console.error('Treasury Box API error', cause);
   return noStoreJson({ error: 'Treasury service is temporarily unavailable.', code: 'internal_error' }, 500);

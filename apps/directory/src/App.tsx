@@ -176,6 +176,17 @@ export default function App() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-8">
+        <section className="mb-6 rounded-xl border border-brand-teal/30 p-4 sm:flex sm:items-center sm:justify-between sm:gap-6">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-teal dark:text-brand-teal-light">Our Stellar Testnet workspace</p>
+            <h2 className="mt-1 text-lg font-semibold">Shared transaction approvals</h2>
+            <p className="mt-1 text-sm opacity-80">Prepare payments and contract calls, collect signatures and verify execution. Keep your keys in your own wallet.</p>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-4 sm:mt-0 sm:shrink-0">
+            <a href="https://stellar-testnet.multisig.tools" className="rounded-lg bg-brand-teal px-4 py-2 text-sm font-semibold text-white">Open Testnet</a>
+            <a href="https://docs.multisig.tools/stellar/developers" className="text-sm font-semibold underline underline-offset-2">Developer guide</a>
+          </div>
+        </section>
         <div className="mb-6 md:mb-10">
           <p className="hidden md:block text-sm opacity-70 max-w-2xl leading-relaxed mb-6">
             Discover multisig wallets, treasury tools, custody platforms, and related signing infrastructure across crypto ecosystems.

@@ -64,7 +64,7 @@ test('Ledger and Trezor are explicit signer transports inside the existing walle
   assert.match(walletKit, /shouldLoadHardwareWallets = includeHardwareWallets \|\| selectedHardwareWallet/);
   assert.match(walletKit, /shouldLoadHardwareWallets \? await loadHardwareWalletModules\(\) : \[\]/);
   assert.match(walletKit, /connectWalletIdentity[\s\S]*loadKit\(true\)/);
-  assert.match(walletKit, /modules: \[\.\.\.nameVarialWallet\(defaultModules\(\)\), \.\.\.hardwareModules\]/);
+  assert.match(walletKit, /const modules = \[\.\.\.nameVarialWallet\(defaultModules\(\)\), \.\.\.hardwareModules\]/);
   assert.match(walletKit, /import\('buffer'\)/);
   assert.match(packageJson, /"buffer": "\^6\.0\.3"/);
   assert.match(walletKit, /HARDWARE_WALLET_SUPPORT_EMAIL = 'support@multisig\.tools'/);
@@ -115,4 +115,14 @@ test('footer closes the trust story without duplicating workspace task navigatio
   assert.match(footer, /<Mail className="h-4 w-4"/);
   assert.match(uxDesignSystem, /Trust closure and wallet confirmation/);
   assert.match(uxDesignSystem, /not a permanent polling loop/);
+});
+
+test('wallet selection keeps Kit behavior in a native focus-contained modal', () => {
+  assert.match(walletKit, /document.createElement\('dialog'\)/);
+  assert.match(walletKit, /dialog.showModal\(\)/);
+  assert.match(walletKit, /kit.authModal\(\{ container: dialog \}\)/);
+  assert.match(walletKit, /row.tabIndex = 0/);
+  assert.match(walletKit, /event.key === 'Enter' \|\| event.key === ' '/);
+  assert.match(walletKit, /closeEvent.next\(\)/);
+  assert.match(walletKit, /previousFocus.focus\(\)/);
 });

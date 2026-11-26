@@ -14,7 +14,7 @@ import {
   nativeToScVal,
   xdr,
 } from '@stellar/stellar-sdk/base';
-import { inspectSorobanHostFunctionXdr, inspectSorobanAuthorizationEntry, previewSorobanValue } from '../../../../packages/stellar-core/src/sorobanInspection.js';
+import { inspectSorobanHostFunctionXdr, sorobanIntentCallTitle, inspectSorobanAuthorizationEntry, previewSorobanValue } from '../../../../packages/stellar-core/src/sorobanInspection.js';
 import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 
 const CONTRACT_ID = 'CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE';
@@ -162,4 +162,7 @@ test('review summary formats native XLM exactly and never guesses other token un
   assert.deepEqual(inspectSorobanHostFunctionXdr(native, 'testnet')?.nativeXlmTransfer, { from, to, amount: '0.5' });
   assert.equal(inspectSorobanHostFunctionXdr(native, 'public')?.nativeXlmTransfer, undefined);
   assert.equal(inspectSorobanHostFunctionXdr(make(CONTRACT_ID), 'testnet')?.nativeXlmTransfer, undefined);
+  assert.equal(sorobanIntentCallTitle(native, 'testnet'), 'Transfer 0.5 XLM');
+  assert.equal(sorobanIntentCallTitle(make(CONTRACT_ID), 'testnet'), 'Call transfer');
+  assert.equal(sorobanIntentCallTitle('invalid', 'testnet'), 'Soroban Intent');
 });

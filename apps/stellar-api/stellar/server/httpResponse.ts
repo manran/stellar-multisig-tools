@@ -1,11 +1,40 @@
 import { createHash } from 'node:crypto';
 
+const INPUT_DETAILS: Record<string, { field: string; allowedValues?: readonly (string | number)[]; expectedType?: string }> = {
+  invalid_network: { field: 'network', allowedValues: ['public', 'testnet'] },
+  invalid_proposal_decision: { field: 'decision', allowedValues: ['decline'] },
+  invalid_payment_amount: { field: 'amount', expectedType: 'decimal string' },
+  invalid_transaction_lifetime: { field: 'lifetimeSeconds', allowedValues: [3600, 86400, 604800] },
+  integration_service_id_required: { field: 'serviceId', expectedType: 'string' },
+  invalid_integration_service_id: { field: 'serviceId', expectedType: 'lowercase service identifier' },
+  invalid_execution_source: { field: 'executor' },
+  executor_required: { field: 'executor' },
+  invalid_browser_origin: { field: 'origin' },
+};
+
+export function apiErrorBody(cause: { message: string; code: string; name?: string; field?: unknown }) {
+  return {
+    error: cause.message,
+    code: cause.code,
+    ...(cause.name === 'RequestBodyError' && typeof cause.field === 'string' && cause.field ? { details: { field: cause.field } } : {}),
+  };
+}
+
 export function noStoreJson(
   data: unknown,
   status = 200,
   headers: Record<string, string> = {},
 ): Response {
-  return Response.json(data, {
+  let payload = data;
+  if (status === 400 && data && typeof data === 'object' && 'code' in data && typeof data.code === 'string'
+    && !('details' in data) && Object.hasOwn(INPUT_DETAILS, data.code)) {
+    const details = INPUT_DETAILS[data.code];
+    const fixed = process.env.VITE_STELLAR_DEPLOYMENT_NETWORK;
+    const network = data.code === 'invalid_network' && (fixed === 'testnet' || fixed === 'public');
+    payload = { ...data, ...(network ? { error: 'network must be ' + fixed + ' on this deployment.' } : {}),
+      details: { ...details, ...(network ? { allowedValues: [fixed] } : {}) } };
+  }
+  return Response.json(payload, {
     status,
     headers: {
       ...headers,

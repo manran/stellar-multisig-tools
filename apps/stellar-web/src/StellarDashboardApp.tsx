@@ -208,7 +208,7 @@ export default function StellarDashboardApp() {
                           <NetworkBadge network={intent.network} />
                           <span>{intentAuthorizationWindowLabel(intent)}</span>
                         </div>
-                        <div className="mst-work-row__title">Contract authorization</div>
+                        <div className="mst-work-row__title">{intent.callTitle || 'Contract authorization'}</div>
                         <p className="mst-work-row__copy">{action.detail}</p>
                         <div className="mt-2 font-mono text-xs text-neutral-400">Created by {intent.creatorAddress ? shortAddress(intent.creatorAddress) : (intent.creatorActor?.label ?? intent.creatorActor?.id ?? 'external service')}</div>
                       </div>

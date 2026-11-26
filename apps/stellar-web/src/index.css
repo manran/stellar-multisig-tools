@@ -4101,3 +4101,8 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
 @media (prefers-reduced-motion: reduce) {
   .mst-agent-danger-action { transition-duration: 100ms; }
 }
+
+/* Native modal contains the existing Wallets Kit UI, including hardware account selection. */
+.mst-wallet-dialog { margin: auto; padding: 0; border: 0; max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); background: transparent; color: inherit; overflow: auto; }
+.mst-wallet-dialog::backdrop { background: rgb(0 0 0 / 55%); }
+.mst-wallet-dialog :is(button, [role="button"]):focus-visible { outline: 2px solid #24745d; outline-offset: -2px; }

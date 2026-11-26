@@ -12,3 +12,9 @@ The directory is for navigation; it is not an API endpoint. The Stellar Testnet 
 - [Testnet OpenAPI](https://api-testnet.multisig.tools/stellar/openapi.json): Schema and authentication.
 - [Agent API](https://docs.multisig.tools/stellar/developers/agent-api): Signer-scoped credential permissions.
 - [Testnet workspace](https://stellar-testnet.multisig.tools): Human approval surface.
+
+- [API and webhooks](https://docs.multisig.tools/stellar/developers/api): Transport contract, errors, retries and webhook delivery.
+- [Classic integration](https://docs.multisig.tools/stellar/developers/classic): Payment creation, signature and submission ownership.
+- [Soroban integration](https://docs.multisig.tools/stellar/developers/soroban): Profile, detached AUTH, execution and exact-hash recovery.
+- [Security](https://docs.multisig.tools/stellar/developers/security): Credential and authorization boundaries.
+- [State and error reference](https://docs.multisig.tools/stellar/developers/reference): Lifecycle states, retry vocabulary and error catalogue.

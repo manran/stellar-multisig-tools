@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { Moon, Sun } from 'lucide-react';
 import StellarAccountControl from './StellarAccountControl';
 import MultiSigBrandMark from './MultiSigBrandMark';
 import { NetworkBadge } from './MultiSigUi';
@@ -10,6 +12,13 @@ interface Props {
 }
 
 export default function StellarHeader({ landing = false, demo = false }: Props) {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
+  function toggleTheme() {
+    const next = !dark;
+    document.documentElement.classList.toggle('dark', next);
+    try { localStorage.setItem('theme', next ? 'dark' : 'light'); } catch { /* Browser storage may be unavailable. */ }
+    setDark(next);
+  }
   const fixedDeploymentNetwork = fixedClientStellarDeploymentNetwork();
   const brandLabel = landing ? 'MultiSig Tools — Shared authorization for Stellar' : 'MultiSig Tools';
 
@@ -29,6 +38,7 @@ export default function StellarHeader({ landing = false, demo = false }: Props) 
         ) : (
           <div className="mst-header__actions">
             {fixedDeploymentNetwork && <NetworkBadge network={fixedDeploymentNetwork} />}
+            <button type="button" className="mst-action-secondary !p-2" aria-label={dark ? 'Use light theme' : 'Use dark theme'} title={dark ? 'Use light theme' : 'Use dark theme'} onClick={toggleTheme}>{dark ? <Sun aria-hidden="true" className="h-4 w-4" /> : <Moon aria-hidden="true" className="h-4 w-4" />}</button>
             <StellarAccountControl />
           </div>
         )}

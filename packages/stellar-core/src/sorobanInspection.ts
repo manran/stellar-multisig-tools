@@ -204,6 +204,13 @@ export function inspectSorobanHostFunctionXdr(encoded: string, network: StellarN
   }
 }
 
+/** Compact list label. Unknown contract amounts must not be represented as XLM. */
+export function sorobanIntentCallTitle(encoded: string, network: StellarNetwork): string {
+  const call = inspectSorobanHostFunctionXdr(encoded, network);
+  if (call?.nativeXlmTransfer) return `Transfer ${call.nativeXlmTransfer.amount} XLM`;
+  return call ? `Call ${call.functionName}` : 'Soroban Intent';
+}
+
 function authorizationClassification(info: ReturnType<typeof inspectAuthEntry>): {
   authorizationKind: SorobanAuthorizationKind;
   verificationModel: SorobanAuthorizationVerification;

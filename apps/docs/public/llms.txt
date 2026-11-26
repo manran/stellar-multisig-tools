@@ -17,3 +17,9 @@ Start on Testnet. Public runtime discovery is available via the RFC 9727 API Cat
 
 - [Sign a Proposal](https://docs.multisig.tools/stellar/start/sign-a-proposal): Review, sign, submit, receipt.
 - [Templates](https://docs.multisig.tools/stellar/transactions/templates): Payment templates and delegated proposer permissions.
+
+- [API and webhooks](https://docs.multisig.tools/stellar/developers/api): Transport contract, errors, retries and webhook delivery.
+- [Classic integration](https://docs.multisig.tools/stellar/developers/classic): Payment creation, signature and submission ownership.
+- [Soroban integration](https://docs.multisig.tools/stellar/developers/soroban): Profile, detached AUTH, execution and exact-hash recovery.
+- [Security](https://docs.multisig.tools/stellar/developers/security): Credential and authorization boundaries.
+- [State and error reference](https://docs.multisig.tools/stellar/developers/reference): Lifecycle states, retry vocabulary and error catalogue.

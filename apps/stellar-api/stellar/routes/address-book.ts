@@ -16,7 +16,7 @@ import {
 } from '../server/addressBookService.js';
 import type { StoredAddressAlias } from '../server/addressBookStore.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
-import { publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
+import { apiErrorBody, publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
 import type { AgentAccessLevel } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 
 const MAX_BODY_BYTES = 8 * 1024;
@@ -38,10 +38,10 @@ function publicEntry(entry: StoredAddressAlias) {
 }
 
 function errorResponse(cause: unknown): Response {
-  if (cause instanceof RequestBodyError) return json({ error: cause.message, code: cause.code }, cause.status);
-  if (cause instanceof AuthServiceError || cause instanceof CallerAuthenticationError || cause instanceof DeploymentNetworkPolicyError) return json({ error: cause.message, code: cause.code }, cause.status);
-  if (cause instanceof AgentCredentialServiceError) return json({ error: cause.message, code: cause.code }, cause.status);
-  if (cause instanceof AddressBookServiceError) return json({ error: cause.message, code: cause.code }, cause.status);
+  if (cause instanceof RequestBodyError) return json(apiErrorBody(cause), cause.status);
+  if (cause instanceof AuthServiceError || cause instanceof CallerAuthenticationError || cause instanceof DeploymentNetworkPolicyError) return json(apiErrorBody(cause), cause.status);
+  if (cause instanceof AgentCredentialServiceError) return json(apiErrorBody(cause), cause.status);
+  if (cause instanceof AddressBookServiceError) return json(apiErrorBody(cause), cause.status);
   if (cause instanceof RequestStorageUnavailableError) return json({ error: cause.message, code: 'storage_not_configured' }, 503);
   console.error('Address book API error', cause);
   return json({ error: 'Address book is temporarily unavailable.', code: 'internal_error' }, 500);

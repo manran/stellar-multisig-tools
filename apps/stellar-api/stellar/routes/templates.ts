@@ -2,7 +2,7 @@ import { blobAuthStore } from '../server/blobAuthStore.js';
 import { authConfigForRequest } from '../server/authConfig.js';
 import { AuthServiceError, requirePrivateWorkspaceSession } from '../server/authService.js';
 import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
-import { noStoreJson } from '../server/httpResponse.js';
+import { apiErrorBody, noStoreJson } from '../server/httpResponse.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import {
   ReusableTemplateServiceError,
@@ -25,7 +25,7 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof ReusableTemplateServiceError
     || cause instanceof ReusableTemplateStorageUnavailableError
   ) {
-    return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
+    return noStoreJson(apiErrorBody(cause), cause.status);
   }
   console.error('Reusable template API error', cause);
   return noStoreJson({ error: 'Templates are temporarily unavailable.', code: 'internal_error' }, 500);

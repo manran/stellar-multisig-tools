@@ -154,6 +154,7 @@ export type SorobanIntentViewerAction = 'sign' | 'route_execution' | 'waiting' |
 
 export interface InboxSorobanIntentSnapshot {
   id: string;
+  callTitle?: string;
   network: StellarNetwork;
   createdAt: string;
   creatorAddress?: string;

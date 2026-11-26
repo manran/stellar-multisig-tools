@@ -27,6 +27,7 @@ export default function ContractWorkspaceApp() {
   const [methods, setMethods] = useState<ContractMethodDescriptor[]>([]);
   const [loading, setLoading] = useState(Boolean(route));
   const [saving, setSaving] = useState(false);
+  const [interfaceReady, setInterfaceReady] = useState(false);
   const [savedOverride, setSavedOverride] = useState(false);
   const [error, setError] = useState('');
   const saved = savedOverride || contracts.some(
@@ -42,9 +43,10 @@ export default function ContractWorkspaceApp() {
     if (!route) return;
     let cancelled = false;
     setLoading(true);
+    setInterfaceReady(false);
     setError('');
     void inspectContractOperation(route.contractId, route.network)
-      .then((loaded) => { if (!cancelled) setMethods(loaded.methods); })
+      .then((loaded) => { if (!cancelled) { setMethods([...loaded.methods].sort((a, b) => a.name.localeCompare(b.name))); setInterfaceReady(true); } })
       .catch((cause) => {
         if (!cancelled) setError(cause instanceof Error ? cause.message : 'Unable to load this contract interface.');
       })
@@ -64,7 +66,7 @@ export default function ContractWorkspaceApp() {
   }
 
   async function keepContract() {
-    if (saving || authBusy) return;
+    if (saving || authBusy || !interfaceReady) return;
     setSaving(true);
     setError('');
     try {
@@ -121,7 +123,7 @@ export default function ContractWorkspaceApp() {
                   )) : <span className="block py-4 text-sm text-neutral-500 dark:text-neutral-400">No callable methods found.</span>}
                 </div>
               )}
-              <a href={callHref()} className="mst-action-primary mt-6">New contract call</a>
+              {interfaceReady && <a href={callHref()} className="mst-action-primary mt-6">New contract call</a>}
             </section>
 
             <div className="mst-contract-facts">
@@ -141,7 +143,7 @@ export default function ContractWorkspaceApp() {
                 ) : (
                   <>
                     <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">Save this reusable work object to your signer workspace.</p>
-                    <button type="button" disabled={saving || authBusy} onClick={() => void keepContract()} className="mst-action-secondary mt-4 disabled:opacity-40">{saving || authBusy ? 'Saving…' : 'Save to Contracts'}</button>
+                    <button type="button" disabled={saving || authBusy || !interfaceReady} onClick={() => void keepContract()} className="mst-action-secondary mt-4 disabled:opacity-40">{saving || authBusy ? 'Saving…' : 'Save to Contracts'}</button>
                   </>
                 )}
               </section>

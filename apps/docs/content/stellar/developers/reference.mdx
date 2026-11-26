@@ -1,0 +1,125 @@
+---
+title: State, errors and terminology
+description: Understand lifecycle states, recovery strategies, and the versioned API contract.
+---
+
+## Request, Intent, Task and Job
+
+A Request (also called a Proposal or Signing Request in the Human UI) coordinates signatures for one Classic transaction envelope. An Intent describes a Soroban host function and authorization plan; its execution package is created separately. An Agent Task describes work from the represented signer's perspective. An Integration Job describes work owned by the service. Neither a Task nor a Job grants additional Stellar authority.
+
+### Classic Request status
+
+| State | Meaning |
+| --- | --- |
+| awaiting_signatures | More valid signatures are required. quorum_unreachable means current refusals leave insufficient weight. |
+| waiting_preconditions | Authorization or envelope exists but a ledger/time precondition is not met or cannot be verified. |
+| ready | Current required authorization and preconditions allow submission. |
+| submitted | Stellar inclusion and successful execution are confirmed. |
+| expired | The Request or transaction validity window elapsed. |
+| stale | The transaction sequence is no longer usable. |
+| blocked | The current envelope or authorization cannot proceed; read statusReason and evidence. |
+
+For external execution, expired, stale and blocked alone do not prove that no payment occurred. Reconcile the original hash; require verified failed or non-included evidence before considering a replacement.
+
+### Soroban authorization status
+
+| State | Meaning |
+| --- | --- |
+| awaiting_authorization | A required AUTH entry still needs signer authorization. |
+| authorization_ready | The plan has sufficient current valid AUTH. |
+| expired | The authorization window elapsed. |
+| blocked | The current plan cannot be satisfied or validated. |
+| cancelled | The Intent was cancelled. |
+| completed | Execution was confirmed successful on Stellar. |
+
+A released execution hash must be reconciled before replacement, re-plan or cancellation. A completed receipt is terminal even if signer policy changes.
+
+### Agent Task state
+
+| State | Meaning |
+| --- | --- |
+| action_required | At least one relevant action needs attention. |
+| waiting | Waiting for other signers, conditions or a caller with sufficient scope. |
+| execution_unknown | A released hash lacks a terminal result. |
+| completed | Success confirmed. |
+| expired | Work expired. |
+| failed | Work cannot proceed or verified execution failed. |
+| cancelled | Intent cancelled. |
+
+Read `signatureRequired` independently from `nextActions[].available`. A read credential can discover a needed signature without being able to contribute it.
+
+### Integration Job state
+
+| State | Meaning |
+| --- | --- |
+| waiting_for_authorization | More approval is required. |
+| waiting_preconditions | Classic preconditions need resolution. |
+| ready | A permitted execution action is available. |
+| executing | Soroban has a prepared execution package. |
+| execution_unknown | Reconcile the original hash. |
+| completed | Success confirmed. |
+| expired | Work expired or a non-inclusion proof resolved the attempt. |
+| failed | Execution or preparation failed; inspect evidence. |
+| cancelled | Soroban Intent cancelled. |
+
+Use the concrete `nextActions` and `actionCalls` provided for the current resource. An external Stellar submission is not an API operation.
+
+## Retry vocabulary
+
+| Strategy | What to do |
+| --- | --- |
+| retry_same_request | Repeat exactly the same accepted call. |
+| retry_same_request_with_backoff | Repeat the same call with bounded delays. |
+| inspect_then_decide | Inspect canonical current state before deciding. |
+| stop_and_inspect | Stop automated retries and examine state/evidence. |
+| stop | Do not repeat this action. |
+| correct_input | Correct the rejected input. |
+| authenticate | Obtain the required valid credential. |
+| human_review | Require a conscious review before further action. |
+| human_recovery | Follow the stated human-assisted recovery sequence. |
+| start_new_request | Begin a new pairing request only where the operation explicitly permits it. |
+| reconcile_first | Reconcile every original unresolved transaction hash. |
+| inspect_terminal | Retrieve the terminal receipt. |
+| review_and_reauthorize | Review a changed plan and collect fresh authorization. |
+| complete | Keep the successful evidence; no replacement payment. |
+
+Choose the rule in this order: `onError[code]`, `onHttpStatus[status]`, `defaultError`. If no response arrived, use `transportFailure`. Reconciliation responses use `onOutcome`.
+
+## Errors
+
+Read [OpenAPI](https://api-testnet.multisig.tools/stellar/openapi.json), then `x-multisig-errors` for the published source-derived code catalogue with declared HTTP statuses, meanings and caller actions. The catalogue covers statically declared codes and explicitly listed dynamic families; additional deployment or provider errors can occur. Do not assume an unlisted error is safe to retry.
+
+```sh
+curl -fsS https://api-testnet.multisig.tools/stellar/openapi.json | jq '."x-multisig-errors"'
+```
+
+| Code | Caller action |
+| --- | --- |
+| unknown_request_field | Correct the field identified by details.field. |
+| idempotency_conflict | Stop; inspect the original accepted input and key. |
+| intent_authorization_not_ready | Inspect and collect required AUTH. |
+| managed_executor_not_configured | Choose an allowed external executor or request operator configuration. |
+| intent_execution_outcome_unknown | Reconcile original hashes before mutation. |
+| intent_already_executed | Inspect and retain the terminal receipt. |
+| integration_service_exists | Recover the existing service through its operator; do not replace its credential automatically. |
+| already_exchanged | Follow the reserved credential recovery path. |
+
+Rate limits depend on deployment and credential policy. The published policy does not guarantee a universal remaining count. On 429, use bounded backoff according to the operation; do not create parallel credentials to bypass limits.
+
+## Glossary
+
+- **Principal**: the Stellar signer that delegates access.
+- **Actor**: the individual authenticated credential or Human responsible for an action.
+- **Authorizer**: the account or contract required to authorize a Soroban invocation.
+- **Executor**: the Stellar transaction source that supplies the sequence, fee and execution signature.
+- **Treasury**: a shared Stellar account; its live signer policy governs approval.
+- **Integration Profile**: scoped service configuration; it is not a signer.
+- **Receipt**: verified evidence of the transaction result, not a broadcast acknowledgement.
+
+## Contract change history
+
+### 1.1.0
+
+Added explicit session status/logout operations, same-hash Soroban execution resume, Principal-specific AUTH preimages, structured refusal status, Classic Integration jobs, own-profile inspection, optional Inbox totals, error catalogue and public discovery validators. Unknown closed-schema request fields are now rejected. The transport operation IDs have been shortened; regenerate generated clients before adopting this revision. The logical operation wire version remains 1. Existing snake_case fields and legacy public Request links remain compatible.
+
+This is the contract revision in the source release. Check `info.version` on the target deployment before relying on a new feature.

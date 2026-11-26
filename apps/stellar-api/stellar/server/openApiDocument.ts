@@ -1,3 +1,4 @@
+import { API_ERROR_CATALOG } from './apiErrorCatalog.generated.js';
 import {
   HEADLESS_API_REVISION,
   HEADLESS_OPERATION_CATALOG,
@@ -313,10 +314,10 @@ const components: OpenApiObject = {
       required: ['error', 'code'],
       properties: {
         error: { type: 'string' },
-        code: { type: 'string' },
+        code: { type: 'string', description: 'Stable machine-readable code. See x-multisig-errors and the selected logical operation retry policy.' },
         network: stellarNetwork,
         requestStatus: { type: 'string' },
-        details: { type: 'object', additionalProperties: true },
+        details: { type: 'object', properties: { field: { type: 'string', description: 'Invalid input field or nested field path.' }, allowedValues: { type: 'array', items: { oneOf: [{ type: 'string' }, { type: 'integer' }] } }, expectedType: { type: 'string' } }, additionalProperties: true },
       },
       additionalProperties: false,
     },
@@ -677,7 +678,7 @@ const components: OpenApiObject = {
         contractId,
         method: { type: 'string', minLength: 1, maxLength: 64 },
         arguments: { type: 'object', maxProperties: 64, description: 'Named typed JSON values validated recursively against the deployed Contract Spec before ScVal encoding.', additionalProperties: true },
-        preparedXdr: xdr,
+        preparedXdr: { ...xdr, description: 'Envelope returned by contract-prepare simulation. A raw contract-call build without its simulation authorization data is not sufficient.' },
         privateNote: { type: 'string' },
         externalReference: { type: 'string' },
         executor: { ...accountId, description: 'Optional Integration Service executor override. It must be inside the credential Soroban execution allowlist. If omitted, the Service default is snapshotted when configured; otherwise executor resolution remains deferred.' },
@@ -1042,7 +1043,7 @@ const components: OpenApiObject = {
       properties: {
         action: { type: 'string', const: 'issue_browser_authorization' },
         signerAddress: accountId,
-        origin: { type: 'string', format: 'uri', description: 'Exact Browser origin bound to the short-lived capability.' },
+        origin: { type: 'string', format: 'uri', description: 'Exact browser origin; capability inspection and contribution must send the matching Origin header. Lifetime is at most 30 minutes and is also constrained by the authorization plan.' },
       },
       additionalProperties: false,
     },
@@ -1738,6 +1739,38 @@ const components: OpenApiObject = {
       },
       additionalProperties: true,
     },
+    IntegrationClassicWebhookRequest: {
+      type: 'object',
+      required: ['version', 'id', 'network', 'transactionHash', 'createdAt', 'expiresAt', 'contributionCount', 'signatureCount', 'status', 'statusReason'],
+      properties: {
+        version: operationVersion, id: { type: 'string' }, network: stellarNetwork,
+        transactionHash: submissionProperties.transactionHash, createdAt: timestamp, expiresAt: timestamp,
+        contributionCount: { type: 'integer', minimum: 0 }, signatureCount: { type: 'integer', minimum: 0 },
+        status: { enum: ['awaiting_signatures', 'waiting_preconditions', 'ready', 'submitted', 'expired', 'stale', 'blocked'] },
+        statusReason: { type: 'string' }, executionMode: { enum: ['multisigtools', 'external'] },
+        externalReference: { type: 'string' }, executionOutcome: schema('ClassicExecutionEvidence'), result: schema('SigningRequestSubmission'),
+      },
+      additionalProperties: false,
+    },
+    IntegrationWebhookEnvelope: {
+      type: 'object', required: ['schema', 'id', 'type', 'createdAt', 'serviceId', 'data'],
+      properties: {
+        schema: { const: 'multisigtools-integration-webhook-v1' }, id: { type: 'string' }, type: { const: 'work.changed' },
+        createdAt: timestamp, serviceId: { type: 'string' },
+        data: {
+          type: 'object', required: ['work', 'projection'],
+          properties: {
+            work: { type: 'object', required: ['kind', 'id', 'network'], properties: {
+              kind: { enum: ['classic_request', 'soroban_intent'] }, id: { type: 'string' }, network: stellarNetwork, externalReference: { type: 'string' },
+            }, additionalProperties: false },
+            projection: { oneOf: [
+              { type: 'object', required: ['type', 'request'], properties: { type: { const: 'classic_request' }, request: schema('IntegrationClassicWebhookRequest') }, additionalProperties: false },
+              { type: 'object', required: ['type', 'job'], properties: { type: { const: 'soroban_job' }, job: schema('IntegrationSorobanJob') }, additionalProperties: false },
+            ] },
+          }, additionalProperties: false,
+        },
+      }, additionalProperties: false,
+    },
     IntegrationClassicJob: {
       type: 'object',
       required: ['version', 'id', 'kind', 'network', 'state', 'nextActions', 'actionCalls', 'reviewUrl', 'statusReason'],
@@ -2058,6 +2091,7 @@ export function createOpenApiDocument(
   return {
     openapi: '3.1.1',
     'x-multisig-operations': logicalOperationContracts(paths),
+    'x-multisig-errors': API_ERROR_CATALOG,
     'x-multisig-deployment-network': deploymentNetwork,
     jsonSchemaDialect: 'https://json-schema.org/draft/2020-12/schema',
     info: {
@@ -2068,6 +2102,30 @@ export function createOpenApiDocument(
     tags: [...new Set(HEADLESS_OPERATION_CATALOG.map(item => item.id.split('.')[0]))].map(name => ({ name })),
     servers: [{ url: origin }],
     paths,
+    webhooks: {
+      workChanged: {
+        post: {
+          operationId: 'integration.webhook.workChanged',
+          summary: 'Current Integration work changed',
+          description: 'Verify the Standard Webhooks signature over the exact raw body. Deduplicate by event ID and inspect canonical state before acting. Payloads are current projections, not an ordered transition log.',
+          tags: ['integration'],
+          parameters: [
+            parameter('webhook-id', 'header', true, { type: 'string' }, 'Stable event identity, including redelivery.'),
+            parameter('webhook-timestamp', 'header', true, { type: 'string' }, 'Signed delivery timestamp in Unix seconds.'),
+            parameter('webhook-signature', 'header', true, { type: 'string' }, 'Standard Webhooks signature. Verify with the owning service webhook secret.'),
+          ],
+          requestBody: body(schema('IntegrationWebhookEnvelope')),
+          responses: {
+            '2XX': { description: 'Delivery acknowledged.' },
+            '408': { description: 'Retryable timeout.' },
+            '425': { description: 'Retryable too-early response.' },
+            '429': { description: 'Retryable rate limit.' },
+            '5XX': { description: 'Retryable server error.' },
+            default: { description: 'Other non-2xx responses are terminal.' },
+          },
+        },
+      },
+    },
     components,
     externalDocs: {
       description: 'MultiSig Tools developer integration and authority guide',

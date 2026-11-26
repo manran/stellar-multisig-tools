@@ -21,6 +21,26 @@ After verified failure or non-inclusion, a retry of the **same Intent** is disti
 
 Integration owners and Intent creators can reconcile a persisted successful, failed, or non-inclusion result without a live signer-policy lookup. Owner reconciliation does not require a live authorization refresh for non-success results. It returns the evidence with `projectionNotRefreshed: true` instead of a current Job or Task; the same flag applies if an optional projection cannot be refreshed. Inspect the Intent again before further actions; do not infer current authorization from the stored receipt. Non-owner signers still need a current signer-policy access check. A recorded AUTH contributor can also read a confirmed historical Intent even after cancellation or signer-policy changes; this historical access is read-only. The completed authorization projection does not return reusable authorization entries.
 
+## Create a Soroban Integration Profile
+
+The Classic quickstart profile alone cannot create Soroban Intents. Create a separate Testnet profile, or ask an authorized operator to update an existing one. Replace all placeholder account addresses with funded Testnet accounts you control. The executor is a G-account that pays fees and supplies the transaction sequence; it does not replace the contract's authorizers.
+
+```json
+{
+  "serviceId": "replace-with-unique-testnet-id",
+  "label": "Soroban transfer test",
+  "sorobanContracts": [{
+    "contractId": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+    "methods": ["transfer"],
+    "execution": { "mode": "external", "executor": "<funded-executor-G-address>" }
+  }],
+  "sorobanExecutionAccounts": ["<funded-executor-G-address>"],
+  "profile": { "authorizationExperience": "hosted" }
+}
+```
+
+POST this body to `/integration-testnet` as described in the [Testnet quickstart](/stellar/developers/testnet-quickstart). Keep the returned `apiKey` in `MULTISIG_INTEGRATION_KEY`; it is not a Stellar private key.
+
 ## Create the Intent
 
 A verified Human session may prepare an Intent for other authorizers. Creation does not grant any signer power: each required authorizer must still approve according to its live Stellar policy. An Agent Principal, by contrast, may create a signer-owned Intent only if it is a current signer for at least one required authorizer (or the call requires none). Integrations are scoped by their allowed contract methods.
@@ -45,6 +65,8 @@ curl -sS -X POST https://api-testnet.multisig.tools/stellar/intent \
   }'
 ```
 
+The response contains the created Intent, its current authorization snapshot and the Integration `job`. Save the Intent ID and open `job.reviewUrl` for each signer. The alternative `preparedXdr` input must come from a successful `POST /contract-prepare` simulation on the same network, not just a raw `contract-call` envelope.
+
 The example uses the Testnet native XLM Stellar Asset Contract. Its amount is in stroops: 10,000,000 stroops = 1 XLM. Replace the account addresses with your funded Testnet accounts and use the token contract's decimal precision for other assets.
 
 
@@ -59,6 +81,44 @@ Use a C address for `contractId`. For a contract argument declared as `MuxedAddr
 3. Prepare execution after AUTH is ready.
 4. Compare final enforcing simulation with reviewed effects.
 5. Reconcile the actual ledger result back into the Intent.
+
+### Execute and reconcile the same Intent
+
+After all signers contribute AUTH, inspect with your Integration key and the saved Intent ID:
+
+```bash
+curl -fsS "$MST_API/intent" \
+  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
+  -H "X-MultiSig-Intent-Id: $INTENT_ID"
+```
+
+Set `MST_API=https://api-testnet.multisig.tools/stellar`. Continue only when the current job offers preparation. For an allowed external executor, send the following body to `PUT /intent` using the same headers and JSON content type:
+
+```json
+{ "action": "prepare_execution", "executor": "<funded-executor-G-address>" }
+```
+
+Review `execution.effectsDiff` and `execution.effects`. If the operation reports that review or reauthorization is required, follow its current action contract before signing. Once acceptable, retain `execution.transactionHash`, `execution.xdr` and the validity window. With the Stellar SDK, sign only that exact envelope using the executor key. Do not rebuild it or replace its AUTH entries. Submit to the Testnet Stellar RPC (not the MST Intent API).
+
+```js
+import { Keypair, TransactionBuilder, Networks, rpc } from '@stellar/stellar-sdk';
+const tx = TransactionBuilder.fromXDR(execution.xdr, Networks.TESTNET);
+if (tx.hash().toString('hex') !== execution.transactionHash) throw new Error('Hash mismatch');
+const executor = Keypair.fromSecret(process.env.STELLAR_EXECUTOR_SECRET);
+if (tx.source !== executor.publicKey()) throw new Error('Executor mismatch');
+tx.sign(executor);
+const server = new rpc.Server('https://soroban-testnet.stellar.org');
+const submitted = await server.sendTransaction(tx);
+console.log(submitted.status); // Not proof of successful execution.
+```
+
+Whether the RPC response is delivered or lost, use the same Intent ID and `PUT /intent` with this body:
+
+```json
+{ "action": "reconcile_execution", "transactionHash": "<saved-transaction-hash>" }
+```
+
+Read `outcome` and its evidence. Only verified `successful` closes the payment successfully; `unknown` requires continued reconciliation of this exact hash. A failed or non-included attempt needs explicit review before another attempt, never an automatic replacement payment.
 
 ## Sign a detached AUTH entry
 
@@ -90,5 +150,17 @@ Never send the Stellar secret key to MultiSig Tools. A completed receipt has no 
 The owning Integration Service may issue a short-lived capability bound to one service, Intent, AuthorizationPlan revision/digest, signer, exact browser origin, and expiry.
 
 Use the returned `hostedReviewUrl` for human review. Its origin is the network's Hosted website, not the API origin.
+
+Issue a capability from your service using `PUT /intent` with its Integration key and Intent ID:
+
+```json
+{
+  "action": "issue_browser_authorization",
+  "signerAddress": "<required-signer-G-address>",
+  "origin": "https://your-app.example"
+}
+```
+
+Return only the short-lived `capability` and the Intent ID to that browser. The default maximum lifetime is 30 minutes; a changed plan or no longer actionable signer invalidates its use earlier. Browser GET and PATCH requests must send the exact matching `Origin` header (normally supplied by the browser) and `X-MultiSig-Intent-Capability` plus `X-MultiSig-Intent-Id`. Do not expose the Integration bearer token in the browser.
 
 The browser can inspect its signer-specific challenge and contribute authorization. It cannot create arbitrary Intents, cancel/replan, change execution ownership, or become a Stellar signer without valid wallet cryptographic evidence.

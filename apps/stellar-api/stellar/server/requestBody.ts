@@ -4,7 +4,7 @@ export class RequestBodyError extends Error {
   readonly status: number;
   readonly code: string;
 
-  constructor(message: string, status: number, code: string) {
+  constructor(message: string, status: number, code: string, readonly field?: string) {
     super(message);
     this.name = 'RequestBodyError';
     this.status = status;
@@ -48,7 +48,7 @@ async function readBodyBytes(request: Request, maxBytes: number): Promise<Uint8A
 
 export function assertKnownRequestFields(body: Record<string, unknown>, schemaName: string): void {
   const field = unknownRequestField(body, schemaName);
-  if (field) throw new RequestBodyError('Unknown request field: ' + field, 400, 'unknown_request_field');
+  if (field) throw new RequestBodyError('Unknown request field: ' + field, 400, 'unknown_request_field', field);
 }
 
 export async function readJsonObjectBody(

@@ -1,6 +1,6 @@
 import { buildContractCall, ContractCallServiceError } from '../server/contractCallService.js';
 import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
-import { publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
+import { apiErrorBody, publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -12,7 +12,7 @@ function json(data: unknown, status = 200): Response {
 
 function errorResponse(cause: unknown): Response {
   if (cause instanceof RequestBodyError || cause instanceof ContractCallServiceError || cause instanceof DeploymentNetworkPolicyError) {
-    return json({ error: cause.message, code: cause.code }, cause.status);
+    return json(apiErrorBody(cause), cause.status);
   }
   console.error('Contract call API error', cause);
   return json({ error: 'Contract call builder is temporarily unavailable.', code: 'internal_error' }, 500);

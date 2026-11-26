@@ -1,5 +1,5 @@
 import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
-import { publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
+import { apiErrorBody, publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import {
@@ -17,7 +17,7 @@ function json(data: unknown, status = 200): Response {
 
 function errorResponse(cause: unknown): Response {
   if (cause instanceof RequestBodyError || cause instanceof DeploymentNetworkPolicyError) {
-    return json({ error: cause.message, code: cause.code }, cause.status);
+    return json(apiErrorBody(cause), cause.status);
   }
   if (cause instanceof SorobanSimulationError) {
     const status = cause.kind === 'unsupported' || cause.kind === 'invalid' ? 400 : 503;

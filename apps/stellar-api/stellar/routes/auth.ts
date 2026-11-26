@@ -14,7 +14,7 @@ import {
   verifyAuthToken,
 } from '../server/authService.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
-import { publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
+import { apiErrorBody, publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
 
 const MAX_BODY_BYTES = 300 * 1024;
 const CORS_METHODS = 'GET, POST, DELETE, OPTIONS';
@@ -24,8 +24,8 @@ function json(data: unknown, status = 200, headers: Record<string, string> = {})
 }
 
 function errorResponse(cause: unknown): Response {
-  if (cause instanceof RequestBodyError || cause instanceof DeploymentNetworkPolicyError) return json({ error: cause.message, code: cause.code }, cause.status);
-  if (cause instanceof AuthServiceError) return json({ error: cause.message, code: cause.code }, cause.status);
+  if (cause instanceof RequestBodyError || cause instanceof DeploymentNetworkPolicyError) return json(apiErrorBody(cause), cause.status);
+  if (cause instanceof AuthServiceError) return json(apiErrorBody(cause), cause.status);
   if (cause instanceof RequestStorageUnavailableError) return json({ error: cause.message, code: 'storage_not_configured' }, 503);
   console.error('Authentication API error', cause);
   return json({ error: 'Private workspace service is temporarily unavailable.', code: 'internal_error' }, 500);

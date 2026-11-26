@@ -53,7 +53,7 @@ export default function SorobanIntentActivityCard({
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400"><span>Contract authorization</span>{item.network === 'testnet' && <><span>·</span><span className="text-sky-700 dark:text-sky-300">Testnet</span></>}</div>
-            <h2 className="mt-2 text-xl font-bold tracking-tight">Soroban Intent</h2>
+            <h2 className="mt-2 text-xl font-bold tracking-tight">{item.callTitle || 'Soroban Intent'}</h2>
             <p className="mt-1 break-all font-mono text-xs text-neutral-400">{item.intentDigest}</p>
           </div>
           <div className="flex shrink-0 items-start gap-3">

@@ -1,3 +1,4 @@
+import { sorobanIntentCallTitle } from '../../../../packages/stellar-core/src/sorobanInspection.js';
 import type { SorobanIntentWorkActivityItem } from '../../../../packages/stellar-core/src/workActivityTypes.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { projectSorobanIntentEvidence } from './sorobanIntentEvidence.js';
@@ -31,6 +32,7 @@ export async function listSorobanIntentActivityItems(
     const activityAt = evidence.at(-1)?.occurredAt ?? stored.createdAt;
     return {
       kind: 'soroban_intent' as const,
+      callTitle: sorobanIntentCallTitle(stored.intent.hostFunctionXdr, stored.network),
       workId: stored.id,
       activityAt,
       intentId: stored.id,

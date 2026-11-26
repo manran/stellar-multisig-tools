@@ -427,3 +427,16 @@ test('resolved Soroban retry policy points to same-Intent review; completed proj
   }
   assert.ok((schemas.ContractIntentExecutionReconcileResult.properties as JsonObject).projectionNotRefreshed);
 });
+
+test('webhook contract documents both existing projections without reusable signing data', () => {
+  const doc = createOpenApiDocument();
+  const webhook = (doc.webhooks as JsonObject).workChanged as JsonObject;
+  const post = webhook.post as JsonObject;
+  assert.deepEqual((post.parameters as JsonObject[]).map(p => p.name), ['webhook-id', 'webhook-timestamp', 'webhook-signature']);
+  const schemas = (doc.components as JsonObject).schemas as Record<string, JsonObject>;
+  const classic = schemas.IntegrationClassicWebhookRequest.properties as JsonObject;
+  assert.equal(classic.baseXdr, undefined);
+  assert.equal(classic.mergedXdr, undefined);
+  assert.ok(classic.executionOutcome);
+  assert.ok(schemas.IntegrationWebhookEnvelope);
+});

@@ -10,7 +10,7 @@ import {
   updateIntegrationAdminService,
 } from '../server/integrationAdminService.js';
 import { RequestBodyError, readJsonObjectBody } from '../server/requestBody.js';
-import { noStoreJson } from '../server/httpResponse.js';
+import { apiErrorBody, noStoreJson } from '../server/httpResponse.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
 import {
   classicManagedChannelSoftLimit,
@@ -52,7 +52,7 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof ClassicManagedChannelConfigurationError
     || cause instanceof DeploymentNetworkPolicyError
   ) {
-    return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
+    return noStoreJson(apiErrorBody(cause), cause.status);
   }
   if (cause instanceof RequestStorageUnavailableError) {
     return noStoreJson({ error: cause.message, code: 'integration_admin_storage_unavailable' }, 503);

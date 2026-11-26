@@ -14,7 +14,7 @@ import {
   keepContractWorkspace,
   listContractWorkspaces,
 } from '../server/contractWorkspaceService.js';
-import { publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
+import { apiErrorBody, publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import type { SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
 import type { AgentAccessLevel } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
@@ -49,7 +49,7 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof ContractWorkspaceServiceError
     || cause instanceof DeploymentNetworkPolicyError
   ) {
-    return json({ error: cause.message, code: cause.code }, cause.status);
+    return json(apiErrorBody(cause), cause.status);
   }
   if (cause instanceof RequestStorageUnavailableError) {
     return json({ error: cause.message, code: 'storage_not_configured' }, 503);

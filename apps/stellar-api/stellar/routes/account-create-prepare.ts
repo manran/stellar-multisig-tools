@@ -12,7 +12,7 @@ import {
 } from '../../../../packages/stellar-core/src/classicCreateAccountPrepare.js';
 import { IntegrationCredentialServiceError } from '../server/integrationCredentialService.js';
 import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
-import { noStoreJson } from '../server/httpResponse.js';
+import { apiErrorBody, noStoreJson } from '../server/httpResponse.js';
 import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import { signerCanAccessTransaction } from '../server/requestAccess.js';
 import { loadAccount } from '../../../../packages/stellar-core/src/horizon.js';
@@ -29,7 +29,7 @@ function errorResponse(cause: unknown): Response {
     || cause instanceof IntegrationCredentialServiceError
     || cause instanceof DeploymentNetworkPolicyError
   ) {
-    return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
+    return noStoreJson(apiErrorBody(cause), cause.status);
   }
   console.error('Classic account create prepare API error', cause);
   return noStoreJson({ error: 'Classic account creation preparation is temporarily unavailable.', code: 'internal_error' }, 500);

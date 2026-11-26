@@ -10,7 +10,7 @@ import {
 } from '../server/agentCredentialService.js';
 import { RequestBodyError, readJsonObjectBody } from '../server/requestBody.js';
 import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
-import { noStoreJson } from '../server/httpResponse.js';
+import { apiErrorBody, noStoreJson } from '../server/httpResponse.js';
 import {
   beforeFirstDurableWrite,
   enforceSemanticRateLimit,
@@ -23,10 +23,10 @@ import { privateSessionAddressFromRequest } from '../../../../packages/stellar-c
 const MAX_BODY_BYTES = 16 * 1024;
 
 function errorResponse(cause: unknown): Response {
-  if (cause instanceof RequestBodyError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
-  if (cause instanceof AuthServiceError || cause instanceof DeploymentNetworkPolicyError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
-  if (cause instanceof AgentCredentialServiceError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
-  if (cause instanceof SemanticRateLimitError) return noStoreJson({ error: cause.message, code: cause.code }, cause.status);
+  if (cause instanceof RequestBodyError) return noStoreJson(apiErrorBody(cause), cause.status);
+  if (cause instanceof AuthServiceError || cause instanceof DeploymentNetworkPolicyError) return noStoreJson(apiErrorBody(cause), cause.status);
+  if (cause instanceof AgentCredentialServiceError) return noStoreJson(apiErrorBody(cause), cause.status);
+  if (cause instanceof SemanticRateLimitError) return noStoreJson(apiErrorBody(cause), cause.status);
   if (cause instanceof RequestStorageUnavailableError) return noStoreJson({ error: cause.message, code: 'storage_not_configured' }, 503);
   console.error('Agent access API error', cause);
   return noStoreJson({ error: 'Agent access is temporarily unavailable.', code: 'internal_error' }, 500);

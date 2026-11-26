@@ -10,7 +10,7 @@ import { authConfigForRequest } from '../server/authConfig.js';
 import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import { privateSessionAddressFromRequest } from '../../../../packages/stellar-core/src/privateSessionTransport.js';
 import type { SignerPrincipalRef } from '../../../../packages/stellar-core/src/agentAccessTypes.js';
-import { noStoreJson, publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
+import { apiErrorBody, noStoreJson, publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
 import { RequestBodyError, readJsonObjectBody } from '../server/requestBody.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
 import { limitAgentGrant, grantRequestSource } from '../server/agentGrantRateLimit.js';
@@ -21,7 +21,7 @@ function errorResponse(cause: unknown): Response {
   }
   if (cause instanceof AgentCredentialServiceError || cause instanceof AuthServiceError || cause instanceof RequestBodyError
     || cause instanceof DeploymentNetworkPolicyError) {
-    return publicCorsJson({ error: cause.message, code: cause.code }, 'GET, POST, OPTIONS', cause.status);
+    return publicCorsJson(apiErrorBody(cause), 'GET, POST, OPTIONS', cause.status);
   }
   if (cause instanceof RequestStorageUnavailableError) {
     return publicCorsJson({ error: 'Agent pairing storage is unavailable.', code: 'storage_unavailable' }, 'GET, POST, OPTIONS', 503);
