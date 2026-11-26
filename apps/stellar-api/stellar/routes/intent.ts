@@ -55,6 +55,7 @@ import { SorobanIntentServiceError } from '../server/sorobanIntentService.js';
 import { replanExpiredSorobanIntent, SorobanIntentReplanServiceError } from '../server/sorobanIntentReplanService.js';
 import {
   prepareSorobanIntentExecution,
+  resumeSorobanIntentExecution,
   SorobanIntentExecutionServiceError,
 } from '../server/sorobanIntentExecutionService.js';
 import {
@@ -84,7 +85,7 @@ import {
 
 const MAX_BODY_BYTES = 64 * 1024;
 const METHODS = 'GET, POST, PATCH, PUT, OPTIONS';
-import { SorobanIntentStoreConflictError, assertSorobanIntentNotExecuted, publicSorobanIntent } from '../server/sorobanIntentStore.js';
+import { SorobanIntentStoreConflictError, assertSorobanIntentNotExecuted, publicSorobanIntent, successfulSorobanExecution } from '../server/sorobanIntentStore.js';
 
 const sorobanIntentStore = runtimeSorobanIntentStore();
 const INTENT_ID_HEADER = 'x-multisig-intent-id';
@@ -234,6 +235,14 @@ async function storedIntentAccess(request: Request, required: IntentAccessLevel,
   }
 
   const address = requireIntentPrincipal(identity, required);
+  const receipt = required === 'read' ? successfulSorobanExecution(await (sorobanIntentStore.listExecutionObservations?.(id) ?? Promise.resolve([]))) : undefined;
+  const historicalParticipant = receipt && (stored.creatorAddress === address
+    || (await sorobanIntentStore.listContributions(id)).some(item => item.signerAddress === address));
+  if (historicalParticipant) {
+    const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, id, { terminalReceiptOnly: true });
+    if (agent) await blobAgentCredentialStore.touchCredential(agent.credentialId, new Date().toISOString());
+    return { id, integrationCredential: null, agent, session, browserCapability: null, stored, authorization, address };
+  }
   const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, id, { terminalReceiptOnly: stored.creatorAddress === address });
   const participant = stored.creatorAddress === address || authorization.authorizers.some(
     (authorizer) => authorizer.activeSigners.some((signer) => signer.publicKey === address),
@@ -246,7 +255,9 @@ async function storedIntentAccess(request: Request, required: IntentAccessLevel,
     );
   }
   if (agent) await blobAgentCredentialStore.touchCredential(agent.credentialId, new Date().toISOString());
-  return { id, integrationCredential: null, agent, session, browserCapability: null, stored, authorization, address };
+  return { id, integrationCredential: null, agent, session, browserCapability: null, stored,
+    authorization: receipt ? await getSorobanIntentAuthorization(sorobanIntentStore, id, { terminalReceiptOnly: true }) : authorization,
+    address };
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -682,6 +693,19 @@ export async function PUT(request: Request): Promise<Response> {
     if (body.action === 'reconcile_execution') return await reconcileIntentResponse(request, body);
     const access = await storedIntentAccess(request, 'write');
     if (body.action !== 'cancel') await assertSorobanIntentNotExecuted(sorobanIntentStore, access.id);
+    if (body.action === 'resume_execution') {
+      const execution = await resumeSorobanIntentExecution(sorobanIntentStore, access.id,
+        typeof body.transactionHash === 'string' ? body.transactionHash.toLowerCase() : '', {
+          principalAddress: access.address,
+          serviceId: access.integrationCredential?.serviceId,
+          authorization: access.authorization,
+        });
+      const job = access.integrationCredential ? await loadIntegrationJob(access.integrationCredential, access.stored, access.authorization) : undefined;
+      const task = access.agent ? await loadAgentTask(access.stored, access.authorization, access.agent) : undefined;
+      return json({ operation: 'contract.intent.execution.resume', version: 1, execution,
+        ...(job ? { job } : {}), ...(task ? { task } : {}) });
+    }
+
     if (access.integrationCredential && ['issue_browser_authorization', 'replan', 'prepare_execution', 'refresh_execution'].includes(String(body.action ?? 'prepare_execution'))
       && !integrationSorobanExecutionAvailable(access.stored.network, access.stored.executionPolicy, access.integrationCredential.sorobanExecutionAccounts)) {
       throw new BoxServiceError('No available Soroban execution route. Configure an allowed executor before collecting authorization or preparing execution.', 409, 'managed_executor_not_configured');

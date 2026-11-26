@@ -19,6 +19,7 @@ export type SigningRequestStatus =
 
 export type SigningRequestStatusReason =
   | 'signatures_required'
+  | 'quorum_unreachable'
   | 'preconditions_not_met'
   | 'preconditions_unavailable'
   | 'authorization_complete'
@@ -97,6 +98,7 @@ export interface SigningRequestSnapshot {
   status: SigningRequestStatus;
   statusReason: SigningRequestStatusReason;
   statusDetail?: string;
+  declines?: Array<{ signerAddress: string; decidedAt: string }>;
   submission?: SigningRequestSubmission;
   executionOutcome?: ClassicExecutionEvidence;
   execution?: RequestExecution;
@@ -157,6 +159,7 @@ export interface SigningRequestPrivateContext {
 export interface SigningRequestHistoryProjection {
   activity: ActivityRequestItem;
   sourceAnalyses: SourceAnalysis[];
+  policyBasis?: 'proposal_creation' | 'current' | 'unavailable';
 }
 
 export interface CreateSigningRequestResponse {

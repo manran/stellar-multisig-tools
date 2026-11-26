@@ -32,3 +32,5 @@ Check `capabilities.classicManagedExecution.testnet` from runtime-config before 
 **No silent rewrite:** raw XDR is never silently rewritten into a managed-channel transaction. Managed reconstruction is available for semantic creation because the business intent is explicit.
 
 The managed channel is pre-authorized only for transaction-source authority. It never becomes a Treasury signer.
+
+A refusal is a coordination decision, not a Stellar signature or a final cancellation. When the remaining available signer weight cannot meet the current policy, the Request remains `awaiting_signatures` with `statusReason: "quorum_unreachable"`. A declined signer can reconsider by contributing a valid signature, and a live policy change can also restore reachability. Historical receipt policy is labeled `proposal_creation` when a frozen snapshot exists; older submitted Requests without a snapshot report `unavailable` rather than substituting current signer weights.

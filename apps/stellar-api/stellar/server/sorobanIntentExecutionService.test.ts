@@ -16,6 +16,7 @@ import { emptySorobanEffectsSnapshot, sorobanEffectsSnapshot, type SorobanEffect
 import { createSorobanIntent, materializeSorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
 import {
   prepareSorobanIntentExecution,
+  resumeSorobanIntentExecution,
   SorobanIntentExecutionServiceError,
 } from './sorobanIntentExecutionService.js';
 import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
@@ -331,4 +332,29 @@ test('structural effects changes require a new authorization revision and cannot
       && (cause.details as { effectsDiff?: { kind?: string; requiresReauthorization?: boolean } } | undefined)?.effectsDiff?.kind === 'structural'
       && (cause.details as { effectsDiff?: { requiresReauthorization?: boolean } } | undefined)?.effectsDiff?.requiresReauthorization === true,
   );
+});
+
+
+test('resume returns the exact previously released XDR without another simulation and rejects other principals, expiry and resolution', async () => {
+  const f = fixture();
+  const source = Keypair.random();
+  const store = new MemoryIntentStore(f.stored);
+  const now = new Date('2026-09-16T00:00:00.000Z');
+  const owner = f.stored.creatorAddress!;
+  const original = await prepareSorobanIntentExecution(store, f.stored.id, source.publicKey(), {
+    authorization: f.authorization,
+    accountLoader: async () => ({ accountId: source.publicKey(), sequence: '7' } as never),
+    networkParametersLoader: async () => ({ baseFeeInStroops: 100 } as never),
+    enforcer: async ({ envelopeXdr }) => ({ endpointUrl: 'test', latestLedger: 123, assembledXdr: envelopeXdr, effects: f.stored.authorizationPlan.effects }),
+    preparedByAddress: owner, now,
+  });
+  const options = { principalAddress: owner, authorization: f.authorization, now };
+  assert.deepEqual(await resumeSorobanIntentExecution(store, f.stored.id, original.transactionHash, options), original);
+  assert.equal(store.preparations.length, 1);
+  await assert.rejects(() => resumeSorobanIntentExecution(store, f.stored.id, original.transactionHash,
+    { ...options, principalAddress: Keypair.random().publicKey() }), { code: 'intent_execution_resume_denied' });
+  await assert.rejects(() => resumeSorobanIntentExecution(store, f.stored.id, original.transactionHash,
+    { ...options, now: new Date(Date.parse(original.validUntil!) + 1) }), { code: 'intent_execution_resume_unavailable' });
+  store.preparations[0].nonInclusionProof = { oldestLedger: 1, latestLedger: 200, latestLedgerClosedAt: original.validUntil!, checkedAt: original.validUntil! };
+  await assert.rejects(() => resumeSorobanIntentExecution(store, f.stored.id, original.transactionHash, options), { code: 'intent_execution_resume_unavailable' });
 });

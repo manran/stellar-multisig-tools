@@ -4,7 +4,7 @@ import type { SorobanIntentIntegrationContext } from '../../../../packages/stell
 import type { SorobanExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
 import type { SorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
 import type { SorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
-import type { SorobanExecutionNonInclusionProof } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
+import type { SorobanExecutionNonInclusionProof, SorobanIntentExecutionResponse } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 export type { SorobanExecutionNonInclusionProof } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
@@ -54,6 +54,9 @@ export interface StoredSorobanIntentExecutionPreparation {
   preparedByAddress?: string;
   preparedBy?: MachineCallerProvenance;
   nonInclusionProof?: SorobanExecutionNonInclusionProof;
+  /** Exact package, stored before release. Never included in evidence or list responses. */
+  releasedExecution?: SorobanIntentExecutionResponse['execution'];
+  hasReleasedExecution?: boolean;
 }
 
 export interface StoredSorobanIntentExecutionObservation {
@@ -167,6 +170,7 @@ export interface SorobanIntentStore {
   listContributions(id: string): Promise<StoredSorobanIntentAuthorizationContribution[]>;
   putContribution(id: string, contribution: StoredSorobanIntentAuthorizationContribution): Promise<void>;
   listExecutionPreparations?(id: string): Promise<StoredSorobanIntentExecutionPreparation[]>;
+  getReleasedExecution?(id: string, transactionHash: string): Promise<SorobanIntentExecutionResponse['execution'] | null>;
   putExecutionPreparation?(id: string, preparation: StoredSorobanIntentExecutionPreparation): Promise<void>;
   recordExecutionNonInclusion?(id: string, transactionHash: string, proof: SorobanExecutionNonInclusionProof): Promise<void>;
   listExecutionObservations?(id: string): Promise<StoredSorobanIntentExecutionObservation[]>;

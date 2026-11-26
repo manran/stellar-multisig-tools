@@ -9,6 +9,7 @@ import {
 } from '../../../../packages/stellar-core/src/horizon.js';
 import type { StellarNetworkParameters, TransactionSubmissionResult } from '../../../../packages/stellar-core/src/horizon.js';
 import { assessTransactionPreconditions } from '../../../../packages/stellar-core/src/transactionPreconditions.js';
+import type { ActivityEvent } from '../../../../packages/stellar-core/src/activityTypes.js';
 import { analyzeEnvelopeSignatures } from '../../../../packages/stellar-core/src/signatureAnalysis.js';
 import { mergeSignedTransactionXdr, transactionHashHex } from '../../../../packages/stellar-core/src/signatureMerge.js';
 import { analyzeTransactionAuthorization } from '../../../../packages/stellar-core/src/transactionAuthorization.js';
@@ -740,10 +741,19 @@ async function buildSnapshot(
   accountLoader: AccountLoader,
   networkParametersLoader: NetworkParametersLoader | undefined,
   executionEvidence?: ClassicTerminalExecutionEvidence | null,
+  events: readonly ActivityEvent[] = [],
 ): Promise<SigningRequestSnapshot> {
   const merged = mergeContributions(request, contributions);
+  const declines = events.flatMap(event => {
+    if (event.type !== 'approval_declined' || !event.actorAddress) return [];
+    const signer = [{ key: event.actorAddress, type: 'ed25519_public_key', weight: 1 }];
+    const signed = analyzeEnvelopeSignatures(merged.mergedXdr, request.network, signer, 'inner').matchedSigners
+      .some(match => !match.automatic && match.signatureIndex !== undefined);
+    return signed ? [] : [{ signerAddress: event.actorAddress, decidedAt: event.occurredAt }];
+  });
   const base = {
     id: request.id,
+    ...(declines.length ? { declines } : {}),
     network: request.network,
     transactionHash: request.transactionHash,
     baseXdr: request.baseXdr,
@@ -874,6 +884,27 @@ async function buildSnapshot(
     };
   }
 
+  const declinedKeys = new Set(declines.map(item => item.signerAddress));
+  // Use an upper bound; special signer mechanisms can still supply weight.
+  const quorumUnreachable = declinedKeys.size > 0 && (
+    analysis.authorization.checks.some(check => {
+      if (check.satisfied !== false || check.requiredWeight === undefined) return false;
+      const account = analysis.accountLookups.find(item => item.accountId === check.accountId)?.account;
+      if (!account) return false;
+      const active = account.signers.filter(signer => signer.weight > 0);
+      const eligible = active.filter(signer => signer.type !== 'ed25519_public_key' || !declinedKeys.has(signer.key));
+      const total = active.reduce((sum, signer) => sum + signer.weight, 0);
+      const remaining = eligible.reduce((sum, signer) => sum + signer.weight, 0);
+      return total >= check.requiredWeight && remaining < check.requiredWeight;
+    }) || analysis.authorization.extraSigners.some(signer =>
+      !signer.satisfied && declinedKeys.has(signer.signerKey))
+  );
+  if (quorumUnreachable) return {
+    ...base,
+    status: 'awaiting_signatures',
+    statusReason: 'quorum_unreachable',
+    statusDetail: 'A signer declined. The remaining approval weight is insufficient unless a declined signer changes their decision or the account policy changes.',
+  };
   return {
     ...base,
     status: 'awaiting_signatures',
@@ -925,6 +956,11 @@ export async function createSigningRequest(
     createdAt: now.toISOString(),
     expiresAt: expiryForInspection(inspection, now).toISOString(),
     discoverySignerKeys,
+    reviewSourceAccounts: analysis.accountLookups.flatMap(({ account }) => account ? [structuredClone({
+      accountId: account.accountId, sequence: account.sequence, subentryCount: account.subentryCount,
+      numSponsoring: account.numSponsoring, numSponsored: account.numSponsored,
+      thresholds: account.thresholds, signers: account.signers,
+    })] : []),
     capabilityHash: options.capabilityHash,
     ...(options.executionPolicy ? { executionPolicy: options.executionPolicy } : {}),
     ...(analysis.sorobanEffects ? { sorobanEffectsBaseline: analysis.sorobanEffects } : {}),
@@ -963,6 +999,7 @@ export async function getSigningRequestForStoredRequest(
     accountLoader,
     networkParametersLoader,
     executionEvidence,
+    await (store.listActivityEvents?.(request.id) ?? Promise.resolve([])),
   );
   if (submission || executionEvidence || !['stale', 'expired', 'blocked'].includes(snapshot.status)) return snapshot;
 
@@ -1048,6 +1085,8 @@ export async function contributeSigningRequest(
         now,
         accountLoader,
         networkParametersLoader,
+        undefined,
+        await (store.listActivityEvents?.(request.id) ?? Promise.resolve([])),
       ),
       addedSignatureCount: 0,
       duplicateSignatureCount: merge.duplicateSignatureCount,

@@ -1,3 +1,4 @@
+import type { SorobanIntentExecutionResponse } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 import type { Pool, PoolClient } from 'pg';
 import type { MachineCallerProvenance } from '../../../../packages/stellar-core/src/coordinationActorTypes.js';
 import type { SorobanExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
@@ -559,10 +560,12 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
       prepared_by_address: string | null;
       prepared_by: MachineCallerProvenance | null;
       non_inclusion_proof: SorobanExecutionNonInclusionProof | null;
+      has_released_execution: boolean;
     }>(
       `SELECT transaction_hash, authorization_plan_digest, authorization_plan_revision,
               execution_source, transaction_sequence, valid_until, latest_ledger,
-              effects_digest, effects_accepted, prepared_at, prepared_by_address, prepared_by, non_inclusion_proof
+              effects_digest, effects_accepted, prepared_at, prepared_by_address, prepared_by, non_inclusion_proof,
+              released_execution IS NOT NULL AS has_released_execution
          FROM mst_stellar.soroban_execution_preparations
         WHERE intent_id = $1
         ORDER BY prepared_at, transaction_hash`,
@@ -582,8 +585,18 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
       preparedAt: iso(row.prepared_at),
       ...(row.prepared_by_address ? { preparedByAddress: row.prepared_by_address } : {}),
       ...(row.prepared_by ? { preparedBy: row.prepared_by } : {}),
+      ...(row.has_released_execution ? { hasReleasedExecution: true } : {}),
       ...(row.non_inclusion_proof ? { nonInclusionProof: row.non_inclusion_proof } : {}),
     }));
+  }
+
+  async getReleasedExecution(id: string, transactionHash: string): Promise<SorobanIntentExecutionResponse['execution'] | null> {
+    const result = await this.pool.query<{ released_execution: SorobanIntentExecutionResponse['execution'] | null }>(
+      `SELECT released_execution FROM mst_stellar.soroban_execution_preparations
+        WHERE intent_id = $1 AND transaction_hash = $2 AND released_execution IS NOT NULL
+        ORDER BY prepared_at LIMIT 1`, [id, transactionHash],
+    );
+    return result.rows[0]?.released_execution ?? null;
   }
 
   async putExecutionPreparation(id: string, value: StoredSorobanIntentExecutionPreparation): Promise<void> {
@@ -604,10 +617,10 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
            intent_id, authorization_plan_revision, authorization_plan_digest,
            transaction_hash, execution_source, transaction_sequence, valid_until,
            latest_ledger, effects_digest, effects_accepted, prepared_at,
-           prepared_by_address, prepared_by, non_inclusion_proof
+           prepared_by_address, prepared_by, non_inclusion_proof, released_execution
          ) VALUES (
            $1, $2, $3, $4, $5, $6, $7,
-           $8, $9, $10, $11, $12, $13, $14
+           $8, $9, $10, $11, $12, $13, $14, $15
          )
          ON CONFLICT (intent_id, prepared_at, transaction_hash) DO NOTHING`,
         [
@@ -625,6 +638,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
           value.preparedByAddress ?? null,
           value.preparedBy ?? null,
           this.historicalImport ? value.nonInclusionProof ?? null : null,
+          value.releasedExecution ? JSON.stringify(value.releasedExecution) : null,
         ],
       );
       if (this.emitOutbox && inserted.rowCount && parent.integration_service_id) {

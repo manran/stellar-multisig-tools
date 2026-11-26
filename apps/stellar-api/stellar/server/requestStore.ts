@@ -7,7 +7,7 @@ import type { PrivateCommitmentRecord } from '../../../../packages/stellar-core/
 import type { PrivateNoteRevision } from '../../../../packages/stellar-core/src/privateNote.js';
 import type { SorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import type { ClassicTerminalExecutionEvidence, SorobanRequestOrigin } from '../../../../packages/stellar-core/src/requestTypes.js';
-import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import type { StellarAccountSnapshot, StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import type { ReusableTemplateRef } from '../../../../packages/stellar-core/src/reusableTemplate.js';
 
 export interface StoredSigningRequest {
@@ -32,6 +32,8 @@ export interface StoredSigningRequest {
   executionPolicy?: ExecutionPolicy;
   /** Candidate signer addresses captured from fresh policy at Request creation. Discovery only, never authorization evidence. */
   discoverySignerKeys?: string[];
+  /** Signing policy observed when this proposal was frozen; receipt evidence only. */
+  reviewSourceAccounts?: StellarAccountSnapshot[];
   /** SHA-256 of the private bearer token for a shared request link. */
   capabilityHash?: string;
   /** Immutable first off-chain note when private context is supplied at request creation. */

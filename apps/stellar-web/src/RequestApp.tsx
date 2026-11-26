@@ -1045,6 +1045,7 @@ export default function RequestApp() {
 
               {!reviewComplete ? (
                 <section id="proposal-review" tabIndex={-1} className="scroll-mt-24 space-y-5 focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]">
+                  {snapshot.statusReason === 'quorum_unreachable' && <div role="status" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm"><div className="font-semibold">Not enough remaining approval weight</div><p className="mt-1">{snapshot.statusDetail}</p></div>}
                   <ReviewTransactionSummary inspection={inspection} xdr={snapshot.mergedXdr} sourceAccount={sourceAnalyses.find((analysis) => analysis.accountId === inspection.transactionSourceAccount)?.account ?? null} privateCommitment={privateCommitment} />
                   {!privateCommitment && privateNote && <PrivateNoteCard note={privateNote} busy={false} locked />}
                   <div className="flex justify-end">

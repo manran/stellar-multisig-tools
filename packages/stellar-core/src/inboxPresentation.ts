@@ -31,7 +31,7 @@ export interface InboxActionCounts {
 
 export function projectInboxViewerAction(
   status: SigningRequestStatus,
-  options: { hasSigned: boolean; declined?: boolean; executionMode?: 'multisigtools' | 'external' },
+  options: { hasSigned: boolean; declined?: boolean; quorumUnreachable?: boolean; executionMode?: 'multisigtools' | 'external' },
 ): InboxViewerAction {
   if (status === 'ready') {
     if (options.executionMode === 'external') return 'waiting_execution';
@@ -43,6 +43,7 @@ export function projectInboxViewerAction(
   if (status === 'awaiting_signatures') {
     if (options.hasSigned) return 'waiting_for_others';
     if (options.declined) return 'declined';
+    if (options.quorumUnreachable) return 'waiting_for_others';
     return 'sign';
   }
   return 'attention';

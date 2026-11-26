@@ -58,6 +58,7 @@ export default function TransactionReceiptApp() {
   const [activity, setActivity] = useState<ActivityRequestItem | null>(null);
   const [inspection, setInspection] = useState<TransactionXdrInspection | null>(null);
   const [sourceAnalyses, setSourceAnalyses] = useState<SourceAnalysis[]>([]);
+  const [policyBasis, setPolicyBasis] = useState<NonNullable<CreateSigningRequestResponse["history"]>["policyBasis"]>();
   const [context, setContext] = useState<CreateSigningRequestResponse['context']>();
   const navigationReturnTarget = useMemo(() => {
     const state = window.history.state as { returnTo?: string; returnLabel?: string } | null;
@@ -83,7 +84,7 @@ export default function TransactionReceiptApp() {
 
 
   useEffect(() => {
-    if (networkMismatch || !requestId) return;
+    if (networkMismatch || !requestId || !privateReady) return;
     let cancelled = false;
     const controller = new AbortController();
     setLoading(true);
@@ -105,7 +106,7 @@ export default function TransactionReceiptApp() {
       if (!requestBody.history) throw new Error('Transaction receipt projection is unavailable.');
       const parsed = inspectTransactionXdr(requestBody.request.mergedXdr, requestBody.request.network);
       if (cancelled) return;
-      setSnapshot(requestBody.request); setContext(requestBody.context); setActivity(requestBody.history.activity); setInspection(parsed); setSourceAnalyses(requestBody.history.sourceAnalyses);
+      setSnapshot(requestBody.request); setContext(requestBody.context); setActivity(requestBody.history.activity); setInspection(parsed); setSourceAnalyses(requestBody.history.sourceAnalyses); setPolicyBasis(requestBody.history.policyBasis);
       const sourceAccountIds = requestBody.history.sourceAnalyses.flatMap((item) => item.account ? [item.account.accountId] : []);
       const sharedNameAccountIds = [...new Set([accountId, ...sourceAccountIds].filter(Boolean))];
       if (privateReady && address && sharedNameAccountIds.length > 0) {
@@ -186,7 +187,9 @@ export default function TransactionReceiptApp() {
           </dl>
           <div className="transaction-evidence-record-hash border-t border-black/10 px-5 py-3.5 dark:border-white/10"><div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-400">Transaction hash</div><div className="mt-1 break-all font-mono text-[11px] leading-5 text-neutral-600 dark:text-neutral-300">{snapshot.transactionHash}</div></div>
         </section>
-        <ReviewTransactionSummary inspection={inspection} xdr={snapshot.mergedXdr} sourceAccount={primarySource ?? null} privateCommitment={context?.privateCommitment} mode="history" />
+        {policyBasis === 'proposal_creation' && <p className="text-sm text-[var(--color-ink-2)]">Signing policy recorded when the proposal was created. Ledger confirmation is the evidence of successful execution.</p>}
+        {policyBasis === 'unavailable' && <p role="status" className="text-sm text-[var(--color-ink-2)]">This earlier proposal has no saved signing-policy snapshot. The transaction and recorded signer decisions are shown; the previous policy cannot be reconstructed from today's account.</p>}
+        <ReviewTransactionSummary inspection={inspection} xdr={snapshot.mergedXdr} sourceAccount={policyBasis === 'unavailable' ? null : primarySource ?? null} privateCommitment={context?.privateCommitment} mode="history" />
         <section className="transaction-evidence-signatures rounded-xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.035] sm:p-6">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <div><div className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400">Signatures collected</div><h2 className="mt-1 text-2xl font-bold">{snapshot.signatureCount} signature{snapshot.signatureCount === 1 ? '' : 's'}</h2></div>

@@ -106,6 +106,8 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(intentExecution['x-multisig-operation-ids'], [
     'contract.intent.execution.prepare',
     'integration.intent.execution.prepare',
+    'contract.intent.execution.resume',
+    'integration.intent.execution.resume',
     'contract.intent.execution.reconcile',
     'integration.intent.execution.reconcile',
     'contract.intent.replan',
@@ -191,7 +193,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
     type: 'string', enum: ['waiting_for_authorization', 'ready', 'executing', 'execution_unknown', 'completed', 'expired', 'failed', 'cancelled'],
   });
   assert.deepEqual(((schemas.IntegrationSorobanJob.properties as JsonObject).nextActions as JsonObject).items, {
-    type: 'string', enum: ['prepare_execution', 'submit_execution', 'reconcile_execution', 'refresh_execution', 'replan', 'cancel'],
+    type: 'string', enum: ['prepare_execution', 'submit_execution', 'reconcile_execution', 'refresh_execution', 'resume_execution', 'replan', 'cancel'],
   });
   for (const name of ['ContractIntentCreateResult', 'ContractIntentInspectResult', 'ContractIntentExecutionResult', 'ContractIntentExecutionReconcileResult', 'ContractIntentReplanResult', 'ContractIntentCancelResult']) {
     assert.ok((schemas[name].properties as JsonObject).job);
@@ -323,6 +325,8 @@ test('every registry operation has an exact resolvable logical contract and a re
   const expectedActions = {
     'contract.intent.execution.prepare': 'prepare_execution',
     'integration.intent.execution.prepare': 'prepare_execution',
+    'contract.intent.execution.resume': 'resume_execution',
+    'integration.intent.execution.resume': 'resume_execution',
     'contract.intent.execution.reconcile': 'reconcile_execution',
     'integration.intent.execution.reconcile': 'reconcile_execution',
     'contract.intent.replan': 'replan', 'integration.intent.replan': 'replan',

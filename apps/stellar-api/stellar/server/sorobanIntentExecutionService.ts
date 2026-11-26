@@ -16,7 +16,7 @@ import {
   type SorobanIntentAuthorizationSnapshot,
 } from './sorobanIntentAuthorizationService.js';
 import type { MachineCallerProvenance } from '../../../../packages/stellar-core/src/coordinationActorTypes.js';
-import { assertCurrentSorobanPlan, assertSorobanIntentNotExecuted, assertSorobanExecutionResolved, type SorobanIntentStore, type StoredSorobanIntentExecutionPreparation } from './sorobanIntentStore.js';
+import { assertCurrentSorobanPlan, assertSorobanIntentNotExecuted, assertSorobanExecutionResolved, unresolvedSorobanPreparations, type SorobanIntentStore, type StoredSorobanIntentExecutionPreparation } from './sorobanIntentStore.js';
 
 export class SorobanIntentExecutionServiceError extends Error {
   constructor(message: string, readonly status: number, readonly code: string, readonly details?: unknown) {
@@ -58,6 +58,58 @@ export interface SorobanIntentExecutionPreparation {
   effectsAccepted: boolean;
   preparedAt: string;
   xdr: string;
+}
+
+/** Replay the exact package, not another simulation, sequence or transaction. */
+export async function resumeSorobanIntentExecution(
+  store: SorobanIntentStore,
+  id: string,
+  transactionHash: string,
+  options: { principalAddress?: string; serviceId?: string; authorization: SorobanIntentAuthorizationSnapshot; now?: Date },
+): Promise<SorobanIntentExecutionPreparation> {
+  if (!/^[0-9a-f]{64}$/.test(transactionHash)) {
+    throw new SorobanIntentExecutionServiceError('transactionHash must be the previously prepared hash.', 400, 'invalid_transaction_hash');
+  }
+  const stored = await store.getIntent(id);
+  if (!stored) throw new SorobanIntentExecutionServiceError('Soroban Intent not found.', 404, 'intent_not_found');
+  await assertSorobanIntentNotExecuted(store, id);
+  const [preparations, observations] = await Promise.all([
+    store.listExecutionPreparations?.(id) ?? Promise.resolve([]),
+    store.listExecutionObservations?.(id) ?? Promise.resolve([]),
+  ]);
+  const unresolved = unresolvedSorobanPreparations(preparations, observations);
+  const preparation = unresolved.length === 1 ? unresolved[0] : undefined;
+  if (!preparation || preparation.transactionHash !== transactionHash || stored.cancellation
+    || preparation.authorizationPlanRevision !== (stored.authorizationPlanRevision ?? 1)
+    || preparation.authorizationPlanDigest !== stored.authorizationPlan.authorizationPlanDigest
+    || options.authorization.authorizationPlanDigest !== preparation.authorizationPlanDigest
+    || options.authorization.status !== 'authorization_ready'
+    || !preparation.validUntil || !(Date.parse(preparation.validUntil) > (options.now ?? new Date()).getTime())) {
+    throw new SorobanIntentExecutionServiceError('This exact transaction cannot be resumed. Check its Stellar result before any replacement.', 409, 'intent_execution_resume_unavailable');
+  }
+  const owner = stored.integration
+    ? options.serviceId === stored.integration.serviceId
+      && preparation.preparedBy?.type === 'service' && preparation.preparedBy.id === options.serviceId
+    : Boolean(options.principalAddress && preparation.preparedByAddress === options.principalAddress);
+  if (!owner) throw new SorobanIntentExecutionServiceError('Only the original preparing signer or owning Integration can resume this transaction.', 403, 'intent_execution_resume_denied');
+  const execution = preparation.releasedExecution ?? await store.getReleasedExecution?.(id, transactionHash);
+  if (!execution || execution.transactionHash !== transactionHash || execution.intentId !== id
+    || execution.network !== stored.network || execution.intentDigest !== stored.intent.intentDigest
+    || execution.authorizationPlanDigest !== preparation.authorizationPlanDigest
+    || execution.authorizationPlanRevision !== preparation.authorizationPlanRevision
+    || execution.executionSource !== preparation.executionSource
+    || execution.transactionSequence !== preparation.transactionSequence
+    || execution.validUntil !== preparation.validUntil || execution.effects.digest !== preparation.effectsDigest) {
+    throw new SorobanIntentExecutionServiceError('The original execution package is unavailable. Check Stellar before preparing a replacement.', 409, 'intent_execution_resume_unavailable');
+  }
+  const tx = TransactionBuilder.fromXdr(execution.xdr, stored.network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC);
+  if (tx instanceof FeeBumpTransaction || Buffer.from(tx.hash()).toString('hex') !== transactionHash
+    || tx.source !== preparation.executionSource || tx.sequence !== preparation.transactionSequence) {
+    throw new SorobanIntentExecutionServiceError('The stored package does not match the prepared transaction.', 503, 'intent_execution_evidence_unavailable');
+  }
+  await assertCurrentSorobanPlan(await store.getIntent(id), stored);
+  await assertSorobanIntentNotExecuted(store, id);
+  return execution;
 }
 
 export async function prepareSorobanIntentExecution(
@@ -228,6 +280,7 @@ export async function prepareSorobanIntentExecution(
     effectsDigest: result.effects.digest,
     effectsAccepted: result.effectsAccepted,
     preparedAt: result.preparedAt,
+    releasedExecution: result,
     ...(options.preparedByAddress ? { preparedByAddress: options.preparedByAddress } : {}),
     ...(options.preparedBy ? { preparedBy: options.preparedBy } : {}),
   };

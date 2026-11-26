@@ -127,6 +127,11 @@ test('Postgres Classic store round-trips core facts and replaces Blob discovery/
   const privateStore = new MemoryPrivateStore();
   const store = createPostgresSigningRequestStore(pool, privateStore);
   const f = fixture();
+  f.request.reviewSourceAccounts = [{
+    accountId: f.source.publicKey(), sequence: '1', subentryCount: 1, numSponsoring: 0, numSponsored: 0,
+    thresholds: { low: 1, medium: 2, high: 2 },
+    signers: [{ key: f.source.publicKey(), type: 'ed25519_public_key', weight: 1 }, { key: f.signer.publicKey(), type: 'ed25519_public_key', weight: 1 }],
+  }];
 
   await store.createRequest(f.request);
   assert.deepEqual(await store.getRequest(f.request.id), f.request);

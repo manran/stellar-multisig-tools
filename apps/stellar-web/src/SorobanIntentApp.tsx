@@ -149,6 +149,13 @@ export default function SorobanIntentApp() {
       : undefined;
   }, [evidence]);
 
+  const canResumePreparedExecution = Boolean(intent && !intent.integration && !intent.cancellation
+    && authorization?.status === 'authorization_ready' && pendingExecutionPreparation?.resumable
+    && pendingExecutionPreparation.actorAddress === sessionAddress
+    && pendingExecutionPreparation.authorizationPlanDigest === intent.authorizationPlan.authorizationPlanDigest
+    && pendingExecutionPreparation.authorizationPlanRevision === (intent.authorizationPlanRevision ?? 1)
+    && pendingExecutionPreparation.validUntil && Date.parse(pendingExecutionPreparation.validUntil) > Date.now());
+
   function clearIntentView() {
     viewerRef.current = { ...viewerRef.current };
     setLoadedViewer(null);
@@ -409,6 +416,28 @@ export default function SorobanIntentApp() {
     });
   }
 
+  async function resumeExecution() {
+    const actingViewer = viewer;
+    const transactionHash = pendingExecutionPreparation?.transactionHash;
+    if (!canResumePreparedExecution || !intent || !transactionHash || busy || loadedViewer !== actingViewer || viewerRef.current !== actingViewer) return;
+    setBusy(true);
+    setError('');
+    try {
+      const body = await apiJson<SorobanIntentExecutionResponse>(await fetch('/api/intent', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-MultiSig-Intent-Id': intent.id, ...privateSessionAddressHeaders(actingViewer.address) },
+        body: JSON.stringify({ action: 'resume_execution', transactionHash }),
+      }));
+      if (viewerRef.current !== actingViewer) return;
+      if (body.execution.transactionHash !== transactionHash) throw new Error('The resumed transaction hash does not match.');
+      continueToSigningRoom(body, body.execution.executionSource === actingViewer.address ? 'current_client' : 'multisigtools');
+    } catch (cause) {
+      if (viewerRef.current === actingViewer) setError(cause instanceof Error ? cause.message : 'Unable to resume the prepared transaction.');
+    } finally {
+      if (viewerRef.current === actingViewer) setBusy(false);
+    }
+  }
+
   async function prepareExecution(
     route: SorobanExecutionRoute = executionRoute,
     acceptedEffectsDigest?: string,
@@ -582,7 +611,7 @@ export default function SorobanIntentApp() {
 
             {!confirmedExecution && latestExecutionResult?.type === 'execution_failed' && latestExecutionResult.transactionHash && <section className="rounded-2xl border border-red-500/25 bg-red-500/[0.07] p-5 sm:p-6"><div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-600" /><div className="min-w-0 flex-1"><h2 className="text-xl font-bold">Execution failed on Stellar</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">This exact prepared transaction was observed{latestExecutionResult.ledger ? ` in ledger ${latestExecutionResult.ledger.toLocaleString()}` : ''}, but it did not succeed. Authorization evidence remains separate from this network result.</p><div className="mt-3 break-all font-mono text-xs text-neutral-500">{latestExecutionResult.transactionHash}</div><a href={horizonTransactionUrl(latestExecutionResult.transactionHash, intent.network)} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-semibold text-red-700 underline decoration-red-500/30 underline-offset-4 dark:text-red-300">View network record</a></div></div></section>}
 
-            {!confirmedExecution && pendingExecutionPreparation?.transactionHash && <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:p-6"><h2 className="text-xl font-bold">Prepared transaction</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">This transaction was prepared, but may not have been signed or submitted. Check its Stellar result before preparing another transaction. Checking does not submit anything.</p>{pendingExecutionPreparation.validUntil && <p className="mt-2 text-sm">Valid until {new Date(pendingExecutionPreparation.validUntil).toLocaleString()}. After this time, check Stellar again before preparing a replacement.</p>}<div className="mt-3 break-all font-mono text-xs text-neutral-500">{pendingExecutionPreparation.transactionHash}</div><div className="mt-4 flex flex-wrap items-center gap-3"><ActionButton variant="secondary" disabled={busy} onClick={() => void reconcileExecution(pendingExecutionPreparation.transactionHash!)}><RefreshCw className={busy ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{busy ? 'Checking Stellar…' : 'Check Stellar result'}</ActionButton>{executionCheckMessage && <span className="text-sm text-neutral-600 dark:text-neutral-300">{executionCheckMessage}</span>}</div></section>}
+            {!confirmedExecution && pendingExecutionPreparation?.transactionHash && <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:p-6"><h2 className="text-xl font-bold">Prepared transaction</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">This transaction was prepared, but may not have been signed or submitted. Check its Stellar result before preparing another transaction. Checking does not submit anything.</p>{pendingExecutionPreparation.validUntil && <p className="mt-2 text-sm">Valid until {new Date(pendingExecutionPreparation.validUntil).toLocaleString()}. After this time, check Stellar again before preparing a replacement.</p>}<div className="mt-3 break-all font-mono text-xs text-neutral-500">{pendingExecutionPreparation.transactionHash}</div><div className="mt-4 flex flex-wrap items-center gap-3">{canResumePreparedExecution && <ActionButton disabled={busy} onClick={() => void resumeExecution()}>Resume signing</ActionButton>}<ActionButton variant="secondary" disabled={busy} onClick={() => void reconcileExecution(pendingExecutionPreparation.transactionHash!)}><RefreshCw className={busy ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{busy ? 'Checking Stellar…' : 'Check Stellar result'}</ActionButton>{executionCheckMessage && <span className="text-sm text-neutral-600 dark:text-neutral-300">{executionCheckMessage}</span>}</div></section>}
 
             {!confirmedExecution && authorization.status === 'cancelled' && <section className="rounded-2xl border border-black/10 bg-black/[0.025] p-5 dark:border-white/10 dark:bg-white/[0.04] sm:p-6"><h2 className="text-xl font-bold">Intent cancelled</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">MultiSigTools will not collect more AUTH, refresh the AuthorizationPlan, or prepare another execution package for this Intent. Detached AUTH or prepared XDR already disclosed outside MultiSigTools cannot be revoked here and may remain usable until its Stellar validity window ends.</p>{intent.cancellation?.cancelledAt && <p className="mt-3 text-xs text-neutral-500">Cancelled {new Date(intent.cancellation.cancelledAt).toLocaleString()}.</p>}</section>}
 

@@ -54,17 +54,11 @@ export async function GET(request: Request): Promise<Response> {
     // Agent credential can perform. Read Agents can notify their signer.
     const soroban = await listAgentSorobanInbox(sorobanIntentStore, context.address, context.network, context.access, options);
     const { requests, intents, complete, nextCursor } = mergeInboxPage(candidates, soroban.intents, limit);
-    const classicTasks = await Promise.all(requests.map(async (item) => {
-      const declined = item.status === 'awaiting_signatures' && signingRequestStore.listActivityEvents
-        ? (await signingRequestStore.listActivityEvents(item.id)).some((event) =>
-          event.type === 'approval_declined' && event.actorAddress === context.address)
-        : false;
-      return projectClassicAgentTask({
-        request: item,
-        credentialAccess: context.access,
-        hasSigned: signerHasSignedTransaction(context.address, item.mergedXdr, item.network),
-        declined,
-      });
+    const classicTasks = requests.map(item => projectClassicAgentTask({
+      request: item,
+      credentialAccess: context.access,
+      hasSigned: signerHasSignedTransaction(context.address, item.mergedXdr, item.network),
+      declined: item.declines?.some(decline => decline.signerAddress === context.address) ?? false,
     }));
     const intentIds = new Set(intents.map((item) => item.id));
     const tasks = [...classicTasks, ...soroban.tasks.filter((item) => intentIds.has(item.id))];

@@ -77,6 +77,7 @@ export interface SorobanIntentEvidenceEvent {
   transactionHash?: string;
   effectsDigest?: string;
   effectsAccepted?: boolean;
+  resumable?: true;
   validUntil?: string | null;
   latestLedger?: number;
   nonInclusionProof?: SorobanExecutionNonInclusionProof;
@@ -115,6 +116,7 @@ export type IntegrationJobNextAction =
   | 'submit_execution'
   | 'reconcile_execution'
   | 'refresh_execution'
+  | 'resume_execution'
   | 'replan'
   | 'cancel';
 
@@ -126,7 +128,7 @@ export interface IntegrationSorobanJobProjection {
   state: IntegrationJobState;
   nextActions: IntegrationJobNextAction[];
   actionCalls: Partial<Record<IntegrationJobNextAction,
-    { operationId: string; bodyDefaults: { action: string }; reviewRequired?: true }
+    { operationId: string; bodyDefaults: { action: string; transactionHash?: string }; reviewRequired?: true }
     | { transport: 'external_stellar_submission'; transactionHash: string }>>;
   reviewUrl: string;
   waitingFor?: string[];
@@ -212,7 +214,7 @@ export interface SorobanIntentExecutionReconciliationResponse {
 }
 
 export interface SorobanIntentExecutionResponse {
-  operation: 'contract.intent.execution.prepare';
+  operation: 'contract.intent.execution.prepare' | 'contract.intent.execution.resume';
   version: 1;
   execution: {
     version: 1;

@@ -124,6 +124,14 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'integration:write', effect: 'coordination-state', summary: 'Resolve the Integration executor, enforce reviewed effects, and prepare or refresh the final unsigned Soroban execution package only after prior hashes are resolved.',
   },
   {
+    id: 'contract.intent.execution.resume', version: 1, method: 'PUT', path: '/intent',
+    access: 'principal:write', effect: 'none', summary: 'Retrieve the original unexpired execution package as its preparing signer. Never prepares a replacement.',
+  },
+  {
+    id: 'integration.intent.execution.resume', version: 1, method: 'PUT', path: '/intent',
+    access: 'integration:write', effect: 'none', summary: 'Retrieve the original unexpired execution package owned by this Integration. Never prepares a replacement.',
+  },
+  {
     id: 'contract.intent.execution.reconcile', version: 1, method: 'PUT', path: '/intent',
     access: 'principal:write', effect: 'coordination-state', summary: 'Independently verify a persisted Soroban execution preparation against Stellar and retain the observed ledger result or verified non-inclusion.',
   },

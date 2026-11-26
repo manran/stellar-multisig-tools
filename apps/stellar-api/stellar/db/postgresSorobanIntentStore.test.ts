@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { Address, Contract, Keypair, xdr } from '@stellar/stellar-sdk/base';
 import type { SorobanExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
-import { emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
+import { compareSorobanEffects, emptySorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import type { SorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
 import type { SorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
 import { applyCoordinationMigrations } from './migrate.js';
@@ -466,4 +466,31 @@ test('Postgres cancellation cannot race a released unresolved execution', { skip
     authorizationPlanDigest: PLAN_ONE, authorizationPlanRevision: 1, executionSource: 'GEXECUTOR',
     ledger: 124, successful: false, observedAt: '2026-09-18T01:04:00.000Z' });
   assert.equal((await store.cancelIntent!(value.id, cancel)).created, true);
+});
+
+
+test('Postgres persists the exact released package without returning XDR in preparation listings', {
+  skip: !TEST_URL || !RESET_ALLOWED,
+}, async () => {
+  const store = createPostgresSorobanIntentStore(coordinationPool(), new MemoryPrivateStore());
+  const value = stored('PGINTENT00000092');
+  await store.createIntent(value);
+  const effects = emptySorobanEffectsSnapshot();
+  const preparation = {
+    version: 1 as const, transactionHash: TX_HASH, authorizationPlanDigest: PLAN_ONE, authorizationPlanRevision: 1,
+    executionSource: 'GEXECUTOR', transactionSequence: '9', validUntil: '2026-09-18T02:00:00.000Z',
+    latestLedger: 123, effectsDigest: effects.digest, effectsAccepted: false, preparedAt: '2026-09-18T01:03:00.000Z',
+  };
+  const releasedExecution = {
+    version: 1 as const, intentId: value.id, network: 'testnet' as const, intentDigest: INTENT_DIGEST,
+    authorizationPlanDigest: PLAN_ONE, authorizationPlanRevision: 1,
+    executionSource: preparation.executionSource, transactionSequence: preparation.transactionSequence,
+    transactionHash: TX_HASH, validUntil: preparation.validUntil, latestLedger: 123,
+    effectsDiff: compareSorobanEffects(effects, effects), effects, effectsAccepted: false,
+    preparedAt: preparation.preparedAt, xdr: 'fixture-original-envelope',
+  };
+  await store.putExecutionPreparation!(value.id, { ...preparation, releasedExecution });
+  assert.deepEqual(await store.getReleasedExecution!(value.id, TX_HASH), releasedExecution);
+  assert.deepEqual(await store.listExecutionPreparations!(value.id), [{ ...preparation, hasReleasedExecution: true }]);
+  assert.equal(await store.getReleasedExecution!(value.id, 'e'.repeat(64)), null);
 });

@@ -1092,3 +1092,40 @@ test('submits a ready request once, records the result, and rejects later signat
     },
   );
 });
+
+
+test('decline projection is reversible, uses live weighted policy and never overrides chain confirmation', async () => {
+  const store = new MemoryStore();
+  const { source, second, transaction } = paymentTransaction();
+  const id = 'D'.repeat(16);
+  let policy = accountSnapshot(source, second, 2);
+  const accountLoader = async () => policy;
+  const options = { accountLoader, idFactory: () => id, transactionLoader: async () => null };
+  await createSigningRequest(store, { network: 'testnet', xdr: transaction.toXdr() }, options);
+  const before = store.requests.get(id)?.reviewSourceAccounts;
+  assert.deepEqual(before?.[0]?.thresholds, { low: 1, medium: 2, high: 2 });
+  await store.putActivityEvent(id, { version: 1, eventId: 'declined-second', requestId: id,
+    type: 'approval_declined', occurredAt: new Date().toISOString(), actorAddress: second.publicKey() });
+  const declined = await getSigningRequest(store, id, options);
+  assert.equal(declined.status, 'awaiting_signatures');
+  assert.equal(declined.statusReason, 'quorum_unreachable');
+  assert.equal(declined.declines?.[0]?.signerAddress, second.publicKey());
+  // Live signing policy still governs readiness, but the historical snapshot is immutable.
+  const third = Keypair.random();
+  policy = { ...policy, signers: [
+    ...policy.signers.map(signer => ({ ...signer, weight: signer.key === second.publicKey() ? 3 : 1 })),
+    { key: third.publicKey(), type: 'ed25519_public_key', weight: 1 },
+  ], thresholds: { low: 1, medium: 3, high: 3 } };
+  assert.equal((await getSigningRequest(store, id, options)).statusReason, 'quorum_unreachable');
+  policy = { ...policy, thresholds: { ...policy.thresholds, medium: 2 } };
+  assert.equal((await getSigningRequest(store, id, options)).statusReason, 'signatures_required');
+  assert.equal(store.requests.get(id)?.reviewSourceAccounts?.[0]?.thresholds.medium, 2);
+  policy = accountSnapshot(source, second, 2);
+  transaction.sign(second);
+  const reconsidered = await contributeSigningRequest(store, id, transaction.toXdr(), options);
+  assert.equal(reconsidered.request.statusReason, 'signatures_required');
+  assert.equal(reconsidered.request.declines, undefined);
+  transaction.sign(source);
+  const ready = await contributeSigningRequest(store, id, transaction.toXdr(), options);
+  assert.equal(ready.request.status, 'ready');
+});

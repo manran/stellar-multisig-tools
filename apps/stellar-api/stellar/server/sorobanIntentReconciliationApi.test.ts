@@ -180,4 +180,34 @@ test('actual Intent reconciliation route replays owner evidence without a live l
   const inspected = await GET(new Request('https://example.test/intent', { headers }));
   assert.equal(inspected.status, 200);
   assert.deepEqual((await inspected.json()).task, repeatedBody.task);
+
+  // Model a historical cancelled-then-confirmed record with a contributor
+  // who is neither the creator nor a current on-chain signer.
+  const historicalId = 'H'.repeat(16);
+  const historical = { ...(await blobSorobanIntentStore.getIntent(pendingId))!,
+    id: historicalId, creatorAddress: executor };
+  await blobSorobanIntentStore.createIntent(historical);
+  for (const contribution of await blobSorobanIntentStore.listContributions(pendingId)) {
+    await blobSorobanIntentStore.putContribution(historicalId, contribution);
+  }
+  await blobSorobanIntentStore.putExecutionPreparation!(historicalId, { ...preparation, authorizationPlanDigest: plan.authorizationPlanDigest });
+  await blobSorobanIntentStore.cancelIntent!(historicalId, {
+    version: 1, cancelledAt: timestamp, authorizationPlanDigest: plan.authorizationPlanDigest, authorizationPlanRevision: 1,
+  });
+  await blobSorobanIntentStore.putExecutionObservation!(historicalId, {
+    version: 1, transactionHash: hash, authorizationPlanDigest: plan.authorizationPlanDigest, authorizationPlanRevision: 1,
+    executionSource: executor, ledger: 15, successful: true, observedAt: timestamp,
+  });
+  globalThis.fetch = async () => { throw new Error('network disabled for historical receipt'); };
+  const historicalHeaders = { 'X-MultiSig-Intent-Id': historicalId, Authorization: 'Bearer ' + reader.apiKey };
+  const historicalReceipt = await GET(new Request('https://example.test/intent', { headers: historicalHeaders }));
+  const receiptBody = await historicalReceipt.json();
+  assert.equal(historicalReceipt.status, 200, JSON.stringify(receiptBody));
+  assert.equal(receiptBody.authorization.status, 'completed');
+  assert.deepEqual(receiptBody.authorization.authorizationEntriesXdr, []);
+  assert.deepEqual(receiptBody.task.nextActions, []);
+  const historicalStranger = await GET(new Request('https://example.test/intent', {
+    headers: { ...historicalHeaders, Authorization: 'Bearer ' + stranger.apiKey },
+  }));
+  assert.notEqual(historicalStranger.status, 200);
 });

@@ -91,8 +91,10 @@ export function projectIntegrationSorobanJob({
   const canSubmit = executionAvailable && !managed && state === 'executing' && unresolved.length === 1
     && latestPreparation?.authorizationPlanRevision === currentRevision(stored)
     && latestPreparation.authorizationPlanDigest === stored.authorizationPlan.authorizationPlanDigest;
+  const canResume = canSubmit && Boolean(latestPreparation?.hasReleasedExecution || latestPreparation?.releasedExecution)
+    && latestPreparation?.preparedBy?.type === 'service' && latestPreparation.preparedBy.id === stored.integration?.serviceId;
   const nextActions: IntegrationSorobanJobProjection['nextActions'] = state === 'completed' ? []
-    : unresolved.length ? [...(canSubmit ? ['submit_execution' as const] : []), 'reconcile_execution']
+    : unresolved.length ? [...(canSubmit ? ['submit_execution' as const] : []), ...(canResume ? ['resume_execution' as const] : []), 'reconcile_execution']
     : state === 'cancelled' ? []
     : executionBlocked ? ['cancel']
     : state === 'ready' || (state === 'failed' && authorization.status === 'authorization_ready')
@@ -102,12 +104,12 @@ export function projectIntegrationSorobanJob({
 
   const operationIds = {
     prepare_execution: 'integration.intent.execution.prepare', refresh_execution: 'integration.intent.execution.prepare',
-    reconcile_execution: 'integration.intent.execution.reconcile', replan: 'integration.intent.replan', cancel: 'integration.intent.cancel',
+    resume_execution: 'integration.intent.execution.resume', reconcile_execution: 'integration.intent.execution.reconcile', replan: 'integration.intent.replan', cancel: 'integration.intent.cancel',
   };
   const actionCalls: IntegrationSorobanJobProjection['actionCalls'] = Object.fromEntries(nextActions.map((action) => [action,
     action === 'submit_execution'
       ? { transport: 'external_stellar_submission' as const, transactionHash: latestPreparation!.transactionHash }
-      : { operationId: operationIds[action], bodyDefaults: { action },
+      : { operationId: operationIds[action], bodyDefaults: { action, ...(action === 'resume_execution' ? { transactionHash: latestPreparation!.transactionHash } : {}) },
           ...(!unresolved.length && (preparations.length || observations.length) && ['prepare_execution', 'refresh_execution', 'replan'].includes(action)
             ? { reviewRequired: true as const } : {}) },
   ]));

@@ -17,7 +17,7 @@ const TASK_OPERATIONS: Record<AgentTaskAction['code'], string> = {
   contribute_signature: 'proposal.contribute', decline: 'proposal.decline',
   contribute_authorization: 'contract.intent.contribute',
   prepare_execution: 'contract.intent.execution.prepare', refresh_execution: 'contract.intent.execution.prepare',
-  reconcile_execution: 'contract.intent.execution.reconcile', replan: 'contract.intent.replan', cancel: 'contract.intent.cancel',
+  resume_execution: 'contract.intent.execution.resume', reconcile_execution: 'contract.intent.execution.reconcile', replan: 'contract.intent.replan', cancel: 'contract.intent.cancel',
 };
 
 function action(
@@ -48,7 +48,7 @@ export function projectClassicAgentTask({
 }): AgentTaskProjection {
   let state: AgentTaskProjection['state'];
   let nextActions: AgentTaskAction[] = [];
-  const signatureRequired = request.status === 'awaiting_signatures' && !hasSigned && !declined;
+  const signatureRequired = request.status === 'awaiting_signatures' && request.statusReason !== 'quorum_unreachable' && !hasSigned && !declined;
 
   if (request.status === 'submitted') state = 'completed';
   else if (request.executionOutcome?.outcome === 'unknown' && ['expired', 'stale', 'blocked'].includes(request.status)) state = 'execution_unknown';
@@ -161,6 +161,18 @@ export function projectSorobanAgentTask({
   else if (unresolved.length) {
     state = stored.cancellation ? 'cancelled' : 'action_required';
     nextActions = [action('reconcile_execution', 'write', credentialAccess)];
+    const pending = unresolved.length === 1 ? unresolved[0] : undefined;
+    if (!stored.integration && !stored.cancellation && pending
+      && (pending.hasReleasedExecution || pending.releasedExecution)
+      && pending.preparedByAddress === principalAddress
+      && pending.authorizationPlanRevision === currentRevision(stored)
+      && pending.authorizationPlanDigest === stored.authorizationPlan.authorizationPlanDigest
+      && authorization.status === 'authorization_ready' && pending.validUntil
+      && Date.parse(pending.validUntil) > now.getTime()) {
+      nextActions.push({ ...action('resume_execution', 'write', credentialAccess),
+        bodyDefaults: { action: 'resume_execution', transactionHash: pending.transactionHash } });
+    }
+
   }
   else if (stored.cancellation || authorization.status === 'cancelled') state = 'cancelled';
   else if (authorization.status === 'expired') {

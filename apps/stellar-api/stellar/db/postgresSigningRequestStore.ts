@@ -11,7 +11,7 @@ import type { RequestIntegrationContext } from '../../../../packages/stellar-cor
 import type { SorobanEffectsSnapshot } from '../../../../packages/stellar-core/src/sorobanEffects.js';
 import type { ReusableTemplateKind } from '../../../../packages/stellar-core/src/reusableTemplate.js';
 import type { ClassicTerminalExecutionEvidence, SorobanRequestOrigin } from '../../../../packages/stellar-core/src/requestTypes.js';
-import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import type { StellarAccountSnapshot, StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import type { Pool, PoolClient } from 'pg';
 import { blobRequestPrivateDataStore } from '../server/blobRequestPrivateDataStore.js';
 import type { RequestPrivateDataStore } from '../server/requestPrivateDataStore.js';
@@ -42,6 +42,7 @@ interface RequestRow {
   instruction_digest: string | null;
   execution_policy: ExecutionPolicy | null;
   discovery_signer_keys: string[];
+  review_source_accounts: StellarAccountSnapshot[] | null;
   capability_hash: string | null;
   soroban_effects_baseline: SorobanEffectsSnapshot | null;
   soroban_origin: SorobanRequestOrigin | null;
@@ -69,7 +70,7 @@ async function readRequest(
   const result = await db.query<RequestRow>(
     `SELECT r.id, r.network, r.base_xdr, r.transaction_hash, r.created_at, r.expires_at,
             r.creator_address, r.proposer_address, r.creator_actor, r.integration_context, r.instruction_digest,
-            r.execution_policy, r.discovery_signer_keys, r.capability_hash,
+            r.execution_policy, r.discovery_signer_keys, r.review_source_accounts, r.capability_hash,
             r.soroban_effects_baseline, r.soroban_origin,
             r.reusable_template_id, r.reusable_template_version,
             t.name AS reusable_template_name, t.kind AS reusable_template_kind,
@@ -102,6 +103,7 @@ async function readRequest(
     ...(row.discovery_signer_keys.length > 0
       ? { discoverySignerKeys: row.discovery_signer_keys }
       : {}),
+    ...(row.review_source_accounts ? { reviewSourceAccounts: row.review_source_accounts } : {}),
     ...(row.capability_hash ? { capabilityHash: row.capability_hash } : {}),
     ...(privateData?.initialPrivateNote ? { initialPrivateNote: privateData.initialPrivateNote } : {}),
     ...(privateData?.privateCommitment ? { privateCommitment: privateData.privateCommitment } : {}),
@@ -259,11 +261,11 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
            instruction_digest, execution_policy, discovery_signer_keys, capability_hash,
            soroban_effects_baseline, soroban_origin,
            reusable_template_id, reusable_template_version, has_private_data,
-           proposer_address
+           proposer_address, review_source_accounts
          ) VALUES (
            $1, $2, $3, $4, $5, $6,
            $7, $8, $9, $10, $11, $12, $13, $14,
-           $15, $16, $17, $18, $19, $20
+           $15, $16, $17, $18, $19, $20, $21
          )`,
         [
           request.id,
@@ -286,6 +288,7 @@ export class PostgresSigningRequestStore implements SigningRequestStore {
           request.templateRef?.version ?? null,
           Boolean(request.initialPrivateNote || request.privateCommitment),
           request.proposerAddress ?? null,
+          request.reviewSourceAccounts ? JSON.stringify(request.reviewSourceAccounts) : null,
         ],
       );
       await insertSubjects(client, request.id, request.network, 'discovery', 'account', subjects.sourceAccountIds);

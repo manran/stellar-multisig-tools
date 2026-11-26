@@ -17,6 +17,7 @@ export type AgentTaskActionCode =
   | 'decline'
   | 'prepare_execution'
   | 'refresh_execution'
+  | 'resume_execution'
   | 'reconcile_execution'
   | 'replan'
   | 'cancel';

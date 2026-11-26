@@ -148,11 +148,7 @@ export async function projectHumanInboxRequests(
   requests: readonly SigningRequestSnapshot[],
 ): Promise<InboxRequestSnapshot[]> {
   return Promise.all(requests.map(async (snapshot) => {
-    const declined = snapshot.status === 'awaiting_signatures' && store.listActivityEvents
-      ? (await store.listActivityEvents(snapshot.id)).some((event) =>
-          event.type === 'approval_declined' && event.actorAddress === address,
-        )
-      : false;
+    const declined = snapshot.declines?.some(item => item.signerAddress === address) ?? false;
     const viewerAction = snapshot.proposerAddress === address
       ? snapshot.status === 'awaiting_signatures' ? 'proposer_waiting' as const
         : snapshot.status === 'ready' ? 'proposer_ready' as const
@@ -161,6 +157,7 @@ export async function projectHumanInboxRequests(
       : projectInboxViewerAction(snapshot.status, {
       hasSigned: signerHasSignedTransaction(address, snapshot.mergedXdr, snapshot.network),
       declined,
+      quorumUnreachable: snapshot.statusReason === 'quorum_unreachable',
       executionMode: projectedRequestExecutionMode(snapshot),
     });
     const coordinationEvents = (viewerAction === 'waiting_for_others' || viewerAction === 'proposer_waiting') && store.listRequestCoordinationEvents

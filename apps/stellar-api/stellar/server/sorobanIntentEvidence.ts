@@ -103,6 +103,7 @@ export function projectSorobanIntentEvidence(
       transactionHash: preparation.transactionHash,
       effectsDigest: preparation.effectsDigest,
       effectsAccepted: preparation.effectsAccepted,
+      ...(preparation.hasReleasedExecution || preparation.releasedExecution ? { resumable: true as const } : {}),
       validUntil: preparation.validUntil,
       latestLedger: preparation.latestLedger,
     });

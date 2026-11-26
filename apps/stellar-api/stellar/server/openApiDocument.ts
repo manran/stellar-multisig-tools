@@ -130,7 +130,7 @@ function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/intent' && method === 'post') return schema('ContractIntentCreateResult');
   if (path === '/intent' && method === 'get') return { oneOf: [schema('ContractIntentInspectResult'), schema('BrowserAuthorizationInspectResult')] };
   if (path === '/intent' && method === 'patch') return { oneOf: [schema('ContractIntentContributionResult'), schema('BrowserAuthorizationContributionResult')] };
-  if (path === '/intent' && method === 'put') return { oneOf: [schema('ContractIntentExecutionResult'), schema('ContractIntentExecutionReconcileResult'), schema('ContractIntentReplanResult'), schema('ContractIntentCancelResult'), schema('BrowserAuthorizationIssueResult')] };
+  if (path === '/intent' && method === 'put') return { oneOf: [schema('ContractIntentExecutionResult'), schema('ContractIntentExecutionResumeResult'), schema('ContractIntentExecutionReconcileResult'), schema('ContractIntentReplanResult'), schema('ContractIntentCancelResult'), schema('BrowserAuthorizationIssueResult')] };
   if (path === '/contract-call') return schema('ContractCallBuildResult');
   if (path === '/contract-prepare') return { oneOf: [schema('ContractPrepareResult'), schema('ContractEnforceResult')] };
   if (path === '/contracts' && method === 'get') return schema('ContractWorkspaceListResult');
@@ -781,10 +781,10 @@ const components: OpenApiObject = {
         nextActions: {
           type: 'array',
           uniqueItems: true,
-          items: { type: 'string', enum: ['prepare_execution', 'submit_execution', 'reconcile_execution', 'refresh_execution', 'replan', 'cancel'] },
+          items: { type: 'string', enum: ['prepare_execution', 'submit_execution', 'reconcile_execution', 'refresh_execution', 'resume_execution', 'replan', 'cancel'] },
         },
         actionCalls: { type: 'object', description: 'Resolve each offered action by operationId and bodyDefaults. External submission is not an MST API call; use the exact prepared and authorized XDR matching transactionHash.', additionalProperties: { oneOf: [
-          { type: 'object', required: ['operationId', 'bodyDefaults'], properties: { operationId: { type: 'string' }, bodyDefaults: { type: 'object', required: ['action'], properties: { action: { type: 'string' } }, additionalProperties: false }, reviewRequired: { const: true, description: 'Review the resolved prior attempt and current authorization before continuing this same Intent. This is a caller decision, not a new grant of signing authority.' } }, additionalProperties: false },
+          { type: 'object', required: ['operationId', 'bodyDefaults'], properties: { operationId: { type: 'string' }, bodyDefaults: { type: 'object', required: ['action'], properties: { action: { type: 'string' }, transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' } }, additionalProperties: false }, reviewRequired: { const: true, description: 'Review the resolved prior attempt and current authorization before continuing this same Intent. This is a caller decision, not a new grant of signing authority.' } }, additionalProperties: false },
           { type: 'object', required: ['transport', 'transactionHash'], properties: { transport: { const: 'external_stellar_submission' }, transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' } }, additionalProperties: false },
         ] } },
         reviewUrl: { type: 'string', format: 'uri' },
@@ -838,7 +838,7 @@ const components: OpenApiObject = {
               operationId: { type: 'string', description: 'Resolve this exact call in x-multisig-operations. Use the task id in the required resource header.' },
               bodyDefaults: { type: 'object', additionalProperties: { type: 'string' } },
               requiredInputs: { type: 'array', items: { type: 'string' }, description: 'Additional fields the caller must choose explicitly before invoking this action.' },
-              code: { type: 'string', enum: ['contribute_signature', 'contribute_authorization', 'decline', 'prepare_execution', 'refresh_execution', 'reconcile_execution', 'replan', 'cancel'] },
+              code: { type: 'string', enum: ['contribute_signature', 'contribute_authorization', 'decline', 'prepare_execution', 'refresh_execution', 'resume_execution', 'reconcile_execution', 'replan', 'cancel'] },
               requiredAccess: { type: 'string', enum: ['write', 'sign'] },
               available: { type: 'boolean' },
               reviewRequired: { const: true, description: 'Review the resolved prior attempt before continuing this same Intent; availability alone does not authorize a retry.' },
@@ -897,6 +897,7 @@ const components: OpenApiObject = {
         transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' },
         effectsDigest: { type: 'string', minLength: 1 },
         effectsAccepted: { type: 'boolean' },
+        resumable: { const: true },
         validUntil: { oneOf: [timestamp, { type: 'null' }] },
         latestLedger: { type: 'integer', minimum: 1 },
         nonInclusionProof: schema('SorobanExecutionNonInclusionProof'),
@@ -1039,7 +1040,7 @@ const components: OpenApiObject = {
       },
       additionalProperties: false,
     },
-    ContractIntentActionInput: { oneOf: ['ContractIntentExecutionInput', 'ContractIntentExecutionReconcileInput', 'ContractIntentReplanInput', 'ContractIntentCancelInput', 'BrowserAuthorizationIssueInput'].map(schema) },
+    ContractIntentActionInput: { oneOf: ['ContractIntentExecutionInput', 'ContractIntentExecutionResumeInput', 'ContractIntentExecutionReconcileInput', 'ContractIntentReplanInput', 'ContractIntentCancelInput', 'BrowserAuthorizationIssueInput'].map(schema) },
     ContractIntentExecutionInput: {
       type: 'object',
       anyOf: [
@@ -1053,6 +1054,11 @@ const components: OpenApiObject = {
         executionSource: { ...accountId, deprecated: true, description: 'Legacy alias for executor.' },
         acceptedEffectsDigest: { type: 'string', pattern: '^[0-9a-f]{64}$', description: 'Explicit acceptance of the exact current effects digest after reviewing a critical numeric-only diff. Structural changes cannot be accepted here and require a fresh authorization-plan revision. Integration Services cannot use this field.' },
       },
+      additionalProperties: false,
+    },
+    ContractIntentExecutionResumeInput: {
+      type: 'object', required: ['action', 'transactionHash'],
+      properties: { action: { const: 'resume_execution' }, transactionHash: { type: 'string', pattern: '^[0-9a-fA-F]{64}$' } },
       additionalProperties: false,
     },
     ContractIntentExecutionReconcileInput: {
@@ -1131,6 +1137,12 @@ const components: OpenApiObject = {
         job: schema('IntegrationSorobanJob'),
         task: schema('AgentTask'),
       },
+      additionalProperties: false,
+    },
+    ContractIntentExecutionResumeResult: {
+      type: 'object', required: ['operation', 'version', 'execution'],
+      properties: { operation: { const: 'contract.intent.execution.resume' }, version: operationVersion,
+        execution: schema('SorobanIntentExecutionPreparation'), job: schema('IntegrationSorobanJob'), task: schema('AgentTask') },
       additionalProperties: false,
     },
     SorobanIntentExecutionObservation: {
@@ -1595,6 +1607,7 @@ const components: OpenApiObject = {
         signatureCount: { type: 'integer', minimum: 0 },
         status: { type: 'string', enum: ['awaiting_signatures', 'waiting_preconditions', 'ready', 'submitted', 'expired', 'stale', 'blocked'] },
         statusReason: { type: 'string' },
+        declines: { type: 'array', items: { type: 'object', required: ['signerAddress', 'decidedAt'], properties: { signerAddress: accountId, decidedAt: timestamp }, additionalProperties: false } },
         statusDetail: { type: 'string' },
         creatorAddress: accountId,
         proposerAddress: accountId,
@@ -1872,7 +1885,8 @@ function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
           dispatch = { body: { action: 'prepare_execution' }, actionValues: ['prepare_execution', 'refresh_execution'] };
           result = schema('ContractIntentExecutionResult');
         } else {
-          const branch = id.endsWith('.execution.reconcile') ? ['ContractIntentExecutionReconcile', 'reconcile_execution']
+          const branch = id.endsWith('.execution.resume') ? ['ContractIntentExecutionResume', 'resume_execution']
+            : id.endsWith('.execution.reconcile') ? ['ContractIntentExecutionReconcile', 'reconcile_execution']
             : id.endsWith('.replan') ? ['ContractIntentReplan', 'replan']
             : id.endsWith('.cancel') ? ['ContractIntentCancel', 'cancel']
             : ['BrowserAuthorizationIssue', 'issue_browser_authorization'];

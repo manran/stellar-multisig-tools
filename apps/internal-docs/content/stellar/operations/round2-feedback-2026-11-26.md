@@ -51,3 +51,17 @@ Base: GitHub 1878bb83c200348718836b12c5b6aaaaf30f302e (tree identical to local c
 - U9: pairing approval uses the existing permission descriptions, flags Sign scope, displays expiry, explains the two distinct signatures, and no longer claims a pending request when preview fails. Browser acceptance pending.
 
 Verification: 997/997 regular tests passed, including the referenced-union, nested input and HTTP-boundary regressions. API and Web builds passed. Remaining review items are still open, including weighted refusal handling, historical receipt snapshots and resumable Soroban signing.
+
+
+## Third repair batch: shared lifecycle and exact recovery
+
+Base: 9a3012ca60375ea79e00ea05ee97d5da4017e0dd (previous reviewed GitHub repair branch).
+
+- A2: historical confirmed Intent read access includes recorded AUTH contributors, even when cancellation or a later signer-policy change would prevent live signing access. Receipt-only access exposes no reusable AUTH entries and does not grant write access. Actual route regression covers a cancelled-then-confirmed record and an unrelated caller.
+- A3: Request snapshot is the single source of current unsigned refusal decisions. Remaining signer weight is evaluated against each current authorization check and mandatory extra signers, using a conservative upper bound for other signer mechanisms. An unreachable quorum is reversible: `awaiting_signatures` / `quorum_unreachable`, not a terminal cancellation. Human Inbox, Agent tasks and Integration Request reads share the same result. Agent decline provenance is recorded.
+- U5: the exact released Soroban execution package is persisted atomically with its preparation. The original preparing signer or owning Integration can resume that same unresolved unexpired package with unchanged ready authorization. No new hash, simulation, sequence or submission occurs. Human review, Agent task and Integration job expose the recovery action. Old packages without stored XDR, expired packages and unresolved multiple hashes still require reconciliation.
+- U6: persist the source-account signing policy at proposal creation, not at receipt viewing. New receipts distinguish the creation snapshot from live execution authorization. Old submitted records without a snapshot explicitly report unavailable policy and render encoded transaction evidence rather than today's weights.
+- U14 (partial): avoid requesting a private transaction receipt before wallet authentication.
+- Additive PostgreSQL migration 0023 adds nullable policy snapshots and released execution packages. No fabricated historical backfill. Apply only during a coordinated Testnet deployment before running the new API.
+
+Verification: 999/999 regular tests, 42/42 disposable PostgreSQL tests, API and Web builds passed. The regression exercises unequal signer weights, reversible refusal, immutable policy snapshots, exact execution replay, rejection of unrelated/expired/resolved recovery and historical contributor receipt access. Database tests verify stored package recovery without listing raw XDR. Real Testnet replay, mobile/browser review and deployment remain open. The original outstanding review items not addressed above remain open; do not claim independent acceptance.

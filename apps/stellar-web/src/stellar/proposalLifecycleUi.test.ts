@@ -258,7 +258,7 @@ test('Inbox does not perform client-side signer relationship discovery', () => {
 test('Human Inbox separates Request status from the current signer next action', () => {
   assert.match(requestInbox, /projectHumanInboxRequests/);
   assert.match(requestInbox, /signerHasSignedTransaction/);
-  assert.match(requestInbox, /approval_declined/);
+  assert.match(requestInbox, /snapshot\.declines/);
   assert.match(inboxApi, /context\.actor === 'human'/);
   assert.match(inboxApi, /summarizeInboxActions\(humanRequests, intents\)/);
   assert.match(inboxApi, /actor: context\.actor,[\s\S]*pending_count: tasks\.length,[\s\S]*requests,/);

@@ -73,6 +73,7 @@ import type {
   SigningRequestStatus,
 } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
+import { analyzeAccountAuthorization } from '../../../../packages/stellar-core/src/authorization.js';
 import { loadTransactionSourceAnalyses } from '../../../../packages/stellar-core/src/transactionReviewAnalysis.js';
 import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 import { transactionHashHex } from '../../../../packages/stellar-core/src/signatureMerge.js';
@@ -611,22 +612,10 @@ async function requestCoordination(requestId: string, snapshot?: Awaited<ReturnT
       : Promise.resolve([]),
     listLatestHumanNotificationSummaries(requestId),
   ]);
-  const events = snapshot && signingRequestStore.listActivityEvents
-    ? await signingRequestStore.listActivityEvents(requestId)
-    : [];
-  const declines = events.filter(event => event.type === 'approval_declined' && event.actorAddress
-    && snapshot && !signerHasSignedTransaction(event.actorAddress, snapshot.mergedXdr, snapshot.network))
-    .map(event => ({ signerAddress: event.actorAddress!, decidedAt: event.occurredAt }));
-  return { assignments, notifications, ...(snapshot ? { declines } : {}) };
+  return { assignments, notifications, ...(snapshot ? { declines: snapshot.declines ?? [] } : {}) };
 }
 
-async function viewerDeclined(requestId: string, actorAddress?: string): Promise<boolean> {
-  if (!actorAddress || !signingRequestStore.listActivityEvents) return false;
-  const events = await signingRequestStore.listActivityEvents(requestId);
-  return events.some((item) => item.type === 'approval_declined' && item.actorAddress === actorAddress);
-}
-
-async function recordDecline(requestId: string, actorAddress: string): Promise<void> {
+async function recordDecline(requestId: string, actorAddress: string, actor?: ReturnType<typeof agentActorForCredential>): Promise<void> {
   const stored = await signingRequestStore.getRequest(requestId);
   if (!stored) throw new SigningRequestServiceError('Signing request not found.', 404, 'request_not_found');
   const allowed = await signerCanAccessTransaction(actorAddress, stored.baseXdr, stored.network);
@@ -647,6 +636,7 @@ async function recordDecline(requestId: string, actorAddress: string): Promise<v
       type: 'approval_declined',
       occurredAt: new Date().toISOString(),
       actorAddress,
+      ...(actor ? { actor } : {}),
       detail: 'Signer declined this proposal. The request remains open for other signers until it is replaced, submitted, or expires.',
     });
   }
@@ -737,15 +727,20 @@ export async function GET(request: Request): Promise<Response> {
           revisions,
         ))
       : latestPrivateNoteForRequest(signingRequestStore, access.stored);
-    const sourceAnalysesPromise = historyRequested
-      ? loadTransactionSourceAnalyses(
-          inspectTransactionXdr(access.stored.baseXdr, access.stored.network),
-          access.stored.network,
-          accountLoader,
-        )
-      : null;
-
     const snapshot = await snapshotPromise;
+    const policyBasis = access.stored.reviewSourceAccounts?.length ? 'proposal_creation' as const
+      : snapshot.submission ? 'unavailable' as const : 'current' as const;
+    const sourceAnalysesPromise = historyRequested
+      ? policyBasis === 'proposal_creation'
+        ? Promise.resolve(access.stored.reviewSourceAccounts!.map(account => ({ accountId: account.accountId, account, analysis: analyzeAccountAuthorization(account) })))
+        : policyBasis === 'unavailable'
+          ? Promise.resolve([])
+          : loadTransactionSourceAnalyses(
+            inspectTransactionXdr(access.stored.baseXdr, access.stored.network),
+            access.stored.network,
+            accountLoader,
+          )
+      : null;
     if (access.mode === 'capability' && (snapshot.status === 'submitted' || snapshot.status === 'expired')) {
       return capabilityClosedResponse(snapshot.network, snapshot.status);
     }
@@ -812,12 +807,10 @@ export async function GET(request: Request): Promise<Response> {
         );
       }
       if (!historyAccountId) activityBound = true;
-      declined = activity.events.some((item) =>
-        item.type === 'approval_declined' && item.actorAddress === access.actorAddress,
-      );
-      history = { activity, sourceAnalyses };
+      declined = snapshot.declines?.some(item => item.signerAddress === access.actorAddress) ?? false;
+      history = { activity, sourceAnalyses, policyBasis };
     } else {
-      declined = await viewerDeclined(access.id, access.actorAddress);
+      declined = snapshot.declines?.some(item => item.signerAddress === access.actorAddress) ?? false;
     }
     let privateNote = await privateNotePromise;
     if ((access.mode === 'agent' && !activityBound) || access.mode === 'service') privateNote = undefined;
@@ -1337,11 +1330,12 @@ export async function PATCH(request: Request): Promise<Response> {
       if (!access.actorAddress) {
         throw new SigningRequestServiceError('Unlock a signer wallet before declining this proposal.', 401, 'decline_identity_required');
       }
-      await recordDecline(access.id, access.actorAddress);
+      await recordDecline(access.id, access.actorAddress, access.agentCredential ? agentActorForCredential(access.agentCredential) : undefined);
       const snapshot = await getSigningRequest(signingRequestStore, access.id, serviceOptions);
       return noStoreJson({
         request: snapshot,
         decision: 'declined' as const,
+        coordination: await requestCoordination(access.id, snapshot),
         ...(access.mode === 'agent' ? { task: agentRequestTask(access, snapshot, true) } : {}),
       });
     }

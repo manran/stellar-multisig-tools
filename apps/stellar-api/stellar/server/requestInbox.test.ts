@@ -225,7 +225,7 @@ test('Human Inbox action projection recognizes the current signer signature and 
   const { projectHumanInboxRequests } = await import('./requestInbox.js');
   const projected = await projectHumanInboxRequests(store, signer.publicKey(), [
     { ...baseSnapshot, id: '0'.repeat(16), mergedXdr: signed.toXDR(), status: 'awaiting_signatures' as const },
-    { ...baseSnapshot, id: '1'.repeat(16), mergedXdr: unsigned.toXDR(), status: 'awaiting_signatures' as const },
+    { ...baseSnapshot, id: '1'.repeat(16), mergedXdr: unsigned.toXDR(), status: 'awaiting_signatures' as const, declines: [{ signerAddress: signer.publicKey(), decidedAt: '2026-09-06T00:01:00.000Z' }] },
     { ...baseSnapshot, id: '2'.repeat(16), mergedXdr: unsigned.toXDR(), status: 'ready' as const, statusReason: 'authorization_complete' as const },
     { ...baseSnapshot, id: '3'.repeat(16), mergedXdr: unsigned.toXDR(), status: 'ready' as const, statusReason: 'authorization_complete' as const, execution: { mode: 'multisigtools' as const } },
     { ...baseSnapshot, id: '4'.repeat(16), mergedXdr: unsigned.toXDR(), status: 'ready' as const, statusReason: 'authorization_complete' as const, execution: { mode: 'external' as const, executor: { type: 'service' as const, id: 'fednetwork' } } },
