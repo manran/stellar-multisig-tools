@@ -1,3 +1,5 @@
+import { unknownRequestField } from './openApiDocument.js';
+
 export class RequestBodyError extends Error {
   readonly status: number;
   readonly code: string;
@@ -47,6 +49,7 @@ async function readBodyBytes(request: Request, maxBytes: number): Promise<Uint8A
 export async function readJsonObjectBody(
   request: Request,
   maxBytes: number,
+  schemaName?: string,
 ): Promise<Record<string, unknown>> {
   const contentType = request.headers.get('content-type') ?? '';
   if (contentType.split(';', 1)[0].trim().toLowerCase() !== 'application/json') {
@@ -65,8 +68,13 @@ export async function readJsonObjectBody(
   try {
     const body = JSON.parse(new TextDecoder().decode(bytes)) as unknown;
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('object required');
+    if (schemaName) {
+      const field = unknownRequestField(body, schemaName);
+      if (field) throw new RequestBodyError('Unknown request field: ' + field, 400, 'unknown_request_field');
+    }
     return body as Record<string, unknown>;
-  } catch {
+  } catch (cause) {
+    if (cause instanceof RequestBodyError) throw cause;
     throw new RequestBodyError('Request body must be valid JSON.', 400, 'invalid_json');
   }
 }

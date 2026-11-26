@@ -19,7 +19,7 @@ import type {
   SorobanIntentResponse,
   StoredSorobanIntentSnapshot,
 } from '../../../packages/stellar-core/src/sorobanIntentApiTypes';
-import { inspectSorobanAuthorizationEntry, type SorobanInvocationInspection } from '../../../packages/stellar-core/src/sorobanInspection';
+import { inspectSorobanHostFunctionXdr, inspectSorobanAuthorizationEntry, type SorobanInvocationInspection } from '../../../packages/stellar-core/src/sorobanInspection';
 import type { SorobanEffectsDiff, SorobanEffectsSnapshot } from '../../../packages/stellar-core/src/sorobanEffects';
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
 import { horizonTransactionUrl, isValidStellarAccountId } from '../../../packages/stellar-core/src/horizon';
@@ -68,7 +68,7 @@ function InvocationTree({ node, depth = 0 }: { node: SorobanInvocationInspection
     <div className="rounded-xl bg-black/[0.03] p-4 text-sm dark:bg-white/[0.04]">
       <div className="font-semibold">{node.label}</div>
       {node.detail && <div className="mt-1 break-all font-mono text-xs text-neutral-500">{node.detail}</div>}
-      {node.argumentPreviews.length > 0 && <div className="mt-2 text-xs text-neutral-500">{node.argumentPreviews.join(' · ')}</div>}
+      {node.argumentPreviews.length > 0 && <div className="mt-2 break-all text-xs text-neutral-500">{node.argumentPreviews.join(' · ')}</div>}
     </div>
     {node.children.length > 0 && <div className="mt-2 space-y-2">{node.children.map((child, index) => <InvocationTree key={`${child.label}-${depth}-${index}`} node={child} depth={depth + 1} />)}</div>}
   </div>;
@@ -78,8 +78,8 @@ function SimulationEffectsView({ effects }: { effects?: SorobanEffectsSnapshot }
   if (!effects) return <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">This legacy Intent has no recorded simulation-effects baseline. Do not execute it without refreshing authorization.</div>;
   return <div className="space-y-3">
     <div className="flex flex-wrap gap-2 text-xs text-neutral-500"><span>{effects.stateChangeCount} state changes</span><span>·</span><span>{effects.eventCount} successful events</span><span>·</span><span className="font-mono">{effects.digest.slice(0, 12)}…</span></div>
-    {effects.stateChanges.map((change, index) => <div key={`state-${change.keyPreview}-${index}`} className="rounded-xl bg-black/[0.03] p-3 text-sm dark:bg-white/[0.04]"><div className="font-semibold">{change.kind} · {change.keyPreview}</div><div className="mt-1 break-words text-xs text-neutral-500">{change.beforePreview ?? '∅'} → {change.afterPreview ?? '∅'}</div></div>)}
-    {effects.events.map((event, index) => <div key={`event-${event.contractId ?? 'system'}-${index}`} className="rounded-xl bg-black/[0.03] p-3 text-sm dark:bg-white/[0.04]"><div className="font-semibold">{event.type} event{event.contractId ? ` · ${compactAddress(event.contractId)}` : ''}</div><div className="mt-1 text-xs text-neutral-500">{event.topics.join(' · ') || 'No topics'}</div><div className="mt-1 break-words font-mono text-xs text-neutral-500">{event.data}</div></div>)}
+    {effects.stateChanges.map((change, index) => <div key={`state-${change.keyPreview}-${index}`} className="rounded-xl bg-black/[0.03] p-3 text-sm dark:bg-white/[0.04]"><div className="break-all font-semibold">{change.kind} · {change.keyPreview}</div><div className="mt-1 break-words text-xs text-neutral-500">{change.beforePreview ?? '∅'} → {change.afterPreview ?? '∅'}</div></div>)}
+    {effects.events.map((event, index) => <div key={`event-${event.contractId ?? 'system'}-${index}`} className="rounded-xl bg-black/[0.03] p-3 text-sm dark:bg-white/[0.04]"><div className="font-semibold">{event.type} event{event.contractId ? ` · ${compactAddress(event.contractId)}` : ''}</div><div className="mt-1 break-all text-xs text-neutral-500">{event.topics.join(' · ') || 'No topics'}</div><div className="mt-1 break-words font-mono text-xs text-neutral-500">{event.data}</div></div>)}
     {effects.truncated && <div className="text-xs text-amber-700 dark:text-amber-300">Preview is truncated. The security digest still covers the complete simulation result.</div>}
   </div>;
 }
@@ -130,6 +130,8 @@ export default function SorobanIntentApp() {
       }
     });
   }, [authorization]);
+
+  const callSummary = useMemo(() => intent ? inspectSorobanHostFunctionXdr(intent.intent.hostFunctionXdr, intent.network) : null, [intent]);
 
   const confirmedExecution = useMemo(() => [...evidence].reverse().find((item) =>
     item.type === 'execution_confirmed' && item.transactionHash), [evidence]);
@@ -321,7 +323,7 @@ export default function SorobanIntentApp() {
 
   async function cancelIntent() {
     const actingViewer = viewer;
-    if (!intent || !authorization || busy || loadedViewer !== actingViewer || viewerRef.current !== actingViewer || !actingViewer.address || authorization.status === 'cancelled' || confirmedExecution) return;
+    if (!intent || !authorization || busy || loadedViewer !== actingViewer || viewerRef.current !== actingViewer || !actingViewer.address || authorization.status === 'cancelled' || confirmedExecution || pendingExecutionPreparation) return;
     const warning = pendingExecutionPreparation
       ? 'Cancel this Intent in MultiSigTools? A prepared transaction already exists. Cancellation stops further MultiSigTools coordination, but it cannot revoke detached AUTH or prepared XDR already disclosed outside MultiSigTools.'
       : 'Cancel this Intent in MultiSigTools? Cancellation stops further MultiSigTools coordination, but it cannot revoke detached AUTH already disclosed outside MultiSigTools.';
@@ -563,16 +565,24 @@ export default function SorobanIntentApp() {
           <div className="mt-6 space-y-5">
             <section className="mst-intent-summary">
               <div className="flex flex-wrap items-center justify-between gap-3"><StatusBadge tone={primaryStatus.tone}>{primaryStatus.label}</StatusBadge><span className="font-mono text-xs text-neutral-400">{intent.id}</span></div>
+              {callSummary && <div className="mt-4 min-w-0 space-y-2">
+                <h2 className="text-xl font-bold">{callSummary.nativeXlmTransfer ? 'Send ' + callSummary.nativeXlmTransfer.amount + ' XLM' : 'Call ' + callSummary.functionName}</h2>
+                {callSummary.nativeXlmTransfer ? <>
+                  <div className="text-xs font-semibold">From</div><div className="break-all font-mono text-sm">{callSummary.nativeXlmTransfer.from}</div>
+                  <div className="text-xs font-semibold">To</div><div className="break-all font-mono text-sm">{callSummary.nativeXlmTransfer.to}</div>
+                </> : callSummary.argumentPreviews.map((value, index) => <div key={index} className="break-all text-sm">Argument {index + 1}: {value}</div>)}
+                <div className="break-all font-mono text-xs text-neutral-500">Contract {callSummary.contractAddress}</div>
+              </div>}
               <div className="mt-3 break-all font-mono text-[11px] text-neutral-500">Intent {intent.intent.intentDigest}</div>
               {authorization.statusDetail && <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{authorization.statusDetail}</p>}
-              <div className="mt-4 flex flex-wrap gap-2"><ActionButton variant="secondary" size="sm" onClick={() => void copyShareLink()}><Share2 className="h-4 w-4" />{copied ? 'Intent link copied' : 'Share with another signer'}</ActionButton><ActionButton variant="secondary" size="sm" onClick={() => void loadIntent(sessionAddress)}><RefreshCw className="h-4 w-4" />Refresh</ActionButton>{!confirmedExecution && authorization.status !== 'cancelled' && !intent.integration && intent.creatorAddress === sessionAddress && <ActionButton variant="danger" size="sm" disabled={busy} onClick={() => void cancelIntent()}><CircleAlert className="h-4 w-4" />{busy ? 'Cancelling…' : 'Cancel Intent'}</ActionButton>}</div>
+              <div className="mt-4 flex flex-wrap gap-2"><ActionButton variant="secondary" size="sm" onClick={() => void copyShareLink()}><Share2 className="h-4 w-4" />{copied ? 'Intent link copied' : 'Share with another signer'}</ActionButton><ActionButton variant="secondary" size="sm" onClick={() => void loadIntent(sessionAddress)}><RefreshCw className="h-4 w-4" />Refresh</ActionButton>{!confirmedExecution && !pendingExecutionPreparation && authorization.status !== 'cancelled' && !intent.integration && intent.creatorAddress === sessionAddress && <ActionButton variant="danger" size="sm" disabled={busy} onClick={() => void cancelIntent()}><CircleAlert className="h-4 w-4" />{busy ? 'Cancelling…' : 'Cancel Intent'}</ActionButton>}</div>
             </section>
 
             {confirmedExecution?.transactionHash && <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] p-5 sm:p-6"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div className="min-w-0 flex-1"><h2 className="text-xl font-bold">Transaction confirmed</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">MultiSigTools independently observed this prepared transaction on Stellar{confirmedExecution.ledger ? ` in ledger ${confirmedExecution.ledger.toLocaleString()}` : ''}. External submitter identity is not inferred.</p><div className="mt-3 break-all font-mono text-xs text-neutral-500">{confirmedExecution.transactionHash}</div><a href={horizonTransactionUrl(confirmedExecution.transactionHash, intent.network)} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-semibold text-emerald-700 underline decoration-emerald-500/30 underline-offset-4 dark:text-emerald-300">View network record</a></div></div></section>}
 
             {!confirmedExecution && latestExecutionResult?.type === 'execution_failed' && latestExecutionResult.transactionHash && <section className="rounded-2xl border border-red-500/25 bg-red-500/[0.07] p-5 sm:p-6"><div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-600" /><div className="min-w-0 flex-1"><h2 className="text-xl font-bold">Execution failed on Stellar</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">This exact prepared transaction was observed{latestExecutionResult.ledger ? ` in ledger ${latestExecutionResult.ledger.toLocaleString()}` : ''}, but it did not succeed. Authorization evidence remains separate from this network result.</p><div className="mt-3 break-all font-mono text-xs text-neutral-500">{latestExecutionResult.transactionHash}</div><a href={horizonTransactionUrl(latestExecutionResult.transactionHash, intent.network)} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-semibold text-red-700 underline decoration-red-500/30 underline-offset-4 dark:text-red-300">View network record</a></div></div></section>}
 
-            {!confirmedExecution && pendingExecutionPreparation?.transactionHash && <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:p-6"><h2 className="text-xl font-bold">Prepared execution</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">MultiSigTools has durable preparation evidence for this exact transaction hash, but no Stellar result has been recorded yet. Checking verifies the network directly; it does not submit anything.</p><div className="mt-3 break-all font-mono text-xs text-neutral-500">{pendingExecutionPreparation.transactionHash}</div><div className="mt-4 flex flex-wrap items-center gap-3"><ActionButton variant="secondary" disabled={busy} onClick={() => void reconcileExecution(pendingExecutionPreparation.transactionHash!)}><RefreshCw className={busy ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{busy ? 'Checking Stellar…' : 'Check Stellar result'}</ActionButton>{executionCheckMessage && <span className="text-sm text-neutral-600 dark:text-neutral-300">{executionCheckMessage}</span>}</div></section>}
+            {!confirmedExecution && pendingExecutionPreparation?.transactionHash && <section className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:p-6"><h2 className="text-xl font-bold">Prepared transaction</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">This transaction was prepared, but may not have been signed or submitted. Check its Stellar result before preparing another transaction. Checking does not submit anything.</p>{pendingExecutionPreparation.validUntil && <p className="mt-2 text-sm">Valid until {new Date(pendingExecutionPreparation.validUntil).toLocaleString()}. After this time, check Stellar again before preparing a replacement.</p>}<div className="mt-3 break-all font-mono text-xs text-neutral-500">{pendingExecutionPreparation.transactionHash}</div><div className="mt-4 flex flex-wrap items-center gap-3"><ActionButton variant="secondary" disabled={busy} onClick={() => void reconcileExecution(pendingExecutionPreparation.transactionHash!)}><RefreshCw className={busy ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{busy ? 'Checking Stellar…' : 'Check Stellar result'}</ActionButton>{executionCheckMessage && <span className="text-sm text-neutral-600 dark:text-neutral-300">{executionCheckMessage}</span>}</div></section>}
 
             {!confirmedExecution && authorization.status === 'cancelled' && <section className="rounded-2xl border border-black/10 bg-black/[0.025] p-5 dark:border-white/10 dark:bg-white/[0.04] sm:p-6"><h2 className="text-xl font-bold">Intent cancelled</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">MultiSigTools will not collect more AUTH, refresh the AuthorizationPlan, or prepare another execution package for this Intent. Detached AUTH or prepared XDR already disclosed outside MultiSigTools cannot be revoked here and may remain usable until its Stellar validity window ends.</p>{intent.cancellation?.cancelledAt && <p className="mt-3 text-xs text-neutral-500">Cancelled {new Date(intent.cancellation.cancelledAt).toLocaleString()}.</p>}</section>}
 

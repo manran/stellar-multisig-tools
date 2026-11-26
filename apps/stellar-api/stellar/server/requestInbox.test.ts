@@ -84,6 +84,10 @@ test('live authorizer-account subjects discover replacement signers without trus
   };
   assert.deepEqual((await listSignerInbox(store, newSigner, { ...options, sourceAccountIds: [source] })).map((item) => item.id), [request.id]);
   assert.deepEqual(await listSignerInbox(store, oldSigner, options), []);
+  assert.deepEqual(await listSignerInbox(store, newSigner, { ...options, sourceAccountIds: [source],
+    accountLoader: async () => ({ ...await options.accountLoader(), sequence: '2' }),
+  }), []);
+
 });
 
 test('real Classic Inbox enumeration returns all 101 authorized requests in stable pages', async () => {

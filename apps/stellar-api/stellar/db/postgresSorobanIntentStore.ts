@@ -398,7 +398,9 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
         };
       }
 
-      await assertNotExecuted(client, id);
+      // Backfill reproduces existing historical facts; runtime cancellation must not create them.
+      if (this.historicalImport) await assertNotExecuted(client, id);
+      else await assertExecutionResolved(client, id);
 
       await client.query(
         `INSERT INTO mst_stellar.soroban_intent_cancellations (

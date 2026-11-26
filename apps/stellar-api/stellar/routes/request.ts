@@ -593,14 +593,20 @@ function initialPrivateNote(text: string, createdAt: string): PrivateNoteRevisio
   };
 }
 
-async function requestCoordination(requestId: string) {
+async function requestCoordination(requestId: string, snapshot?: Awaited<ReturnType<typeof getSigningRequest>>) {
   const [assignments, notifications] = await Promise.all([
     signingRequestStore.listRequestAssignments
       ? signingRequestStore.listRequestAssignments(requestId)
       : Promise.resolve([]),
     listLatestHumanNotificationSummaries(requestId),
   ]);
-  return { assignments, notifications };
+  const events = snapshot && signingRequestStore.listActivityEvents
+    ? await signingRequestStore.listActivityEvents(requestId)
+    : [];
+  const declines = events.filter(event => event.type === 'approval_declined' && event.actorAddress
+    && snapshot && !signerHasSignedTransaction(event.actorAddress, snapshot.mergedXdr, snapshot.network))
+    .map(event => ({ signerAddress: event.actorAddress!, decidedAt: event.occurredAt }));
+  return { assignments, notifications, ...(snapshot ? { declines } : {}) };
 }
 
 async function viewerDeclined(requestId: string, actorAddress?: string): Promise<boolean> {
@@ -804,7 +810,7 @@ export async function GET(request: Request): Promise<Response> {
     }
     let privateNote = await privateNotePromise;
     if ((access.mode === 'agent' && !activityBound) || access.mode === 'service') privateNote = undefined;
-    const coordination = await requestCoordination(access.id);
+    const coordination = await requestCoordination(access.id, snapshot);
     return noStoreJson({
       request: snapshot,
       access: {

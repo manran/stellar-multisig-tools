@@ -25,9 +25,8 @@ import TreasuryApp from './TreasuryApp';
 import TemplatesApp from './TemplatesApp';
 import TreasuryBoxSettingsApp from './TreasuryBoxSettingsApp';
 import TransactionReceiptApp from './TransactionReceiptApp';
-import { canonicalStellarContentLocationForLocation, canonicalStellarRuntimeLocationForLocation, navigateWorkspace, WORKSPACE_NAVIGATION_EVENT } from './workspaceNavigation';
-import { fixedClientStellarDeploymentNetwork } from '../../../packages/stellar-core/src/deploymentNetwork';
-import { isCanonicalStellarContentPath, stellarWorkspaceRouteForPath } from './workspaceRoutes';
+import { canonicalStellarRuntimeLocationForLocation, navigateWorkspace, WORKSPACE_NAVIGATION_EVENT } from './workspaceNavigation';
+import { stellarWorkspaceRouteForPath } from './workspaceRoutes';
 import type { StellarWorkspaceRouteKind } from './workspaceRoutes';
 
 interface RouteMatch {
@@ -76,11 +75,6 @@ function RoutedApp() {
   const [locationKey, setLocationKey] = useState(currentLocationKey);
   const [, setNavigationRevision] = useState(0);
   const route = routeFor(window.location.pathname);
-  const canonicalContentRedirect = fixedClientStellarDeploymentNetwork() === 'testnet'
-    && isCanonicalStellarContentPath(window.location.pathname)
-    ? canonicalStellarContentLocationForLocation(window.location.href)
-    : null;
-
   useEffect(() => {
     const syncLocation = () => {
       setLocationKey(currentLocationKey());
@@ -118,11 +112,6 @@ function RoutedApp() {
   }, []);
 
   useEffect(() => {
-    if (!canonicalContentRedirect) return;
-    window.location.replace(canonicalContentRedirect);
-  }, [canonicalContentRedirect, locationKey]);
-
-  useEffect(() => {
     document.title = titleFor(route.kind);
   }, [locationKey, route.kind]);
 
@@ -131,7 +120,7 @@ function RoutedApp() {
     navigateWorkspace(route.redirectTo, { replace: true });
   }, [locationKey, route.redirectTo]);
 
-  if (canonicalContentRedirect || route.redirectTo !== undefined) return null;
+  if (route.redirectTo !== undefined) return null;
   if (route.kind === 'demo') return <DemoTreasuryApp />;
 
   let Component;

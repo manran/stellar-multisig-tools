@@ -1,8 +1,7 @@
 import { Mail } from 'lucide-react';
 import MultiSigBrandMark from './MultiSigBrandMark';
 import { STELLAR_PUBLIC_DOCS_BASE } from '../../../packages/stellar-core/src/apiOrigins';
-import { canonicalStellarContentHref, stellarHref } from './workspaceNavigation';
-import { isCanonicalStellarContentPath } from './workspaceRoutes';
+import { stellarHref } from './workspaceNavigation';
 
 interface Props {
   workspace?: boolean;
@@ -11,7 +10,7 @@ interface Props {
 const linkClass = 'transition hover:text-emerald-700 dark:hover:text-emerald-300';
 
 function footerHref(path: string) {
-  return isCanonicalStellarContentPath(path) ? canonicalStellarContentHref(path) : stellarHref(path);
+  return stellarHref(path);
 }
 
 function SupportLink({ compact = false }: { compact?: boolean }) {
@@ -48,8 +47,8 @@ export default function StellarFooter({ workspace = false }: Props) {
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-semibold">
               <a href={STELLAR_PUBLIC_DOCS_BASE} className={linkClass}>Docs</a>
-              <a href={canonicalStellarContentHref('/privacy')} className={linkClass}>Privacy</a>
-              <a href={canonicalStellarContentHref('/terms')} className={linkClass}>Terms</a>
+              <a href={stellarHref('/privacy')} className={linkClass}>Privacy</a>
+              <a href={stellarHref('/terms')} className={linkClass}>Terms</a>
               <SupportLink compact />
             </div>
           </div>

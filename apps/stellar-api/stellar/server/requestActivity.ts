@@ -375,7 +375,7 @@ function encodeActivityCursor(item: ActivityRequestItem): string {
   return Buffer.from(`${latestActivityAt(item)}\n${item.requestId}`, 'utf8').toString('base64url');
 }
 
-function decodeActivityCursor(value: string | undefined): { occurredAt: string; requestId: string } | null {
+export function decodeActivityCursor(value: string | undefined): { occurredAt: string; requestId: string } | null {
   if (!value) return null;
   try {
     const decoded = Buffer.from(value, 'base64url').toString('utf8');
@@ -383,7 +383,7 @@ function decodeActivityCursor(value: string | undefined): { occurredAt: string; 
     if (newline <= 0) return null;
     const occurredAt = decoded.slice(0, newline);
     const requestId = decoded.slice(newline + 1);
-    if (!occurredAt || !isValidSigningRequestId(requestId)) return null;
+    if (!Number.isFinite(Date.parse(occurredAt)) || !isValidSigningRequestId(requestId)) return null;
     return { occurredAt, requestId };
   } catch {
     return null;

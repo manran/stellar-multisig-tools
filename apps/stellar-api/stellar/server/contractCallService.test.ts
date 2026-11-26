@@ -147,3 +147,12 @@ test('builds a Blend-style typed JSON Vec<UDT> call and rejects shape drift', as
       && /extra is not declared by struct Request/.test(cause.message),
   );
 });
+
+test('contract interface distinguishes missing live contract from upstream failure', async () => {
+  await assert.rejects(() => inspectContractInterface(CONTRACT_ID, 'testnet', {
+    interfaceLoader: async () => { throw { code: 404, message: 'Could not obtain contract instance from server' }; },
+  }), (cause: unknown) => cause instanceof ContractCallServiceError && cause.status === 404 && cause.code === 'contract_not_found');
+  await assert.rejects(() => inspectContractInterface(CONTRACT_ID, 'testnet', {
+    interfaceLoader: async () => { throw new Error('RPC timed out'); },
+  }), (cause: unknown) => cause instanceof ContractCallServiceError && cause.status === 502);
+});

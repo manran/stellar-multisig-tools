@@ -92,7 +92,7 @@ export function projectIntegrationSorobanJob({
     && latestPreparation?.authorizationPlanRevision === currentRevision(stored)
     && latestPreparation.authorizationPlanDigest === stored.authorizationPlan.authorizationPlanDigest;
   const nextActions: IntegrationSorobanJobProjection['nextActions'] = state === 'completed' ? []
-    : unresolved.length ? [...(canSubmit ? ['submit_execution' as const] : []), 'reconcile_execution', ...(state === 'cancelled' ? [] : ['cancel' as const])]
+    : unresolved.length ? [...(canSubmit ? ['submit_execution' as const] : []), 'reconcile_execution']
     : state === 'cancelled' ? []
     : executionBlocked ? ['cancel']
     : state === 'ready' || (state === 'failed' && authorization.status === 'authorization_ready')

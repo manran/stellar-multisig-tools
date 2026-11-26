@@ -42,7 +42,7 @@ function errorResponse(cause: unknown): Response {
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    const body = await readJsonObjectBody(request, MAX_BODY_BYTES, 'ClassicPaymentPrepareInput');
     const network = body.network === 'public' || body.network === 'testnet' ? body.network : null;
     if (!network) throw new ClassicPaymentPrepareError('Network must be public or testnet.', 400, 'invalid_network');
     assertDeploymentNetwork(network);

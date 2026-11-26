@@ -76,3 +76,18 @@ test('rejects non-JSON media types', async () => {
     },
   );
 });
+
+test('closed payment and Intent input schemas reject misspelled fields', async () => {
+  for (const [schema, body, field] of [
+    ['ClassicPaymentPrepareInput', '{"memoo":"lost"}', 'memoo'],
+    ['ClassicPaymentPrepareInput', '{"payments":[{"asset":{"type":"native","issuer":"unexpected"}}]}', 'payments[0].asset.issuer'],
+    ['ClassicPaymentPrepareInput', '{"payments":[{"amunt":"1"}]}', 'payments[0].amunt'],
+    ['ContractIntentCreateInput', '{"privateNot":"lost"}', 'privateNot'],
+    ['ClassicCreateAccountPrepareInput', '{"memoo":"lost"}', 'memoo'],
+  ]) {
+    await assert.rejects(() => readJsonObjectBody(jsonRequest(body), 1024, schema),
+      (cause: unknown) => cause instanceof RequestBodyError && cause.status === 400
+        && cause.code === 'unknown_request_field' && cause.message.includes(field));
+  }
+  assert.deepEqual(await readJsonObjectBody(jsonRequest('{"arguments":{"custom_field":"x"}}'), 1024, 'ContractIntentCreateInput'), {arguments:{custom_field:'x'}});
+});

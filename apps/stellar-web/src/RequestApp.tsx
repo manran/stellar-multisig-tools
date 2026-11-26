@@ -215,7 +215,8 @@ function requestNavigationState(requestId: string): {
 }
 
 export default function RequestApp() {
-  const initialLocator = window.location.hash.slice(1);
+  const legacyId = new URLSearchParams(window.location.search).get('request') ?? '';
+  const initialLocator = window.location.hash.slice(1) || (/^[0-9A-HJKMNP-TV-Z]{16}$/i.test(legacyId) ? legacyId : '');
   const initialRequest = parseRequestLocator(initialLocator);
   const navigation = useMemo(() => requestNavigationState(initialRequest.id), []);
   const returnTarget = useMemo(() => navigation.returnTarget ?? sameOriginReturnTarget(), [navigation]);

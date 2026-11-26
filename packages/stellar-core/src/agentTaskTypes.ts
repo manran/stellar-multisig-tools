@@ -25,6 +25,7 @@ export interface AgentTaskAction {
   code: AgentTaskActionCode;
   operationId: string;
   bodyDefaults?: Record<string, string>;
+  requiredInputs?: string[];
   requiredAccess: Exclude<AgentAccessLevel, 'read'>;
   available: boolean;
   /** Review the resolved prior attempt before continuing this same Intent. Not a new authorization grant. */

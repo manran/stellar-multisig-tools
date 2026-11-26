@@ -111,6 +111,11 @@ export async function inspectContractInterface(
     };
   } catch (cause) {
     if (cause instanceof ContractCallServiceError) throw cause;
+    // SDK getContractInstance returns this specific error for an absent live entry.
+    if (cause && typeof cause === 'object' && 'code' in cause && cause.code === 404
+      && 'message' in cause && cause.message === 'Could not obtain contract instance from server') {
+      throw new ContractCallServiceError('No live contract instance found on the selected network.', 404, 'contract_not_found');
+    }
     throw new ContractCallServiceError(
       cause instanceof Error ? cause.message : 'Unable to load this contract interface.',
       502,

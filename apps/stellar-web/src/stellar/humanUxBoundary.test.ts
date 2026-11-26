@@ -216,7 +216,7 @@ test('external-service work keeps final execution out of signer UI', () => {
   assert.match(intent, /owns final execution for this Intent/);
   assert.match(intent, /Executor account/);
   assert.match(intent, /The executor account is not bound yet/);
-  assert.match(intent, /Checking verifies the network directly; it does not submit anything/);
+  assert.match(intent, /Checking does not submit anything/);
   assert.match(intentApi, /external_executor_required/);
   assert.match(intentApi, /resolveAndBindIntegrationSorobanExecutor/);
   assert.match(intentApi, /configuredSorobanManagedExecutor/);
@@ -244,13 +244,11 @@ test('Testnet is a network-bound runtime while public Docs live on the dedicated
   const routes = source('../workspaceRoutes.ts');
   const agentDocs = source('../../../docs/content/stellar/developers/agent-api.mdx');
 
-  assert.match(main, /fixedClientStellarDeploymentNetwork\(\) === 'testnet'/);
-  assert.match(main, /isCanonicalStellarContentPath\(window\.location\.pathname\)/);
-  assert.match(main, /window\.location\.replace\(canonicalContentRedirect\)/);
+  assert.doesNotMatch(main, /canonicalContentRedirect/);
+  assert.doesNotMatch(testnetLanding, /STELLAR_MAINNET_ORIGIN/);
+  assert.match(testnetLanding, /Manage shared Stellar accounts/);
+  assert.doesNotMatch(footer, /canonicalStellarContentHref/);
   assert.doesNotMatch(main, /DocsApp/);
-  assert.match(testnetLanding, /Testnet runtime/);
-  assert.match(testnetLanding, /Network stays fixed/);
-  assert.match(testnetLanding, /Product content stays canonical/);
   assert.match(testnetLanding, /href=\{STELLAR_PUBLIC_DOCS_BASE\}/);
   assert.match(testnetLanding, /STELLAR_PUBLIC_DOCS_BASE}\/developers/);
   assert.match(footer, /href=\{STELLAR_PUBLIC_DOCS_BASE\}/);

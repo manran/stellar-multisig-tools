@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   Account,
+  Asset,
   Address,
   Contract,
   StrKey,
@@ -13,7 +14,7 @@ import {
   nativeToScVal,
   xdr,
 } from '@stellar/stellar-sdk/base';
-import { inspectSorobanAuthorizationEntry, previewSorobanValue } from '../../../../packages/stellar-core/src/sorobanInspection.js';
+import { inspectSorobanHostFunctionXdr, inspectSorobanAuthorizationEntry, previewSorobanValue } from '../../../../packages/stellar-core/src/sorobanInspection.js';
 import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 
 const CONTRACT_ID = 'CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE';
@@ -147,4 +148,18 @@ test('keeps arbitrary C-account credential payload distinct from locally verifie
   assert.equal(auth.signed, true);
   assert.equal(auth.signers[0]?.signatureFormat, 'custom');
   assert.equal(auth.signers[0]?.signatureCount, null);
+});
+
+test('review summary formats native XLM exactly and never guesses other token units', () => {
+  const from = Keypair.random().publicKey();
+  const to = Keypair.random().publicKey();
+  const make = (contractId: string) => xdr.HostFunction.hostFunctionTypeInvokeContract(new xdr.InvokeContractArgs({
+    contractAddress: new Contract(contractId).address().toScAddress(),
+    functionName: 'transfer',
+    args: [Address.fromString(from).toScVal(), Address.fromString(to).toScVal(), nativeToScVal(5000000n, { type: 'i128' })],
+  })).toXdr('base64');
+  const native = make(Asset.native().contractId(Networks.TESTNET));
+  assert.deepEqual(inspectSorobanHostFunctionXdr(native, 'testnet')?.nativeXlmTransfer, { from, to, amount: '0.5' });
+  assert.equal(inspectSorobanHostFunctionXdr(native, 'public')?.nativeXlmTransfer, undefined);
+  assert.equal(inspectSorobanHostFunctionXdr(make(CONTRACT_ID), 'testnet')?.nativeXlmTransfer, undefined);
 });

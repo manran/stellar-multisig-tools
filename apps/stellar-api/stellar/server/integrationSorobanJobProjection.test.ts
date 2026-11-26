@@ -124,7 +124,7 @@ test('unavailable execution never advertises rejected replan or refresh actions'
     reviewUrl: REVIEW_URL, executionAvailable: false, now: BEFORE_EXPIRY,
   });
   assert.equal(executing.reason, 'execution_outcome_unknown');
-  assert.deepEqual(executing.nextActions, ['reconcile_execution', 'cancel']);
+  assert.deepEqual(executing.nextActions, ['reconcile_execution']);
 });
 test('projects a current execution package as executing', () => {
   const job = projectIntegrationSorobanJob({
@@ -135,7 +135,7 @@ test('projects a current execution package as executing', () => {
     now: BEFORE_EXPIRY,
   });
   assert.equal(job.state, 'executing');
-  assert.deepEqual(job.nextActions, ['submit_execution', 'reconcile_execution', 'cancel']);
+  assert.deepEqual(job.nextActions, ['submit_execution', 'reconcile_execution']);
   assert.deepEqual(job.actionCalls.submit_execution, { transport: 'external_stellar_submission', transactionHash: job.execution?.transactionHash });
   assert.deepEqual(job.actionCalls.reconcile_execution, { operationId: 'integration.intent.execution.reconcile', bodyDefaults: { action: 'reconcile_execution' } });
   assert.deepEqual(job.execution, {
@@ -155,7 +155,7 @@ test('retains unresolved preparation evidence from an older AuthorizationPlan re
     reviewUrl: REVIEW_URL,
   });
   assert.equal(job.state, 'execution_unknown');
-  assert.deepEqual(job.nextActions, ['reconcile_execution', 'cancel']);
+  assert.deepEqual(job.nextActions, ['reconcile_execution']);
   assert.deepEqual(job.unresolvedTransactionHashes, ['c'.repeat(64)]);
 });
 
@@ -168,7 +168,7 @@ test('elapsed execution package must be reconciled before refresh', () => {
     now: new Date('2026-09-17T02:00:00.000Z'),
   });
   assert.equal(job.state, 'execution_unknown');
-  assert.deepEqual(job.nextActions, ['reconcile_execution', 'cancel']);
+  assert.deepEqual(job.nextActions, ['reconcile_execution']);
   const cleared = projectIntegrationSorobanJob({
     stored: stored(), authorization: authorization('authorization_ready'),
     preparations: [{ ...preparation(), nonInclusionProof: { oldestLedger: 1, latestLedger: 500, latestLedgerClosedAt: '2026-09-17T02:00:00.000Z', checkedAt: '2026-09-17T02:00:01.000Z' } }],
@@ -239,7 +239,7 @@ test('managed execution does not tell an external Service to submit', () => {
   });
   assert.equal(job.state, 'executing');
   assert.equal(job.execution?.owner, 'multisigtools');
-  assert.deepEqual(job.nextActions, ['reconcile_execution', 'cancel']);
+  assert.deepEqual(job.nextActions, ['reconcile_execution']);
 });
 
 test('cancelled Integration work allows only reconciliation of released execution', () => {

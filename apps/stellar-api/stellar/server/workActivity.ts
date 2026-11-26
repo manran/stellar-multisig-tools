@@ -23,7 +23,7 @@ function encodeCursor(item: WorkActivityItem): string {
   return Buffer.from(`${item.activityAt}\n${workKey(item)}`, 'utf8').toString('base64url');
 }
 
-function decodeCursor(value: string | undefined): { activityAt: string; key: string } | null {
+export function decodeWorkActivityCursor(value: string | undefined): { activityAt: string; key: string } | null {
   if (!value) return null;
   try {
     const decoded = Buffer.from(value, 'base64url').toString('utf8');
@@ -32,7 +32,7 @@ function decodeCursor(value: string | undefined): { activityAt: string; key: str
     const activityAt = decoded.slice(0, newline);
     const key = decoded.slice(newline + 1);
     const match = /^(request|soroban_intent):(.+)$/.exec(key);
-    if (!activityAt || !match || !isValidSigningRequestId(match[2])) return null;
+    if (!Number.isFinite(Date.parse(activityAt)) || !match || !isValidSigningRequestId(match[2])) return null;
     return { activityAt, key };
   } catch {
     return null;
@@ -63,7 +63,7 @@ export async function listWorkActivityPage(
     })),
     ...intents,
   ].sort(compareItems);
-  const cursor = decodeCursor(options.cursor);
+  const cursor = decodeWorkActivityCursor(options.cursor);
   const filtered = cursor ? items.filter((item) => isAfterCursor(item, cursor)) : items;
   const limit = Math.max(1, Math.min(options.limit ?? 25, 100));
   const page = filtered.slice(0, limit);

@@ -95,14 +95,14 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.ok((testnetIntegrationCreate.responses as JsonObject)['201']);
   assert.deepEqual(inspect.security, []);
   assert.equal(inspect.operationId, 'contract.interface.inspect');
-  assert.equal(intent.operationId, 'contract.intent.create.integration.intent.create');
+  assert.equal(intent.operationId, 'transport.intent.post');
   assert.deepEqual(intent['x-multisig-operation-ids'], ['contract.intent.create', 'integration.intent.create']);
   assert.deepEqual(intent.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }]);
-  assert.equal(intentInspect.operationId, 'contract.intent.inspect.integration.intent.inspect.integration.intent.browser.inspect');
+  assert.equal(intentInspect.operationId, 'transport.intent.get');
   assert.deepEqual(intentInspect.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { intentCapability: [] }]);
-  assert.equal(intentContribute.operationId, 'contract.intent.contribute.integration.intent.browser.contribute');
+  assert.equal(intentContribute.operationId, 'transport.intent.patch');
   assert.deepEqual(intentContribute.security, [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }, { intentCapability: [] }]);
-  assert.equal(intentExecution.operationId, 'contract.intent.execution.prepare.integration.intent.execution.prepare.contract.intent.execution.reconcile.integration.intent.execution.reconcile.contract.intent.replan.integration.intent.replan.contract.intent.cancel.integration.intent.cancel.integration.intent.browser.issue');
+  assert.equal(intentExecution.operationId, 'transport.intent.put');
   assert.deepEqual(intentExecution['x-multisig-operation-ids'], [
     'contract.intent.execution.prepare',
     'integration.intent.execution.prepare',
@@ -120,10 +120,10 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.equal(integrationExecution.operationId, 'integration.execution.inspect');
   assert.deepEqual(integrationExecution.security, [{ integrationBearer: [] }]);
   assert.deepEqual(integrationExecution['x-multisig-operation-ids'], ['integration.execution.inspect']);
-  assert.equal(paymentPrepare.operationId, 'classic.payment.prepare.integration.classic.payment.prepare');
+  assert.equal(paymentPrepare.operationId, 'transport.payment-prepare.post');
   assert.deepEqual(paymentPrepare.security, [{ agentBearer: [] }, { integrationBearer: [] }, { humanBearer: [] }, { humanSession: [] }]);
-  assert.equal(requestCreate.operationId, 'proposal.create.integration.request.create');
-  assert.equal(requestSubmit.operationId, 'proposal.submit.integration.request.submit');
+  assert.equal(requestCreate.operationId, 'transport.request.post');
+  assert.equal(requestSubmit.operationId, 'transport.request.put');
   const requestPatch = paths['/request'].patch as JsonObject;
   assert.deepEqual(requestPatch['x-multisig-operation-ids'], ['proposal.contribute', 'proposal.decline', 'proposal.activity.retain']);
   const patchVariants = ((document.components as JsonObject).schemas as Record<string, JsonObject>).ProposalPatchInput.oneOf as JsonObject[];

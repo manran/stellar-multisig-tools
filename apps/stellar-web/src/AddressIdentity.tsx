@@ -10,10 +10,6 @@ interface Props {
   className?: string;
 }
 
-function shortAddress(address: string) {
-  return address.length <= 22 ? address : `${address.slice(0, 10)}…${address.slice(-8)}`;
-}
-
 export default function AddressIdentity({ address, subjectType, allowNaming = false, labelOverride = '', className = '' }: Props) {
   const { labelFor } = useAddressBook();
   const label = labelOverride.trim() || labelFor(address, subjectType);
@@ -25,8 +21,7 @@ export default function AddressIdentity({ address, subjectType, allowNaming = fa
         {allowNaming && <AddressAliasEditor address={address} subjectType={subjectType} compact={Boolean(label)} />}
       </div>
       <div className={`transaction-evidence-address-line ${label ? 'mt-0.5 text-xs text-neutral-500 dark:text-neutral-400' : 'text-sm text-neutral-700 dark:text-neutral-200'} font-mono`} title={address}>
-        <span className="transaction-evidence-address-short sm:hidden">{shortAddress(address)}</span>
-        <span className="transaction-evidence-address-full hidden break-all sm:inline">{address}</span>
+        <span className="transaction-evidence-address-full break-all">{address}</span>
       </div>
     </div>
   );

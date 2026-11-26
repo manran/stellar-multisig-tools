@@ -18,13 +18,14 @@ import {
   looksLikeTreasuryAuditCredential,
 } from '../server/boxService.js';
 import {
+  decodeActivityCursor,
   getSignerActivityItem,
   getTreasuryActivityItem,
   listSignerActivityPage,
   listTreasuryActivityPage,
 } from '../server/requestActivity.js';
 import { canViewTreasuryActivity } from '../server/treasuryActivityAccess.js';
-import { listWorkActivityPage } from '../server/workActivity.js';
+import { decodeWorkActivityCursor, listWorkActivityPage } from '../server/workActivity.js';
 import { noStoreJson } from '../server/httpResponse.js';
 import { AccountNotFoundError, isValidStellarAccountId, loadAccount } from '../../../../packages/stellar-core/src/horizon.js';
 import { isValidSigningRequestId } from '../server/requestLocator.js';
@@ -74,6 +75,12 @@ export async function GET(request: Request): Promise<Response> {
     const cursor = url.searchParams.get('cursor')?.trim() || undefined;
     const view = url.searchParams.get('view')?.trim() || undefined;
 
+    if (view && view !== 'work') {
+      return noStoreJson({ error: 'Use view=work or omit view for Classic history.', code: 'invalid_activity_view' }, 400);
+    }
+    if (cursor && !(view === 'work' ? decodeWorkActivityCursor(cursor) : decodeActivityCursor(cursor))) {
+      return noStoreJson({ error: 'Use the nextCursor returned by the previous Activity page.', code: 'invalid_activity_cursor' }, 400);
+    }
     if (viewer.kind === 'treasury_audit') {
       if (accountId && accountId !== viewer.auditAccountId) {
         return noStoreJson({ error: 'This Audit credential is bound to another Treasury.', code: 'treasury_audit_scope_denied' }, 403);

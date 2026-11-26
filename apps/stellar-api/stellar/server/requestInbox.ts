@@ -99,7 +99,7 @@ export async function listSignerInbox(
         accountLoader: cachedAccountLoader,
         networkParametersLoader,
       });
-      if (snapshot.status === 'submitted' || snapshot.status === 'expired') return null;
+      if (snapshot.status === 'submitted' || snapshot.status === 'expired' || (snapshot.status === 'stale' && snapshot.executionOutcome?.outcome !== 'unknown')) return null;
       return snapshot;
     }));
 

@@ -1,5 +1,5 @@
 import type { MachineCallerProvenance } from '../../../../packages/stellar-core/src/coordinationActorTypes.js';
-import { SorobanIntentStoreConflictError } from './sorobanIntentStore.js';
+import { assertSorobanExecutionResolved, SorobanIntentStoreConflictError } from './sorobanIntentStore.js';
 import type {
   SorobanIntentStore,
   StoredSorobanIntent,
@@ -57,14 +57,6 @@ export async function cancelSorobanIntent(
       'intent_cancellation_unavailable',
     );
   }
-  const observations = await (store.listExecutionObservations?.(id) ?? Promise.resolve([]));
-  if (observations.some((item) => item.successful)) {
-    throw new SorobanIntentCancellationServiceError(
-      'This Soroban Intent has already executed successfully and cannot be cancelled.',
-      409,
-      'intent_already_executed',
-    );
-  }
   const cancellation: StoredSorobanIntentCancellation = {
     version: 1,
     cancelledAt: (options.now ?? new Date()).toISOString(),
@@ -75,6 +67,7 @@ export async function cancelSorobanIntent(
   };
   let persisted;
   try {
+    await assertSorobanExecutionResolved(store, id);
     persisted = await store.cancelIntent(id, cancellation);
   } catch (cause) {
     if (cause instanceof SorobanIntentStoreConflictError && cause.code === 'intent_already_executed') {
@@ -82,6 +75,13 @@ export async function cancelSorobanIntent(
         'This Soroban Intent has already executed successfully and cannot be cancelled.',
         409,
         'intent_already_executed',
+      );
+    }
+    if (cause instanceof SorobanIntentStoreConflictError && cause.code === 'intent_execution_outcome_unknown') {
+      throw new SorobanIntentCancellationServiceError(
+        'Check the result of every prepared transaction before cancelling this Intent.',
+        409,
+        cause.code,
       );
     }
     throw cause;

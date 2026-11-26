@@ -141,7 +141,7 @@ test('Soroban Agent Task tells a Write Agent to prepare after authorization', ()
   assert.equal(task.state, 'action_required');
   assert.equal(task.signatureRequired, false);
   assert.deepEqual(task.nextActions, [
-    { code: 'prepare_execution', operationId: 'contract.intent.execution.prepare', bodyDefaults: { action: 'prepare_execution' }, requiredAccess: 'write', available: true },
+    { code: 'prepare_execution', operationId: 'contract.intent.execution.prepare', bodyDefaults: { action: 'prepare_execution' }, requiredInputs: ['executor'], requiredAccess: 'write', available: true },
   ]);
 });
 test('Soroban Agent Task reconciles a stale prepared package before refresh', () => {

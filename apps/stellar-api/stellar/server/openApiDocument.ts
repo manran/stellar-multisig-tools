@@ -163,7 +163,7 @@ function security(path: string, method: string, access: HeadlessOperationAccess)
 
 function transportOperationId(path: string, method: string, operations: readonly HeadlessOperationDescriptor[]): string {
   if (operations.length === 1) return operations[0].id;
-  return operations.map((item) => item.id).join('.');
+  return 'transport.' + path.slice(1).replaceAll('/', '.') + '.' + method;
 }
 
 function openApiPaths(): OpenApiObject {
@@ -834,6 +834,7 @@ const components: OpenApiObject = {
             properties: {
               operationId: { type: 'string', description: 'Resolve this exact call in x-multisig-operations. Use the task id in the required resource header.' },
               bodyDefaults: { type: 'object', additionalProperties: { type: 'string' } },
+              requiredInputs: { type: 'array', items: { type: 'string' }, description: 'Additional fields the caller must choose explicitly before invoking this action.' },
               code: { type: 'string', enum: ['contribute_signature', 'contribute_authorization', 'decline', 'prepare_execution', 'refresh_execution', 'reconcile_execution', 'replan', 'cancel'] },
               requiredAccess: { type: 'string', enum: ['write', 'sign'] },
               available: { type: 'boolean' },
@@ -928,6 +929,14 @@ const components: OpenApiObject = {
         version: operationVersion,
         intent: schema('StoredSorobanIntent'),
         authorization: schema('SorobanIntentAuthorizationSnapshot'),
+        callSummary: { type: 'object', required: ['contractAddress', 'functionName', 'argumentPreviews'],
+          properties: {
+            contractAddress: contractId, functionName: { type: 'string' },
+            argumentPreviews: { type: 'array', items: { type: 'string' } },
+            nativeXlmTransfer: { type: 'object', required: ['from', 'to', 'amount'],
+              properties: { from: { type: 'string' }, to: { type: 'string' }, amount: { type: 'string' } },
+              additionalProperties: false },
+          }, additionalProperties: false, description: 'Review summary decoded from the stored HostFunction XDR. XLM amount is in XLM, not stroops. Generic arguments are previews, not authoritative signing input.' },
         evidence: { type: 'array', items: schema('SorobanIntentEvidenceEvent') },
         job: schema('IntegrationSorobanJob'),
         task: schema('AgentTask'),
@@ -939,7 +948,7 @@ const components: OpenApiObject = {
       required: ['entryIndex', 'signatureBase64'],
       properties: {
         entryIndex: { type: 'integer', minimum: 0 },
-        signatureBase64: { type: 'string', minLength: 1 },
+        signatureBase64: { type: 'string', minLength: 1, description: 'Base64 Ed25519 signature of SHA-256(HashIdPreimage XDR bytes), constructed for this entryIndex, network and plan expirationLedger. Do not sign the Base64 text.' },
       },
       additionalProperties: false,
     },
@@ -1782,12 +1791,20 @@ function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
     let result: OpenApiObject | undefined;
     let statuses: string[] | undefined;
     let dispatch: OpenApiObject | undefined;
-    const security = access === 'public' ? []
+    const security: OpenApiObject[] = access === 'public' ? []
       : access === 'human' ? [{ humanBearer: [] }, { humanSession: [] }]
       : access.startsWith('principal:') ? [{ agentBearer: [] }]
       : access.startsWith('integration:') ? [{ integrationBearer: [] }]
       : access.startsWith('browser:') ? [{ intentCapability: [] }]
       : [{ treasuryAuditBearer: [] }];
+    // Principal operations shared with the verified Human session. Treasuries
+    // intentionally remain MSA-only. Integration/browser variants stay scoped.
+    if (access.startsWith('principal:') && [
+      '/intent', '/request', '/contracts', '/inbox', '/address-book', '/activity',
+      '/payment-prepare', '/account-create-prepare',
+    ].includes(path)) {
+      security.push({ humanBearer: [] }, { humanSession: [] });
+    }
     const grant = id.startsWith('agent.grant.');
     if (grant) {
       const action = id.split('.').at(-1)!;
@@ -1872,6 +1889,43 @@ function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
     return [id, { operationId: id, method, path, access, effect, security, parameters,
       ...(request ? { requestBody: request } : {}), ...(dispatch ? { dispatch } : {}), responses, retry }];
   }));
+}
+
+// Check closed input objects against the same schema used in the public contract.
+// Other validation (including ABI-dependent values) remains in the route/service.
+export function unknownRequestField(value: unknown, schemaName: string): string | undefined {
+  const schemas = components.schemas as Record<string, OpenApiObject>;
+  function visit(input: unknown, shape: OpenApiObject, path: string): string | undefined {
+    if (typeof shape.$ref === 'string') {
+      return visit(input, schemas[shape.$ref.split('/').at(-1)!], path);
+    }
+    if (Array.isArray(input) && shape.items) {
+      for (const [index, entry] of input.entries()) {
+        const unknown = visit(entry, shape.items as OpenApiObject, path + '[' + index + ']');
+        if (unknown) return unknown;
+      }
+    }
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return;
+    const record = input as Record<string, unknown>;
+    if (Array.isArray(shape.oneOf) && !shape.properties) {
+      const branches = (shape.oneOf as OpenApiObject[]).filter(branch =>
+        Object.entries((branch.properties ?? {}) as Record<string, OpenApiObject>)
+          .every(([key, field]) => field.const === undefined || record[key] === field.const));
+      if (branches.length === 1) return visit(input, branches[0], path);
+      return;
+    }
+    const properties = (shape.properties ?? {}) as Record<string, OpenApiObject>;
+    for (const [key, entry] of Object.entries(record)) {
+      const fieldPath = path ? path + '.' + key : key;
+      if (!Object.hasOwn(properties, key)) {
+        if (shape.additionalProperties === false) return fieldPath;
+      } else {
+        const unknown = visit(entry, properties[key], fieldPath);
+        if (unknown) return unknown;
+      }
+    }
+  }
+  return visit(value, schemas[schemaName], '');
 }
 
 export function createOpenApiDocument(

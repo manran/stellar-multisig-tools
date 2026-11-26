@@ -137,6 +137,7 @@ export interface SigningRequestNotificationSummary {
 }
 
 export interface SigningRequestCoordination {
+  declines?: Array<{ signerAddress: string; decidedAt: string }>;
   assignments: SigningRequestAssignment[];
   notifications: SigningRequestNotificationSummary[];
 }

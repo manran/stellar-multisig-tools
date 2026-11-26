@@ -31,12 +31,15 @@ Verify `fixedNetwork=testnet` and inspect `capabilities.classicManagedExecution.
 curl -sS -X POST https://api-testnet.multisig.tools/stellar/integration-testnet \
   -H "Content-Type: application/json" \
   -d '{
-    "serviceId": "my-testnet-app",
+    "serviceId": "my-testnet-app-replace-me",
     "label": "My Testnet App",
     "classicSourceAccounts": ["GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"],
     "profile": { "authorizationExperience": "hosted" }
   }'
 ```
+
+Replace the example serviceId with a unique lowercase ID (1–40 letters, digits or hyphens). A globally existing ID returns 409; the original key cannot be retrieved.
+
 
 Use a lowercase service ID of 1–40 letters, digits or hyphens, starting with a letter or digit. Invalid IDs return HTTP 400 (`invalid_integration_service_id`); the API does not silently lowercase them.
 
@@ -115,7 +118,7 @@ If the submission response is lost, use the original Request ID, not a new payme
 
 ```sh
 curl -sS "https://api-testnet.multisig.tools/stellar/request?view=reconciliation" \
-  -H "Authorization: Bearer $MSI_KEY" \
+  -H "Authorization: Bearer $MULTISIG_INTEGRATION_KEY" \
   -H "X-Multisig-Request-Id: $REQUEST_ID"
 ```
 

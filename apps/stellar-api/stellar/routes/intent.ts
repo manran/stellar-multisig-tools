@@ -1,3 +1,4 @@
+import { inspectSorobanHostFunctionXdr } from '../../../../packages/stellar-core/src/sorobanInspection.js';
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
 import { blobAuthStore } from '../server/blobAuthStore.js';
 import {
@@ -268,12 +269,14 @@ export async function GET(request: Request): Promise<Response> {
       sorobanIntentStore.listExecutionPreparations?.(access.id) ?? Promise.resolve([]),
       sorobanIntentStore.listExecutionObservations?.(access.id) ?? Promise.resolve([]),
     ]);
+    const callSummary = inspectSorobanHostFunctionXdr(access.stored.intent.hostFunctionXdr, access.stored.network);
     return json({
       operation: 'contract.intent.inspect',
       version: 1,
       intent: publicSorobanIntent(access.stored),
       authorization: access.authorization,
       evidence: projectSorobanIntentEvidence(access.stored, contributions, preparations, observations),
+      ...(callSummary ? { callSummary } : {}),
       ...(access.integrationCredential ? {
         job: integrationJob(access.integrationCredential, access.stored, access.authorization, preparations, observations),
       } : {}),
@@ -374,7 +377,7 @@ function executorFromBody(body: Record<string, unknown>): unknown {
 export async function POST(request: Request): Promise<Response> {
   try {
     assertCoordinationWritesEnabled();
-    const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    const body = await readJsonObjectBody(request, MAX_BODY_BYTES, 'ContractIntentCreateInput');
     const network = body.network === 'public' || body.network === 'testnet' ? body.network : null;
     if (!network) {
       throw new ContractIntentServiceError('Network must be public or testnet.', 400, 'invalid_network');

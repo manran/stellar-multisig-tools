@@ -19,6 +19,8 @@ class MemoryStore implements SorobanIntentStore {
   value: StoredSorobanIntent;
   cancellation: StoredSorobanIntentCancellation | null = null;
   observations: StoredSorobanIntentExecutionObservation[] = [];
+  preparations: import('./sorobanIntentStore.js').StoredSorobanIntentExecutionPreparation[] = [];
+  async listExecutionPreparations() { return this.preparations; }
 
   constructor() {
     this.value = {
@@ -122,4 +124,26 @@ test('known successful execution cannot be relabelled as cancelled', async () =>
     (cause: unknown) => cause instanceof SorobanIntentCancellationServiceError
       && cause.code === 'intent_already_executed',
   );
+});
+
+test('unresolved execution prevents cancellation even after validity expires', async () => {
+  const store = new MemoryStore();
+  store.preparations = [{
+    version: 1, transactionHash: 'c'.repeat(64), authorizationPlanDigest: DIGEST,
+    authorizationPlanRevision: 3, executionSource: 'GEXECUTOR', transactionSequence: '9',
+    latestLedger: 123, validUntil: '2026-09-18T00:05:00.000Z',
+    effectsDigest: DIGEST, effectsAccepted: false, preparedAt: '2026-09-18T00:00:00.000Z',
+  }];
+  await assert.rejects(
+    () => cancelSorobanIntent(store, store.value.id, { cancelledByAddress: 'GCREATOR' }),
+    (cause: unknown) => cause instanceof SorobanIntentCancellationServiceError
+      && cause.status === 409 && cause.code === 'intent_execution_outcome_unknown',
+  );
+  assert.equal(store.cancellation, null);
+  store.observations = [{
+    version: 1, transactionHash: 'c'.repeat(64), authorizationPlanDigest: DIGEST,
+    authorizationPlanRevision: 3, executionSource: 'GEXECUTOR', ledger: 124,
+    successful: false, observedAt: '2026-09-18T00:03:00.000Z',
+  }];
+  assert.equal((await cancelSorobanIntent(store, store.value.id, { cancelledByAddress: 'GCREATOR' })).replayed, false);
 });

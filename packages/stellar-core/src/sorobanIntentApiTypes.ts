@@ -1,3 +1,4 @@
+import type { SorobanCallSummary } from './sorobanInspection.js';
 import type { AgentTaskProjection } from './agentTaskTypes.js';
 import type { SorobanGAccountAuthorizerStatus } from './sorobanAuthorization.js';
 import type { SorobanAuthorizationPlan } from './sorobanAuthorizationPlan.js';
@@ -164,6 +165,7 @@ export interface InboxSorobanIntentSnapshot {
 }
 
 export interface SorobanIntentResponse {
+  callSummary?: SorobanCallSummary;
   operation: 'contract.intent.create' | 'contract.intent.inspect';
   version: 1;
   replayed?: boolean;

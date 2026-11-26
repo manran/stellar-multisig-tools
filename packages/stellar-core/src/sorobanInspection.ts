@@ -1,5 +1,8 @@
 import {
   Address,
+  Asset,
+  Networks,
+  xdr,
   buildInvocationTree,
   inspectAuthEntry,
   scValToNative,
@@ -10,6 +13,8 @@ import type {
   ExecuteInvocation,
   InvocationTree,
 } from '@stellar/stellar-sdk/base';
+
+import type { StellarNetwork } from './types.js';
 
 type ScAddress = Parameters<typeof Address.fromScAddress>[0];
 type ScVal = Parameters<typeof scValToNative>[0];
@@ -173,6 +178,30 @@ function inspectContractCall(func: HostFunctionShape): SorobanContractCallInspec
     functionName: args.functionName.toString(),
     argumentPreviews: args.args.map((value) => previewSorobanValue(scValToNative(value))),
   };
+}
+
+export interface SorobanCallSummary extends SorobanContractCallInspection {
+  nativeXlmTransfer?: { from: string; to: string; amount: string };
+}
+
+// Derive the review summary from the exact stored HostFunction, never from
+// user-provided labels or a guess based only on the function name.
+export function inspectSorobanHostFunctionXdr(encoded: string, network: StellarNetwork): SorobanCallSummary | null {
+  try {
+    const func = xdr.HostFunction.fromXdr(encoded, 'base64');
+    const call = inspectContractCall(func);
+    if (!call) return null;
+    if (call.contractAddress !== Asset.native().contractId(network === 'testnet' ? Networks.TESTNET : Networks.PUBLIC)
+      || call.functionName !== 'transfer' || func.type !== 'hostFunctionTypeInvokeContract') return call;
+    const values = func.value.args.map(value => scValToNative(value));
+    const [from, to, raw] = values;
+    if (values.length !== 3 || typeof from !== 'string' || typeof to !== 'string'
+      || typeof raw !== 'bigint' || raw < 0n) return call;
+    const amount = (raw / 10000000n).toString() + '.' + (raw % 10000000n).toString().padStart(7, '0');
+    return { ...call, nativeXlmTransfer: { from, to, amount: amount.replace(/0+$/, '').replace(/\.$/, '') } };
+  } catch {
+    return null;
+  }
 }
 
 function authorizationClassification(info: ReturnType<typeof inspectAuthEntry>): {

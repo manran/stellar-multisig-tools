@@ -445,3 +445,25 @@ test('successful execution observed before cancellation wins the cancellation ra
       && cause.code === 'intent_already_executed',
   );
 });
+
+test('Postgres cancellation cannot race a released unresolved execution', { skip: !TEST_URL || !RESET_ALLOWED }, async () => {
+  const store = createPostgresSorobanIntentStore(coordinationPool(), new MemoryPrivateStore());
+  const value = stored('PGINTENT00000091');
+  await store.createIntent(value);
+  await store.putExecutionPreparation!(value.id, {
+    version: 1, transactionHash: TX_HASH, authorizationPlanDigest: PLAN_ONE,
+    authorizationPlanRevision: 1, executionSource: 'GEXECUTOR', transactionSequence: '9',
+    validUntil: '2026-09-18T01:04:00.000Z', latestLedger: 123,
+    effectsDigest: emptySorobanEffectsSnapshot().digest, effectsAccepted: false,
+    preparedAt: '2026-09-18T01:03:00.000Z',
+  });
+  const cancel = { version: 1 as const, cancelledAt: '2026-09-18T01:05:00.000Z',
+    authorizationPlanDigest: PLAN_ONE, authorizationPlanRevision: 1 };
+  await assert.rejects(() => store.cancelIntent!(value.id, cancel),
+    (cause: unknown) => cause instanceof SorobanIntentStoreConflictError && cause.code === 'intent_execution_outcome_unknown');
+  assert.equal((await store.getIntent(value.id))?.cancellation, undefined);
+  await store.putExecutionObservation!(value.id, { version: 1, transactionHash: TX_HASH,
+    authorizationPlanDigest: PLAN_ONE, authorizationPlanRevision: 1, executionSource: 'GEXECUTOR',
+    ledger: 124, successful: false, observedAt: '2026-09-18T01:04:00.000Z' });
+  assert.equal((await store.cancelIntent!(value.id, cancel)).created, true);
+});

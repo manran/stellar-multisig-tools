@@ -13,13 +13,15 @@ If the returned execution policy has no bound executor, supply an allowed `execu
 
 A successful observed execution is terminal for the Intent, even if the receipt refers to an earlier authorization revision. Preparation, re-planning and new authorization writes are then rejected with HTTP 409 (`intent_already_executed`). Reconciliation remains available for already released transactions.
 
-A released execution package stays unresolved until its exact hash has a verified result or verified non-inclusion. Do not refresh or re-plan merely because the local time bound elapsed, a submission timed out, or Horizon returned 404. Those operations return HTTP 409 (`intent_execution_outcome_unknown`). Reconcile every hash in `unresolvedTransactionHashes` first. Reconciliation reports `outcome` as `successful`, `failed`, `not_included`, or `unknown`. Non-inclusion requires a healthy Stellar RPC with retained history covering the preparation ledger through a ledger closed strictly after the transaction's time bound, and a subsequent NOT_FOUND lookup. Missing history leaves the outcome unknown. The response schema requires `observation` for `successful` or `failed` (with the matching `successful` boolean), `nonInclusionProof` for `not_included`, and neither for `unknown`. Check the evidence against the exact prepared hash and validity window. Use the published `retry.onOutcome` policy; a failed or absent execution does not authorize a replacement on its own. Safe preparation and re-planning require transactional PostgreSQL storage.
+A released execution package stays unresolved until its exact hash has a verified result or verified non-inclusion. Do not cancel, refresh or re-plan merely because the local time bound elapsed, a submission timed out, or Horizon returned 404. Those operations return HTTP 409 (`intent_execution_outcome_unknown`). Reconcile every hash in `unresolvedTransactionHashes` first. Reconciliation reports `outcome` as `successful`, `failed`, `not_included`, or `unknown`. Non-inclusion requires a healthy Stellar RPC with retained history covering the preparation ledger through a ledger closed strictly after the transaction's time bound, and a subsequent NOT_FOUND lookup. Missing history leaves the outcome unknown. The response schema requires `observation` for `successful` or `failed` (with the matching `successful` boolean), `nonInclusionProof` for `not_included`, and neither for `unknown`. Check the evidence against the exact prepared hash and validity window. Use the published `retry.onOutcome` policy; a failed or absent execution does not authorize a replacement on its own. Safe preparation and re-planning require transactional PostgreSQL storage.
 
 After verified failure or non-inclusion, a retry of the **same Intent** is distinct from creating a replacement payment. Inspect the stored evidence and current authorization first; decide explicitly whether to continue. A `refresh_execution`, `prepare_execution` or `replan` action marked `reviewRequired: true` is technically callable, not permission to retry automatically. Current signer policy, effect checks and unresolved-hash guards still apply. Re-plan and collect fresh AUTH when required. MST does not enforce a separate Human approval for this caller decision.
 
 Integration owners and Intent creators can reconcile a persisted successful, failed, or non-inclusion result without a live signer-policy lookup. Owner reconciliation does not require a live authorization refresh for non-success results. It returns the evidence with `projectionNotRefreshed: true` instead of a current Job or Task; the same flag applies if an optional projection cannot be refreshed. Inspect the Intent again before further actions; do not infer current authorization from the stored receipt. Non-owner signers still need a current signer-policy access check. The completed authorization projection does not return reusable authorization entries.
 
 ## Create the Intent
+
+A verified Human session may prepare an Intent for other authorizers. Creation does not grant any signer power: each required authorizer must still approve according to its live Stellar policy. An Agent Principal, by contrast, may create a signer-owned Intent only if it is a current signer for at least one required authorizer (or the call requires none). Integrations are scoped by their allowed contract methods.
 
 For new machine-created semantic Intents, replay the same accepted input and `Idempotency-Key` to recover the existing Intent without reloading its contract interface. Object member order does not matter; changed argument values or types, or changed business context, conflict. Legacy Intents and claims without an accepted-input fingerprint still use their original typed-digest verification, which may require the ABI. Reading current authorization for a pending Intent can still require live signer/ledger state. A stored successful receipt remains available independently of that state.
 
@@ -31,15 +33,18 @@ curl -sS -X POST https://api-testnet.multisig.tools/stellar/intent \
   -H "Idempotency-Key: contract-test-001" \
   -d '{
     "network": "testnet",
-    "contractId": "CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE",
+    "contractId": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
     "method": "transfer",
     "arguments": {
       "from": "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
       "to": "GDGV7V7UT3XDMQ3COT25VCQNJDW57WYPHSLFSAJEW2LLZDCDREWNAPXO",
-      "amount": "1"
+      "amount": "10000000"
     }
   }'
 ```
+
+The example uses the Testnet native XLM Stellar Asset Contract. Its amount is in stroops: 10,000,000 stroops = 1 XLM. Replace the account addresses with your funded Testnet accounts and use the token contract's decimal precision for other assets.
+
 
 ## Protocol 30 addresses
 
@@ -52,6 +57,10 @@ Use a C address for `contractId`. For a contract argument declared as `MuxedAddr
 3. Prepare execution after AUTH is ready.
 4. Compare final enforcing simulation with reviewed effects.
 5. Reconcile the actual ledger result back into the Intent.
+
+## Sign a detached AUTH entry
+
+For an Agent signer, inspect the current Intent and select a needed entry by its authorizer's `entryIndex`. Decode `authorization.authorizationEntriesXdr[entryIndex]` as a SorobanAuthorizationEntry. Use the selected Stellar network passphrase and that authorizer's exact `expirationLedger`. With the Stellar SDK, construct the authorization HashIdPreimage (using `buildAuthorizationEntryPreimage`), hash its binary XDR with SHA-256, and sign the 32-byte hash with the Ed25519 key. Encode the 64-byte signature as Base64 and send `entryIndex` and `signatureBase64` through the signer contribution operation. Do not sign the XDR's Base64 text or use a transaction-envelope signature. Re-inspect the plan after a conflict; a revised plan requires fresh signatures.
 
 ## Browser authorization
 

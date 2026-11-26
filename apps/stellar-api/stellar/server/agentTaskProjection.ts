@@ -186,7 +186,10 @@ export function projectSorobanAgentTask({
     )];
   }
 
-  if (canCancel && state !== 'completed' && state !== 'cancelled') {
+  nextActions = nextActions.map(item => item.code === 'prepare_execution' || item.code === 'refresh_execution'
+    ? { ...item, requiredInputs: ['executor'] } : item);
+
+  if (canCancel && !unresolved.length && state !== 'completed' && state !== 'cancelled') {
     nextActions = [...nextActions, action('cancel', 'write', credentialAccess)];
   }
 

@@ -151,6 +151,8 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
   const classicExecutionValid = treasuries.length === 0
     || classicManagedAvailable !== false
     || (manageExecution && treasuries.every((item) => item.executionOwner === 'integration'));
+  const managedUnavailable = (treasuries.length > 0 && classicManagedAvailable !== true)
+    || (selectedMethodCount > 0 && sorobanManagedAvailable !== true);
   const webhookValid = !webhookEnabled || /^https:\/\//i.test(webhookUrl.trim());
   const basicsValid = /^[a-z0-9][a-z0-9-]{0,39}$/.test(serviceId.trim().toLowerCase()) && Boolean(label.trim());
   const readyToCreate = basicsValid && hasBusinessScope && contractExecutionValid && classicExecutionValid && webhookValid;
@@ -300,8 +302,17 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
       setError('Add a Classic Treasury or select at least one contract method.');
       return;
     }
+    if (step === 2 && managedUnavailable) {
+      setManageExecution(true);
+      if (classicManagedAvailable !== true) {
+        setTreasuries(current => current.map(item => ({ ...item, executionOwner: 'integration' })));
+      }
+      if (sorobanManagedAvailable !== true) {
+        setContracts(current => current.map(item => ({ ...item, executionOwner: 'integration' })));
+      }
+    }
     if (step === 3 && !classicExecutionValid) {
-      setError('Managed Classic execution is unavailable on this deployment. Route every Treasury to your service or enable a managed channel pool.');
+      setError('Managed Classic execution is unavailable on this deployment. Choose My service submits for every Treasury.');
       return;
     }
     if (step === 3 && !contractExecutionValid) {
@@ -505,11 +516,12 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
             <div>
               <div className="font-bold">Execution</div>
               <p className="mt-1 max-w-2xl text-sm text-neutral-500">
-                MultiSigTools manages transaction sources, sequence, fees and submission by default.
+                {manageExecution ? 'Your service supplies the transaction source and submits transactions for resources you select.' : 'MultiSigTools manages transaction sources, sequence, fees and submission.'}
               </p>
             </div>
             <button
               type="button"
+              disabled={manageExecution && managedUnavailable}
               onClick={() => setExecutionManagement(!manageExecution)}
               className="ia-action"
             >
