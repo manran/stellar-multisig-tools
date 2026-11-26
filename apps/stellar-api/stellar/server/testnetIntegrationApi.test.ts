@@ -51,3 +51,16 @@ test('Testnet Integration self-service does not require an operator credential',
   const body = await response.json() as { code: string };
   assert.equal(body.code, 'integration_service_id_required');
 });
+
+
+test('profile typo is rejected at HTTP boundary before credential creation', async () => {
+  process.env.VITE_STELLAR_DEPLOYMENT_NETWORK = 'testnet';
+  const response = await POST(new Request('https://api-testnet.multisig.tools/stellar/integration-testnet', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ serviceId: 'review-test', label: 'x', classicSourceAccounts: [Keypair.random().publicKey()], webhok: { url: 'https://example.test', enabled: true } }),
+  }));
+  assert.equal(response.status, 400);
+  const body = await response.json() as { error: string; code: string };
+  assert.equal(body.code, 'unknown_request_field');
+  assert.match(body.error, /webhok/);
+});

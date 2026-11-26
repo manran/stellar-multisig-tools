@@ -81,7 +81,7 @@ export async function GET(request: Request): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    const body = await readJsonObjectBody(request, MAX_BODY_BYTES, 'SignerAuthExchangeInput');
     const network = typeof body.network === 'string' ? body.network : 'public';
     if (network === 'public' || network === 'testnet') assertDeploymentNetwork(network);
     const sessionTtlSeconds = resolveUnlockTtlSeconds(body.unlock_seconds);

@@ -71,7 +71,7 @@ export async function GET(request: Request): Promise<Response> {
 export async function PUT(request: Request): Promise<Response> {
   try {
     const ownerPromise = ownerAddress(request, 'write');
-    const bodyPromise = readJsonObjectBody(request, MAX_BODY_BYTES);
+    const bodyPromise = readJsonObjectBody(request, MAX_BODY_BYTES, 'ContactSaveInput');
     const [owner, body] = await Promise.all([ownerPromise, bodyPromise]);
     const entry = await upsertAddressAlias(blobAddressBookStore, owner, {
       address: typeof body.address === 'string' ? body.address : '',
@@ -88,7 +88,7 @@ export async function PUT(request: Request): Promise<Response> {
 export async function DELETE(request: Request): Promise<Response> {
   try {
     const ownerPromise = ownerAddress(request, 'write');
-    const bodyPromise = readJsonObjectBody(request, MAX_BODY_BYTES);
+    const bodyPromise = readJsonObjectBody(request, MAX_BODY_BYTES, 'ContactDeleteInput');
     const [owner, body] = await Promise.all([ownerPromise, bodyPromise]);
     await deleteAddressAlias(blobAddressBookStore, owner, {
       address: typeof body.address === 'string' ? body.address : '',

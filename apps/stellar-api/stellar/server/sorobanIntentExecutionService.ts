@@ -68,7 +68,7 @@ export async function prepareSorobanIntentExecution(
 ): Promise<SorobanIntentExecutionPreparation> {
   const sourceAddress = executionSource.trim();
   if (!isValidStellarAccountId(sourceAddress)) {
-    throw new SorobanIntentExecutionServiceError('A valid Stellar execution source is required.', 400, 'invalid_execution_source');
+    throw new SorobanIntentExecutionServiceError('executor must be a valid Stellar G-account address.', 400, 'invalid_execution_source');
   }
   const stored = await store.getIntent(id);
   if (!stored) {

@@ -201,7 +201,7 @@ export async function createIntegrationAdminService(
 ): Promise<{ service: IntegrationAdminSummary; apiKey: string; webhookSecret?: string }> {
   const serviceId = input.serviceId;
   if (typeof serviceId !== 'string' || !serviceId.trim()) {
-    throw new IntegrationAdminServiceError('Service id is required.', 400, 'integration_service_id_required');
+    throw new IntegrationAdminServiceError('serviceId must be a non-empty string.', 400, 'integration_service_id_required');
   }
   if (!isValidIntegrationServiceId(serviceId)) {
     throw new IntegrationAdminServiceError('Service id must contain 1–40 lowercase letters, digits or hyphens, starting with a letter or digit.', 400, 'invalid_integration_service_id');

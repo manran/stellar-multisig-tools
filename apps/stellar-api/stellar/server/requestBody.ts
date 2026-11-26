@@ -46,6 +46,11 @@ async function readBodyBytes(request: Request, maxBytes: number): Promise<Uint8A
   return body;
 }
 
+export function assertKnownRequestFields(body: Record<string, unknown>, schemaName: string): void {
+  const field = unknownRequestField(body, schemaName);
+  if (field) throw new RequestBodyError('Unknown request field: ' + field, 400, 'unknown_request_field');
+}
+
 export async function readJsonObjectBody(
   request: Request,
   maxBytes: number,
@@ -68,10 +73,7 @@ export async function readJsonObjectBody(
   try {
     const body = JSON.parse(new TextDecoder().decode(bytes)) as unknown;
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('object required');
-    if (schemaName) {
-      const field = unknownRequestField(body, schemaName);
-      if (field) throw new RequestBodyError('Unknown request field: ' + field, 400, 'unknown_request_field');
-    }
+    if (schemaName) assertKnownRequestFields(body as Record<string, unknown>, schemaName);
     return body as Record<string, unknown>;
   } catch (cause) {
     if (cause instanceof RequestBodyError) throw cause;

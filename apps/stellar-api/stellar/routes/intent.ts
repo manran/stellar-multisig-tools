@@ -580,7 +580,7 @@ export async function PATCH(request: Request): Promise<Response> {
   try {
     assertCoordinationWritesEnabled();
     const access = await storedIntentAccess(request, 'sign');
-    const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    const body = await readJsonObjectBody(request, MAX_BODY_BYTES, 'ContractIntentContributionInput');
     if (!access.address) {
       throw new SorobanIntentAuthorizationServiceError('A current signer is required.', 403, 'intent_signer_required');
     }
@@ -678,7 +678,7 @@ async function reconcileIntentResponse(request: Request, body: Record<string, un
 export async function PUT(request: Request): Promise<Response> {
   try {
     assertCoordinationWritesEnabled();
-    const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    const body = await readJsonObjectBody(request, MAX_BODY_BYTES, 'ContractIntentActionInput');
     if (body.action === 'reconcile_execution') return await reconcileIntentResponse(request, body);
     const access = await storedIntentAccess(request, 'write');
     if (body.action !== 'cancel') await assertSorobanIntentNotExecuted(sorobanIntentStore, access.id);

@@ -91,3 +91,31 @@ test('closed payment and Intent input schemas reject misspelled fields', async (
   }
   assert.deepEqual(await readJsonObjectBody(jsonRequest('{"arguments":{"custom_field":"x"}}'), 1024, 'ContractIntentCreateInput'), {arguments:{custom_field:'x'}});
 });
+
+
+test('shared schema rejects unknown fields in referenced action branches and nested proposals', async () => {
+  const cases: [string, Record<string, unknown>, string][] = [
+    ['AgentGrantActionInput', { action: 'request', label: 'agent', network: 'testnet', access: 'read', lable: 'typo' }, 'lable'],
+    ['ContractIntentActionInput', { action: 'cancel', executor: 'unexpected' }, 'executor'],
+    ['ContractIntentActionInput', { action: 'prepare_execution', executorr: 'unexpected' }, 'executorr'],
+    ['TestnetIntegrationCreateInput', { sorobanContracts: [{ contractId: 'C...', methods: ['transfer'], execution: { mode: 'external', executorr: 'G...' } }] }, 'sorobanContracts[0].execution.executorr'],
+    ['ProposalPatchInput', { assignSigner: 'G...', signedXdr: 'xdr' }, 'assignSigner'],
+    ['ProposalPatchInput', { assignSigner: 'G...', signedXdrr: 'xdr' }, 'signedXdrr'],
+    ['ProposalCreateInput', { network: 'testnet', templatePayment: { template: { id: 'tpl_1', version: 1 }, amount: '1', memoo: 'missing' } }, 'templatePayment.memoo'],
+    ['ProposalSubmitInput', { acceptedEffectsDigest: 'hash', memoo: 'typo' }, 'memoo'],
+  ];
+  for (const [schema, body, field] of cases) {
+    await assert.rejects(() => readJsonObjectBody(jsonRequest(JSON.stringify(body)), 4096, schema),
+      (cause: unknown) => cause instanceof RequestBodyError && cause.code === 'unknown_request_field' && cause.message.includes(field),
+      schema + ': ' + field);
+  }
+  for (const [schema, body] of [
+    ['ContractIntentActionInput', { action: 'prepare_execution', executor: 'G...' }],
+    ['ContractIntentActionInput', { executionSource: 'G...' }],
+    ['AgentGrantActionInput', { action: 'request', label: 'agent', access: 'read', network: 'testnet' }],
+    ['ProposalPatchInput', { assignSigner: 'G...' }],
+    ['ProposalCreateInput', { network: 'testnet', templatePayment: { template: { id: 'tpl_1', version: 1 }, amount: '1', memo: 'hello' } }],
+  ] as const) {
+    assert.deepEqual(await readJsonObjectBody(jsonRequest(JSON.stringify(body)), 4096, schema), body);
+  }
+});

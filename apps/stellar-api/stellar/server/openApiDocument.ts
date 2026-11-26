@@ -96,12 +96,12 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
 
 function requestBody(path: string, method: string): OpenApiObject | undefined {
   if (path === '/auth' && method === 'post') return body(schema('SignerAuthExchangeInput'));
-  if (path === '/agent-access' && method === 'delete') return body({ type: 'object', required: ['credentialId'], properties: { credentialId: { type: 'string', minLength: 1 } }, additionalProperties: false });
+  if (path === '/agent-access' && method === 'delete') return body(schema('AgentAccessDeleteInput'));
   if (path === '/agent-grants' && method === 'post') return body(schema('AgentGrantActionInput'));
   if (path === '/integration-testnet' && method === 'post') return body(schema('TestnetIntegrationCreateInput'));
   if (path === '/intent' && method === 'post') return body(schema('ContractIntentCreateInput'));
   if (path === '/intent' && method === 'patch') return body(schema('ContractIntentContributionInput'));
-  if (path === '/intent' && method === 'put') return body({ oneOf: [schema('ContractIntentExecutionInput'), schema('ContractIntentExecutionReconcileInput'), schema('ContractIntentReplanInput'), schema('ContractIntentCancelInput'), schema('BrowserAuthorizationIssueInput')] });
+  if (path === '/intent' && method === 'put') return body(schema('ContractIntentActionInput'));
   if (path === '/contract-call' && method === 'post') return body(schema('ContractCallBuildInput'));
   if (path === '/contract-prepare' && method === 'post') return body(schema('ContractPrepareInput'));
   if (path === '/contracts' && (method === 'put' || method === 'delete')) return body(schema('ContractWorkspaceInput'));
@@ -111,11 +111,12 @@ function requestBody(path: string, method: string): OpenApiObject | undefined {
   if (path === '/address-book' && method === 'delete') return body(schema('ContactDeleteInput'));
   if (path === '/request' && method === 'post') return body(schema('ProposalCreateInput'));
   if (path === '/request' && method === 'patch') return body(schema('ProposalPatchInput'));
+  if (path === '/request' && method === 'put') return { ...body(schema('ProposalSubmitInput')), required: false };
   return undefined;
 }
 
 function successSchema(path: string, method: string): OpenApiObject {
-  if (path === '/auth') return method === 'get' ? { oneOf: [schema('SignerAuthChallenge'), schema('SignerAuthStatus')] } : schema('SignerAuthSession');
+  if (path === '/auth') return method === 'get' ? { oneOf: [schema('SignerAuthChallenge'), schema('SignerAuthStatus')] } : schema(method === 'delete' ? 'SignerAuthStatus' : 'SignerAuthSession');
   if (path === '/agent-access') return schema('SignerAgentAccessResult');
   if (path === '/runtime-config') return schema('RuntimeConfigResult');
   if (path === '/inbox') return schema('SignerInboxResult');
@@ -142,6 +143,7 @@ function successSchema(path: string, method: string): OpenApiObject {
 }
 
 function security(path: string, method: string, access: HeadlessOperationAccess): OpenApiObject[] {
+  if (path === '/auth' && (method === 'get' || method === 'delete')) return [{}, { humanBearer: [] }, { humanSession: [] }];
   if (path === '/agent-grants') return [{}, { humanBearer: [] }, { humanSession: [] }]; // Public actions need no session; challenge/approve/deny require Human session.
   if (path === '/agent-access') return [{ humanBearer: [] }, { humanSession: [] }];
   if (access === 'public') return [];
@@ -335,6 +337,7 @@ const components: OpenApiObject = {
       properties: { unlocked: { type: 'boolean' }, authenticated: { type: 'boolean' }, address: accountId, network: stellarNetwork, expires_at: { type: 'integer' } },
       additionalProperties: false,
     },
+    AgentAccessDeleteInput: { type: 'object', required: ['credentialId'], properties: { credentialId: { type: 'string', minLength: 1 } }, additionalProperties: false },
     SignerAgentAccessResult: {
       type: 'object', required: ['principal'],
       properties: { principal: { type: 'object', additionalProperties: true }, credentials: { type: 'array', items: { type: 'object', additionalProperties: true } }, credential: { type: 'object', additionalProperties: true } },
@@ -1036,6 +1039,7 @@ const components: OpenApiObject = {
       },
       additionalProperties: false,
     },
+    ContractIntentActionInput: { oneOf: ['ContractIntentExecutionInput', 'ContractIntentExecutionReconcileInput', 'ContractIntentReplanInput', 'ContractIntentCancelInput', 'BrowserAuthorizationIssueInput'].map(schema) },
     ContractIntentExecutionInput: {
       type: 'object',
       anyOf: [
@@ -1490,17 +1494,33 @@ const components: OpenApiObject = {
       },
       additionalProperties: false,
     },
+    ProposalTemplateReferenceInput: {
+      type: 'object', required: ['id', 'version'],
+      properties: { id: { type: 'string' }, version: { type: 'integer', minimum: 1 }, name: { type: 'string' }, kind: { type: 'string' } },
+      additionalProperties: false,
+    },
+    ProposalTemplatePaymentInput: {
+      type: 'object', required: ['template', 'amount'],
+      properties: { template: schema('ProposalTemplateReferenceInput'), amount: { type: 'string' }, memo: { type: 'string' } },
+      additionalProperties: false,
+    },
+    ProposalSubmitInput: {
+      type: 'object', properties: { acceptedEffectsDigest: { type: 'string', pattern: '^[0-9a-f]{64}$' } }, additionalProperties: false,
+    },
     ProposalCreateInput: {
       type: 'object',
       required: ['network'],
       oneOf: [
         { required: ['xdr'] },
+        { required: ['templatePayment'] },
         { required: ['payment'], description: 'Semantic Classic payment creation is available to Integration Service callers. For MST-managed semantic execution, runtime capabilities.classicManagedExecution must be true for the selected network. Otherwise prepare an unsigned payment with integration.classic.payment.prepare and create a Request using its xdr, or explicitly configure external execution.' },
       ],
       properties: {
         network: stellarNetwork,
         xdr,
         payment: schema('ClassicPaymentInstructionInput'),
+        template: schema('ProposalTemplateReferenceInput'),
+        templatePayment: schema('ProposalTemplatePaymentInput'),
         externalReference: {},
         privateNote: { type: 'string' },
         privateCommitment: {},
@@ -1513,6 +1533,8 @@ const components: OpenApiObject = {
         { type: 'object', description: 'Requires valid signer authorization; Agent callers require Sign access.', required: ['signedXdr'], properties: { signedXdr: xdr }, additionalProperties: false, 'x-multisig-access': 'principal:sign' },
         { type: 'object', description: 'Requires a Human signer session or an Agent credential with Write access.', required: ['decision'], properties: { decision: { type: 'string', const: 'decline' } }, additionalProperties: false, 'x-multisig-access': 'principal:write' },
         { type: 'object', description: 'Human only: verified current signer session (bearer or cookie), while the Proposal is active. Agent and Integration credentials cannot retain Activity.', required: ['retainActivity'], properties: { retainActivity: { type: 'boolean', const: true } }, additionalProperties: false, 'x-multisig-access': 'human' },
+        { type: 'object', required: ['assignSigner'], properties: { assignSigner: accountId }, additionalProperties: false, 'x-multisig-access': 'human' },
+        { type: 'object', required: ['remindSigner'], properties: { remindSigner: accountId }, additionalProperties: false, 'x-multisig-access': 'human' },
       ],
     },
     SorobanRequestOrigin: {
@@ -1826,6 +1848,10 @@ function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
       }
     } else if (id === 'signer.auth.challenge') {
       result = schema('SignerAuthChallenge');
+    } else if (id === 'signer.auth.status' || id === 'signer.auth.logout') {
+      parameters = [];
+      security.push({}, { humanBearer: [] }, { humanSession: [] });
+      result = schema('SignerAuthStatus');
     } else if (path === '/intent') {
       const integration = access.startsWith('integration:');
       if (method === 'POST') {
@@ -1886,7 +1912,7 @@ function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
       .filter(([status]) => !status.startsWith('2') || !statuses || statuses.includes(status))
       .map(([status, value]) => [status, status.startsWith('2') && result ? response(status === '201' ? 'Created.' : 'Successful operation.', result) : value]));
     const retry = logicalOperationRetry(operation);
-    return [id, { operationId: id, method, path, access, effect, security, parameters,
+    return [id, { operationId: id, method, path, access, effect, summary: operation.summary, security, parameters,
       ...(request ? { requestBody: request } : {}), ...(dispatch ? { dispatch } : {}), responses, retry }];
   }));
 }
@@ -1895,10 +1921,11 @@ function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
 // Other validation (including ABI-dependent values) remains in the route/service.
 export function unknownRequestField(value: unknown, schemaName: string): string | undefined {
   const schemas = components.schemas as Record<string, OpenApiObject>;
-  function visit(input: unknown, shape: OpenApiObject, path: string): string | undefined {
-    if (typeof shape.$ref === 'string') {
-      return visit(input, schemas[shape.$ref.split('/').at(-1)!], path);
-    }
+  function resolve(shape: OpenApiObject): OpenApiObject {
+    return typeof shape.$ref === 'string' ? schemas[shape.$ref.split('/').at(-1)!] : shape;
+  }
+  function visit(input: unknown, rawShape: OpenApiObject, path: string): string | undefined {
+    const shape = resolve(rawShape);
     if (Array.isArray(input) && shape.items) {
       for (const [index, entry] of input.entries()) {
         const unknown = visit(entry, shape.items as OpenApiObject, path + '[' + index + ']');
@@ -1908,11 +1935,18 @@ export function unknownRequestField(value: unknown, schemaName: string): string 
     if (!input || typeof input !== 'object' || Array.isArray(input)) return;
     const record = input as Record<string, unknown>;
     if (Array.isArray(shape.oneOf) && !shape.properties) {
-      const branches = (shape.oneOf as OpenApiObject[]).filter(branch =>
+      const branches = (shape.oneOf as OpenApiObject[]).map(resolve);
+      const eligible = branches.filter(branch =>
         Object.entries((branch.properties ?? {}) as Record<string, OpenApiObject>)
-          .every(([key, field]) => field.const === undefined || record[key] === field.const));
-      if (branches.length === 1) return visit(input, branches[0], path);
-      return;
+          .every(([key, field]) => !Object.hasOwn(record, key) ||
+            (field.const === undefined || record[key] === field.const)
+              && (!Array.isArray(field.enum) || field.enum.includes(record[key]))));
+      // Preserve the route's specific invalid-action/value error when no branch matches.
+      if (!eligible.length) return;
+      const complete = eligible.filter(branch => ((branch.required ?? []) as string[]).every(key => Object.hasOwn(record, key)));
+      const candidates = complete.length ? complete : eligible;
+      const errors = candidates.map(branch => visit(input, branch, path));
+      return errors.every(Boolean) ? errors[0] : undefined;
     }
     const properties = (shape.properties ?? {}) as Record<string, OpenApiObject>;
     for (const [key, entry] of Object.entries(record)) {

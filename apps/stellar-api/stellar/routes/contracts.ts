@@ -98,7 +98,7 @@ export async function PUT(request: Request): Promise<Response> {
   try {
     const [principal, body] = await Promise.all([
       principalFor(request, 'write'),
-      readJsonObjectBody(request, MAX_BODY_BYTES),
+      readJsonObjectBody(request, MAX_BODY_BYTES, 'ContractWorkspaceInput'),
     ]);
     assertRequestedNetwork(body, principal);
     const contract = await keepContractWorkspace(blobContractWorkspaceStore, principal, contractIdFromBody(body));
@@ -112,7 +112,7 @@ export async function DELETE(request: Request): Promise<Response> {
   try {
     const [principal, body] = await Promise.all([
       principalFor(request, 'write'),
-      readJsonObjectBody(request, MAX_BODY_BYTES),
+      readJsonObjectBody(request, MAX_BODY_BYTES, 'ContractWorkspaceInput'),
     ]);
     assertRequestedNetwork(body, principal);
     const contractId = contractIdFromBody(body);

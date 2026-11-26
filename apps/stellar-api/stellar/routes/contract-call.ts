@@ -24,7 +24,7 @@ export async function OPTIONS(): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    const body = await readJsonObjectBody(request, MAX_BODY_BYTES, 'ContractCallBuildInput');
     if (body.network === 'public' || body.network === 'testnet') assertDeploymentNetwork(body.network);
     return json(await buildContractCall({
       network: body.network,

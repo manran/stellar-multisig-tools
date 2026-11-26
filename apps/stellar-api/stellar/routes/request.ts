@@ -90,7 +90,7 @@ import {
   enforcePreparedSorobanTransaction,
   SorobanSimulationError,
 } from '../../../../packages/stellar-core/src/sorobanRpc.js';
-import { readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
+import { assertKnownRequestFields, readJsonObjectBody, RequestBodyError } from '../server/requestBody.js';
 import { assertDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import { noStoreJson } from '../server/httpResponse.js';
 import {
@@ -540,7 +540,18 @@ async function authorizeRequest(
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
-  return readJsonObjectBody(request, MAX_BODY_BYTES);
+  const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+  if (request.method === 'PATCH') {
+    if (body.decision !== undefined && body.decision !== 'decline') {
+      throw new RequestBodyError('decision must be decline. To approve, send signedXdr.', 400, 'invalid_proposal_decision');
+    }
+    // Preserve the explicit immutable-note error for the legacy single-field request.
+    if (typeof body.privateNote === 'string' && Object.keys(body).length === 1) return body;
+  }
+  const schemaName = request.method === 'POST' ? 'ProposalCreateInput'
+    : request.method === 'PATCH' ? 'ProposalPatchInput' : 'ProposalSubmitInput';
+  assertKnownRequestFields(body, schemaName);
+  return body;
 }
 
 function privateCommitmentForCreate(body: Record<string, unknown>, xdr: string) {

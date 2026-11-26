@@ -97,7 +97,7 @@ export async function inspectContractInterface(
   const network = normalizedNetwork(networkValue);
   const contractId = contractIdValue.trim();
   if (!isValidContractId(contractId)) {
-    throw new ContractCallServiceError('A valid Stellar C... contract address is required.', 400, 'invalid_contract');
+    throw new ContractCallServiceError('Provide a valid Stellar C... address in the contract query parameter.', 400, 'invalid_contract');
   }
   try {
     const loaded = await (dependencies.interfaceLoader ?? loadContractInterface)(contractId, network);

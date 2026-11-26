@@ -260,17 +260,19 @@ export default function AgentAccessApp() {
 
           {incomingGrantId && (
             <section aria-label="Agent authorization request" className="mst-agent-section mt-6">
-              <h2 className="text-xl font-bold">An agent is requesting access</h2>
+              <h2 className="text-xl font-bold">{incomingGrant?.status === 'pending' ? 'An agent is requesting access' : 'Agent authorization request'}</h2>
               {grantError && <p role="alert" className="mt-3 text-sm text-[var(--color-danger)]">{grantError}</p>}
               {incomingGrant && (
                 <>
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <div><div className="text-xs font-semibold text-[var(--color-muted)]">Agent</div><div className="mt-1 text-lg font-semibold break-words">{incomingGrant.label}</div></div>
-                    <div><div className="text-xs font-semibold text-[var(--color-muted)]">Permission</div><div className="mt-1 text-lg font-semibold capitalize">{incomingGrant.access}</div></div>
+                    <div><div className="text-xs font-semibold text-[var(--color-muted)]">Permission</div><div className={'mt-1 text-lg font-semibold capitalize ' + (incomingGrant.access === 'sign' ? 'text-[var(--color-danger)]' : '')}>{incomingGrant.access}</div><p className="mt-1 text-sm text-[var(--color-ink-2)]">{ACCESS_OPTIONS.find(option => option.value === incomingGrant.access)?.detail}</p></div>
                     <div><div className="text-xs font-semibold text-[var(--color-muted)]">Network</div><div className="mt-1 font-semibold">Stellar Testnet</div></div>
                     <div><div className="text-xs font-semibold text-[var(--color-muted)]">Verification code</div><div className="mt-1 font-mono text-lg font-semibold tracking-wide">{incomingGrant.userCode}</div></div>
+                    <div><div className="text-xs font-semibold text-[var(--color-muted)]">Expires</div><div className="mt-1 font-semibold"><time dateTime={incomingGrant.expiresAt}>{new Date(incomingGrant.expiresAt).toLocaleString()}</time></div></div>
                   </div>
                   <p className="mt-4 text-sm text-[var(--color-ink-2)]">Compare this code and permission with the agent's request. Approval creates a reusable credential for this signer. The agent receives the credential directly; no key is shown here.</p>
+                  {incomingGrant.status === 'pending' && !privateReady && <p className="mt-3 text-sm text-[var(--color-ink-2)]">Your wallet will ask you to confirm your identity, then approve this agent in a separate signature.</p>}
                   {incomingGrant.status === 'pending' && privateReady && (
                     <div className="mt-5 flex flex-wrap gap-3">
                       <button type="button" disabled={grantBusy} onClick={() => void respondToIncomingGrant('approve')} className="mst-action-primary disabled:opacity-40">{grantBusy ? 'Waiting for wallet…' : 'Approve in wallet'}</button>

@@ -78,7 +78,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     assertDeploymentNetwork('testnet');
-    const body = await readJsonObjectBody(request, 16 * 1024);
+    const body = await readJsonObjectBody(request, 16 * 1024, 'AgentGrantActionInput');
     if (body.action === 'request') {
       await limitAgentGrant('request:' + grantRequestSource(request));
       const created = await beginAgentGrant(blobAgentGrantStore, body.label, body.access, body.network);

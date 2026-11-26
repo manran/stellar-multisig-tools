@@ -103,7 +103,7 @@ function memoHashFor(value: unknown): string | undefined {
 function lifetimeFor(value: unknown): number {
   if (value === undefined || value === null) return DEFAULT_TRANSACTION_LIFETIME_SECONDS;
   if (typeof value !== 'number' || !isTransactionLifetimeSeconds(value)) {
-    throw new ClassicCreateAccountPrepareError('Unsupported transaction lifetime.', 400, 'invalid_transaction_lifetime');
+    throw new ClassicCreateAccountPrepareError('lifetimeSeconds must be 3600, 86400, or 604800.', 400, 'invalid_transaction_lifetime');
   }
   return value;
 }

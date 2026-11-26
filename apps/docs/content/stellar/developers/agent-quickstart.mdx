@@ -65,6 +65,8 @@ Use the fixed Testnet API base above. After the Agent has sent the verification 
 5. `POST /agent-grants` with the same two headers and `{"action":"approve","requestId":"REQUEST_ID","mode":"transaction","transaction":"SIGNED_APPROVAL_XDR"}`. A successful response is `{"status":"approved"}`; the Agent itself exchanges its private device code for the msa credential. A session alone cannot approve.
 6. To revoke, the signer uses the same session headers with `DELETE /agent-access` and `{"credentialId":"CREDENTIAL_ID"}`. `GET /agent-access` lists credential IDs and scopes, not secrets.
 
+To check the current session, call `GET /auth` without query parameters (signer.auth.status). An absent or expired session returns `{"unlocked":false,"authenticated":false}`. A valid session also returns its address, network and expiry. `DELETE /auth` (signer.auth.logout) clears the browser session cookie; it does not revoke an independently held bearer token or any Agent credential. Discard the local bearer token when ending an independent session.
+
 For message-signing tools that implement SEP-53, the auth exchange also accepts mode=sep53, challenge (the original XDR) and signature (base64); the grant approval accepts mode=sep53 and a fresh base64 signature of the returned approval message. Do not use a generic raw message signature or a private key as the proof.
 
 The Stellar transaction signature for a subsequent payment is separate again: inspect the exact Request baseXdr, obtain the signer's approval of that payment, sign it locally, and send signedXdr through proposal.contribute. The msa credential never signs for you.

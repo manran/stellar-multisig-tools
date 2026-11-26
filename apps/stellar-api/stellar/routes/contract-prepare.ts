@@ -32,7 +32,7 @@ export async function OPTIONS(): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    const body = await readJsonObjectBody(request, MAX_BODY_BYTES, 'ContractPrepareInput');
     const network: StellarNetwork | null = body.network === 'public' || body.network === 'testnet'
       ? body.network
       : null;

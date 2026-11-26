@@ -36,6 +36,14 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
     access: 'public', effect: 'none', summary: 'Request a wallet authentication challenge for a signer address and network; a session requires a valid signature.',
   },
   {
+    id: 'signer.auth.status', version: 1, method: 'GET', path: '/auth',
+    access: 'public', effect: 'none', summary: 'Inspect the current Human session, or return the locked state without credentials. Omit account and network.',
+  },
+  {
+    id: 'signer.auth.logout', version: 1, method: 'DELETE', path: '/auth',
+    access: 'public', effect: 'private-state', summary: 'Clear the browser session cookie. This does not revoke an independently held bearer token.',
+  },
+  {
     id: 'signer.auth.exchange', version: 1, method: 'POST', path: '/auth',
     access: 'public', effect: 'private-state', summary: 'Exchange a signer-approved SEP-10 challenge or SEP-53 message signature for a short-lived private Human session.',
   },

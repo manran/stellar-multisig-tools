@@ -45,7 +45,7 @@ export async function POST(request: Request): Promise<Response> {
     if (request.headers.has('idempotency-key')) {
       throw new IntegrationAdminServiceError('Idempotency-Key is not supported for one-time Integration Profile creation.', 400, 'idempotency_key_unsupported');
     }
-    const body = await readJsonObjectBody(request, MAX_BODY_BYTES);
+    const body = await readJsonObjectBody(request, MAX_BODY_BYTES, 'TestnetIntegrationCreateInput');
     const result = await createTestnetIntegration(blobIntegrationCredentialStore, body);
     return noStoreJson({ operation: 'integration.testnet.create', version: 1, ...result }, 201);
   } catch (cause) {

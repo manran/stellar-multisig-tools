@@ -74,7 +74,10 @@ function accountFor(value: unknown, field: string): string {
 }
 
 function amountFor(value: unknown, index: number): string {
-  const amount = typeof value === 'string' ? value.trim() : '';
+  if (typeof value !== 'string') {
+    throw new ClassicPaymentPrepareError(`Payment ${index}: amount must be a decimal string, such as "1.25".`, 400, 'invalid_payment_amount');
+  }
+  const amount = value.trim();
   if (!AMOUNT_PATTERN.test(amount)) {
     throw new ClassicPaymentPrepareError(`Payment ${index}: amount must be greater than 0 with at most 7 decimal places.`, 400, 'invalid_payment_amount');
   }
@@ -143,7 +146,7 @@ function memoHashFor(value: unknown): string | undefined {
 function lifetimeFor(value: unknown): number {
   if (value === undefined || value === null) return DEFAULT_TRANSACTION_LIFETIME_SECONDS;
   if (typeof value !== 'number' || !isTransactionLifetimeSeconds(value)) {
-    throw new ClassicPaymentPrepareError('Unsupported transaction lifetime.', 400, 'invalid_transaction_lifetime');
+    throw new ClassicPaymentPrepareError('lifetimeSeconds must be 3600, 86400, or 604800.', 400, 'invalid_transaction_lifetime');
   }
   return value;
 }

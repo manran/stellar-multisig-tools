@@ -38,3 +38,16 @@ A6, A8, A9, A10, A12, A15; S2, S3, S4, S6, S7; D2, D5, D7, D9, D10, D11, D13; U6
 ## Verification
 
 995 regular automated tests and 41 disposable Postgres tests passed. Historical import, unresolved cancellation, nested input typo rejection, missing contract vs RPC failure and native XLM amount projection covered. Database tests use isolated disposable storage only. Actual Testnet transaction replay, desktop/mobile browser acceptance and deployment remain open.
+
+
+
+## Second repair batch
+
+Base: GitHub 1878bb83c200348718836b12c5b6aaaaf30f302e (tree identical to local ce2c9f9).
+
+- A1: extended the shared closed-schema field check to all documented request-body routes. Resolve referenced oneOf branches and validate nested objects; preserve existing authorization and action-specific value checks. Include actual Human template and assignment/reminder request fields. Generic ABI arguments and explicitly open private context remain subject to their service validators.
+- A5/A6: executor, amount type, lifetime, serviceId, invalid decision and contract query errors now identify the requested input. Existing codes retained except the new invalid_proposal_decision. Network-specific and structured field diagnostics remain open.
+- S3: registry and OpenAPI now describe session status and cookie logout, including optional Human authentication; document that logout does not revoke bearer tokens. S4: logical operation summaries added; comprehensive examples and field descriptions remain open.
+- U9: pairing approval uses the existing permission descriptions, flags Sign scope, displays expiry, explains the two distinct signatures, and no longer claims a pending request when preview fails. Browser acceptance pending.
+
+Verification: 997/997 regular tests passed, including the referenced-union, nested input and HTTP-boundary regressions. API and Web builds passed. Remaining review items are still open, including weighted refusal handling, historical receipt snapshots and resumable Soroban signing.

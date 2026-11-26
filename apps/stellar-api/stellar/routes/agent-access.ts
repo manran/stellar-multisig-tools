@@ -94,7 +94,7 @@ export async function DELETE(request: Request): Promise<Response> {
   try {
     const [{ session, principal }, body] = await Promise.all([
       authorizedPrincipal(request),
-      readJsonObjectBody(request, MAX_BODY_BYTES),
+      readJsonObjectBody(request, MAX_BODY_BYTES, 'AgentAccessDeleteInput'),
     ]);
     if (typeof body.credentialId !== 'string' || !body.credentialId.trim()) {
       throw new AgentCredentialServiceError('Agent credential id is required.', 400, 'invalid_agent_credential_id');

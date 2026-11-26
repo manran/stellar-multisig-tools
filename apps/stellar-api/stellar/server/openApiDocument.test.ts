@@ -137,7 +137,11 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(inbox.security, [{ agentBearer: [] }, { humanBearer: [] }, { humanSession: [] }]);
   assert.deepEqual(inbox['x-multisig-effects'], ['none']);
   assert.ok(((paths['/agent-grants'].post as JsonObject).responses as JsonObject)['201']);
-  assert.equal((paths['/auth'].get as JsonObject).operationId, 'signer.auth.challenge');
+  assert.equal((paths['/auth'].get as JsonObject).operationId, 'transport.auth.get');
+  assert.equal((paths['/auth'].delete as JsonObject).operationId, 'signer.auth.logout');
+  const authLogical = document['x-multisig-operations'] as Record<string, JsonObject>;
+  assert.deepEqual(authLogical['signer.auth.status'].parameters, []);
+  assert.deepEqual(authLogical['signer.auth.status'].security, [{}, { humanBearer: [] }, { humanSession: [] }]);
   assert.equal((paths['/auth'].post as JsonObject).operationId, 'signer.auth.exchange');
   assert.deepEqual((paths['/agent-access'].delete as JsonObject).security, [{ humanBearer: [] }, { humanSession: [] }]);
   assert.deepEqual((paths['/agent-grants'].get as JsonObject)['x-multisig-operation-ids'], ['agent.grant.inspect', 'agent.grant.challenge']);
@@ -258,6 +262,7 @@ test('OpenAPI describes the public Contract composition without UI state', () =>
   assert.deepEqual(schemas.ProposalCreateInput.required, ['network']);
   assert.deepEqual(schemas.ProposalCreateInput.oneOf, [
     { required: ['xdr'] },
+    { required: ['templatePayment'] },
     { required: ['payment'], description: 'Semantic Classic payment creation is available to Integration Service callers. For MST-managed semantic execution, runtime capabilities.classicManagedExecution must be true for the selected network. Otherwise prepare an unsigned payment with integration.classic.payment.prepare and create a Request using its xdr, or explicitly configure external execution.' },
   ]);
 });
