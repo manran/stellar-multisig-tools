@@ -78,6 +78,8 @@ test('Integration execution inspection requires msi and returns only public mana
     version: number;
     serviceId: string;
     network: string;
+    configuration: { serviceId: string; classicSourceAccounts: string[]; profile: { authorizationExperience: string } };
+    soroban: { externalExecutorCount: number };
     classic: {
       scopeConfigured: boolean;
       managedAvailable: boolean;
@@ -92,6 +94,11 @@ test('Integration execution inspection requires msi and returns only public mana
   assert.equal(body.version, 1);
   assert.equal(body.serviceId, 'execution-test');
   assert.equal(body.network, 'testnet');
+  assert.equal(body.configuration.serviceId, 'execution-test');
+  assert.equal(body.configuration.classicSourceAccounts.length, 1);
+  assert.equal(body.configuration.profile.authorizationExperience, 'headless');
+  assert.equal(body.soroban.externalExecutorCount, 0);
+  assert.equal(JSON.stringify(body).includes(secretHash), false);
   assert.equal(body.classic.scopeConfigured, true);
   assert.equal(body.classic.managedAvailable, true);
   assert.equal(body.classic.managedSourceAccountCount, 1);

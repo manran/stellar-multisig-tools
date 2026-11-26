@@ -15,14 +15,19 @@ export class InvalidInboxPageError extends Error {
   readonly code = 'invalid_inbox_page';
 }
 
-export function inboxPageParameters(url: URL): { limit: number; after?: InboxPageKey } {
+export const INBOX_TOTAL_SCAN_LIMIT = 500;
+
+export function inboxPageParameters(url: URL): { limit: number; after?: InboxPageKey; includeTotals?: true } {
   const value = url.searchParams.get('limit');
   const limit = value === null ? 50 : Number(value);
   if (!Number.isInteger(limit) || limit < 1 || limit > 100 || (value !== null && !/^\d+$/.test(value))) {
     throw new InvalidInboxPageError('Inbox limit must be between 1 and 100.');
   }
   const cursor = url.searchParams.get('cursor');
-  if (cursor === null) return { limit };
+  const totals = url.searchParams.get('includeTotals');
+  if (totals !== null && totals !== '1') throw new InvalidInboxPageError('includeTotals must be 1.');
+  if (totals && cursor !== null) throw new InvalidInboxPageError('includeTotals is available on the first page only.');
+  if (cursor === null) return { limit, ...(totals ? { includeTotals: true as const } : {}) };
   try {
     if (cursor.length > 256 || !/^[A-Za-z0-9_-]+$/.test(cursor)) throw new Error();
     const after = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as InboxPageKey;
@@ -53,4 +58,14 @@ export function mergeInboxPage<R extends { id: string; createdAt: string }, I ex
     complete,
     ...(!complete ? { nextCursor: Buffer.from(JSON.stringify(page.at(-1)), 'utf8').toString('base64url') } : {}),
   };
+}
+
+export function inboxPendingTotals<R extends { id: string; createdAt: string }, I extends { id: string; createdAt: string }>(
+  requests: readonly R[], intents: readonly I[],
+) {
+  const page = mergeInboxPage(requests, intents, INBOX_TOTAL_SCAN_LIMIT);
+  const count = page.requests.length + page.intents.length;
+  return page.complete
+    ? { total_pending_count: count, total_pending_count_complete: true }
+    : { total_pending_count_lower_bound: count + 1, total_pending_count_complete: false };
 }

@@ -93,6 +93,11 @@ html.stellar-ui .opacity-60 { opacity: 0.76; }
 html.stellar-ui .opacity-65 { opacity: 0.80; }
 html.stellar-ui .opacity-70 { opacity: 0.84; }
 
+/* Secondary text must remain readable on the workspace's light and dark surfaces. */
+html.stellar-ui:not(.dark) :is(.text-neutral-400, .text-neutral-500) { color: #595959; }
+html.stellar-ui:not(.dark) .text-amber-700 { color: #92400e; }
+html.stellar-ui.dark :is(.dark\:text-neutral-400, .dark\:text-neutral-500, .text-neutral-500:not([class*="dark:text-"])) { color: #b3b3b3; }
+
 /* Network theme layer.
 
    Mainnet uses the MST teal-and-gold brand palette. Testnet keeps its existing

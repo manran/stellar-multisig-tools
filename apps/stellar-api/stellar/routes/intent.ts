@@ -73,6 +73,7 @@ import {
   authenticateSorobanBrowserAuthorizationCapability,
   issueSorobanBrowserAuthorizationCapability,
   projectSorobanBrowserAuthorization,
+  projectSorobanSignerChallenges,
   SorobanBrowserAuthorizationServiceError,
 } from '../server/sorobanBrowserAuthorizationService.js';
 import {
@@ -288,6 +289,7 @@ export async function GET(request: Request): Promise<Response> {
       authorization: access.authorization,
       evidence: projectSorobanIntentEvidence(access.stored, contributions, preparations, observations),
       ...(callSummary ? { callSummary } : {}),
+      ...(access.address ? { challenges: projectSorobanSignerChallenges(access.stored, access.authorization, access.address) } : {}),
       ...(access.integrationCredential ? {
         job: integrationJob(access.integrationCredential, access.stored, access.authorization, preparations, observations),
       } : {}),

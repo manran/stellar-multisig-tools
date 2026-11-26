@@ -173,6 +173,7 @@ export interface SorobanIntentResponse {
   replayed?: boolean;
   intent: StoredSorobanIntentSnapshot;
   authorization: SorobanIntentAuthorizationSnapshot;
+  challenges?: Array<{ entryIndex: number; authorizer: string; preimageXdr: string; expiresAtLedger: number }>;
   evidence?: SorobanIntentEvidenceEvent[];
   job?: IntegrationSorobanJobProjection;
   task?: AgentTaskProjection;

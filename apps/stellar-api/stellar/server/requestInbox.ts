@@ -56,7 +56,7 @@ export async function listSignerInbox(
   const now = options.now ?? new Date();
   const accountLoader = options.accountLoader ?? loadAccount;
   const networkParametersLoader = options.networkParametersLoader ?? loadNetworkParameters;
-  const limit = Math.max(1, Math.min(options.limit ?? 50, 101));
+  const limit = Math.max(1, Math.min(options.limit ?? 50, 501));
   const accountCache = new Map<string, ReturnType<typeof loadAccount>>();
   const cachedAccountLoader: typeof loadAccount = (accountId, network) => {
     const key = `${network}:${accountId}`;

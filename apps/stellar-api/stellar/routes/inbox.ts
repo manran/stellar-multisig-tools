@@ -18,7 +18,7 @@ import { noStoreJson } from '../server/httpResponse.js';
 import { DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
 import { summarizeInboxActions } from '../../../../packages/stellar-core/src/inboxPresentation.js';
 import { loadAccountsForSigner } from '../../../../packages/stellar-core/src/signerAccounts.js';
-import { inboxPageParameters, mergeInboxPage, InvalidInboxPageError } from '../server/inboxPage.js';
+import { inboxPageParameters, mergeInboxPage, InvalidInboxPageError, INBOX_TOTAL_SCAN_LIMIT, inboxPendingTotals } from '../server/inboxPage.js';
 
 const signingRequestStore = runtimeSigningRequestStore();
 const sorobanIntentStore = runtimeSorobanIntentStore();
@@ -26,14 +26,15 @@ const sorobanIntentStore = runtimeSorobanIntentStore();
 export async function GET(request: Request): Promise<Response> {
   try {
     const context = await signerWorkspaceCallerFromRequest(blobAgentCredentialStore, blobAuthStore, request, 'read', 'Sign in with a Stellar wallet to view this inbox.');
-    const { limit, after } = inboxPageParameters(new URL(request.url));
+    const { limit, after, includeTotals } = inboxPageParameters(new URL(request.url));
     // Reverse lookup is discovery, not authorization. Do not return a stale
     // cached account set as a complete Inbox after signer rotation.
     const accounts = await loadAccountsForSigner(context.address, context.network, AbortSignal.timeout(30000), fetch, { fresh: true });
-    const options = { sourceAccountIds: accounts.map((item) => item.accountId), after, limit: limit + 1 };
+    const options = { sourceAccountIds: accounts.map((item) => item.accountId), after, limit: (includeTotals ? INBOX_TOTAL_SCAN_LIMIT : limit) + 1 };
     const candidates = await listSignerInbox(signingRequestStore, context.address, { ...options, network: context.network, includeProposed: context.actor === 'human' });
     if (context.actor === 'human') {
-      const page = mergeInboxPage(candidates, await listSorobanIntentInbox(sorobanIntentStore, context.address, context.network, options), limit);
+      const intentCandidates = await listSorobanIntentInbox(sorobanIntentStore, context.address, context.network, options);
+      const page = mergeInboxPage(candidates, intentCandidates, limit);
       const { intents, complete, nextCursor } = page;
       const humanRequests = await projectHumanInboxRequests(signingRequestStore, context.address, page.requests);
       const actionCounts = summarizeInboxActions(humanRequests, intents);
@@ -43,6 +44,7 @@ export async function GET(request: Request): Promise<Response> {
         actor: context.actor,
         complete,
         ...(nextCursor ? { nextCursor } : {}),
+        ...(includeTotals ? inboxPendingTotals(candidates, intentCandidates) : {}),
         pending_count: humanRequests.length + intents.length,
         action_count: actionCounts.actionRequired,
         action_counts: actionCounts,
@@ -68,6 +70,7 @@ export async function GET(request: Request): Promise<Response> {
       actor: context.actor,
       complete,
       ...(nextCursor ? { nextCursor } : {}),
+      ...(includeTotals ? inboxPendingTotals(candidates, soroban.intents) : {}),
       pending_count: tasks.length,
       action_count: tasks.filter((task) => task.nextActions.some((action) => action.available)).length,
       signature_required_count: tasks.filter((task) => task.signatureRequired).length,

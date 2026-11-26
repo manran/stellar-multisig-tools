@@ -60,7 +60,7 @@ test('node adapter rejects unknown paths and unsupported methods', async () => {
     new Request('http://localhost/stellar/runtime-config', { method: 'POST' }),
   );
   assert.equal(wrongMethod.status, 405);
-  assert.equal(wrongMethod.headers.get('allow'), 'GET, OPTIONS');
+  assert.equal(wrongMethod.headers.get('allow'), 'GET, HEAD, OPTIONS');
 });
 
 
@@ -77,4 +77,33 @@ test('Node HTTP adapter exposes reusable templates through the Stellar namespace
   const response = await dispatchStellarHttpRequest(new Request('https://api-testnet.multisig.tools/stellar/templates?network=testnet'));
   assert.notEqual(response.status, 404);
   assert.notEqual(response.status, 405);
+});
+
+
+test('public discovery supports HEAD, validators and gzip without exposing private data', async () => {
+  const url = 'http://localhost/stellar/openapi.json';
+  const first = await dispatchStellarHttpRequest(new Request(url));
+  assert.equal(first.status, 200);
+  assert.match(first.headers.get('cache-control') ?? '', /public/);
+  assert.ok(first.headers.get('etag'));
+  assert.match(first.headers.get('x-request-id') ?? '', /^[0-9a-f-]{36}$/);
+  const conditional = await dispatchStellarHttpRequest(new Request(url, { headers: { 'If-None-Match': first.headers.get('etag')! } }));
+  assert.equal(conditional.status, 304);
+  assert.equal(conditional.body, null);
+  const head = await dispatchStellarHttpRequest(new Request(url, { method: 'HEAD' }));
+  assert.equal(head.status, 200);
+  assert.equal(head.body, null);
+  assert.equal(head.headers.get('etag'), first.headers.get('etag'));
+  const gzip = await dispatchStellarHttpRequest(new Request(url, { headers: { 'Accept-Encoding': 'gzip' } }));
+  assert.equal(gzip.headers.get('content-encoding'), 'gzip');
+  const { gunzipSync } = await import('node:zlib');
+  assert.deepEqual(JSON.parse(gunzipSync(Buffer.from(await gzip.arrayBuffer())).toString()), await first.json());
+});
+
+test('HEAD does not invoke private GET reconciliation or authentication', async () => {
+  for (const path of ['/stellar/request?view=reconciliation', '/stellar/intent', '/stellar/auth']) {
+    const response = await dispatchStellarHttpRequest(new Request('http://localhost'+path, { method: 'HEAD' }));
+    assert.equal(response.status, 405);
+    assert.equal(response.body, null);
+  }
 });

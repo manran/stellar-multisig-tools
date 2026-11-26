@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
 import { Readable } from 'node:stream';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
@@ -29,7 +31,7 @@ import * as treasuries from '../../routes/treasuries.js';
 import * as treasuryBox from '../../routes/treasury-box.js';
 import * as templates from '../../routes/templates.js';
 
-type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
+type HttpMethod = 'HEAD' | 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
 type RouteHandler = (request: Request) => Response | Promise<Response>;
 type RouteModule = Partial<Record<HttpMethod, RouteHandler>>;
 
@@ -94,7 +96,7 @@ function routeKey(pathname: string): string | undefined {
   return key && !key.includes('/') ? key : undefined;
 }
 
-export async function dispatchStellarHttpRequest(request: Request): Promise<Response> {
+async function dispatchRoute(request: Request): Promise<Response> {
   const { pathname } = new URL(request.url);
 
   if (pathname === '/healthz') return json({ status: 'ok' });
@@ -109,9 +111,11 @@ export async function dispatchStellarHttpRequest(request: Request): Promise<Resp
   }
 
   const method = request.method.toUpperCase() as HttpMethod;
-  const handler = route[method];
+  // Do not route HEAD to private GET handlers: some reconcile state or issue a challenge.
+  const publicHead = ['openapi', 'operations', 'runtime-config', 'stellar-toml'].includes(key!);
+  const handler = route[method] ?? (method === 'HEAD' && publicHead ? route.GET : undefined);
   if (!handler) {
-    const allow = (Object.keys(route) as HttpMethod[]).sort().join(', ');
+    const allow = [...new Set([...Object.keys(route), ...(route.GET && publicHead ? ['HEAD'] : [])])].sort().join(', ');
     return json(
       { error: 'Method not allowed.', code: 'method_not_allowed' },
       405,
@@ -119,7 +123,26 @@ export async function dispatchStellarHttpRequest(request: Request): Promise<Resp
     );
   }
 
-  return handler(request);
+  return handler(method === 'HEAD' && !route.HEAD ? new Request(request.url, { method: 'GET', headers: request.headers }) : request);
+}
+
+export async function dispatchStellarHttpRequest(request: Request): Promise<Response> {
+  const response = await dispatchRoute(request);
+  const headers = new Headers(response.headers);
+  headers.set('X-Request-Id', randomUUID());
+  const exposed = headers.get('Access-Control-Expose-Headers');
+  if (!exposed?.toLowerCase().includes('x-request-id')) headers.set('Access-Control-Expose-Headers', [exposed, 'X-Request-Id'].filter(Boolean).join(', '));
+  const discoveryResource = ['/stellar/openapi.json', '/stellar/operations'].includes(new URL(request.url).pathname);
+  const acceptGzip = (request.headers.get('accept-encoding') ?? '').split(',').some(value => /^\s*gzip\s*(?:;|$)/i.test(value) && !/;\s*q\s*=\s*0(?:\.0*)?\s*$/i.test(value));
+  if (discoveryResource) headers.set('Vary', 'Accept-Encoding');
+  if (request.method === 'HEAD' || response.status === 304) return new Response(null, { status: response.status, headers });
+  if (discoveryResource && acceptGzip && response.status === 200 && response.body) {
+    const payload = gzipSync(Buffer.from(await response.arrayBuffer()));
+    headers.set('Content-Encoding', 'gzip');
+    headers.delete('Content-Length');
+    return new Response(new Uint8Array(payload), { status: response.status, headers });
+  }
+  return new Response(response.body, { status: response.status, headers });
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {

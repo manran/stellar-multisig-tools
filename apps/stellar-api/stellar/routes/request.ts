@@ -1,3 +1,4 @@
+import { projectIntegrationClassicJob } from '../server/integrationClassicJobProjection.js';
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
 import { blobAuthStore } from '../server/blobAuthStore.js';
 import { RequestStorageUnavailableError } from '../server/blobRequestStore.js';
@@ -830,6 +831,7 @@ export async function GET(request: Request): Promise<Response> {
       ...(history ? { history } : {}),
       coordination,
       ...(access.mode === 'agent' ? { task: agentRequestTask(access, snapshot, declined) } : {}),
+      ...(access.mode === 'service' ? { job: projectIntegrationClassicJob(snapshot, access.stored.integration?.correlationId) } : {}),
     });
   } catch (cause) {
     return errorResponse(cause);
@@ -909,6 +911,7 @@ export async function POST(request: Request): Promise<Response> {
         );
         return noStoreJson({
           request: result.request,
+          job: projectIntegrationClassicJob(result.request, result.externalReference),
           replayed: result.replayed,
           ...(result.externalReference ? { externalReference: result.externalReference } : {}),
           access: { shareable: false, activityBound: false },
@@ -941,6 +944,7 @@ export async function POST(request: Request): Promise<Response> {
       );
       return noStoreJson({
         request: result.request,
+          job: projectIntegrationClassicJob(result.request, result.externalReference),
         replayed: result.replayed,
         ...(result.externalReference ? { externalReference: result.externalReference } : {}),
         access: { shareable: false, activityBound: false },
@@ -1460,7 +1464,7 @@ export async function PUT(request: Request): Promise<Response> {
     if (snapshot.status === 'submitted' && access.stored.integration) {
       await releaseManagedClassicLeaseBestEffort(snapshot.id);
     }
-    return noStoreJson({ request: snapshot });
+    return noStoreJson({ request: snapshot, ...(access.mode === 'service' ? { job: projectIntegrationClassicJob(snapshot, access.stored.integration?.correlationId) } : {}) });
   } catch (cause) {
     return errorResponse(cause);
   }

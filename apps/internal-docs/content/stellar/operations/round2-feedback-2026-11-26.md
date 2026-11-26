@@ -65,3 +65,18 @@ Base: 9a3012ca60375ea79e00ea05ee97d5da4017e0dd (previous reviewed GitHub repair 
 - Additive PostgreSQL migration 0023 adds nullable policy snapshots and released execution packages. No fabricated historical backfill. Apply only during a coordinated Testnet deployment before running the new API.
 
 Verification: 999/999 regular tests, 42/42 disposable PostgreSQL tests, API and Web builds passed. The regression exercises unequal signer weights, reversible refusal, immutable policy snapshots, exact execution replay, rejection of unrelated/expired/resolved recovery and historical contributor receipt access. Database tests verify stored package recovery without listing raw XDR. Real Testnet replay, mobile/browser review and deployment remain open. The original outstanding review items not addressed above remain open; do not claim independent acceptance.
+
+## Fourth repair batch: Integration job contract and public discovery
+
+Base: b3e3912204b1845f2c85658f907f865ac2c54281.
+
+- A8: authenticated owning Integration configuration is available through integration-execution. Reuse the redacted profile projection; no secret recovery, self-rotation or privilege expansion.
+- A9: Classic Integration creation/inspection/submission exposes a job with review URL, exact transaction identity, state and next actions. Unknown external outcomes retain reconciliation; waiting preconditions remain distinct from authorization.
+- A10: optional first-page live pending totals across Request and Intent; bounded to 500, with a lower bound rather than an invented exact count above the cap.
+- A12/S7: public discovery revision 1.1.0, registry and OpenAPI self-discovery, ETag/conditional GET, HEAD, gzip in Node and request identifiers. No public caching of private state; no HEAD fallback to private reconciliation handlers. Rate-limit headers and deployed edge verification remain open.
+- A15: explicit web stellar.toml rewrite, favicon alias, robots and missing-static-resource handling; verify on deployed origins.
+- S1: logical Request capability alternatives for actual inspect/contribute/submit operations. S4/S7: shared revision, tags and operation descriptions; comprehensive examples and naming cleanup remain open.
+- D1: Principal-scoped pending preimage challenges and Node/Python signing examples. D9/D10/D11 partly improved through execution-profile and job inspection docs.
+- U13/U14 partial: contrast adjustments, skip link, empty contacts wording, route reset, unknown workspace route, metadata and static asset caching. Browser/axe/mobile acceptance remains open.
+
+Remaining work: comprehensive structured input diagnostics, error-code catalogue, ABI-aware summaries/precision, webhook and end-to-end integration docs, accessibility/browser and full independent Testnet acceptance. This is not a closure of all 49 feedback items. No new migrations or deployment in this batch.

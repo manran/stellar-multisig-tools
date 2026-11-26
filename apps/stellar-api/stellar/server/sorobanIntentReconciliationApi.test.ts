@@ -165,6 +165,11 @@ test('actual Intent reconciliation route replays owner evidence without a live l
   const signatureBase64 = Buffer.from(signer.sign(stellarHash(preimage.toXdr()))).toString('base64');
   const headers = { 'Content-Type': 'application/json', 'X-MultiSig-Intent-Id': pendingId, Authorization: 'Bearer ' + sign.apiKey };
   const contribute = () => PATCH(new Request('https://example.test/intent', { method: 'PATCH', headers, body: JSON.stringify({ entryIndex: 0, signatureBase64 }) }));
+  const challengeResponse = await GET(new Request('https://example.test/intent', { headers }));
+  assert.equal(challengeResponse.status, 200);
+  const challengeBody = await challengeResponse.json();
+  assert.equal(challengeBody.challenges[0].preimageXdr, preimage.toXDR('base64'));
+  assert.equal(challengeBody.challenges[0].entryIndex, 0);
   const first = await contribute();
   const firstBody = await first.json();
   assert.equal(first.status, 200, JSON.stringify(firstBody));

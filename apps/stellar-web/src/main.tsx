@@ -30,18 +30,19 @@ import { stellarWorkspaceRouteForPath } from './workspaceRoutes';
 import type { StellarWorkspaceRouteKind } from './workspaceRoutes';
 
 interface RouteMatch {
-  kind: StellarWorkspaceRouteKind;
+  kind: StellarWorkspaceRouteKind | 'not-found';
   redirectTo?: string;
 }
 
 function routeFor(pathname: string): RouteMatch {
   const matched = stellarWorkspaceRouteForPath(pathname);
   if (matched) return { kind: matched.kind };
-  return { kind: 'inbox', redirectTo: '' };
+  return { kind: 'not-found' };
 }
 
-function titleFor(kind: StellarWorkspaceRouteKind) {
+function titleFor(kind: RouteMatch['kind']) {
   switch (kind) {
+    case 'not-found': return 'Page not found | MultiSig Tools';
     case 'home': return 'MultiSig Tools for Stellar | Shared authorization without shared custody';
     case 'demo': return 'Interactive Demo | MultiSig Tools';
     case 'inbox': return 'Inbox | MultiSig Tools';
@@ -91,6 +92,7 @@ function RoutedApp() {
 
       const url = new URL(anchor.href, window.location.href);
       if (url.origin !== window.location.origin) return;
+      if (anchor.getAttribute('href')?.startsWith('#') && url.pathname === window.location.pathname) return;
       if (!stellarWorkspaceRouteForPath(url.pathname)) return;
 
       event.preventDefault();
@@ -121,6 +123,7 @@ function RoutedApp() {
   }, [locationKey, route.redirectTo]);
 
   if (route.redirectTo !== undefined) return null;
+  if (route.kind === 'not-found') return <main className="mx-auto max-w-xl px-6 py-16"><h1 className="text-3xl font-bold">Page not found</h1><p className="mt-4">This page does not exist.</p><a className="mst-action-primary mt-6 inline-flex" href="/">Return to home</a></main>;
   if (route.kind === 'demo') return <DemoTreasuryApp />;
 
   let Component;
@@ -152,7 +155,7 @@ function RoutedApp() {
     <StellarWalletProvider>
       <ContractWorkspaceProvider>
         <AddressBookProvider>
-          <Component key={route.kind === 'request' || route.kind === 'authorization' || route.kind === 'receipt' || route.kind === 'contract-workspace' ? locationKey : route.kind} />
+          <Component key={route.kind === 'request' || route.kind === 'authorization' || route.kind === 'receipt' || route.kind === 'contract-workspace' || route.kind === 'new' ? locationKey : route.kind} />
         </AddressBookProvider>
       </ContractWorkspaceProvider>
     </StellarWalletProvider>

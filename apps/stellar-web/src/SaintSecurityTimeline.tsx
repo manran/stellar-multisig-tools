@@ -84,7 +84,7 @@ export default function SaintSecurityTimeline({
       return (
         <aside aria-label="SAINT signing-policy history" className="rounded-xl border border-[var(--color-warning)] px-4 py-3 text-sm">
           <p className="font-semibold text-[var(--color-warning)]">Signing policy changed after this Proposal was created</p>
-          <p className="mt-1 text-[var(--color-ink-2)]">SAINT observed {after.length} change{after.length === 1 ? '' : 's'} within its historical window. Check the current Treasury policy before signing.</p>
+          <p className="mt-1 text-[var(--color-ink-2)]">Account history shows {after.length} change{after.length === 1 ? '' : 's'} within its historical window. Check the current Treasury policy before signing.</p>
           <a className="mt-2 inline-flex items-center gap-1 text-[var(--color-action)] underline" href={'https://stellar.expert/explorer/testnet/tx/' + after[0].txHash} target="_blank" rel="noreferrer">View latest change <ArrowUpRight className="h-3.5 w-3.5" /></a>
           {!history?.complete && <p className="mt-1 text-xs text-[var(--color-muted)]">Historical coverage is incomplete.</p>}
         </aside>

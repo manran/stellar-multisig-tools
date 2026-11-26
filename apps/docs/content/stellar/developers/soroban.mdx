@@ -64,6 +64,27 @@ Use a C address for `contractId`. For a contract argument declared as `MuxedAddr
 
 For an Agent signer, inspect the current Intent and select a needed entry by its authorizer's `entryIndex`. Decode `authorization.authorizationEntriesXdr[entryIndex]` as a SorobanAuthorizationEntry. Use the selected Stellar network passphrase and that authorizer's exact `expirationLedger`. With the Stellar SDK, construct the authorization HashIdPreimage (using `buildAuthorizationEntryPreimage`), hash its binary XDR with SHA-256, and sign the 32-byte hash with the Ed25519 key. Encode the 64-byte signature as Base64 and send `entryIndex` and `signatureBase64` through the signer contribution operation. Do not sign the XDR's Base64 text or use a transaction-envelope signature. Re-inspect the plan after a conflict; a revised plan requires fresh signatures.
 
+The Principal-only `GET /intent` response also supplies `challenges` for its currently actionable entries. Each item contains `entryIndex` and `preimageXdr`. After independently reviewing the invocation and digest, sign the selected challenge locally:
+
+```js
+import { Keypair } from '@stellar/stellar-sdk';
+import { createHash } from 'node:crypto';
+const { entryIndex, preimageXdr } = challenge;
+const digest = createHash('sha256').update(Buffer.from(preimageXdr, 'base64')).digest();
+const signatureBase64 = Keypair.fromSecret(process.env.STELLAR_SIGNER_SECRET).sign(digest).toString('base64');
+// PATCH /intent with { entryIndex, signatureBase64 } and the signer credential.
+```
+
+```python
+from stellar_sdk import Keypair
+import base64, hashlib, os
+digest = hashlib.sha256(base64.b64decode(challenge["preimageXdr"])).digest()
+signature = Keypair.from_secret(os.environ["STELLAR_SIGNER_SECRET"]).sign(digest)
+body = {"entryIndex": challenge["entryIndex"], "signatureBase64": base64.b64encode(signature).decode()}
+```
+
+Never send the Stellar secret key to MultiSig Tools. A completed receipt has no actionable challenge.
+
 ## Browser authorization
 
 The owning Integration Service may issue a short-lived capability bound to one service, Intent, AuthorizationPlan revision/digest, signer, exact browser origin, and expiry.

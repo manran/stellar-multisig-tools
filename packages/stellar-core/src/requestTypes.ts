@@ -106,6 +106,23 @@ export interface SigningRequestSnapshot {
   template?: ReusableTemplateRef;
 }
 
+export interface IntegrationClassicJobProjection {
+  version: 1;
+  id: string;
+  kind: 'classic_transaction';
+  network: StellarNetwork;
+  state: 'waiting_for_authorization' | 'waiting_preconditions' | 'ready' | 'execution_unknown' | 'completed' | 'expired' | 'failed';
+  nextActions: Array<'submit_execution' | 'reconcile_execution'>;
+  actionCalls: Partial<Record<'submit_execution' | 'reconcile_execution',
+    { operationId: string; queryDefaults?: { view: 'reconciliation' } }
+    | { transport: 'external_stellar_submission'; transactionHash: string }>>;
+  reviewUrl: string;
+  statusReason: SigningRequestStatusReason;
+  executionOutcome?: ClassicExecutionEvidence;
+  result?: { transactionHash: string; ledger: number; successful: boolean };
+  externalReference?: string;
+}
+
 export interface SigningRequestAssignment {
   version: 1;
   signerAddress: string;
@@ -164,6 +181,7 @@ export interface SigningRequestHistoryProjection {
 
 export interface CreateSigningRequestResponse {
   request: SigningRequestSnapshot;
+  job?: IntegrationClassicJobProjection;
   capability?: string;
   access?: SigningRequestAccess;
   context?: SigningRequestPrivateContext;

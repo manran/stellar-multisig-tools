@@ -105,6 +105,18 @@ function summary(record: StoredIntegrationCredential | ConfiguredIntegrationCred
   };
 }
 
+export async function inspectOwnIntegrationConfiguration(
+  store: IntegrationCredentialStore,
+  credential: ConfiguredIntegrationCredential,
+  readDurable: boolean,
+): Promise<IntegrationAdminSummary> {
+  const stored = readDurable ? await store.getCredential(credential.serviceId) : null;
+  if (stored && (!stored.enabled || stored.credential.secretHash !== credential.secretHash)) {
+    throw new IntegrationAdminServiceError('Integration credential changed. Authenticate again.', 401, 'invalid_integration_credential');
+  }
+  return stored ? summary(stored, 'durable') : summary(credential, 'bootstrap');
+}
+
 export async function listIntegrationAdminServices(store: IntegrationCredentialStore): Promise<IntegrationAdminSummary[]> {
   let durable: StoredIntegrationCredential[];
   try {

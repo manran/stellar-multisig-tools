@@ -69,6 +69,7 @@ export default function StellarWorkspaceShell({ active, children, networkContext
 
   return (
     <div data-stellar-network={effectiveNetwork} className="mst-workspace-root">
+      <a href="#workspace-main" onClick={(event) => { event.preventDefault(); document.getElementById('workspace-main')?.focus(); }} className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 mst-action-primary">Skip to main content</a>
       <StellarHeader />
       <div className="mst-workspace-layout">
         <aside className="mst-workspace-rail" aria-label="Workspace navigation">
@@ -116,7 +117,7 @@ export default function StellarWorkspaceShell({ active, children, networkContext
           </nav>
           <div className="mst-rail-note">Shared authorization, one workspace.</div>
         </aside>
-        <div className="mst-workspace-content">{children}</div>
+        <div id="workspace-main" tabIndex={-1} className="mst-workspace-content">{children}</div>
       </div>
       <StellarFooter workspace />
     </div>

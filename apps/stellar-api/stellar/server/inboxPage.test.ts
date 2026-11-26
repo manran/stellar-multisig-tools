@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { compareInboxPageKeys, inboxPageParameters, mergeInboxPage, type InboxPageKey } from './inboxPage.js';
+import { compareInboxPageKeys, inboxPageParameters, mergeInboxPage, inboxPendingTotals, type InboxPageKey } from './inboxPage.js';
 import { encodeSigningRequestId } from './requestLocator.js';
 
 const at = '2026-11-25T00:00:00.000Z';
@@ -47,4 +47,11 @@ test('invalid cursor and limit are errors, never an empty page', () => {
   for (const query of ['limit=0','limit=101','limit=1.5','cursor=','cursor=invalid']) {
     assert.throws(() => inboxPageParameters(new URL('https://example.test/inbox?'+query)), { code: 'invalid_inbox_page' });
   }
+});
+
+test('optional live Inbox total is independent of page size and never presents a truncated count as exact', () => {
+  assert.deepEqual(inboxPageParameters(new URL('https://example.test/inbox?limit=1&includeTotals=1')), { limit: 1, includeTotals: true });
+  assert.throws(() => inboxPageParameters(new URL('https://example.test/inbox?includeTotals=1&cursor=invalid')), { code: 'invalid_inbox_page' });
+  assert.deepEqual(inboxPendingTotals([item(1), item(1)], [item(1)]), { total_pending_count: 2, total_pending_count_complete: true });
+  assert.deepEqual(inboxPendingTotals(Array.from({ length: 501 }, (_, i) => item(i)), []), { total_pending_count_lower_bound: 501, total_pending_count_complete: false });
 });

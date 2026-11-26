@@ -576,7 +576,7 @@ export default function PaymentComposer({ network }: Props) {
                             {savedAccounts.map((entry) => <option key={entry.address} value={entry.address}>{labelFor(entry.address, 'account') || entry.label} · {shortAddress(entry.address)}</option>)}
                           </select>
                         ) : (
-                          <span className="text-xs text-neutral-400">Unlock to use Address Book</span>
+                          <span className="text-xs text-neutral-400">{privateUnlocked ? 'No saved recipients' : 'Unlock to use Contacts'}</span>
                         )}
                       </div>
                       <input id={`payment-destination-${index}`} value={recipient.destination} onChange={(event) => updateRecipient(index, { destination: event.target.value.trim() })} placeholder="G... destination" spellCheck={false} className="mst-transaction-control mt-2 w-full font-mono" />

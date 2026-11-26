@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 export function noStoreJson(
   data: unknown,
   status = 200,
@@ -31,4 +33,21 @@ export function publicCorsJson(
     ...headers,
     ...publicCorsHeaders(methods),
   });
+}
+
+
+export function publicDiscoveryJson(request: Request | undefined, data: unknown, methods: string, contentType = 'application/json; charset=utf-8'): Response {
+  const payload = JSON.stringify(data);
+  const etag = 'W/"' + createHash('sha256').update(payload).digest('hex') + '"';
+  const headers = {
+    ...publicCorsHeaders(methods),
+    'Content-Type': contentType,
+    'Cache-Control': 'public, max-age=60, must-revalidate',
+    'ETag': etag,
+    'Access-Control-Expose-Headers': 'ETag, X-Request-Id',
+    'Referrer-Policy': 'no-referrer',
+  };
+  const candidates = request?.headers.get('if-none-match')?.split(',').map(value => value.trim().replace(/^W\//, ''));
+  if (candidates?.includes('*') || candidates?.includes(etag.slice(2))) return new Response(null, { status: 304, headers });
+  return new Response(request?.method === 'HEAD' ? null : payload, { status: 200, headers });
 }

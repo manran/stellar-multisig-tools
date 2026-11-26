@@ -26,7 +26,18 @@ export interface HeadlessOperationDescriptor {
   summary: string;
 }
 
+// Wire operation versions remain 1. This revision identifies the complete published description.
+export const HEADLESS_API_REVISION = '1.1.0';
+
 export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] = [
+  {
+    id: 'discovery.operations.list', version: 1, method: 'GET', path: '/operations',
+    access: 'public', effect: 'none', summary: 'Read operation IDs, authority, effect and schema pointers.',
+  },
+  {
+    id: 'discovery.openapi.read', version: 1, method: 'GET', path: '/openapi.json',
+    access: 'public', effect: 'none', summary: 'Read the versioned OpenAPI description.',
+  },
   {
     id: 'runtime.config.inspect', version: 1, method: 'GET', path: '/runtime-config',
     access: 'public', effect: 'none', summary: 'Read the deployment-owned Stellar network policy and Classic/Soroban managed execution availability.',
@@ -181,7 +192,7 @@ export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] 
   },
   {
     id: 'integration.execution.inspect', version: 1, method: 'GET', path: '/integration-execution',
-    access: 'integration:read', effect: 'none', summary: 'Inspect this Integration execution capability and the public Classic transaction-source channel identities for the selected network.',
+    access: 'integration:read', effect: 'none', summary: 'Inspect this owning Integration configuration, execution capability and public channel identities for the selected network. No secrets are returned.',
   },
   {
     id: 'classic.payment.prepare', version: 1, method: 'POST', path: '/payment-prepare',

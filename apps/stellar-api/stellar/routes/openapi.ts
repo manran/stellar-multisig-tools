@@ -1,9 +1,9 @@
 import { stellarApiBaseForDeployment } from '../../../../packages/stellar-core/src/apiOrigins.js';
 import { configuredDeploymentNetwork, DeploymentNetworkPolicyError } from '../server/deploymentNetworkPolicy.js';
-import { publicCorsHeaders, publicCorsJson } from '../server/httpResponse.js';
+import { publicCorsHeaders, publicCorsJson, publicDiscoveryJson } from '../server/httpResponse.js';
 import { createOpenApiDocument } from '../server/openApiDocument.js';
 
-const METHODS = 'GET, OPTIONS';
+const METHODS = 'GET, HEAD, OPTIONS';
 const MEDIA_TYPE = 'application/vnd.oai.openapi+json;version=3.1';
 
 export async function OPTIONS(): Promise<Response> {
@@ -13,14 +13,10 @@ export async function OPTIONS(): Promise<Response> {
 export async function GET(request: Request): Promise<Response> {
   try {
     const deploymentNetwork = configuredDeploymentNetwork();
-    return publicCorsJson(
+    return publicDiscoveryJson(request,
       createOpenApiDocument(stellarApiBaseForDeployment(deploymentNetwork), deploymentNetwork),
-      METHODS,
-      200,
-      {
-        'Content-Type': MEDIA_TYPE,
-      },
-    );
+      METHODS, MEDIA_TYPE);
+
   } catch (cause) {
     if (cause instanceof DeploymentNetworkPolicyError) {
       return publicCorsJson({ error: cause.message, code: cause.code }, METHODS, cause.status);
@@ -29,3 +25,5 @@ export async function GET(request: Request): Promise<Response> {
     return publicCorsJson({ error: 'API description is unavailable.', code: 'internal_error' }, METHODS, 500);
   }
 }
+
+export const HEAD = GET;

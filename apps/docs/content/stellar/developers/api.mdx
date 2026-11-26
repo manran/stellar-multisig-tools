@@ -21,6 +21,8 @@ curl -sS https://api-testnet.multisig.tools/stellar/openapi.json
 
 Each registry entry's `schema.href` identifies the OpenAPI document and `schema.pointer` identifies its exact logical operation in `x-multisig-operations`. Resolve that pointer instead of choosing a branch of the shared HTTP path. Its parameters, security, request body, success responses, dispatch defaults, and retry policy apply to the selected operation.
 
+The registry's `apiVersion` and OpenAPI `info.version` identify the same contract revision. Individual operation wire versions remain stable. The public discovery documents support ETag revalidation and HEAD; private state is never cached publicly.
+
 ## Core rules
 
 **Network-bound origin:** use the deployment that owns the selected network. A Request/Intent cannot be switched to another network by URL parameter or wallet default.
@@ -32,6 +34,12 @@ Each registry entry's `schema.href` identifies the OpenAPI document and `schema.
 **Retry:** apply the exact operation's `retry.onError` rule first, then `retry.onHttpStatus`, then `retry.defaultError`. If no response was received, use `retry.transportFailure`. Do not infer that a timeout means a write did not commit. For execution reconciliation, apply `retry.onOutcome` to the validated result. A retry strategy never grants permission to sign or submit.
 
 **Webhook:** receive → verify → deduplicate event id → GET canonical Request/Intent/Job → act from current state.
+
+## Inspect your Integration Profile
+
+Call `GET /integration-execution` with the Integration bearer credential. The `configuration` field contains only the owning service's permitted accounts, contract methods, execution modes, profile preferences and webhook configuration. It excludes all secrets and secret hashes. An existing credential is never recovered or silently replaced: an authorized operator must rotate it. For a disposable Testnet service, obtain approval before creating a new unique profile.
+
+Classic and Soroban creation/inspection responses expose their respective Integration jobs with review links. A Classic job reports `waiting_preconditions` separately from signature collection.
 
 ## Webhook verification
 

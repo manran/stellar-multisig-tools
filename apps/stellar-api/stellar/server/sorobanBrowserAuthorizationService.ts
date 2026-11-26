@@ -294,13 +294,13 @@ export interface SorobanBrowserAuthorizationProjection {
   hostedReviewUrl: string;
 }
 
-export function projectSorobanBrowserAuthorization(
+export function projectSorobanSignerChallenges(
   stored: StoredSorobanIntent,
   authorization: SorobanIntentAuthorizationSnapshot,
-  capability: StoredSorobanBrowserAuthorizationCapability,
-  hostedReviewUrl: string,
-): SorobanBrowserAuthorizationProjection {
-  const challenges = pendingForSigner(authorization, capability.signerAddress).map((authorizer) => {
+  signerAddress: string,
+) {
+  if (authorization.status !== 'awaiting_authorization') return [];
+  return pendingForSigner(authorization, signerAddress).map((authorizer) => {
     const entryXdr = authorization.authorizationEntriesXdr[authorizer.entryIndex];
     if (!entryXdr) {
       throw new SorobanBrowserAuthorizationServiceError(
@@ -320,6 +320,15 @@ export function projectSorobanBrowserAuthorization(
       expiresAtLedger: authorizer.expirationLedger,
     };
   });
+}
+
+export function projectSorobanBrowserAuthorization(
+  stored: StoredSorobanIntent,
+  authorization: SorobanIntentAuthorizationSnapshot,
+  capability: StoredSorobanBrowserAuthorizationCapability,
+  hostedReviewUrl: string,
+): SorobanBrowserAuthorizationProjection {
+  const challenges = projectSorobanSignerChallenges(stored, authorization, capability.signerAddress);
   return {
     version: 1,
     intentId: stored.id,

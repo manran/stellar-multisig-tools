@@ -36,6 +36,8 @@ Retaining a Proposal in Human Activity (`PATCH /request` with `retainActivity: t
 
 Use `GET /treasuries` for Treasury metadata, `GET /address-book` for contacts, and `GET /activity?view=work` for unified Request and Intent activity. The operation registry and OpenAPI describe the supported methods, credential scopes, and effects.
 
+Inbox pagination returns page-local counts. On the first page, add `includeTotals=1` to request a separate live count. Read `total_pending_count` only when `total_pending_count_complete` is true. Otherwise `total_pending_count_lower_bound` reports at least 501 items. This is not a frozen snapshot: later pages revalidate signer access.
+
 An Inbox HTTP 503 means discovery is incomplete, not that there are no pending tasks. Preserve existing reminders and retry later. Intent execution preparation can durably change coordination state; treat it as a Write operation.
 
 ## Identity

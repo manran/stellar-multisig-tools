@@ -1,3 +1,7 @@
+import { blobIntegrationCredentialStore } from '../server/blobIntegrationCredentialStore.js';
+import { inspectOwnIntegrationConfiguration, IntegrationAdminServiceError } from '../server/integrationAdminService.js';
+import { durableIntegrationRegistryEnabled } from '../server/integrationCredentialRegistry.js';
+import { configuredSorobanManagedExecutor } from '../server/sorobanIntentConfig.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
 import {
@@ -18,6 +22,7 @@ import {
 } from '../server/integrationCredentialService.js';
 import {
   assertDeploymentNetwork,
+  configuredDeploymentNetwork,
   DeploymentNetworkPolicyError,
 } from '../server/deploymentNetworkPolicy.js';
 import { noStoreJson } from '../server/httpResponse.js';
@@ -31,6 +36,7 @@ function errorResponse(cause: unknown): Response {
     cause instanceof CallerAuthenticationError
     || cause instanceof AgentCredentialServiceError
     || cause instanceof IntegrationCredentialServiceError
+    || cause instanceof IntegrationAdminServiceError
     || cause instanceof ClassicManagedChannelConfigurationError
     || cause instanceof DeploymentNetworkPolicyError
   ) {
@@ -88,7 +94,11 @@ export async function GET(request: Request): Promise<Response> {
     const externalSources = new Set(caller.credential.classicExternalExecutionSourceAccounts);
     const managedSourceAccountCount = caller.credential.classicSourceAccounts
       .filter((accountId) => !externalSources.has(accountId)).length;
+    const configuration = await inspectOwnIntegrationConfiguration(blobIntegrationCredentialStore, caller.credential,
+      configuredDeploymentNetwork() === 'testnet' || durableIntegrationRegistryEnabled());
     return noStoreJson({
+      configuration,
+      soroban: { managedAvailable: Boolean(configuredSorobanManagedExecutor(network)), externalExecutorCount: caller.credential.sorobanExecutionAccounts.length },
       operation: 'integration.execution.inspect',
       version: 1,
       serviceId: caller.credential.serviceId,

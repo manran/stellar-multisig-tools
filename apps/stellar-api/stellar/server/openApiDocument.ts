@@ -1,4 +1,5 @@
 import {
+  HEADLESS_API_REVISION,
   HEADLESS_OPERATION_CATALOG,
   type HeadlessOperationAccess,
   type HeadlessOperationDescriptor,
@@ -32,6 +33,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
     values.push(
       parameter('limit', 'query', false, { type: 'integer', minimum: 1, maximum: 100, default: 50 }, 'Maximum combined Request and Intent tasks on this page.'),
       parameter('cursor', 'query', false, { type: 'string' }, 'Opaque nextCursor from the previous Inbox page. Each page revalidates live signer access.'),
+      parameter('includeTotals', 'query', false, { type: 'string', const: '1' }, 'First page only: scan up to 500 live work items for a pending total; larger results return a lower bound.'),
     );
   }
   if (path === '/activity') {
@@ -125,6 +127,8 @@ function successSchema(path: string, method: string): OpenApiObject {
   if (path === '/address-book') return schema(method === 'get' ? 'ContactListResult' : method === 'put' ? 'ContactSaveResult' : 'ContactDeleteResult');
   if (path === '/agent-grants') return schema('AgentGrantResult');
   if (path === '/integration-testnet') return schema('TestnetIntegrationCreateResult');
+  if (path === '/operations') return schema('OperationRegistry');
+  if (path === '/openapi.json') return { type: 'object', required: ['openapi', 'info', 'paths', 'components'], additionalProperties: true };
   if (path === '/integration-execution') return schema('IntegrationExecutionInspectResult');
   if (path === '/contract-interface') return schema('ContractInterfaceResult');
   if (path === '/intent' && method === 'post') return schema('ContractIntentCreateResult');
@@ -199,6 +203,7 @@ function openApiPaths(): OpenApiObject {
     pathItem[method] = {
       operationId: transportOperationId(path, method, operations),
       summary: operations.map((item) => item.summary).join(' / '),
+      description: operations.map((item) => item.summary).join(' '),
       tags: [first.id.split('.')[0]],
       security: security(path, method, first.access),
       ...(parameters.length ? { parameters } : {}),
@@ -415,6 +420,37 @@ const components: OpenApiObject = {
           properties: { serviceId: { type: 'string' }, recovery: { const: 'new_service_id_or_authorized_operator_rotation' } }, additionalProperties: false },
       }, additionalProperties: false,
     },
+    IntegrationContractScopes: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['contractId', 'methods'],
+        properties: {
+          contractId,
+          methods: { type: 'array', minItems: 1, items: { type: 'string', pattern: '^[A-Za-z0-9_]{1,64}$' } },
+          execution: {
+            oneOf: [
+              {
+                type: 'object',
+                required: ['mode'],
+                properties: { mode: { type: 'string', const: 'multisigtools', description: 'Requires runtime-config capabilities.sorobanManagedExecution for the selected network.' } },
+                additionalProperties: false,
+              },
+              {
+                type: 'object',
+                required: ['mode', 'executor'],
+                properties: {
+                  mode: { type: 'string', const: 'external' },
+                  executor: accountId,
+                },
+                additionalProperties: false,
+              },
+            ],
+          },
+        },
+        additionalProperties: false,
+      },
+    },
     TestnetIntegrationCreateInput: {
       type: 'object',
       required: ['serviceId', 'label'],
@@ -429,37 +465,7 @@ const components: OpenApiObject = {
         networks: { type: 'array', items: stellarNetwork, description: 'Optional compatibility field; self-service always uses Testnet.' },
         classicSourceAccounts: { type: 'array', items: accountId },
         classicExternalExecutionSourceAccounts: { type: 'array', items: accountId },
-        sorobanContracts: {
-          type: 'array',
-          items: {
-            type: 'object',
-            required: ['contractId', 'methods'],
-            properties: {
-              contractId,
-              methods: { type: 'array', minItems: 1, items: { type: 'string', pattern: '^[A-Za-z0-9_]{1,64}$' } },
-              execution: {
-                oneOf: [
-                  {
-                    type: 'object',
-                    required: ['mode'],
-                    properties: { mode: { type: 'string', const: 'multisigtools', description: 'Requires runtime-config capabilities.sorobanManagedExecution for the selected network.' } },
-                    additionalProperties: false,
-                  },
-                  {
-                    type: 'object',
-                    required: ['mode', 'executor'],
-                    properties: {
-                      mode: { type: 'string', const: 'external' },
-                      executor: accountId,
-                    },
-                    additionalProperties: false,
-                  },
-                ],
-              },
-            },
-            additionalProperties: false,
-          },
-        },
+        sorobanContracts: schema('IntegrationContractScopes'),
         sorobanExecutionAccounts: { type: 'array', items: accountId },
         sorobanDefaultExecutor: accountId,
         profile: {
@@ -535,11 +541,43 @@ const components: OpenApiObject = {
       },
       additionalProperties: false,
     },
+    OperationRegistry: {
+      type: 'object', required: ['contract', 'version', 'apiVersion', 'base', 'openapi', 'documentation', 'operations'],
+      properties: {
+        contract: { const: 'multisig-tools.headless-operations' }, version: operationVersion,
+        apiVersion: { type: 'string' }, base: { type: 'string' }, openapi: { type: 'string' }, documentation: { type: 'string' },
+        operations: { type: 'array', items: { type: 'object', required: ['id', 'method', 'path', 'access', 'effect', 'schema'], additionalProperties: true } },
+      }, additionalProperties: false,
+    },
+    IntegrationConfiguration: {
+      type: 'object',
+      required: ['serviceId', 'label', 'enabled', 'source', 'networks', 'classicSourceAccounts', 'classicExternalExecutionSourceAccounts', 'sorobanContracts', 'sorobanExecutionAccounts', 'profile'],
+      properties: {
+        serviceId: { type: 'string' }, label: { type: 'string' }, enabled: { type: 'boolean' },
+        source: { enum: ['bootstrap', 'durable'] }, networks: { type: 'array', items: stellarNetwork },
+        classicSourceAccounts: { type: 'array', items: accountId },
+        classicExternalExecutionSourceAccounts: { type: 'array', items: accountId },
+        sorobanContracts: schema('IntegrationContractScopes'),
+        sorobanExecutionAccounts: { type: 'array', items: accountId },
+        sorobanDefaultExecutor: accountId,
+        webhook: { type: 'object', required: ['version', 'url', 'enabled', 'secretVersion'],
+          properties: { version: operationVersion, url: { type: 'string', format: 'uri' }, enabled: { type: 'boolean' }, secretVersion: { type: 'integer', minimum: 1 } }, additionalProperties: false },
+        profile: { type: 'object', required: ['version', 'authorizationExperience'],
+          properties: { version: operationVersion, authorizationExperience: { enum: ['hosted', 'native', 'headless'] } }, additionalProperties: false },
+        createdAt: timestamp, updatedAt: timestamp,
+      },
+      additionalProperties: false,
+      description: 'Authenticated owning Integration configuration, excluding all secrets and secret hashes.',
+    },
     IntegrationExecutionInspectResult: {
       type: 'object',
-      required: ['operation', 'version', 'serviceId', 'network', 'classic'],
+      required: ['operation', 'version', 'serviceId', 'network', 'classic', 'configuration', 'soroban'],
       properties: {
         operation: { type: 'string', const: 'integration.execution.inspect' },
+        configuration: schema('IntegrationConfiguration'),
+        soroban: { type: 'object', required: ['managedAvailable', 'externalExecutorCount'],
+          properties: { managedAvailable: { type: 'boolean' }, externalExecutorCount: { type: 'integer', minimum: 0 } }, additionalProperties: false },
+
         version: operationVersion,
         serviceId: { type: 'string' },
         network: stellarNetwork,
@@ -942,6 +980,7 @@ const components: OpenApiObject = {
               additionalProperties: false },
           }, additionalProperties: false, description: 'Review summary decoded from the stored HostFunction XDR. XLM amount is in XLM, not stroops. Generic arguments are previews, not authoritative signing input.' },
         evidence: { type: 'array', items: schema('SorobanIntentEvidenceEvent') },
+        challenges: { type: 'array', items: schema('BrowserAuthorizationChallenge'), description: 'Pending preimages for the authenticated signer only; no reusable challenges for completed or expired Intents.' },
         job: schema('IntegrationSorobanJob'),
         task: schema('AgentTask'),
       },
@@ -973,7 +1012,7 @@ const components: OpenApiObject = {
       required: ['entryIndex', 'authorizer', 'preimageXdr', 'expiresAtLedger'],
       properties: {
         entryIndex: { type: 'integer', minimum: 0 },
-        authorizer: accountId,
+        authorizer: { oneOf: [accountId, contractId] },
         preimageXdr: { type: 'string', minLength: 1, description: 'Signer-specific Soroban authorization preimage for wallet signAuthEntry().' },
         expiresAtLedger: { type: 'integer', minimum: 1 },
       },
@@ -1688,6 +1727,9 @@ const components: OpenApiObject = {
         complete: { type: 'boolean', description: 'True on the last page of this live enumeration; not a point-in-time ledger snapshot.' },
         nextCursor: { type: 'string', description: 'Present when complete is false. Continue before treating absent tasks as cleared.' },
         pending_count: { type: 'integer', minimum: 0, description: 'Number of returned work items on this page.' },
+        total_pending_count: { type: 'integer', minimum: 0, description: 'Live scan count when includeTotals=1 and complete.' },
+        total_pending_count_complete: { type: 'boolean' },
+        total_pending_count_lower_bound: { type: 'integer', minimum: 501 },
         action_count: { type: 'integer', minimum: 0, description: 'For Agent callers, the number of tasks on this page with at least one nextAction whose available flag is true.' },
         signature_required_count: { type: 'integer', minimum: 0, description: 'For Agent callers, the number of returned tasks with signatureRequired=true, regardless of scope.' },
         requests: { type: 'array', items: { type: 'object', additionalProperties: true } },
@@ -1695,6 +1737,32 @@ const components: OpenApiObject = {
         tasks: { type: 'array', items: schema('AgentTask'), description: 'Present for Agent callers. A classic_transaction task refers to a Request; a soroban_contract task refers to an Intent. Both counts include both kinds.' },
       },
       additionalProperties: true,
+    },
+    IntegrationClassicJob: {
+      type: 'object',
+      required: ['version', 'id', 'kind', 'network', 'state', 'nextActions', 'actionCalls', 'reviewUrl', 'statusReason'],
+      properties: {
+        version: operationVersion, id: { type: 'string' }, kind: { const: 'classic_transaction' }, network: stellarNetwork,
+        state: { enum: ['waiting_for_authorization', 'waiting_preconditions', 'ready', 'execution_unknown', 'completed', 'expired', 'failed'] },
+        nextActions: { type: 'array', uniqueItems: true, items: { enum: ['submit_execution', 'reconcile_execution'] } },
+        actionCalls: { type: 'object', additionalProperties: false, properties: {
+          submit_execution: { oneOf: [
+            { type: 'object', required: ['operationId'], properties: { operationId: { const: 'integration.request.submit' } }, additionalProperties: false },
+            { type: 'object', required: ['transport', 'transactionHash'], properties: { transport: { const: 'external_stellar_submission' }, transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' } }, additionalProperties: false },
+          ] },
+          reconcile_execution: { type: 'object', required: ['operationId', 'queryDefaults'], properties: {
+            operationId: { const: 'integration.request.execution.reconcile' },
+            queryDefaults: { type: 'object', required: ['view'], properties: { view: { const: 'reconciliation' } }, additionalProperties: false },
+          }, additionalProperties: false },
+        } },
+        reviewUrl: { type: 'string', format: 'uri' }, statusReason: { type: 'string' },
+        executionOutcome: schema('ClassicExecutionEvidence'),
+        result: { type: 'object', required: ['transactionHash', 'ledger', 'successful'], properties: {
+          transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' }, ledger: { type: 'integer', minimum: 1 }, successful: { type: 'boolean' },
+        }, additionalProperties: false },
+        externalReference: { type: 'string' },
+      },
+      additionalProperties: false,
     },
     ProposalResult: {
       type: 'object',
@@ -1712,6 +1780,7 @@ const components: OpenApiObject = {
         duplicateSignatureCount: { type: 'integer', minimum: 0 },
         decision: { type: 'string', enum: ['declined'] },
         task: schema('AgentTask'),
+        job: schema('IntegrationClassicJob'),
       },
       additionalProperties: false,
     },
@@ -1839,6 +1908,11 @@ function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
       '/payment-prepare', '/account-create-prepare',
     ].includes(path)) {
       security.push({ humanBearer: [] }, { humanSession: [] });
+    }
+    if (['proposal.inspect', 'proposal.contribute', 'proposal.submit'].includes(id)) {
+      security.push({ requestCapability: [] });
+      const capability = ((transport.parameters ?? []) as OpenApiObject[]).find(p => p.name === 'x-multisig-capability');
+      if (capability) parameters.push(capability);
     }
     const grant = id.startsWith('agent.grant.');
     if (grant) {
@@ -1988,9 +2062,10 @@ export function createOpenApiDocument(
     jsonSchemaDialect: 'https://json-schema.org/draft/2020-12/schema',
     info: {
       title: 'MultiSigTools Headless Operations',
-      version: '1.0.0',
+      version: HEADLESS_API_REVISION,
       description: 'Composable Stellar coordination operations for Human, signer Agent, bot, script, wallet, plugin, MCP, CLI, and scoped external-service consumers. Building or preparing XDR never grants signer authority. Signer Agent credentials cannot directly submit. Integration-owned Requests may be automatically submitted at quorum, retried by their Integration, or designated for external execution.',
     },
+    tags: [...new Set(HEADLESS_OPERATION_CATALOG.map(item => item.id.split('.')[0]))].map(name => ({ name })),
     servers: [{ url: origin }],
     paths,
     components,
