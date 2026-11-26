@@ -103,7 +103,7 @@ Review `execution.effectsDiff` and `execution.effects`. If the operation reports
 ```js
 import { Keypair, TransactionBuilder, Networks, rpc } from '@stellar/stellar-sdk';
 const tx = TransactionBuilder.fromXDR(execution.xdr, Networks.TESTNET);
-if (tx.hash().toString('hex') !== execution.transactionHash) throw new Error('Hash mismatch');
+if (Buffer.from(tx.hash()).toString('hex') !== execution.transactionHash) throw new Error('Hash mismatch');
 const executor = Keypair.fromSecret(process.env.STELLAR_EXECUTOR_SECRET);
 if (tx.source !== executor.publicKey()) throw new Error('Executor mismatch');
 tx.sign(executor);
@@ -133,7 +133,7 @@ import { Keypair } from '@stellar/stellar-sdk';
 import { createHash } from 'node:crypto';
 const { entryIndex, preimageXdr } = challenge;
 const digest = createHash('sha256').update(Buffer.from(preimageXdr, 'base64')).digest();
-const signatureBase64 = Keypair.fromSecret(process.env.STELLAR_SIGNER_SECRET).sign(digest).toString('base64');
+const signatureBase64 = Buffer.from(Keypair.fromSecret(process.env.STELLAR_SIGNER_SECRET).sign(digest)).toString('base64');
 // PATCH /intent with { entryIndex, signatureBase64 } and the signer credential.
 ```
 

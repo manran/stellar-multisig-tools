@@ -85,7 +85,7 @@ test('reconciliation persists a successful independently verified network result
       hash: transactionHash,
       ledger: 2222,
       successful: true,
-      createdAt: '2026-09-16T10:03:00.000Z',
+      createdAt: '2026-09-16T10:03:00Z',
     };
   };
   const first = await reconcileSorobanIntentExecution(store, store.stored.id, transactionHash, {
@@ -104,7 +104,7 @@ test('reconciliation persists a successful independently verified network result
   });
   assert.equal(replay.observed, true);
   assert.equal(replay.replayed, true);
-  assert.equal(replay.observation?.observedAt, '2026-09-16T10:04:00.000Z');
+  assert.deepEqual(replay.observation, first.observation);
   assert.equal(loads, 1);
 });
 

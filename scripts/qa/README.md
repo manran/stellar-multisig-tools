@@ -59,6 +59,8 @@ node scripts/qa/hostedTestnetLifecycle.mjs --live --proposer    # Delegated paym
 node scripts/qa/hostedTestnetLifecycle.mjs --live --agent  # scoped Agent signer lifecycle
 node scripts/qa/hostedTestnetLifecycle.mjs --integration https://stellar-testnet.multisig.tools/ # strict read-only discovery
 node scripts/qa/hostedTestnetLifecycle.mjs --live --integration https://stellar-testnet.multisig.tools/ # MSI + two MSA signers
+node scripts/qa/hostedTestnetLifecycle.mjs --live --integration --external https://stellar-testnet.multisig.tools/ # external Classic receipt and non-inclusion
+node scripts/qa/hostedTestnetLifecycle.mjs --live --soroban https://stellar-testnet.multisig.tools/ # detached AUTH, exact resume, cancellation guard and ledger receipt
 ```
 
 The Integration variant discovers its business operation paths and access levels

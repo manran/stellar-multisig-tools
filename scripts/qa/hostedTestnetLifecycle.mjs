@@ -3,8 +3,8 @@
 // two independently signed contributions, and one real Stellar transaction.
 // No saved keys, email invitations, Mainnet calls, or production credentials.
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
-import { Account, Asset, BASE_FEE, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
+import { randomBytes, createHash } from 'node:crypto';
+import { Account, Asset, BASE_FEE, Keypair, Networks, Operation, TransactionBuilder, rpc } from '@stellar/stellar-sdk';
 
 const TESTNET_API = 'https://api-testnet.multisig.tools/stellar';
 let API = TESTNET_API;
@@ -596,7 +596,110 @@ async function integrationE2E() {
   console.log(JSON.stringify({ evidence: trace }, null, 2));
 }
 
+async function sorobanE2E() {
+  await discoverIntegration();
+  check(LIVE, 'Pass --live to authorize disposable Testnet-only transactions.');
+  const alice = Keypair.random(), bob = Keypair.random(), carol = Keypair.random(), executor = Keypair.random();
+  const source = alice.publicKey(), destination = executor.publicKey();
+  await Promise.all([fund(source), fund(destination)]);
+  const account = await horizon('/accounts/' + source);
+  const setup = new TransactionBuilder(new Account(source, account.sequence), { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
+    .addOperation(Operation.setOptions({ signer: { ed25519PublicKey: bob.publicKey(), weight: 1 } }))
+    .addOperation(Operation.setOptions({ signer: { ed25519PublicKey: carol.publicKey(), weight: 1 } }))
+    .addOperation(Operation.setOptions({ masterWeight: 1, lowThreshold: 2, medThreshold: 2, highThreshold: 2 }))
+    .setTimeout(120).build();
+  setup.sign(alice);
+  check((await submitXdr(setup.toXDR())).successful, 'Temporary Treasury setup failed');
+  record('soroban-disposable-2-of-3-treasury', { account: source, executor: destination });
+  const contractId = Asset.native().contractId(Networks.TESTNET);
+  const serviceId = 'soroban-qa-' + randomBytes(6).toString('hex');
+  const profile = await call('/integration-testnet', 'POST', { serviceId, label: 'Soroban recovery QA',
+    sorobanContracts: [{ contractId, methods: ['transfer'], execution: { mode: 'external', executor: destination } }],
+    sorobanExecutionAccounts: [destination], profile: { authorizationExperience: 'hosted' } }, {}, 201);
+  const msi = { Authorization: 'Bearer ' + profile.apiKey };
+  const input = { network: 'testnet', contractId, method: 'transfer', arguments: { from: source, to: destination, amount: '5000000' } };
+  const idem = { ...msi, 'Idempotency-Key': serviceId + '-transfer' };
+  const typo = await call('/intent', 'POST', { ...input, privateNot: 'typo' }, idem, 400);
+  check(typo.code, 'Unknown input field did not fail with a structured error');
+  const created = await call('/intent', 'POST', input, idem, 201);
+  const id = created.intent.id;
+  const scoped = { ...msi, 'X-MultiSig-Intent-Id': id };
+  const replay = await call('/intent', 'POST', input, idem);
+  check(replay.replayed && replay.intent.id === id, 'Intent idempotency failed');
+  const summary = (await call('/intent?includeMetadata=1', 'GET', undefined, scoped)).callSummary;
+  check(summary?.nativeXlmTransfer?.amount === '0.5' && summary.nativeXlmTransfer.from === source && summary.nativeXlmTransfer.to === destination,
+    'Incorrect human-readable native transfer summary');
+  record('soroban-exact-intent-and-replay', { intentId: id });
+  const paired = [];
+  try {
+    for (const signer of [bob, carol]) {
+      const pair = await pairAgent(signer, 'Soroban recovery QA');
+      paired.push({ signer, ...pair });
+      const auth = { Authorization: 'Bearer ' + pair.agent.apiKey, 'X-MultiSig-Intent-Id': id };
+      const inbox = await call('/inbox', 'GET', undefined, { Authorization: auth.Authorization });
+      check(inbox.tasks?.some(t => t.id === id && t.signatureRequired), 'Agent cannot discover required AUTH in Inbox');
+      const snapshot = await call('/intent', 'GET', undefined, auth);
+      const challenge = snapshot.challenges?.find(c => c.authorizer === source);
+      check(challenge?.preimageXdr, 'Required AUTH preimage not provided');
+      const digest = createHash('sha256').update(Buffer.from(challenge.preimageXdr, 'base64')).digest();
+      const contribution = await call('/intent', 'PATCH', { entryIndex: challenge.entryIndex, signatureBase64: Buffer.from(signer.sign(digest)).toString('base64') }, auth);
+      check(contribution.added, 'AUTH contribution not recorded');
+      if (paired.length === 1) check(contribution.authorization.status === 'awaiting_authorization', 'Authorization ready before quorum');
+      else check(contribution.authorization.status === 'authorization_ready', 'Two AUTH signatures did not reach quorum');
+      record('soroban-agent-inbox-auth-contribution', { signer: paired.length });
+    }
+    const prepared = await call('/intent', 'PUT', { action: 'prepare_execution', executor: destination }, scoped);
+    const e = prepared.execution;
+    check(e?.xdr && e.executionSource === destination, 'Missing exact executor package');
+    const resume = await call('/intent', 'PUT', { action: 'resume_execution', transactionHash: e.transactionHash }, scoped);
+    check(resume.execution.xdr === e.xdr && resume.execution.transactionHash === e.transactionHash &&
+      resume.execution.transactionSequence === e.transactionSequence && resume.execution.validUntil === e.validUntil,
+      'Resumption changed the released transaction');
+    record('soroban-exact-package-resume', { transactionHash: e.transactionHash });
+    const pending = await call('/intent', 'GET', undefined, scoped);
+    check(pending.job.unresolvedTransactionHashes.includes(e.transactionHash) && !pending.job.nextActions.includes('cancel'), 'Unresolved package exposes cancellation');
+    const blocked = await call('/intent', 'PUT', { action: 'cancel' }, scoped, 409);
+    check(blocked.code === 'intent_execution_outcome_unknown', 'Unresolved package cancellation not blocked');
+    const unknown = await call('/intent', 'PUT', { action: 'reconcile_execution', transactionHash: e.transactionHash }, scoped);
+    check(unknown.outcome === 'unknown' && !unknown.observation && !unknown.nonInclusionProof, 'Unsigned prepared package has invented evidence');
+    record('soroban-unresolved-cancel-guard');
+    const tx = TransactionBuilder.fromXDR(e.xdr, Networks.TESTNET);
+    check(tx.source === destination && Buffer.from(tx.hash()).toString('hex') === e.transactionHash, 'Executor package hash/source mismatch');
+    tx.sign(executor);
+    const rpcServer = new rpc.Server('https://soroban-testnet.stellar.org', { timeout: 15000 });
+    const submitted = await rpcServer.sendTransaction(tx);
+    check(['PENDING','DUPLICATE'].includes(submitted.status), 'Stellar RPC rejected exact envelope: ' + submitted.status);
+    let result;
+    for (let i = 0; i < 24; i++) {
+      result = await call('/intent', 'PUT', { action: 'reconcile_execution', transactionHash: e.transactionHash }, scoped);
+      if (result.outcome !== 'unknown') break;
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+    check(result?.outcome === 'successful' && result.observation?.successful === true && result.transactionHash === e.transactionHash, 'Missing verified Soroban result: ' + result?.outcome);
+    const again = await call('/intent', 'PUT', { action: 'reconcile_execution', transactionHash: e.transactionHash }, scoped);
+    check(again.replayed, 'Stored Soroban receipt was not replayed');
+    assert.deepEqual(again.observation, result.observation, 'Stored Soroban receipt changed on replay');
+    const chain = await rpcServer.getTransaction(e.transactionHash);
+    check(chain.status === 'SUCCESS' && chain.ledger === result.observation.ledger, 'Stellar result differs from MST receipt');
+    record('soroban-real-ledger-reconciliation', { intentId: id, transactionHash: e.transactionHash, ledger: chain.ledger });
+    for (const item of paired) {
+      const terminal = await call('/intent', 'GET', undefined, { Authorization: 'Bearer ' + item.agent.apiKey, 'X-MultiSig-Intent-Id': id });
+      check(terminal.authorization.status === 'completed' && !terminal.authorization.authorizationEntriesXdr.length && !terminal.challenges?.length, 'Contributor cannot read historical receipt or reusable AUTH leaked');
+    }
+    record('soroban-historical-contributor-receipt');
+  } finally {
+    for (const item of paired) {
+      const revoked = await call('/agent-access', 'DELETE', { credentialId: item.agent.credential.credentialId }, humanHeaders(item.signer.publicKey(), item.bobToken));
+      check(revoked.credential?.revokedAt, 'Soroban QA credential cleanup failed');
+      record('soroban-agent-revoked');
+    }
+  }
+  console.log('LIVE SOROBAN TESTNET E2E PASSED');
+  console.log(JSON.stringify({ evidence: trace }, null, 2));
+}
+
 async function main() {
+  if (process.argv.includes('--soroban')) return sorobanE2E();
   if (INTEGRATION) return integrationE2E();
   const runtime = await call('/runtime-config');
   check(runtime.fixedNetwork === 'testnet', 'Refusing non-Testnet API deployment');

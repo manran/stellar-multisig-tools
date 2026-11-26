@@ -171,7 +171,7 @@ function verifiedObservation(
     ledger: result.ledger,
     successful: result.successful,
     observedAt,
-    ...(result.createdAt ? { networkCreatedAt: result.createdAt } : {}),
+    ...(result.createdAt && Number.isFinite(Date.parse(result.createdAt)) ? { networkCreatedAt: new Date(result.createdAt).toISOString() } : {}),
   };
 }
 export async function reconcileSorobanIntentExecution(
@@ -279,6 +279,10 @@ export async function reconcileSorobanIntentExecution(
     (options.now ?? new Date()).toISOString(),
   );
   await store.putExecutionObservation(id, observation);
+  const canonical = await store.getExecutionObservation(id, normalizedHash);
+  if (!canonical) {
+    throw new SorobanIntentExecutionReconciliationServiceError('Unable to read the persisted execution receipt.', 503, 'intent_execution_reconciliation_unavailable');
+  }
   return {
     version: 1,
     intentId: stored.id,
@@ -286,7 +290,7 @@ export async function reconcileSorobanIntentExecution(
     transactionHash: normalizedHash,
     observed: true,
     replayed: false,
-    observation,
-    outcome: observation.successful ? 'successful' : 'failed',
+    observation: canonical,
+    outcome: canonical.successful ? 'successful' : 'failed',
   };
 }
