@@ -54,7 +54,7 @@ test('new transaction entry keeps primary actions separate from low-frequency St
   assert.match(contractComposer, /inspectContractOperation\(contractId, network\)/);
   assert.match(contractComposer, /fetch\('\/api\/intent'/);
   assert.doesNotMatch(contractComposer, /contractArgumentsToScVals/);
-  assert.match(contractComposer, /source-free Soroban Intent/);
+  assert.match(contractComposer, /First review and collect the required contract approvals/);
   assert.match(contractComposer, /Transaction construction happens only after the required Soroban authorization is complete/);
   assert.ok(app.indexOf('Import a prepared transaction') < app.indexOf('More transaction types'));
   assert.match(app, /stellarHref\('\/new\/import'\)/);
@@ -81,7 +81,7 @@ test('transaction lifetime uses one shared button-group primitive across Human c
     assert.match(composer, /TransactionLifetimePicker/);
   }
   assert.doesNotMatch(contractCall, /TransactionLifetimePicker/);
-  assert.match(contractCall, /No transaction source, sequence, fee, lifetime or envelope signature is chosen/);
+  assert.match(contractCall, /Choose the transaction source and fee after approval/);
 });
 
 test('connected home switches to an actionable Dashboard without a first-use choice modal', () => {

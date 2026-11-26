@@ -35,5 +35,6 @@ export async function limitAgentGrant(
       throw cause;
     }
   }
-  throw new AgentGrantError('Too many Agent pairing attempts. Try again later.', 429, 'agent_pairing_rate_limited');
+  throw new AgentGrantError('Too many Agent pairing attempts. Try again later.', 429, 'agent_pairing_rate_limited',
+    { retryAfterSeconds: Math.max(1, Math.ceil(((period + 1) * WINDOW_MS - now.getTime()) / 1000)), limit: maxAttempts, remaining: 0 });
 }

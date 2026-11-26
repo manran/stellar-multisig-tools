@@ -120,8 +120,8 @@ test('Guided Contract Call is Intent-first and defers transaction execution choi
   assert.doesNotMatch(composer, /contract-source/);
   assert.doesNotMatch(composer, /transactionSource/);
   assert.doesNotMatch(composer, /TransactionLifetimePicker/);
-  assert.match(composer, /source-free Soroban Intent/);
-  assert.match(composer, /No transaction source, sequence, fee, lifetime or envelope signature is chosen/);
+  assert.match(composer, /First review and collect the required contract approvals/);
+  assert.match(composer, /Choose the transaction source and fee after approval/);
   assert.match(composer, /Continue to authorization/);
   assert.match(composer, /navigateWorkspace\('\/a'/);
   assert.match(composer, /Auto-load the interface once a complete C-address is valid/);

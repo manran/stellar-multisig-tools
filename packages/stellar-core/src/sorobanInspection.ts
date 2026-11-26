@@ -182,6 +182,9 @@ function inspectContractCall(func: HostFunctionShape): SorobanContractCallInspec
 
 export interface SorobanCallSummary extends SorobanContractCallInspection {
   nativeXlmTransfer?: { from: string; to: string; amount: string };
+  argumentNames?: string[];
+  interfaceBasis?: 'current_contract';
+  tokenTransfer?: { from: string; to: string; rawAmount: string; amount: string; symbol: string; decimals: number; observedLedger: number; basis: 'contract_reported' };
 }
 
 // Derive the review summary from the exact stored HostFunction, never from
@@ -202,6 +205,35 @@ export function inspectSorobanHostFunctionXdr(encoded: string, network: StellarN
   } catch {
     return null;
   }
+}
+
+export function enrichSorobanCallSummary(
+  encoded: string, network: StellarNetwork,
+  methods: readonly { name: string; inputs: readonly { name: string; typeLabel: string }[]; outputs: readonly string[] }[],
+  metadata?: { symbol: string; decimals: number; observedLedger: number },
+): SorobanCallSummary | null {
+  const call = inspectSorobanHostFunctionXdr(encoded, network);
+  if (!call) return null;
+  const method = methods.find(item => item.name === call.functionName && item.inputs.length === call.argumentPreviews.length);
+  if (!method) return call;
+  const summary: SorobanCallSummary = { ...call, argumentNames: method.inputs.map(item => item.name), interfaceBasis: 'current_contract' };
+  if (call.nativeXlmTransfer || !metadata || method.name !== 'transfer'
+    || method.inputs.length !== 3 || method.inputs[0].typeLabel !== 'Address'
+    || !['Address', 'MuxedAddress'].includes(method.inputs[1].typeLabel)
+    || method.inputs[2].typeLabel !== 'I128'
+    || !Number.isSafeInteger(metadata.decimals) || metadata.decimals < 0 || metadata.decimals > 38
+    || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,23}$/.test(metadata.symbol)
+    || !Number.isSafeInteger(metadata.observedLedger) || metadata.observedLedger <= 0) return summary;
+  const func = xdr.HostFunction.fromXdr(encoded, 'base64');
+  if (func.type !== 'hostFunctionTypeInvokeContract') return summary;
+  const args = func.value.args;
+  if (args[0]?.type !== 'scvAddress' || args[1]?.type !== 'scvAddress' || args[2]?.type !== 'scvI128') return summary;
+  const [from, to, raw] = args.map(value => scValToNative(value));
+  if (typeof from !== 'string' || typeof to !== 'string' || typeof raw !== 'bigint' || raw < 0n) return summary;
+  const scale = 10n ** BigInt(metadata.decimals);
+  const amount = metadata.decimals === 0 ? raw.toString()
+    : ((raw / scale).toString() + '.' + (raw % scale).toString().padStart(metadata.decimals, '0')).replace(/0+$/, '').replace(/\.$/, '');
+  return { ...summary, tokenTransfer: { from, to, rawAmount: raw.toString(), amount, ...metadata, basis: 'contract_reported' } };
 }
 
 /** Compact list label. Unknown contract amounts must not be represented as XLM. */

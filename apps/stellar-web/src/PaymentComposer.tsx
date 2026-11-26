@@ -598,6 +598,7 @@ export default function PaymentComposer({ network }: Props) {
                         {action === 'create_account' ? <div className="mst-transaction-static-field">XLM <span className="ml-1 font-normal text-neutral-400">required for CreateAccount</span></div> : <PaymentAssetPicker assets={assets} value={recipient.assetKey} onChange={(assetKey) => updateRecipient(index, { assetKey })} disabled={!sourceAccount} ariaLabel={`Recipient ${index + 1} asset`} />}
                       </div>
                     </div>
+                    {sourceValid && recipient.destination.trim() === source.trim() && <p role="status" className="mt-2 text-sm text-amber-700 dark:text-amber-300">The recipient is the same as the source account. Check that this is intentional.</p>}
                     {recipient.amount && !amountValid && <div className="mt-2 text-sm text-red-700 dark:text-red-300">Enter an amount greater than 0 with up to 7 decimal places. Use a period as the decimal separator, without grouping separators.</div>}
                     {sourceAccount && action === 'payment' && !asset && <div className="mt-2 text-sm text-red-700 dark:text-red-300">This asset is no longer available from this treasury. Choose an available asset before continuing.</div>}
                   </div>

@@ -14,7 +14,7 @@ import {
   nativeToScVal,
   xdr,
 } from '@stellar/stellar-sdk/base';
-import { inspectSorobanHostFunctionXdr, sorobanIntentCallTitle, inspectSorobanAuthorizationEntry, previewSorobanValue } from '../../../../packages/stellar-core/src/sorobanInspection.js';
+import { inspectSorobanHostFunctionXdr, enrichSorobanCallSummary, sorobanIntentCallTitle, inspectSorobanAuthorizationEntry, previewSorobanValue } from '../../../../packages/stellar-core/src/sorobanInspection.js';
 import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 
 const CONTRACT_ID = 'CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE';
@@ -165,4 +165,22 @@ test('review summary formats native XLM exactly and never guesses other token un
   assert.equal(sorobanIntentCallTitle(native, 'testnet'), 'Transfer 0.5 XLM');
   assert.equal(sorobanIntentCallTitle(make(CONTRACT_ID), 'testnet'), 'Call transfer');
   assert.equal(sorobanIntentCallTitle('invalid', 'testnet'), 'Soroban Intent');
+});
+
+test('contract-reported token metadata preserves exact raw amount and does not guess precision', () => {
+  const from = Keypair.random().publicKey();
+  const to = Keypair.random().publicKey();
+  const encoded = xdr.HostFunction.hostFunctionTypeInvokeContract(new xdr.InvokeContractArgs({
+    contractAddress: new Contract(CONTRACT_ID).address().toScAddress(),
+    functionName: 'transfer',
+    args: [Address.fromString(from).toScVal(), Address.fromString(to).toScVal(), nativeToScVal(123456789012345678901n, { type: 'i128' })],
+  })).toXdr('base64');
+  const methods = [{ name: 'transfer', inputs: [{ name: 'from', typeLabel: 'Address' }, { name: 'to', typeLabel: 'Address' }, { name: 'amount', typeLabel: 'I128' }], outputs: [] }];
+  const reported = { symbol: 'TOKEN', decimals: 6, observedLedger: 123 };
+  const result = enrichSorobanCallSummary(encoded, 'testnet', methods, reported);
+  assert.deepEqual(result?.tokenTransfer, { from, to, rawAmount: '123456789012345678901', amount: '123456789012345.678901', ...reported, basis: 'contract_reported' });
+  assert.deepEqual(result?.argumentNames, ['from', 'to', 'amount']);
+  assert.equal(enrichSorobanCallSummary(encoded, 'testnet', methods)?.tokenTransfer, undefined);
+  assert.equal(enrichSorobanCallSummary(encoded, 'testnet', methods, { ...reported, decimals: 255 })?.tokenTransfer, undefined);
+  assert.equal(enrichSorobanCallSummary(encoded, 'testnet', methods, { ...reported, symbol: 'bad symbol' })?.tokenTransfer, undefined);
 });

@@ -17,7 +17,10 @@ import { limitAgentGrant, grantRequestSource } from '../server/agentGrantRateLim
 
 function errorResponse(cause: unknown): Response {
   if (cause instanceof AgentGrantError) {
-    return publicCorsJson({ error: cause.message, code: cause.code, ...(cause.details ? { details: cause.details } : {}) }, 'GET, POST, OPTIONS', cause.status);
+    const retry: Record<string, string> = cause.status === 429 && typeof cause.details?.retryAfterSeconds === 'number'
+      ? { 'Retry-After': String(cause.details.retryAfterSeconds), 'RateLimit-Limit': String(cause.details.limit), 'RateLimit-Remaining': '0',
+          'Access-Control-Expose-Headers': 'Retry-After, RateLimit-Limit, RateLimit-Remaining' } : {};
+    return publicCorsJson({ error: cause.message, code: cause.code, ...(cause.details ? { details: cause.details } : {}) }, 'GET, POST, OPTIONS', cause.status, retry);
   }
   if (cause instanceof AgentCredentialServiceError || cause instanceof AuthServiceError || cause instanceof RequestBodyError
     || cause instanceof DeploymentNetworkPolicyError) {

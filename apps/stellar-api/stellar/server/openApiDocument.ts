@@ -84,6 +84,7 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
   }
   if (path === '/intent' && method !== 'post') {
     values.push(parameter('X-MultiSig-Intent-Id', 'header', true, { type: 'string' }, 'Soroban Intent id.'));
+    if (method === 'get') values.push(parameter('includeMetadata', 'query', false, { type: 'string', const: '1' }, 'Include optional current contract ABI names and read-only token metadata when available. Never substitutes for exact XDR or historical evidence.'));
     if (method === 'get' || method === 'patch') {
       values.push(parameter('X-MultiSig-Intent-Capability', 'header', false, { type: 'string' }, 'Short-lived signer-scoped Browser authorization capability (mic_...).'));
     }
@@ -221,7 +222,14 @@ function openApiPaths(): OpenApiObject {
           '413': response('Request body too large.', schema('ApiError')),
           '415': response('Unsupported media type; use application/json.', schema('ApiError')),
         } : {}),
-        '429': response('Rate limited.', schema('ApiError')),
+        '429': {
+          ...response('Rate limited.', schema('ApiError')),
+          ...(path === '/agent-grants' ? { headers: {
+            'Retry-After': { description: 'Seconds until the actor-specific pairing window resets.', schema: { type: 'integer', minimum: 1 } },
+            'RateLimit-Limit': { description: 'Pairing attempts per window.', schema: { type: 'integer', minimum: 1 } },
+            'RateLimit-Remaining': { description: 'Remaining attempts in the exhausted window.', schema: { const: 0 } },
+          } } : {}),
+        },
         '500': response('Internal error.', schema('ApiError')),
         '502': response('Upstream service returned an invalid or unavailable response.', schema('ApiError')),
         '503': response('Dependency unavailable.', schema('ApiError')),
@@ -976,6 +984,11 @@ const components: OpenApiObject = {
           properties: {
             contractAddress: contractId, functionName: { type: 'string' },
             argumentPreviews: { type: 'array', items: { type: 'string' } },
+            argumentNames: { type: 'array', items: { type: 'string' } }, interfaceBasis: { const: 'current_contract' },
+            tokenTransfer: { type: 'object', required: ['from','to','rawAmount','amount','symbol','decimals','observedLedger','basis'],
+              properties: { from: { type: 'string' }, to: { type: 'string' }, rawAmount: { type: 'string' }, amount: { type: 'string' },
+                symbol: { type: 'string' }, decimals: { type: 'integer', minimum: 0, maximum: 38 }, observedLedger: { type: 'integer', minimum: 1 }, basis: { const: 'contract_reported' } },
+              additionalProperties: false },
             nativeXlmTransfer: { type: 'object', required: ['from', 'to', 'amount'],
               properties: { from: { type: 'string' }, to: { type: 'string' }, amount: { type: 'string' } },
               additionalProperties: false },
@@ -1902,6 +1915,41 @@ function logicalOperationRetry(operation: HeadlessOperationDescriptor): OpenApiO
 
 /** Canonical logical calls, narrower than their shared HTTP transport. Keep
  * the existing paths for generic OpenAPI clients; resolve this table for Agents. */
+// Illustrative addresses and hashes are not credentials or live resources.
+const exampleSource = 'GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P';
+const exampleDestination = 'GDJXYXYMPGVWATWB7KUC6C5KGB3DDUWP76WBPBAL5V4WN6UUR6JKWWXB';
+const exampleHash = 'a'.repeat(64);
+const paymentExample = { network: 'testnet', sourceAccount: exampleSource,
+  payments: [{ destination: exampleDestination, amount: '1.5', asset: { type: 'native' } }], memo: 'invoice-42', lifetimeSeconds: 3600 };
+const intentExample = { network: 'testnet', contractId: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC', method: 'transfer',
+  arguments: { from: exampleSource, to: exampleDestination, amount: '15000000' } };
+const logicalBodyExamples: Record<string, OpenApiObject> = {
+  'agent.grant.request': { action: 'request', network: 'testnet', label: 'Finance assistant', access: 'read' },
+  'agent.grant.deny': { action: 'deny', requestId: 'a'.repeat(32) },
+  'classic.payment.prepare': paymentExample,
+  'integration.classic.payment.prepare': paymentExample,
+  'contract.intent.create': intentExample,
+  'integration.intent.create': intentExample,
+  'contract.intent.execution.prepare': { action: 'prepare_execution', executor: exampleSource },
+  'integration.intent.execution.prepare': { action: 'prepare_execution', executor: exampleSource },
+  'contract.intent.execution.resume': { action: 'resume_execution', transactionHash: exampleHash },
+  'integration.intent.execution.resume': { action: 'resume_execution', transactionHash: exampleHash },
+  'contract.intent.execution.reconcile': { action: 'reconcile_execution', transactionHash: exampleHash },
+  'integration.intent.execution.reconcile': { action: 'reconcile_execution', transactionHash: exampleHash },
+  'contract.intent.replan': { action: 'replan' },
+  'integration.intent.replan': { action: 'replan' },
+  'contract.intent.cancel': { action: 'cancel' },
+  'integration.intent.cancel': { action: 'cancel' },
+  'integration.intent.browser.issue': { action: 'issue_browser_authorization', signerAddress: exampleSource, origin: 'https://example.com' },
+  'proposal.decline': { decision: 'decline' },
+  'proposal.activity.retain': { retainActivity: true },
+};
+
+function withJsonExample(document: OpenApiObject, example: OpenApiObject): OpenApiObject {
+  const content = document.content as OpenApiObject;
+  return { ...document, content: { ...content, 'application/json': { ...(content['application/json'] as OpenApiObject), example } } };
+}
+
 function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
   const definitions = components.schemas as Record<string, OpenApiObject>;
   const objectBody = (name: string, keys: string[], required: string[], extra: OpenApiObject = {}) => body({
@@ -2032,6 +2080,10 @@ function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
     const responses = Object.fromEntries(Object.entries(transport.responses as OpenApiObject)
       .filter(([status]) => !status.startsWith('2') || !statuses || statuses.includes(status))
       .map(([status, value]) => [status, status.startsWith('2') && result ? response(status === '201' ? 'Created.' : 'Successful operation.', result) : value]));
+    if (request && logicalBodyExamples[id]) request = withJsonExample(request, logicalBodyExamples[id]);
+    if (id === 'signer.auth.status' || id === 'signer.auth.logout') {
+      responses['200'] = withJsonExample(responses['200'] as OpenApiObject, { unlocked: false, authenticated: false });
+    }
     const retry = logicalOperationRetry(operation);
     return [id, { operationId: id, method, path, access, effect, summary: operation.summary, security, parameters,
       ...(request ? { requestBody: request } : {}), ...(dispatch ? { dispatch } : {}), responses, retry }];

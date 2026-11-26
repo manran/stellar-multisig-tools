@@ -203,7 +203,12 @@ function ActivityCard({
   const timelineEvents: ActivityTimelineEvent[] = [
     ...item.events,
     ...(item.coordinationEvents ?? []),
-  ].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.eventId.localeCompare(b.eventId));
+  ].sort((a, b) => {
+    const time = a.occurredAt.localeCompare(b.occurredAt);
+    if (time) return time;
+    const order = (type: string) => type === 'transaction_submitted' ? 1 : type === 'transaction_confirmed' ? 2 : 0;
+    return order(a.type) - order(b.type) || a.eventId.localeCompare(b.eventId);
+  });
 
   return (
     <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)} className="group mst-activity-item">

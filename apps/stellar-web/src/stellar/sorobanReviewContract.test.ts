@@ -76,7 +76,7 @@ test('Soroban Review routes detached authorization into Intent before envelope s
   assert.match(sorobanIntentApp, /action: 'replan'/);
   assert.match(sorobanIntentApp, /action: 'cancel'/);
   assert.match(sorobanIntentApp, /Cancel Intent/);
-  assert.match(sorobanIntentApp, /cannot revoke detached AUTH/);
+  assert.match(sorobanIntentApp, /Approvals already shared outside MultiSig Tools cannot be revoked/);
   assert.match(sorobanIntentApp, /Refresh authorization/);
   assert.match(sorobanIntentApp, /Simulation effects at authorization/);
   assert.match(sorobanIntentApp, /Execution effects comparison/);

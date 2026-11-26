@@ -22,6 +22,9 @@ test('Agent pairing uses durable atomic per-actor limits, not the Vercel-only fi
     const denied = attempts.filter((r) => r.status === 'rejected');
     assert.equal(denied.length, 1);
     assert.equal(denied[0].reason.code, 'agent_pairing_rate_limited');
+    assert.deepEqual(denied[0].reason.details, { retryAfterSeconds: 600, limit: 2, remaining: 0 });
+    await assert.rejects(limitAgentGrant('ip:127.0.0.1', new Date(now.getTime() + 599001), 2),
+      (error: any) => error.details?.retryAfterSeconds === 1);
     await limitAgentGrant('ip:127.0.0.2', now, 2);
     await limitAgentGrant('ip:127.0.0.1', new Date(now.getTime() + 600000), 2);
   } finally {

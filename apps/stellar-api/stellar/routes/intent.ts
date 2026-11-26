@@ -1,3 +1,4 @@
+import { inspectSorobanReviewMetadata } from '../server/sorobanReviewMetadata.js';
 import { inspectSorobanHostFunctionXdr } from '../../../../packages/stellar-core/src/sorobanInspection.js';
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
 import { blobAuthStore } from '../server/blobAuthStore.js';
@@ -281,7 +282,11 @@ export async function GET(request: Request): Promise<Response> {
       sorobanIntentStore.listExecutionPreparations?.(access.id) ?? Promise.resolve([]),
       sorobanIntentStore.listExecutionObservations?.(access.id) ?? Promise.resolve([]),
     ]);
-    const callSummary = inspectSorobanHostFunctionXdr(access.stored.intent.hostFunctionXdr, access.stored.network);
+    const metadataRequested = new URL(request.url).searchParams.get('includeMetadata') === '1';
+    const live = access.authorization.status === 'awaiting_authorization' || access.authorization.status === 'authorization_ready';
+    const callSummary = metadataRequested && live
+      ? await inspectSorobanReviewMetadata(access.stored.intent.hostFunctionXdr, access.stored.network)
+      : inspectSorobanHostFunctionXdr(access.stored.intent.hostFunctionXdr, access.stored.network);
     return json({
       operation: 'contract.intent.inspect',
       version: 1,

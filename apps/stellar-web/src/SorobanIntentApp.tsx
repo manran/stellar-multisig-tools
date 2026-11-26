@@ -19,7 +19,7 @@ import type {
   SorobanIntentResponse,
   StoredSorobanIntentSnapshot,
 } from '../../../packages/stellar-core/src/sorobanIntentApiTypes';
-import { inspectSorobanHostFunctionXdr, inspectSorobanAuthorizationEntry, type SorobanInvocationInspection } from '../../../packages/stellar-core/src/sorobanInspection';
+import { inspectSorobanHostFunctionXdr, inspectSorobanAuthorizationEntry, type SorobanInvocationInspection, type SorobanCallSummary } from '../../../packages/stellar-core/src/sorobanInspection';
 import type { SorobanEffectsDiff, SorobanEffectsSnapshot } from '../../../packages/stellar-core/src/sorobanEffects';
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
 import { horizonTransactionUrl, isValidStellarAccountId } from '../../../packages/stellar-core/src/horizon';
@@ -90,11 +90,13 @@ export default function SorobanIntentApp() {
   const wallet = useStellarWallet();
   const [loadedIntent, setIntent] = useState<StoredSorobanIntentSnapshot | null>(null);
   const [loadedAuthorization, setAuthorization] = useState<SorobanIntentAuthorizationSnapshot | null>(null);
+  const [loadedCallSummary, setCallSummary] = useState<SorobanCallSummary | null>(null);
   const [loadedEvidence, setEvidence] = useState<SorobanIntentEvidenceEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [cancelArmed, setCancelArmed] = useState(false);
   const [executionSource, setExecutionSource] = useState('');
   const [executionDiff, setExecutionDiff] = useState<SorobanEffectsDiff | null>(null);
   const [pendingExecution, setPendingExecution] = useState<SorobanIntentExecutionResponse | null>(null);
@@ -131,7 +133,7 @@ export default function SorobanIntentApp() {
     });
   }, [authorization]);
 
-  const callSummary = useMemo(() => intent ? inspectSorobanHostFunctionXdr(intent.intent.hostFunctionXdr, intent.network) : null, [intent]);
+  const callSummary = useMemo(() => intent ? loadedCallSummary ?? inspectSorobanHostFunctionXdr(intent.intent.hostFunctionXdr, intent.network) : null, [intent, loadedCallSummary]);
 
   const confirmedExecution = useMemo(() => [...evidence].reverse().find((item) =>
     item.type === 'execution_confirmed' && item.transactionHash), [evidence]);
@@ -160,6 +162,8 @@ export default function SorobanIntentApp() {
     viewerRef.current = { ...viewerRef.current };
     setLoadedViewer(null);
     setIntent(null);
+    setCallSummary(null);
+    setCancelArmed(false);
     setAuthorization(null);
     setEvidence([]);
     setExecutionSource('');
@@ -179,7 +183,7 @@ export default function SorobanIntentApp() {
     if (!quiet) setLoading(true);
     if (!quiet) setError('');
     try {
-      const response = await fetch('/api/intent', {
+      const response = await fetch('/api/intent?includeMetadata=1', {
         cache: 'no-store',
         headers: {
           'X-MultiSig-Intent-Id': intentId,
@@ -194,6 +198,7 @@ export default function SorobanIntentApp() {
       knownIntentNetwork.current = body.intent.network;
       setLoadedViewer(requestedViewer);
       setIntent(body.intent);
+      setCallSummary(body.callSummary ?? null);
       setAuthorization(body.authorization);
       setEvidence(body.evidence ?? []);
       if (!quiet) { setExecutionDiff(null); setPendingExecution(null); setPendingExecutionRoute(null); setExecutionCopied(false); setExecutionCheckMessage(''); }
@@ -331,10 +336,8 @@ export default function SorobanIntentApp() {
   async function cancelIntent() {
     const actingViewer = viewer;
     if (!intent || !authorization || busy || loadedViewer !== actingViewer || viewerRef.current !== actingViewer || !actingViewer.address || authorization.status === 'cancelled' || confirmedExecution || pendingExecutionPreparation) return;
-    const warning = pendingExecutionPreparation
-      ? 'Cancel this Intent in MultiSigTools? A prepared transaction already exists. Cancellation stops further MultiSigTools coordination, but it cannot revoke detached AUTH or prepared XDR already disclosed outside MultiSigTools.'
-      : 'Cancel this Intent in MultiSigTools? Cancellation stops further MultiSigTools coordination, but it cannot revoke detached AUTH already disclosed outside MultiSigTools.';
-    if (!window.confirm(warning)) return;
+    if (!cancelArmed) { setCancelArmed(true); return; }
+    setCancelArmed(false);
     setBusy(true);
     setError('');
     try {
@@ -595,17 +598,23 @@ export default function SorobanIntentApp() {
             <section className="mst-intent-summary">
               <div className="flex flex-wrap items-center justify-between gap-3"><StatusBadge tone={primaryStatus.tone}>{primaryStatus.label}</StatusBadge><span className="font-mono text-xs text-neutral-400">{intent.id}</span></div>
               {callSummary && <div className="mt-4 min-w-0 space-y-2">
-                <h2 className="text-xl font-bold">{callSummary.nativeXlmTransfer ? 'Send ' + callSummary.nativeXlmTransfer.amount + ' XLM' : 'Call ' + callSummary.functionName}</h2>
+                <h2 className="text-xl font-bold">{callSummary.nativeXlmTransfer ? 'Send ' + callSummary.nativeXlmTransfer.amount + ' XLM' : callSummary.tokenTransfer ? 'Transfer ' + callSummary.tokenTransfer.amount + ' ' + callSummary.tokenTransfer.symbol : 'Call ' + callSummary.functionName}</h2>
                 {callSummary.nativeXlmTransfer ? <>
                   <div className="text-xs font-semibold">From</div><div className="break-all font-mono text-sm">{callSummary.nativeXlmTransfer.from}</div>
                   <div className="text-xs font-semibold">To</div><div className="break-all font-mono text-sm">{callSummary.nativeXlmTransfer.to}</div>
-                </> : callSummary.argumentPreviews.map((value, index) => <div key={index} className="break-all text-sm">Argument {index + 1}: {value}</div>)}
+                </> : <>
+                  {callSummary.tokenTransfer && <p className="text-xs text-neutral-500">Contract-reported symbol and precision at ledger {callSummary.tokenTransfer.observedLedger}. Raw amount: {callSummary.tokenTransfer.rawAmount}. Verify the contract address below.</p>}
+                  {callSummary.argumentPreviews.map((value, index) => <div key={index} className="break-all text-sm">{callSummary.argumentNames?.[index] || 'Argument ' + (index + 1)}: {value}</div>)}
+                  {callSummary.interfaceBasis && <p className="text-xs text-neutral-500">Parameter names are from the current contract interface.</p>}
+                </>}
                 <div className="break-all font-mono text-xs text-neutral-500">Contract {callSummary.contractAddress}</div>
               </div>}
               <div className="mt-3 break-all font-mono text-[11px] text-neutral-500">Intent {intent.intent.intentDigest}</div>
               {authorization.statusDetail && <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{authorization.statusDetail}</p>}
-              <div className="mt-4 flex flex-wrap gap-2"><ActionButton variant="secondary" size="sm" onClick={() => void copyShareLink()}><Share2 className="h-4 w-4" />{copied ? 'Intent link copied' : 'Share with another signer'}</ActionButton><ActionButton variant="secondary" size="sm" onClick={() => void loadIntent(sessionAddress)}><RefreshCw className="h-4 w-4" />Refresh</ActionButton>{!confirmedExecution && !pendingExecutionPreparation && authorization.status !== 'cancelled' && !intent.integration && intent.creatorAddress === sessionAddress && <ActionButton variant="danger" size="sm" disabled={busy} onClick={() => void cancelIntent()}><CircleAlert className="h-4 w-4" />{busy ? 'Cancelling…' : 'Cancel Intent'}</ActionButton>}</div>
+              <div className="mt-4 flex flex-wrap gap-2"><ActionButton variant="secondary" size="sm" onClick={() => void copyShareLink()}><Share2 className="h-4 w-4" />{copied ? 'Intent link copied' : 'Share with another signer'}</ActionButton><ActionButton variant="secondary" size="sm" onClick={() => void loadIntent(sessionAddress)}><RefreshCw className="h-4 w-4" />Refresh</ActionButton>{!confirmedExecution && !pendingExecutionPreparation && authorization.status !== 'cancelled' && !intent.integration && intent.creatorAddress === sessionAddress && <ActionButton variant="secondary" size="sm" disabled={busy} onClick={() => setCancelArmed(true)}><CircleAlert className="h-4 w-4" />{busy ? 'Cancelling…' : 'Cancel Intent'}</ActionButton>}</div>
             </section>
+
+            {cancelArmed && !confirmedExecution && !pendingExecutionPreparation && <section role="alert" className="rounded-2xl border border-red-500/25 p-5"><h2 className="font-semibold">Cancel this contract request?</h2><p className="mt-2 text-sm">This stops further approvals here. Approvals already shared outside MultiSig Tools cannot be revoked by this action.</p><div className="mt-3 flex gap-2"><ActionButton variant="danger" disabled={busy} onClick={() => void cancelIntent()}>Confirm cancellation</ActionButton><ActionButton variant="secondary" onClick={() => setCancelArmed(false)}>Keep request</ActionButton></div></section>}
 
             {confirmedExecution?.transactionHash && <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] p-5 sm:p-6"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /><div className="min-w-0 flex-1"><h2 className="text-xl font-bold">Transaction confirmed</h2><p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">MultiSigTools independently observed this prepared transaction on Stellar{confirmedExecution.ledger ? ` in ledger ${confirmedExecution.ledger.toLocaleString()}` : ''}. External submitter identity is not inferred.</p><div className="mt-3 break-all font-mono text-xs text-neutral-500">{confirmedExecution.transactionHash}</div><a href={horizonTransactionUrl(confirmedExecution.transactionHash, intent.network)} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-semibold text-emerald-700 underline decoration-emerald-500/30 underline-offset-4 dark:text-emerald-300">View network record</a></div></div></section>}
 
@@ -625,7 +634,7 @@ export default function SorobanIntentApp() {
 
             <section className="mst-intent-authorization-section">
               <h2 className="text-xl font-bold">Required authorization</h2>
-              <div className="mst-intent-authorizer-list">{authorization.authorizers.map((authorizer) => <div key={authorizer.entryIndex} className="mst-intent-authorizer-row"><div className="flex flex-wrap items-center justify-between gap-2"><div className="font-semibold">{compactAddress(authorizer.authorizer)}</div><div className={authorizer.ready ? 'font-semibold text-emerald-700 dark:text-emerald-300' : 'font-semibold text-neutral-500'}>{authorizer.threshold === 0 ? (authorizer.ready ? 'Signature present' : 'Signature required') : `${authorizer.signedWeight} / ${authorizer.threshold} approval power`}</div></div><div className="mt-2 flex flex-wrap gap-2">{authorizer.signerEvidence.length ? authorizer.signerEvidence.map((signer) => <span key={signer.publicKey} className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:text-emerald-300">{compactAddress(signer.publicKey)} · +{signer.weight}</span>) : <span className="text-xs text-neutral-500">Waiting for signer authorization.</span>}</div></div>)}</div>
+              <div className="mst-intent-authorizer-list">{authorization.authorizers.map((authorizer) => <div key={authorizer.entryIndex} className="mst-intent-authorizer-row"><div className="flex flex-wrap items-center justify-between gap-2"><div className="font-semibold">{compactAddress(authorizer.authorizer)}</div><div className={authorizer.ready ? 'font-semibold text-emerald-700 dark:text-emerald-300' : 'font-semibold text-neutral-500'}>{authorizer.threshold === 0 ? (authorizer.ready ? 'Signature present' : 'Signature required') : `${authorizer.signedWeight} / ${authorizer.threshold} signed weight / required threshold`}</div></div><div className="mt-2 flex flex-wrap gap-2">{authorizer.signerEvidence.length ? authorizer.signerEvidence.map((signer) => <span key={signer.publicKey} className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:text-emerald-300">{compactAddress(signer.publicKey)} · +{signer.weight}</span>) : <span className="text-xs text-neutral-500">Waiting for signer authorization.</span>}</div></div>)}</div>
               {!pendingExecutionPreparation && authorization.status === 'awaiting_authorization' && <div className="mst-intent-action-context mt-5"><div className="text-sm font-semibold">Your action</div><p className="mt-2 text-xs leading-5 text-neutral-500 dark:text-neutral-400">Selected verified wallet: {sessionAddress ? compactAddress(sessionAddress) : 'none'}.</p><div className="mt-3 flex flex-wrap gap-2">{targetsForSigner.length > 0 && wallet.networkSource !== 'application' && <ActionButton disabled={busy} onClick={() => void authorize()}><KeyRound className="h-4 w-4" />{busy ? 'Authorizing…' : 'Authorize contract Intent'}</ActionButton>}<ActionButton variant="secondary" disabled={busy || wallet.busy || wallet.authBusy} onClick={() => void confirmSigner(true)}>{sessionAddress ? 'Choose another signer' : 'Choose signer'}</ActionButton></div>{targetsForSigner.length === 0 && sessionAddress && <p className="mt-2 text-xs text-neutral-500">This wallet has no remaining AUTH contribution. Share the Intent link with another current signer.</p>}{targetsForSigner.length > 0 && wallet.networkSource === 'application' && <p className="mt-2 text-xs text-[var(--color-ink-2)]">Ledger and Trezor can sign the final transaction envelope but not detached Soroban AUTH entries. Choose another current signer for this step.</p>}</div>}
             </section>
 

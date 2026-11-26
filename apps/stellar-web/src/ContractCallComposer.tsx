@@ -81,6 +81,9 @@ export default function ContractCallComposer({ network }: Props) {
     () => loaded?.methods.find((method) => method.name === methodName) ?? null,
     [loaded, methodName],
   );
+  const invalidIntegerInputs = (selectedMethod?.inputs ?? []).filter(input => input.kind === 'integer' && !(
+    (rawArgs[input.name] ?? '').trim() === '' && input.typeLabel.startsWith('Option<')
+  ) && !/^-?\d+$/.test((rawArgs[input.name] ?? '').trim()));
   const contractValid = isValidContractId(contractId);
   const privateNoteBytes = privateNoteByteLength(privateNote.trim());
   const privateNoteValid = privateNoteBytes <= MAX_PRIVATE_NOTE_BYTES;
@@ -114,10 +117,11 @@ export default function ContractCallComposer({ network }: Props) {
     setError('');
     try {
       const next = await inspectContractOperation(contractId, network);
-      setLoaded(next);
+      const methods = [...next.methods].sort((a, b) => a.name.localeCompare(b.name));
+      setLoaded({ ...next, methods });
       const requested = routeMethod ? next.methods.find((method) => method.name === routeMethod) ?? null : null;
-      const firstGuided = next.methods.find((method) => method.guided) ?? null;
-      setMethodName(requested?.name ?? firstGuided?.name ?? next.methods[0]?.name ?? '');
+      const firstGuided = methods.find(method => method.guided && method.name === 'transfer') ?? null;
+      setMethodName(requested?.name ?? firstGuided?.name ?? '');
       setRawArgs({});
       if (next.methods.length === 0) {
         setError('This contract exposes no callable methods in its contract spec.');
@@ -142,7 +146,7 @@ export default function ContractCallComposer({ network }: Props) {
 
   async function reviewContractCall(event: FormEvent) {
     event.preventDefault();
-    if (!loaded || !selectedMethod?.guided || !contractValid || !privateNoteValid || building) return;
+    if (!loaded || !selectedMethod?.guided || !contractValid || !privateNoteValid || invalidIntegerInputs.length > 0 || building) return;
     setBuilding(true);
     setError('');
     try {
@@ -173,7 +177,7 @@ export default function ContractCallComposer({ network }: Props) {
   }
 
   async function saveContract() {
-    if (!contractValid || savingContract || authBusy) return;
+    if (!contractValid || !loaded || savingContract || authBusy) return;
     setSavingContract(true);
     setError('');
     try {
@@ -212,7 +216,7 @@ export default function ContractCallComposer({ network }: Props) {
               <a href="#contract-method" className="font-semibold text-neutral-700 dark:text-neutral-200">Continue call</a>
               {workspaceSaved
                 ? <a href={workspaceHref} className="mst-contract-link">Open Contract Workspace</a>
-                : <button type="button" disabled={savingContract || authBusy} onClick={() => void saveContract()} className="mst-contract-link disabled:opacity-40">{savingContract || authBusy ? 'Saving…' : 'Save to Contracts'}</button>}
+                : <button type="button" disabled={!loaded || savingContract || authBusy} onClick={() => void saveContract()} className="mst-contract-link disabled:opacity-40">{savingContract || authBusy ? 'Saving…' : 'Save to Contracts'}</button>}
             </div>
           </div>
         )}
@@ -240,7 +244,7 @@ export default function ContractCallComposer({ network }: Props) {
               <div>
                 <label htmlFor="contract-method" className="text-sm font-semibold">Method</label>
                 <select id="contract-method" value={methodName} disabled={building || loaded.methods.length === 0} onChange={(event) => selectMethod(event.target.value)} className="mst-contract-control mt-2 w-full font-mono disabled:opacity-50">
-                  {loaded.methods.length === 0 && <option value="">No callable methods</option>}
+                  <option value="">{loaded.methods.length === 0 ? 'No callable methods' : 'Choose a method'}</option>
                   {loaded.methods.map((method) => <option key={method.name} value={method.name}>{method.name}{method.guided ? '' : ' — Import XDR required'}</option>)}
                 </select>
               </div>
@@ -260,6 +264,7 @@ export default function ContractCallComposer({ network }: Props) {
                       ) : (
                         <input id={`contract-arg-${input.name}`} value={rawArgs[input.name] ?? ''} disabled={building} onChange={(event) => setRawArgs((current) => ({ ...current, [input.name]: event.target.value }))} placeholder={fieldPlaceholder(input)} spellCheck={false} className="mst-contract-control mt-2 w-full font-mono disabled:opacity-50" />
                       )}
+                      {invalidIntegerInputs.includes(input) && rawArgs[input.name] && <p role="alert" className="mt-1 text-sm text-red-700 dark:text-red-300">Enter a base-10 integer, without a decimal point.</p>}
                       {input.doc && <p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-neutral-500 dark:text-neutral-400">Contract spec: {input.doc}</p>}
                       {input.kind === 'json' && <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">Enter structured JSON. MultiSigTools validates the complete value against the loaded Contract Spec before encoding it.</p>}
                       {(input.kind === 'bytes' || input.kind === 'bytesN') && <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">Enter hexadecimal bytes; `0x` prefix is optional.</p>}
@@ -276,10 +281,10 @@ export default function ContractCallComposer({ network }: Props) {
             <div className={`mt-1 text-xs ${privateNoteValid ? 'text-neutral-400' : 'text-red-600 dark:text-red-300'}`}>{privateNoteBytes}/{MAX_PRIVATE_NOTE_BYTES} UTF-8 bytes</div>
           </div>
 
-          <div className="mst-contract-intent-note">MultiSig Tools first creates a source-free Soroban Intent and discovers detached AUTH requirements. No transaction source, sequence, fee, lifetime or envelope signature is chosen at this stage.</div>
+          <div className="mst-contract-intent-note">First review and collect the required contract approvals. Choose the transaction source and fee after approval.</div>
 
           <div className="flex justify-end border-t border-black/10 pt-5 dark:border-white/10">
-            <button type="submit" disabled={building || loadingSpec || !contractValid || !selectedMethod?.guided || !privateNoteValid || authBusy} className="mst-action-primary disabled:opacity-40">{building && <LoaderCircle className="h-4 w-4 animate-spin" />}{building ? 'Creating Intent…' : 'Continue to authorization'} <ArrowRight className="h-4 w-4" /></button>
+            <button type="submit" disabled={building || loadingSpec || !contractValid || !selectedMethod?.guided || !privateNoteValid || invalidIntegerInputs.length > 0 || authBusy} className="mst-action-primary disabled:opacity-40">{building && <LoaderCircle className="h-4 w-4 animate-spin" />}{building ? 'Creating Intent…' : 'Continue to authorization'} <ArrowRight className="h-4 w-4" /></button>
           </div>
         </form>
 

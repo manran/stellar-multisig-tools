@@ -104,7 +104,7 @@ curl -fsS https://api-testnet.multisig.tools/stellar/openapi.json | jq '."x-mult
 | integration_service_exists | Recover the existing service through its operator; do not replace its credential automatically. |
 | already_exchanged | Follow the reserved credential recovery path. |
 
-Rate limits depend on deployment and credential policy. The published policy does not guarantee a universal remaining count. On 429, use bounded backoff according to the operation; do not create parallel credentials to bypass limits.
+Testnet device pairing permits 20 attempts per actor per ten-minute window. When exhausted, the response includes Retry-After (seconds), RateLimit-Limit and RateLimit-Remaining. Other rate limits depend on deployment and credential policy. The published policy does not guarantee a universal remaining count. On 429, use bounded backoff according to the operation; do not create parallel credentials to bypass limits.
 
 ## Glossary
 
