@@ -1,3 +1,4 @@
+import { displayTimestamp, displayAmount } from './stellar/displayFormat';
 import { useEffect, useState } from 'react';
 import { ArrowRight, CheckCircle2, Clock3, Settings2, ShieldAlert } from 'lucide-react';
 import AddressIdentity from './AddressIdentity';
@@ -29,7 +30,7 @@ function validityLabel(inspection: TransactionXdrInspection): string {
   if (!maxTime || maxTime === '0') return 'No expiration time set';
   const millis = Number(maxTime) * 1000;
   if (!Number.isFinite(millis)) return 'Transaction validity could not be read';
-  return `Valid until ${new Date(millis).toLocaleString()}`;
+  return `Valid until ${displayTimestamp(millis)}`;
 }
 
 function memoLabel(type: string): string {
@@ -117,7 +118,7 @@ export default function ReviewTransactionSummary({ inspection, xdr, sourceAccoun
     ? structuredPayments.reduce((counts, item) => counts.set(item.destination, (counts.get(item.destination) ?? 0) + 1), new Map<string, number>())
     : new Map<string, number>();
   const repeatedBatchRecipients = [...batchRecipientCounts.values()].filter((count) => count > 1).length;
-  const paymentAmount = payment?.amount ?? '';
+  const paymentAmount = displayAmount(payment?.amount ?? '');
   const paymentAsset = payment?.assetCode ?? '';
   const paymentDestination = payment?.destination ?? '';
   const allowNaming = Boolean(sessionAddress);
@@ -164,7 +165,7 @@ export default function ReviewTransactionSummary({ inspection, xdr, sourceAccoun
     title = mode === 'history' ? `Multi-party transaction · ${structuredPayments.length} payments` : 'Multi-party transaction';
     description = mode === 'history' ? 'Independent source accounts participated in one atomic Stellar transaction.' : 'Confirm who sends each payment. Each source account must independently authorize its own operations, and all operations execute atomically.';
   } else if (claimablePayment) {
-    title = mode === 'history' ? `${claimablePayment.amount || '?'} ${claimablePayment.assetCode || 'asset'} claimable payment` : `Send ${claimablePayment.amount || '?'} ${claimablePayment.assetCode || 'asset'} to claim later`;
+    title = mode === 'history' ? `${displayAmount(claimablePayment.amount) || '?'} ${claimablePayment.assetCode || 'asset'} claimable payment` : `Send ${displayAmount(claimablePayment.amount) || '?'} ${claimablePayment.assetCode || 'asset'} to claim later`;
     description = mode === 'history' ? 'The recipient claim window and recovery path are encoded in this transaction.' : 'Confirm the recipient and recovery path before signing. If the recipient does not claim in time, the recovery account can take the balance back.';
   }
   return (
@@ -197,13 +198,13 @@ export default function ReviewTransactionSummary({ inspection, xdr, sourceAccoun
             <div className="mt-5 overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/10 bg-black/[0.025] px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
                 <div className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-400">Exact payment list</div>
-                {totals.length > 0 && <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs">{totals.map((total) => <div key={total.asset} className="flex items-baseline gap-1.5"><span className="font-semibold tabular-nums">{total.amount}</span><PaymentAssetIdentity asset={total.asset} compact /></div>)}</div>}
+                {totals.length > 0 && <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs">{totals.map((total) => <div key={total.asset} className="flex items-baseline gap-1.5"><span className="font-semibold tabular-nums">{displayAmount(total.amount)}</span><PaymentAssetIdentity asset={total.asset} compact /></div>)}</div>}
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[720px] text-left text-sm">
                   <thead className="text-xs uppercase tracking-wide text-neutral-400"><tr>{semantics.kind === 'multi_party' && <th className="px-4 py-3">From</th>}<th className="px-4 py-3">To</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Asset</th></tr></thead>
                   <tbody>
-                    {structuredPayments.map((item, index) => <tr key={`${index}:${item.sourceAccount}:${item.destination}:${item.asset}`} className="border-t border-black/5 dark:border-white/10">{semantics.kind === 'multi_party' && <td className="px-4 py-3"><AddressIdentity address={item.sourceAccount} subjectType="account" /></td>}<td className="px-4 py-3"><AddressIdentity address={item.destination} subjectType="account" allowNaming={allowNaming} /></td><td className="px-4 py-3 font-semibold">{item.amount}</td><td className="px-4 py-3"><PaymentAssetIdentity asset={item.asset} compact /></td></tr>)}
+                    {structuredPayments.map((item, index) => <tr key={`${index}:${item.sourceAccount}:${item.destination}:${item.asset}`} className="border-t border-black/5 dark:border-white/10">{semantics.kind === 'multi_party' && <td className="px-4 py-3"><AddressIdentity address={item.sourceAccount} subjectType="account" /></td>}<td className="px-4 py-3"><AddressIdentity address={item.destination} subjectType="account" allowNaming={allowNaming} /></td><td className="px-4 py-3 font-semibold">{displayAmount(item.amount)}</td><td className="px-4 py-3"><PaymentAssetIdentity asset={item.asset} compact /></td></tr>)}
                   </tbody>
                 </table>
               </div>

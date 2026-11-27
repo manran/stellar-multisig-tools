@@ -91,7 +91,7 @@ function isAuthorizationChange(operation: SetOptionsShape): boolean {
 }
 
 function thresholdPowerLabel(value: number): string {
-  return `Approval power ${value}`;
+  return `Required approval power ${value}`;
 }
 
 export function assessAccountControlPolicyTransition(

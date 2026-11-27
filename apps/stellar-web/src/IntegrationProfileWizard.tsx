@@ -83,6 +83,7 @@ function ownerLabel(owner: ExecutionOwner): string {
 
 export default function IntegrationProfileWizard({ adminSecret, createEndpoint = '/api/integration-admin', onCreated, onCancel }: Props) {
   const [step, setStep] = useState(0);
+  const [attemptedStep, setAttemptedStep] = useState<number | null>(null);
   const [serviceId, setServiceId] = useState('');
   const [label, setLabel] = useState('');
   const [network, setNetwork] = useState<StellarNetwork>('testnet');
@@ -154,7 +155,9 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
   const managedUnavailable = (treasuries.length > 0 && classicManagedAvailable !== true)
     || (selectedMethodCount > 0 && sorobanManagedAvailable !== true);
   const webhookValid = !webhookEnabled || /^https:\/\//i.test(webhookUrl.trim());
-  const basicsValid = /^[a-z0-9][a-z0-9-]{0,39}$/.test(serviceId.trim().toLowerCase()) && Boolean(label.trim());
+  const serviceIdValid = /^[a-z0-9][a-z0-9-]{0,39}$/.test(serviceId.trim().toLowerCase());
+  const labelValid = Boolean(label.trim());
+  const basicsValid = serviceIdValid && labelValid;
   const readyToCreate = basicsValid && hasBusinessScope && contractExecutionValid && classicExecutionValid && webhookValid;
 
   function resetNetwork(next: StellarNetwork) {
@@ -294,10 +297,8 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
 
   function next() {
     setError('');
-    if (step === 0 && !basicsValid) {
-      setError('Enter a service ID of 1–40 lowercase letters, digits or hyphens, beginning with a letter or digit, and a label.');
-      return;
-    }
+    setAttemptedStep(step);
+    if (step === 0 && !basicsValid) return;
     if (step === 2 && !hasBusinessScope) {
       setError('Add a Classic Treasury or select at least one contract method.');
       return;
@@ -319,10 +320,7 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
       setError('Choose an available execution route for every selected contract. If managed execution is unavailable, add and select your own executor.');
       return;
     }
-    if (step === 3 && !webhookValid) {
-      setError('Webhook URL must use HTTPS.');
-      return;
-    }
+    if (step === 3 && !webhookValid) return;
     setStep((current) => Math.min(STEPS.length - 1, current + 1));
   }
 
@@ -398,7 +396,7 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
       </div>
     </div>
 
-    {error && <div className="mt-4 border-y border-red-500/30 bg-red-500/[0.06] px-1 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
+    {error && <div role="alert" className="mt-4 border-y border-red-500/30 bg-red-500/[0.06] px-1 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
 
     <div className="ia-wizard__stage">
       {step === 0 && <div className="max-w-3xl space-y-5">
@@ -408,10 +406,12 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-semibold">Service id
-            <input value={serviceId} onChange={(event) => setServiceId(event.target.value)} placeholder="fednetwork" className="ia-input mt-2 font-mono text-sm" />
+            <input value={serviceId} onChange={(event) => setServiceId(event.target.value)} placeholder="fednetwork" aria-invalid={attemptedStep === 0 && !serviceIdValid} aria-describedby={attemptedStep === 0 && !serviceIdValid ? "service-id-error" : undefined} className="ia-input mt-2 font-mono text-sm" />
+            {attemptedStep === 0 && !serviceIdValid && <span id="service-id-error" className="mt-1 block text-xs text-red-700 dark:text-red-300">Use 1–40 letters, digits or hyphens, beginning with a letter or digit.</span>}
           </label>
           <label className="text-sm font-semibold">Display name
-            <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="FedNetwork" className="ia-input mt-2 text-sm" />
+            <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="FedNetwork" aria-invalid={attemptedStep === 0 && !labelValid} aria-describedby={attemptedStep === 0 && !labelValid ? "display-name-error" : undefined} className="ia-input mt-2 text-sm" />
+            {attemptedStep === 0 && !labelValid && <span id="display-name-error" className="mt-1 block text-xs text-red-700 dark:text-red-300">Enter a display name.</span>}
           </label>
         </div>
         <div>
@@ -493,7 +493,7 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
                   <input type="checkbox" className="mt-1" checked={item.selectedMethods.includes(method.name)} onChange={() => toggleMethod(item.contractId, method.name)} />
                   <span className="min-w-0">
                     <span className="block font-mono text-sm font-semibold break-all">{method.name}</span>
-                    <span className="mt-1 block text-xs text-neutral-500">{method.guided === false ? 'Raw/advanced inputs' : method.doc || 'Callable contract method'}</span>
+                    <span className="mt-1 block whitespace-pre-wrap break-words text-xs text-neutral-500">{method.guided === false ? 'Raw/advanced inputs' : method.doc || 'Callable contract method'}</span>
                   </span>
                 </label>)}
               </div>
@@ -552,7 +552,7 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
                     <div className="mt-1 text-xs text-neutral-500">Signer authority remains the live Stellar account policy.</div>
                   </div>
                   <div>
-                    <SmallChoice selected={item.executionOwner === 'multisigtools'} onClick={() => setTreasuryExecution(item.accountId, 'multisigtools')} title="MultiSigTools managed" />
+                    <SmallChoice disabled={classicManagedAvailable === false} selected={item.executionOwner === 'multisigtools'} onClick={() => setTreasuryExecution(item.accountId, 'multisigtools')} title="MultiSigTools managed" />
                     <SmallChoice selected={item.executionOwner === 'integration'} onClick={() => setTreasuryExecution(item.accountId, 'integration')} title="My service submits" />
                   </div>
                 </div>)}
@@ -583,6 +583,7 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
                     onChange={(event) => setContractExecutor(item.contractId, event.target.value)}
                     className="ia-select mt-2 text-sm"
                   >
+                    <option value="" disabled>Choose an executor</option>
                     <option value="multisigtools" disabled={sorobanManagedAvailable !== true}>MultiSigTools managed{ sorobanManagedAvailable !== true ? " (unavailable)" : "" }</option>
                     {executorPool.map((executor) => <option key={executor} value={executor}>{compactAddress(executor)}</option>)}
                   </select>
@@ -603,7 +604,8 @@ export default function IntegrationProfileWizard({ adminSecret, createEndpoint =
             </label>
           </div>
           {webhookEnabled && <label className="mt-4 block text-sm font-semibold">Webhook URL
-            <input value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://example.com/webhooks/multisig-tools" className="ia-input mt-2 font-mono text-sm" />
+            <input value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://example.com/webhooks/multisig-tools" aria-invalid={attemptedStep === 3 && !webhookValid} aria-describedby={attemptedStep === 3 && !webhookValid ? "webhook-url-error" : undefined} className="ia-input mt-2 font-mono text-sm" />
+            {attemptedStep === 3 && !webhookValid && <span id="webhook-url-error" className="mt-1 block text-xs text-red-700 dark:text-red-300">Webhook URL must use HTTPS.</span>}
           </label>}
         </div>
       </div>}
@@ -684,8 +686,8 @@ function ChoiceCard({ selected, disabled = false, onClick, title, description }:
   </div>;
 }
 
-function SmallChoice({ selected, onClick, title }: { selected: boolean; onClick: () => void; title: string }) {
-  return <button type="button" data-selected={selected} onClick={onClick} className="ia-choice py-2 text-sm">
+function SmallChoice({ selected, disabled = false, onClick, title }: { selected: boolean; disabled?: boolean; onClick: () => void; title: string }) {
+  return <button type="button" disabled={disabled} data-selected={selected} onClick={onClick} className="ia-choice py-2 text-sm">
     {selected ? <Check className="ia-choice__mark h-4 w-4 shrink-0" /> : <CircleDot className="ia-choice__mark h-4 w-4 shrink-0" />}
     <span className="font-semibold">{title}</span>
   </button>;

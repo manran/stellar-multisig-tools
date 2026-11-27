@@ -977,7 +977,7 @@ try {
         assert.equal(await page.getByText('YOU CAN SIGN').count(), 0, 'Proposer must not be classified as a Stellar signer');
         assert.equal(await page.getByRole('heading', { name: 'Review this transaction' }).count(), 0,
           'Reviewed proposer payment should continue straight to signer coordination');
-        await page.getByText('12.5000000 XLM').first().waitFor({ state: 'visible' });
+        await page.getByText('12.5 XLM').first().waitFor({ state: 'visible' });
         assert.equal(state.proposerRequestCount, 1);
         assert.equal(await page.getByRole('button', { name: 'Sign', exact: true }).count(), 0);
         assert.equal(await page.getByRole('button', { name: 'Submit transaction' }).count(), 0);

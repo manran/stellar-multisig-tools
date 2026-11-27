@@ -41,7 +41,7 @@ test('derives exact signer and threshold changes from XDR plus current account s
   assert.ok(summary.changes.some((change) => change.label === 'Remove signer' && change.address === removed.publicKey()));
   assert.ok(summary.changes.some((change) => change.label === 'Add signer' && change.address === added.publicKey()));
   assert.ok(summary.changes.some((change) => change.label === 'Account key' && change.after === 'No approval power'));
-  assert.ok(summary.changes.some((change) => change.label === 'Standard transactions' && change.before === 'Approval power 2' && change.after === 'Approval power 1'));
+  assert.ok(summary.changes.some((change) => change.label === 'Standard transactions' && change.before === 'Required approval power 2' && change.after === 'Required approval power 1'));
   assert.equal(summary.currentHighRequirement?.threshold, 2);
   assert.equal(summary.currentHighRequirement?.policyLabel, '2-of-3');
   assert.equal(summary.currentHighRequirement?.requirementLabel, '2 of 3 approvals');

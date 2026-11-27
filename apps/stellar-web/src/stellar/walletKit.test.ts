@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  hasRememberedWalletSelection,
   isPopupWalletModule,
   isWalletAuthEntrySigningUnsupported,
   isWalletMessageSigningUnsupported,
@@ -71,4 +72,10 @@ test('wallet icons obey the existing content security policy', () => {
   assert.equal(walletIconForCsp(allowed), allowed);
   assert.match(walletIconForCsp('https://storage.herewallet.app/logo.png'), /^data:image\/svg\+xml,/);
   assert.match(walletIconForCsp('https://stellar.creit.tech.evil.test/logo.png'), /^data:image\/svg\+xml,/);
+});
+
+test('wallet selection hint avoids loading Kit for a new visitor and tolerates restricted storage', () => {
+  assert.equal(hasRememberedWalletSelection({ getItem: () => null }), false);
+  assert.equal(hasRememberedWalletSelection({ getItem: () => 'freighter' }), true);
+  assert.equal(hasRememberedWalletSelection({ getItem: () => { throw new Error('restricted'); } }), true);
 });

@@ -1,3 +1,4 @@
+import { displayTimestamp } from './stellar/displayFormat';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Networks, TransactionBuilder } from '@stellar/stellar-sdk/base';
@@ -61,7 +62,7 @@ function friendlyPreconditionState(
     return {
       title: 'Transaction expired',
       detail: Number.isFinite(millis)
-        ? `This transaction expired at ${new Date(millis).toLocaleString()}. Create a fresh transaction to continue.`
+        ? `This transaction expired at ${displayTimestamp(millis)}. Create a fresh transaction to continue.`
         : 'This transaction is past its valid execution window. Create a fresh transaction before collecting more signatures.',
     };
   }
@@ -519,7 +520,7 @@ export default function SigningRoomApp() {
     <StellarWorkspaceShell active="detail" networkContext={network}>
       <main className="px-4 py-7 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto max-w-5xl">
-          <div className="mb-6"><WorkflowProgress current={directSubmission ? 'done' : 'review'} /></div>
+          <div className="mb-6"><WorkflowProgress current={directSubmission ? 'done' : 'review'} prepareHref={!startingRequest && !hasSorobanInvocation && /^\/(?:stellar\/)?new\/(?:payment|create-account)\/?$/.test(new URL(returnTarget.href, window.location.origin).pathname) ? returnTarget.href : undefined} /></div>
           {!inspection ? (
             <>
               <section className="max-w-2xl">

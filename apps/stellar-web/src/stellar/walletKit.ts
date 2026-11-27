@@ -1,10 +1,20 @@
-import { Networks } from '@stellar/stellar-sdk/base';
+import { LocalStorageKeys, Networks } from '@creit.tech/stellar-wallets-kit/types';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 
 let initialized = false;
 let hardwareModulesLoaded = false;
 let walletSelectionPending = false;
 let walletSelectionVersion = 0;
+
+// This persisted selection is a loading hint, not an authenticated identity.
+export function hasRememberedWalletSelection(storage?: Pick<Storage, 'getItem'>): boolean {
+  try {
+    return Boolean((storage ?? localStorage).getItem(LocalStorageKeys.selectedModuleId));
+  } catch {
+    // With restricted storage, retain the original silent discovery behavior.
+    return true;
+  }
+}
 
 export function isWalletSelectionInProgress(): boolean {
   return walletSelectionPending;

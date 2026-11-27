@@ -1,3 +1,4 @@
+import { displayTimestamp } from './stellar/displayFormat';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, CircleAlert, Inbox, LoaderCircle, RefreshCw } from 'lucide-react';
 import { useAddressBook } from './AddressBookContext';
@@ -104,11 +105,11 @@ function OutgoingProgress({
             <span className={item.needsAttention ? 'font-semibold text-[var(--color-danger)]' : item.signature === 'transaction' ? 'font-semibold text-[var(--color-success)]' : ''}> · {item.label}</span>
           </div>
           <div>
-            {item.notification && <span>{item.notification.label}{!compact && <> · <time dateTime={item.notification.occurredAt}>{new Date(item.notification.occurredAt).toLocaleString()}</time></>}</span>}
-            {item.viewedAt && <span>{item.notification && ' · '}Viewed{!compact && <> · <time dateTime={item.viewedAt}>{new Date(item.viewedAt).toLocaleString()}</time></>}</span>}
+            {item.notification && <span>{item.notification.label}{!compact && <> · <time dateTime={item.notification.occurredAt}>{displayTimestamp(item.notification.occurredAt)}</time></>}</span>}
+            {item.viewedAt && <span>{item.notification && ' · '}Viewed{!compact && <> · <time dateTime={item.viewedAt}>{displayTimestamp(item.viewedAt)}</time></>}</span>}
           </div>
           {!compact && <>
-            <div>Asked <time dateTime={item.askedAt}>{new Date(item.askedAt).toLocaleString()}</time></div>
+            <div>Asked <time dateTime={item.askedAt}>{displayTimestamp(item.askedAt)}</time></div>
             <p className="mt-1 text-[var(--color-ink-2)]">{item.detail}</p>
           </>}
         </div>

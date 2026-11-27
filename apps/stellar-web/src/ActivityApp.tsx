@@ -1,3 +1,4 @@
+import { displayTimestamp, displayDate, displayAmount } from './stellar/displayFormat';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -89,7 +90,7 @@ function activityDescription(item: ActivityRequestItem) {
   if (semantics.kind === 'payment' && semantics.primaryOperation && semantics.payment) {
     const { amount, assetCode, destination } = semantics.payment;
     const title = amount && destination
-      ? `${amount}${assetCode ? ` ${assetCode}` : ''} → ${shortAddress(destination)}`
+      ? `${displayAmount(amount)}${assetCode ? ` ${assetCode}` : ''} → ${shortAddress(destination)}`
       : semantics.primaryOperation.summary;
     return { title, summary: 'Payment' };
   }
@@ -224,7 +225,7 @@ function ActivityCard({
           </div>
           <div className="flex shrink-0 items-start gap-3">
             <div className="text-right text-xs text-neutral-400">
-              <div>{new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+              <div>{displayDate(item.createdAt)}</div>
               <div className="mt-1 font-mono">{item.requestId.match(/.{1,4}/g)?.join('-') ?? item.requestId}</div>
             </div>
             <ChevronDown className={`mt-0.5 h-4 w-4 text-neutral-400 transition ${open ? 'rotate-180' : ''}`} />
@@ -244,7 +245,7 @@ function ActivityCard({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <div className="text-sm font-semibold">{copy.title}</div>
-                    <time className="text-xs text-neutral-400">{new Date(event.occurredAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</time>
+                    <time className="text-xs text-neutral-400">{displayTimestamp(event.occurredAt)}</time>
                   </div>
                   {event.detail && <p className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">{event.detail}</p>}
                 </div>

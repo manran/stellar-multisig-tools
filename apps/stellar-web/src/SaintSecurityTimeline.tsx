@@ -1,3 +1,4 @@
+import { displayTimestamp } from './stellar/displayFormat';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, LoaderCircle } from 'lucide-react';
 import type { SaintSecurityEvent, SaintSecurityTimeline } from '../../stellar-api/stellar/server/saintAccountSecurity';
@@ -118,7 +119,7 @@ export default function SaintSecurityTimeline({
               <div className="flex flex-wrap items-start justify-between gap-3 py-3" key={event.id}>
                 <div>
                   <div className="font-semibold text-sm">{eventLabel(event)}</div>
-                  <div className="mt-1 text-xs text-[var(--color-muted)]">{eventDetail(event)} · Ledger {event.ledger} · {new Date(event.occurredAt).toLocaleString()}</div>
+                  <div className="mt-1 text-xs text-[var(--color-muted)]">{eventDetail(event)} · Ledger {event.ledger} · {displayTimestamp(event.occurredAt)}</div>
                 </div>
                 <a href={'https://stellar.expert/explorer/testnet/tx/' + event.txHash} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-[var(--color-action)]">Transaction <ArrowUpRight className="h-3.5 w-3.5" /></a>
               </div>

@@ -1,3 +1,4 @@
+import { displayTimestamp, displayAmount } from './stellar/displayFormat';
 import { projectTransactionSemantics } from './stellar/transactionSemantics';
 import { inspectedAssetIdentity } from './stellar/assetPresentation';
 import type { PortableEvidenceHistoryEvent, PortableEvidenceRecord } from './stellar/portableEvidence';
@@ -36,7 +37,7 @@ function PortableTransactionBody({ inspection }: { inspection: TransactionXdrIns
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div><div className="portable-evidence-label">From</div><div className="portable-evidence-address">{inspection.transactionSourceAccount}</div></div>
           <div><div className="portable-evidence-label">To</div><div className="portable-evidence-address">{payment.destination}</div></div>
-          <div><div className="portable-evidence-label">Amount</div><div className="font-semibold tabular-nums">{payment.amount}</div></div>
+          <div><div className="portable-evidence-label">Amount</div><div className="font-semibold tabular-nums">{displayAmount(payment.amount)}</div></div>
           <div><div className="portable-evidence-label">Asset</div><div className="portable-evidence-address">{assetLabel(payment.asset)}</div></div>
         </div>
       )}
@@ -44,7 +45,7 @@ function PortableTransactionBody({ inspection }: { inspection: TransactionXdrIns
         <div className="mt-3 overflow-hidden rounded border border-black/10">
           <table className="w-full text-left text-xs">
             <thead><tr>{semantics.kind === 'multi_party' && <th className="px-2 py-2">From</th>}<th className="px-2 py-2">To</th><th className="px-2 py-2">Amount</th><th className="px-2 py-2">Asset</th></tr></thead>
-            <tbody>{payments.map((item, index) => <tr key={`${index}:${item.sourceAccount}:${item.destination}`} className="border-t border-black/10">{semantics.kind === 'multi_party' && <td className="portable-evidence-address px-2 py-2">{item.sourceAccount}</td>}<td className="portable-evidence-address px-2 py-2">{item.destination}</td><td className="px-2 py-2 font-semibold tabular-nums">{item.amount}</td><td className="portable-evidence-address px-2 py-2">{assetLabel(item.asset)}</td></tr>)}</tbody>
+            <tbody>{payments.map((item, index) => <tr key={`${index}:${item.sourceAccount}:${item.destination}`} className="border-t border-black/10">{semantics.kind === 'multi_party' && <td className="portable-evidence-address px-2 py-2">{item.sourceAccount}</td>}<td className="portable-evidence-address px-2 py-2">{item.destination}</td><td className="px-2 py-2 font-semibold tabular-nums">{displayAmount(item.amount)}</td><td className="portable-evidence-address px-2 py-2">{assetLabel(item.asset)}</td></tr>)}</tbody>
           </table>
         </div>
       )}
@@ -54,7 +55,7 @@ function PortableTransactionBody({ inspection }: { inspection: TransactionXdrIns
           <div><div className="portable-evidence-label">Recipient</div><div className="portable-evidence-address">{claimablePayment.recipient}</div></div>
           <div><div className="portable-evidence-label">Recovery account</div><div className="portable-evidence-address">{claimablePayment.recoveryAccount}</div></div>
           <div><div className="portable-evidence-label">Claim window</div><div>{claimablePayment.claimWindowSeconds} seconds</div></div>
-          <div><div className="portable-evidence-label">Amount</div><div className="font-semibold tabular-nums">{claimablePayment.amount}</div></div>
+          <div><div className="portable-evidence-label">Amount</div><div className="font-semibold tabular-nums">{displayAmount(claimablePayment.amount)}</div></div>
           <div><div className="portable-evidence-label">Asset</div><div className="portable-evidence-address">{assetLabel(claimablePayment.asset)}</div></div>
         </div>
       )}
@@ -94,7 +95,7 @@ export default function PortableEvidenceDocument({ record, inspection }: { recor
           </div>
           <dl className="transaction-evidence-record-grid grid sm:grid-cols-3">
             <div className="px-5 py-3.5"><dt className="portable-evidence-label">Proposal ID</dt><dd className="mt-1 font-mono font-semibold">{displayRequestId(record.requestId)}</dd></div>
-            {record.submission ? <><div className="px-5 py-3.5"><dt className="portable-evidence-label">Ledger</dt><dd className="mt-1 font-mono font-bold">{record.submission.ledger.toLocaleString()}</dd></div><div className="px-5 py-3.5"><dt className="portable-evidence-label">Submitted</dt><dd className="mt-1 tabular-nums">{new Date(record.submission.submittedAt).toLocaleString()}</dd></div></> : <><div className="px-5 py-3.5"><dt className="portable-evidence-label">Created</dt><dd className="mt-1 tabular-nums">{new Date(record.createdAt).toLocaleString()}</dd></div><div className="px-5 py-3.5"><dt className="portable-evidence-label">Signatures</dt><dd className="mt-1 font-semibold">{record.signatureCount}</dd></div></>}
+            {record.submission ? <><div className="px-5 py-3.5"><dt className="portable-evidence-label">Ledger</dt><dd className="mt-1 font-mono font-bold">{record.submission.ledger.toLocaleString()}</dd></div><div className="px-5 py-3.5"><dt className="portable-evidence-label">Submitted</dt><dd className="mt-1 tabular-nums">{displayTimestamp(record.submission.submittedAt)}</dd></div></> : <><div className="px-5 py-3.5"><dt className="portable-evidence-label">Created</dt><dd className="mt-1 tabular-nums">{displayTimestamp(record.createdAt)}</dd></div><div className="px-5 py-3.5"><dt className="portable-evidence-label">Signatures</dt><dd className="mt-1 font-semibold">{record.signatureCount}</dd></div></>}
           </dl>
           <div className="transaction-evidence-record-hash border-t border-black/10 px-5 py-3.5"><div className="portable-evidence-label">Transaction hash</div><div className="portable-evidence-address mt-1">{record.transactionHash}</div></div>
         </section>
@@ -111,7 +112,7 @@ export default function PortableEvidenceDocument({ record, inspection }: { recor
 
         <section className="transaction-evidence-history">
           <div className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400">History</div>
-          <div className="mt-2 divide-y divide-black/10 border-y border-black/10">{record.history.map((event) => <div key={event.eventId} className="transaction-evidence-history-row grid grid-cols-[minmax(0,1fr)_auto] gap-3 py-2"><div><div className="text-xs font-semibold">{historyTitle(event)}</div></div><time className="whitespace-nowrap text-right text-xs tabular-nums text-neutral-400">{new Date(event.occurredAt).toLocaleString()}</time></div>)}</div>
+          <div className="mt-2 divide-y divide-black/10 border-y border-black/10">{record.history.map((event) => <div key={event.eventId} className="transaction-evidence-history-row grid grid-cols-[minmax(0,1fr)_auto] gap-3 py-2"><div><div className="text-xs font-semibold">{historyTitle(event)}</div></div><time className="whitespace-nowrap text-right text-xs tabular-nums text-neutral-400">{displayTimestamp(event.occurredAt)}</time></div>)}</div>
         </section>
       </div>
       <div className="transaction-evidence-print-footer">MultiSigTools · Proposal {displayRequestId(record.requestId)} · {record.transactionHash}</div>

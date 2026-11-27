@@ -1,3 +1,4 @@
+import { displayTimestamp } from './stellar/displayFormat';
 import { useEffect, useState } from 'react';
 import { CheckCircle2, CircleAlert, LoaderCircle, Mail, Share2, WalletCards, X } from 'lucide-react';
 import AddressAliasEditor from './AddressAliasEditor';
@@ -283,7 +284,7 @@ export default function SigningGuidance({
     const viewedBadge = viewed ? (
       <span
         className="shrink-0 rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-700 dark:text-sky-300"
-        title={assignment?.viewedAt ? `Proposal viewed ${new Date(assignment.viewedAt).toLocaleString()}` : undefined}
+        title={assignment?.viewedAt ? `Proposal viewed ${displayTimestamp(assignment.viewedAt)}` : undefined}
       >
         Viewed
       </span>

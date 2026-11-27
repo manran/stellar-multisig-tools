@@ -39,7 +39,7 @@ test('Inbox uses reusable template name as business label while preserving MST s
   });
 
   assert.equal(description.title, 'Monthly payroll');
-  assert.equal(description.summary, '10.0000000 XLM · Payment');
+  assert.equal(description.summary, '10 XLM · Payment');
   assert.equal(description.systemType, 'Payment');
 });
 
@@ -60,7 +60,7 @@ test('Payment titles stay readable while exact destination remains in transactio
     statusReason: 'signatures_required',
   });
   const recipient = description.inspection.operations[0]?.fields.find((field) => field.label === 'Destination')?.value;
-  assert.equal(description.title, 'Send 10.0000000 XLM');
+  assert.equal(description.title, 'Send 10 XLM');
   assert.match(description.summary, /^To G[A-Z2-7]{9}…[A-Z2-7]{8}$/);
   assert.equal(recipient?.length, 56);
   assert.doesNotMatch(description.title, /G[A-Z2-7]{55}/);

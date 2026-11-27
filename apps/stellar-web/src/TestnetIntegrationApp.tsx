@@ -5,6 +5,7 @@ import { STELLAR_PUBLIC_DOCS_BASE } from '../../../packages/stellar-core/src/api
 import { STELLAR_TESTNET_ORIGIN } from '../../../packages/stellar-core/src/deploymentOrigins';
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
 import './integration-admin.css';
+import StellarHeader from './StellarHeader';
 
 interface RuntimeConfig {
   fixedNetwork: StellarNetwork | null;
@@ -93,7 +94,7 @@ export default function TestnetIntegrationApp() {
     </main>;
   }
 
-  return <main className="integration-admin-shell px-4 py-8 sm:px-6 lg:px-8">
+  return <><StellarHeader landing /><main className="integration-admin-shell px-4 py-8 sm:px-6 lg:px-8">
     <div className="mx-auto max-w-6xl">
       <header className="pb-6">
         <p className="ia-kicker">Developers · Testnet</p>
@@ -106,5 +107,5 @@ export default function TestnetIntegrationApp() {
         onCancel={() => { window.location.href = `${STELLAR_PUBLIC_DOCS_BASE}/developers`; }}
       />
     </div>
-  </main>;
+  </main></>;
 }

@@ -1,3 +1,4 @@
+import { displayAmount } from './displayFormat.js';
 import type { InboxRequestSnapshot } from '../../../../packages/stellar-core/src/inboxPresentation.js';
 import type { SigningRequestSnapshot, SigningRequestStatus, SigningRequestStatusReason } from '../../../../packages/stellar-core/src/requestTypes.js';
 import { projectTransactionSemantics } from './transactionSemantics.js';
@@ -28,7 +29,7 @@ export function describeInboxRequest(request: SigningRequestSnapshot): InboxRequ
     // The business label cannot obscure the amount being authorized.
     // This amount is inspected from the XDR, not taken from a template.
     summary: businessLabel && semantics.kind === 'payment' && semantics.payment
-      ? semantics.payment.amount + ' ' + semantics.payment.assetCode + ' · ' + systemType
+      ? displayAmount(semantics.payment.amount) + ' ' + semantics.payment.assetCode + ' · ' + systemType
       : summary,
     systemType,
     source: semantics.sourceAccount,
@@ -44,14 +45,14 @@ export function describeInboxRequest(request: SigningRequestSnapshot): InboxRequ
   if (semantics.kind === 'payment' && semantics.primaryOperation && semantics.payment) {
     const payment = semantics.payment;
     const title = payment.amount && payment.assetCode
-      ? `Send ${payment.amount} ${payment.assetCode}`
+      ? `Send ${displayAmount(payment.amount)} ${payment.assetCode}`
       : semantics.primaryOperation.summary;
     return present(title, payment.destination ? `To ${conciseRecipient(payment.destination)}` : 'Payment');
   }
   if (semantics.kind === 'batch_payment') {
     return present(
       `Payment · ${semantics.payments.length} recipients`,
-      semantics.payments.slice(0, 2).map((payment) => `${payment.amount} ${payment.assetCode}`).join(' · '),
+      semantics.payments.slice(0, 2).map((payment) => `${displayAmount(payment.amount)} ${payment.assetCode}`).join(' · '),
     );
   }
   if (semantics.kind === 'multi_party') {
@@ -63,7 +64,7 @@ export function describeInboxRequest(request: SigningRequestSnapshot): InboxRequ
   }
   if (semantics.kind === 'claimable_payment' && semantics.claimablePayment) {
     return present(
-      `${semantics.claimablePayment.amount} ${semantics.claimablePayment.assetCode} to claim later`,
+      `${displayAmount(semantics.claimablePayment.amount)} ${semantics.claimablePayment.assetCode} to claim later`,
       'Claimable payment with recovery path',
     );
   }

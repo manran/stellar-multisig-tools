@@ -49,9 +49,9 @@ test('native XLM has an explicit canonical identity and liquidity-pool shares st
 });
 
 test('asset balance formatting groups only the integer part without rounding precision', () => {
-  assert.deepEqual(assetBalanceParts('10000.5000000'), { integer: '10,000', fraction: '.5000000' });
+  assert.deepEqual(assetBalanceParts('10000.5000000'), { integer: '10,000', fraction: '.5' });
   assert.deepEqual(assetBalanceParts('0.0000001'), { integer: '0', fraction: '.0000001' });
-  assert.deepEqual(assetBalanceParts('-1234567.8900000'), { integer: '-1,234,567', fraction: '.8900000' });
+  assert.deepEqual(assetBalanceParts('-1234567.8900000'), { integer: '-1,234,567', fraction: '.89' });
 });
 
 test('asset issuer compaction keeps the canonical issuer recoverable elsewhere', () => {

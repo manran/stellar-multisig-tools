@@ -6,6 +6,7 @@ import { explicitNetworkFromSearch, resolveNetworklessWalletContext } from './st
 import {
   connectWalletIdentity,
   getConnectedWalletIdentity,
+  hasRememberedWalletSelection,
   isWalletAuthEntrySigningUnsupported,
   isWalletMessageSigningUnsupported,
   isWalletSelectionCancelled,
@@ -255,6 +256,7 @@ export function StellarWalletProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [unlockExpiresAt, clearUnlockState]);
 
+  const hasSelectedAddress = Boolean(address);
   useEffect(() => {
     let disposed = false;
     let unsubscribe: (() => void) | null = null;
@@ -262,18 +264,27 @@ export function StellarWalletProvider({ children }: { children: ReactNode }) {
     let consecutiveReadFailures = 0;
     let retryTimer: number | null = null;
 
-    void subscribeWalletIdentity((identity) => {
-      if (disposed || isWalletSelectionInProgress()) return;
-      if (identity && autoIdentitySuppressedRef.current) return;
-      consecutiveReadFailures = 0;
-      applyWalletIdentity(identity);
-    }).then((stop) => {
-      if (disposed) stop();
-      else unsubscribe = stop;
-    });
+    let subscribing = false;
+    const observeWallet = () => {
+      if (unsubscribe || subscribing || disposed) return;
+      subscribing = true;
+      void subscribeWalletIdentity((identity) => {
+        if (disposed || isWalletSelectionInProgress()) return;
+        if (identity && autoIdentitySuppressedRef.current) return;
+        consecutiveReadFailures = 0;
+        applyWalletIdentity(identity);
+      }).then((stop) => {
+        if (disposed) stop();
+        else unsubscribe = stop;
+      }).catch(() => {
+        // Explicit connect/sign still surfaces wallet errors.
+      }).finally(() => { subscribing = false; });
+    };
 
     const refreshQuietly = () => {
       if (disposed || refreshInFlight || document.visibilityState !== 'visible' || autoIdentitySuppressedRef.current || isWalletSelectionInProgress()) return;
+      if (!hasSelectedAddress && !hasRememberedWalletSelection()) return;
+      observeWallet();
       refreshInFlight = true;
       void refreshWalletIdentity()
         .then((identity) => {
@@ -312,7 +323,7 @@ export function StellarWalletProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', refreshOnFocus);
       document.removeEventListener('visibilitychange', refreshOnVisible);
     };
-  }, [applyWalletIdentity, refreshWalletIdentity]);
+  }, [applyWalletIdentity, refreshWalletIdentity, hasSelectedAddress]);
 
   const connect = useCallback(async () => {
     setBusy(true);

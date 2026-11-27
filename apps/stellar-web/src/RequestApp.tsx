@@ -1,3 +1,4 @@
+import { displayTimestamp } from './stellar/displayFormat';
 /* Hallmark · pre-emit critique: P5 H4 E5 S5 R5 V4 */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
@@ -928,7 +929,7 @@ export default function RequestApp() {
                 eyebrow={<div className="flex flex-wrap items-center gap-2"><span className="text-[var(--color-muted)]">Proposal</span><RequestStatusBadge status={snapshot.status} />{(!deploymentNetwork || deploymentNetwork !== snapshot.network) && <NetworkFact network={snapshot.network} />}</div>}
                 title={proposalDescription?.title ?? 'Proposal'}
                 description={proposalDescription?.summary}
-                meta={<><span className="font-mono">ID {displayRequestId(snapshot.id)}</span>{!['submitted', 'expired', 'stale', 'blocked'].includes(snapshot.status) && <span>Signing closes <time dateTime={snapshot.expiresAt}>{new Date(snapshot.expiresAt).toLocaleString()}</time></span>}</>}
+                meta={<><span className="font-mono">ID {displayRequestId(snapshot.id)}</span>{!['submitted', 'expired', 'stale', 'blocked'].includes(snapshot.status) && <span>Signing closes <time dateTime={snapshot.expiresAt}>{displayTimestamp(snapshot.expiresAt)}</time></span>}</>}
                 actions={
                   <>
                     <ActionButton variant="secondary" size="sm" className="min-h-11" onClick={() => void load(requestLocatorString(snapshot.id, capability))} disabled={loading}>
@@ -950,7 +951,7 @@ export default function RequestApp() {
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-[var(--color-success)]">Transaction confirmed</p>
                       <h2 className="mt-1 text-xl font-bold text-[var(--color-ink)]">Confirmed on Stellar</h2>
-                      <p className="mt-2 text-sm text-[var(--color-ink-2)]">Ledger {snapshot.submission.ledger.toLocaleString()} · {new Date(snapshot.submission.submittedAt).toLocaleString()}</p>
+                      <p className="mt-2 text-sm text-[var(--color-ink-2)]">Ledger {snapshot.submission.ledger.toLocaleString()} · {displayTimestamp(snapshot.submission.submittedAt)}</p>
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -1179,8 +1180,8 @@ export default function RequestApp() {
                 <div className="mt-5 space-y-6 border-t border-black/10 pt-5 dark:border-white/10">
                   <div className="mst-request-advanced-facts">
                     <div><span className="font-semibold">Request id:</span> <span className="break-all font-mono">{displayRequestId(snapshot.id)}</span></div>
-                    {snapshot.sorobanOrigin && <div className="mt-2"><span className="font-semibold">Soroban origin:</span> Intent <span className="font-mono">{displayRequestId(snapshot.sorobanOrigin.intentId)}</span> · plan revision {snapshot.sorobanOrigin.authorizationPlanRevision} · prepared {new Date(snapshot.sorobanOrigin.executionPreparedAt).toLocaleString()}</div>}
-                    <div className="mt-2">Created {new Date(snapshot.createdAt).toLocaleString()} · signing closes {new Date(snapshot.expiresAt).toLocaleString()}</div>
+                    {snapshot.sorobanOrigin && <div className="mt-2"><span className="font-semibold">Soroban origin:</span> Intent <span className="font-mono">{displayRequestId(snapshot.sorobanOrigin.intentId)}</span> · plan revision {snapshot.sorobanOrigin.authorizationPlanRevision} · prepared {displayTimestamp(snapshot.sorobanOrigin.executionPreparedAt)}</div>}
+                    <div className="mt-2">Created {displayTimestamp(snapshot.createdAt)} · signing closes {displayTimestamp(snapshot.expiresAt)}</div>
                     <div className="mt-2">{snapshot.contributionCount} contribution{snapshot.contributionCount === 1 ? '' : 's'} · {snapshot.signatureCount} signature{snapshot.signatureCount === 1 ? '' : 's'}</div>
                     <div className="mt-2 break-all font-mono opacity-60">{snapshot.transactionHash}</div>
                     <div className="mt-3 flex flex-wrap gap-2">

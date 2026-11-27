@@ -1,3 +1,4 @@
+import { displayTimestamp } from './stellar/displayFormat';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -450,7 +451,7 @@ export default function TreasuryBoxSettingsApp() {
                           <div>
                             <div className="text-sm font-semibold">{key.label}</div>
                             <div className="mt-1 font-mono text-xs text-neutral-400">{key.prefix}…</div>
-                            <div className="mt-1 text-xs text-neutral-500">Created {new Date(key.createdAt).toLocaleString()} by {shortAddress(key.createdBy)} · {key.lastUsedAt ? `Last used ${new Date(key.lastUsedAt).toLocaleString()}` : 'Never used'}{key.revokedAt ? ` · Revoked ${new Date(key.revokedAt).toLocaleString()}${key.revokedBy ? ` by ${shortAddress(key.revokedBy)}` : ''}` : ''}</div>
+                            <div className="mt-1 text-xs text-neutral-500">Created {displayTimestamp(key.createdAt)} by {shortAddress(key.createdBy)} · {key.lastUsedAt ? `Last used ${displayTimestamp(key.lastUsedAt)}` : 'Never used'}{key.revokedAt ? ` · Revoked ${displayTimestamp(key.revokedAt)}${key.revokedBy ? ` by ${shortAddress(key.revokedBy)}` : ''}` : ''}</div>
                           </div>
                           {!key.revokedAt && <button type="button" disabled={keysLoading} onClick={() => void revokeKey(key.keyId)} className="inline-flex items-center gap-2 rounded-xl border border-red-500/20 px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-300"><Trash2 className="h-4 w-4" />Revoke</button>}
                         </div>
@@ -476,10 +477,10 @@ export default function TreasuryBoxSettingsApp() {
                     <div className="mt-5 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-100">
                       <div className="font-semibold">Some existing API keys do not have a creation event in the current audit store.</div>
                       <p className="mt-1 leading-6">Their durable credential metadata is still shown under Audit access. MultiSig Tools does not invent historical audit events to fill the gap.</p>
-                      <div className="mt-3 space-y-1 text-xs">{missingCreationAuditKeys.map((key) => <div key={key.keyId}>{key.label} · created {new Date(key.createdAt).toLocaleString()} by {shortAddress(key.createdBy)}</div>)}</div>
+                      <div className="mt-3 space-y-1 text-xs">{missingCreationAuditKeys.map((key) => <div key={key.keyId}>{key.label} · created {displayTimestamp(key.createdAt)} by {shortAddress(key.createdBy)}</div>)}</div>
                     </div>
                   )}
-                  {!auditLoading && audit.length > 0 && <div className="mt-5 divide-y divide-black/10 dark:divide-white/10">{[...audit].reverse().map((event) => <div key={event.eventId} className="py-4"><div className="flex flex-wrap items-baseline justify-between gap-2"><div className="text-sm font-semibold">{eventTitle(event)}</div><time className="text-xs text-neutral-400">{new Date(event.occurredAt).toLocaleString()}</time></div><div className="mt-1 text-xs text-neutral-500">{actorLabel(event)}</div>{event.detail && <div className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">{event.detail}</div>}<div className="mt-1 font-mono text-[10px] text-neutral-400">integrity {event.integrityHash.slice(0, 16)}…</div></div>)}</div>}
+                  {!auditLoading && audit.length > 0 && <div className="mt-5 divide-y divide-black/10 dark:divide-white/10">{[...audit].reverse().map((event) => <div key={event.eventId} className="py-4"><div className="flex flex-wrap items-baseline justify-between gap-2"><div className="text-sm font-semibold">{eventTitle(event)}</div><time className="text-xs text-neutral-400">{displayTimestamp(event.occurredAt)}</time></div><div className="mt-1 text-xs text-neutral-500">{actorLabel(event)}</div>{event.detail && <div className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">{event.detail}</div>}<div className="mt-1 font-mono text-[10px] text-neutral-400">integrity {event.integrityHash.slice(0, 16)}…</div></div>)}</div>}
                 </div>
               </details>
             </div>

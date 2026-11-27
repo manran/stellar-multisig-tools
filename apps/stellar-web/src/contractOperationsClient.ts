@@ -1,5 +1,4 @@
 import type { ContractAbiDescriptor, ContractMethodDescriptor } from '../../../packages/stellar-core/src/contractSpec';
-import { SorobanSimulationError } from '../../../packages/stellar-core/src/sorobanRpc';
 import type { SorobanSimulationSummary } from '../../../packages/stellar-core/src/sorobanRpc';
 import type { SorobanEffectsSnapshot } from '../../../packages/stellar-core/src/sorobanEffects';
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
@@ -73,6 +72,7 @@ export async function prepareContractCallOperation(input: {
   if (!response.ok) {
     const kind = body.code?.replace('soroban_simulation_', '');
     if (kind === 'unsupported' || kind === 'configuration' || kind === 'unavailable' || kind === 'invalid') {
+      const { SorobanSimulationError } = await import('../../../packages/stellar-core/src/sorobanRpc');
       throw new SorobanSimulationError(kind, body.error || 'Contract call preparation failed.');
     }
     throw new Error(body.error || `Contract call preparation failed (${response.status}).`);
@@ -98,6 +98,7 @@ export async function verifyPreparedContractCallOperation(input: {
   if (!response.ok) {
     const kind = body.code?.replace('soroban_simulation_', '');
     if (kind === 'unsupported' || kind === 'configuration' || kind === 'unavailable' || kind === 'invalid') {
+      const { SorobanSimulationError } = await import('../../../packages/stellar-core/src/sorobanRpc');
       throw new SorobanSimulationError(kind, body.error || 'Contract call verification failed.');
     }
     throw new Error(body.error || `Contract call verification failed (${response.status}).`);

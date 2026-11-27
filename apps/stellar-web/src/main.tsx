@@ -1,33 +1,35 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { Component as ReactComponent, lazy, StrictMode, Suspense, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
-import AgentAccessApp from './AgentAccessApp';
-import ActivityApp from './ActivityApp';
-import AddressBookApp from './AddressBookApp';
 import { AddressBookProvider } from './AddressBookContext';
-import AccountSigningEntryApp from './AccountSigningEntryApp';
-import ContractsApp from './ContractsApp';
-import ContractWorkspaceApp from './ContractWorkspaceApp';
 import { ContractWorkspaceProvider } from './ContractWorkspaceContext';
-import DemoTreasuryApp from './DemoTreasuryApp';
-import InboxEntryApp from './InboxEntryApp';
-import IntegrationAdminApp from './IntegrationAdminApp';
-import TestnetIntegrationApp from './TestnetIntegrationApp';
-import LegalApp from './LegalApp';
-import MultisigDesignerApp from './MultisigDesignerApp';
-import NewTransactionApp from './NewTransactionApp';
-import RequestApp from './RequestApp';
-import SigningRoomApp from './SigningRoomApp';
-import SorobanIntentApp from './SorobanIntentApp';
 import StellarHomeApp from './StellarHomeApp';
 import { StellarWalletProvider } from './StellarWalletContext';
-import TreasuryApp from './TreasuryApp';
-import TemplatesApp from './TemplatesApp';
-import TreasuryBoxSettingsApp from './TreasuryBoxSettingsApp';
-import TransactionReceiptApp from './TransactionReceiptApp';
 import { canonicalStellarRuntimeLocationForLocation, navigateWorkspace, WORKSPACE_NAVIGATION_EVENT } from './workspaceNavigation';
 import { stellarWorkspaceRouteForPath } from './workspaceRoutes';
 import type { StellarWorkspaceRouteKind } from './workspaceRoutes';
+
+const AgentAccessApp = lazy(() => import('./AgentAccessApp'));
+const ActivityApp = lazy(() => import('./ActivityApp'));
+const AddressBookApp = lazy(() => import('./AddressBookApp'));
+const AccountSigningEntryApp = lazy(() => import('./AccountSigningEntryApp'));
+const ContractsApp = lazy(() => import('./ContractsApp'));
+const ContractWorkspaceApp = lazy(() => import('./ContractWorkspaceApp'));
+const DemoTreasuryApp = lazy(() => import('./DemoTreasuryApp'));
+const InboxEntryApp = lazy(() => import('./InboxEntryApp'));
+const IntegrationAdminApp = lazy(() => import('./IntegrationAdminApp'));
+const TestnetIntegrationApp = lazy(() => import('./TestnetIntegrationApp'));
+const LegalApp = lazy(() => import('./LegalApp'));
+const MultisigDesignerApp = lazy(() => import('./MultisigDesignerApp'));
+const NewTransactionApp = lazy(() => import('./NewTransactionApp'));
+const RequestApp = lazy(() => import('./RequestApp'));
+const SigningRoomApp = lazy(() => import('./SigningRoomApp'));
+const SorobanIntentApp = lazy(() => import('./SorobanIntentApp'));
+const TreasuryApp = lazy(() => import('./TreasuryApp'));
+const TemplatesApp = lazy(() => import('./TemplatesApp'));
+const TreasuryBoxSettingsApp = lazy(() => import('./TreasuryBoxSettingsApp'));
+const TransactionReceiptApp = lazy(() => import('./TransactionReceiptApp'));
 
 interface RouteMatch {
   kind: StellarWorkspaceRouteKind | 'not-found';
@@ -54,7 +56,7 @@ function titleFor(kind: RouteMatch['kind']) {
     case 'treasury': return 'Treasury | MultiSig Tools';
     case 'treasury-settings': return 'Treasury settings | MultiSig Tools';
     case 'bootstrap': return 'Set up multisig offline | MultiSig Tools';
-    case 'address-book': return 'Address Book | MultiSig Tools';
+    case 'address-book': return 'Contacts | MultiSig Tools';
     case 'agent-access': return 'Agent access | MultiSig Tools';
     case 'activity': return 'Activity | MultiSig Tools';
     case 'request': return 'Transaction | MultiSig Tools';
@@ -70,6 +72,21 @@ function titleFor(kind: RouteMatch['kind']) {
 
 function currentLocationKey() {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+function RouteLoading() {
+  return <main className="mx-auto max-w-4xl px-6 py-16"><p role="status" className="text-sm text-[var(--color-muted)]">Loading page...</p></main>;
+}
+
+// Failed chunk loads (for example after a deploy while a tab was open) must
+// not leave a blank screen. Do not silently restart a signing workflow.
+class RouteLoadBoundary extends ReactComponent<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() {
+    if (this.state.failed) return <main className="mx-auto max-w-xl px-6 py-16"><h1 className="text-3xl font-bold">Unable to open this page</h1><p className="mt-3 text-[var(--color-ink-2)]">Reload the page to try again.</p><button type="button" className="mst-action-primary mt-6" onClick={() => window.location.reload()}>Reload page</button></main>;
+    return this.props.children;
+  }
 }
 
 function RoutedApp() {
@@ -124,7 +141,7 @@ function RoutedApp() {
 
   if (route.redirectTo !== undefined) return null;
   if (route.kind === 'not-found') return <main className="mx-auto max-w-xl px-6 py-16"><h1 className="text-3xl font-bold">Page not found</h1><p className="mt-4">This page does not exist.</p><a className="mst-action-primary mt-6 inline-flex" href="/">Return to home</a></main>;
-  if (route.kind === 'demo') return <DemoTreasuryApp />;
+  if (route.kind === 'demo') return <RouteLoadBoundary key={locationKey}><Suspense fallback={<RouteLoading />}><DemoTreasuryApp /></Suspense></RouteLoadBoundary>;
 
   let Component;
   switch (route.kind) {
@@ -155,7 +172,11 @@ function RoutedApp() {
     <StellarWalletProvider>
       <ContractWorkspaceProvider>
         <AddressBookProvider>
-          <Component key={route.kind === 'request' || route.kind === 'authorization' || route.kind === 'receipt' || route.kind === 'contract-workspace' || route.kind === 'new' ? locationKey : route.kind} />
+          <RouteLoadBoundary key={route.kind}>
+            <Suspense fallback={<RouteLoading />}>
+              <Component key={route.kind === 'request' || route.kind === 'authorization' || route.kind === 'receipt' || route.kind === 'contract-workspace' || route.kind === 'new' ? locationKey : route.kind} />
+            </Suspense>
+          </RouteLoadBoundary>
         </AddressBookProvider>
       </ContractWorkspaceProvider>
     </StellarWalletProvider>

@@ -207,9 +207,11 @@ export function PageHeader({
 export function WorkflowProgress({
   current,
   label = 'Transaction progress',
+  prepareHref,
 }: {
   current: HumanWorkflowStage;
   label?: string;
+  prepareHref?: string;
 }) {
   const currentIndex = HUMAN_WORKFLOW_STEPS.findIndex((step) => step.key === current);
   return (
@@ -217,6 +219,9 @@ export function WorkflowProgress({
       {HUMAN_WORKFLOW_STEPS.map((step, index) => {
         const complete = index < currentIndex || (current === 'done' && index === currentIndex);
         const active = index === currentIndex;
+        if (current === 'review' && step.key === 'prepare' && prepareHref) {
+          return <a key={step.key} href={prepareHref} className="mst-workflow-step hover:underline" data-complete="true" data-active="false" aria-label="Return to preparation"><span className="mst-workflow-step__marker" aria-hidden="true"><CheckCircle2 className="h-3.5 w-3.5" /></span>{step.label}</a>;
+        }
         return (
           <div
             key={step.key}

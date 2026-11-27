@@ -59,7 +59,7 @@ const apiVercelConfig = readFileSync(new URL('../../../stellar-api/vercel.json',
 test('interactive Demo is a separate non-authorizing composition root', () => {
   assert.match(landing, /Try live demo/);
   assert.match(landing, /See the full flow/);
-  assert.match(main, /route\.kind === 'demo'\) return <DemoTreasuryApp \/>/);
+  assert.match(main, /route\.kind === 'demo'\) return <RouteLoadBoundary[^\n]*<DemoTreasuryApp \/>/);
   assert.ok(main.indexOf("route.kind === 'demo'") < main.indexOf('<StellarWalletProvider>'));
   assert.doesNotMatch(demoApp, /useStellarWallet|\/api\/|fetch\(|sessionStorage|localStorage/);
   assert.match(demoApp, /No wallet is connected/);

@@ -1,3 +1,4 @@
+import { displayTimestamp } from './stellar/displayFormat';
 import { useEffect, useMemo, useState } from 'react';
 import { Eye, EyeOff, FileText, LoaderCircle, LockKeyhole } from 'lucide-react';
 import { MAX_PRIVATE_NOTE_BYTES, privateNoteByteLength } from '../../../packages/stellar-core/src/privateNote';
@@ -91,7 +92,7 @@ export default function PrivateNoteCard({ note, busy, onSave, locked = false, al
           ) : (
             <div className="whitespace-pre-wrap break-words text-sm leading-6">{note.text}</div>
           )}
-          <div className="mt-2 text-xs text-neutral-400">Added {new Date(note.createdAt).toLocaleString()}</div>
+          <div className="mt-2 text-xs text-neutral-400">Added {displayTimestamp(note.createdAt)}</div>
         </div>
       )}
 

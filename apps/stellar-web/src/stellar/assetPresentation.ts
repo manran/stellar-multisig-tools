@@ -1,3 +1,4 @@
+import { displayAmount } from './displayFormat.js';
 import { paymentAssetChoices } from '../../../../packages/stellar-core/src/paymentAsset.js';
 import type { StellarAccountSnapshot } from '../../../../packages/stellar-core/src/types.js';
 
@@ -49,9 +50,9 @@ export function compactAssetIssuer(issuer: string): string {
 }
 
 export function assetBalanceParts(balance: string): AssetBalanceParts {
-  const match = balance.match(/^(-?)(\d+)(\.\d+)?$/);
+  const match = displayAmount(balance).match(/^(-?)([\d,]+)(\.\d+)?$/);
   if (!match) return { integer: balance, fraction: '' };
   const [, sign, digits, fraction = ''] = match;
-  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const grouped = digits;
   return { integer: `${sign}${grouped}`, fraction };
 }

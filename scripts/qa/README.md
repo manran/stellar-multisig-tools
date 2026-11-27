@@ -130,3 +130,7 @@ Use the same command with `--soroban` to exercise the native XLM Stellar Asset C
 ### Execution evidence contract
 
 Export the current OpenAPI document to a local JSON file, then run `python3 scripts/qa/validateExecutionEvidence.py < openapi.json` with the Python `jsonschema` package installed in an isolated QA environment. The test rejects missing or contradictory terminal evidence for both protocols. The hosted Testnet external lifecycle also checks response-loss recovery by original Request, and never submits its short-validity non-inclusion fixture. It requires no production keys.
+
+### Cold public landing budget
+
+Run `MST_QA_PLAYWRIGHT_MODULE=/tmp/mst-qa-tools/node_modules/playwright/index.mjs MST_PERF_OUTPUT=/artifacts/initial-load.json node scripts/qa/initialLoadProbe.mjs` against the hosted Testnet landing. Optional `MST_PERF_ORIGIN` points to a locally served Testnet production build. Three fresh mobile browser contexts, disabled HTTP cache, and 4x CPU slowdown are used. The script fails for JavaScript exceeding 350,000 decoded bytes or two requests, uncaught page errors, or horizontal overflow. Resource transfer and paint measurements are recorded separately; compare paint timings only under equivalent serving/network conditions.

@@ -1,3 +1,4 @@
+import { displayTimestamp } from './stellar/displayFormat';
 import { useEffect, useState } from 'react';
 import { CircleAlert, ClipboardCopy, KeyRound, LoaderCircle, ShieldCheck, Trash2 } from 'lucide-react';
 import PrivateWorkspaceUnlock from './PrivateWorkspaceUnlock';
@@ -269,7 +270,7 @@ export default function AgentAccessApp() {
                     <div><div className="text-xs font-semibold text-[var(--color-muted)]">Permission</div><div className={'mt-1 text-lg font-semibold capitalize ' + (incomingGrant.access === 'sign' ? 'text-[var(--color-danger)]' : '')}>{incomingGrant.access}</div><p className="mt-1 text-sm text-[var(--color-ink-2)]">{ACCESS_OPTIONS.find(option => option.value === incomingGrant.access)?.detail}</p></div>
                     <div><div className="text-xs font-semibold text-[var(--color-muted)]">Network</div><div className="mt-1 font-semibold">Stellar Testnet</div></div>
                     <div><div className="text-xs font-semibold text-[var(--color-muted)]">Verification code</div><div className="mt-1 font-mono text-lg font-semibold tracking-wide">{incomingGrant.userCode}</div></div>
-                    <div><div className="text-xs font-semibold text-[var(--color-muted)]">Expires</div><div className="mt-1 font-semibold"><time dateTime={incomingGrant.expiresAt}>{new Date(incomingGrant.expiresAt).toLocaleString()}</time></div></div>
+                    <div><div className="text-xs font-semibold text-[var(--color-muted)]">Expires</div><div className="mt-1 font-semibold"><time dateTime={incomingGrant.expiresAt}>{displayTimestamp(incomingGrant.expiresAt)}</time></div></div>
                   </div>
                   <p className="mt-4 text-sm text-[var(--color-ink-2)]">Compare this code and permission with the agent's request. Approval creates a reusable credential for this signer. The agent receives the credential directly; no key is shown here.</p>
                   {incomingGrant.status === 'pending' && !privateReady && <p className="mt-3 text-sm text-[var(--color-ink-2)]">Your wallet will ask you to confirm your identity, then approve this agent in a separate signature.</p>}
@@ -333,7 +334,7 @@ export default function AgentAccessApp() {
                     <div>
                       <div className="flex items-center gap-2"><span className="text-sm font-semibold">{credential.label}</span><span className="rounded-full bg-black/5 px-2 py-0.5 text-[11px] font-bold uppercase dark:bg-white/10">{credential.access}</span></div>
                       <div className="mt-1 font-mono text-xs text-neutral-400">{credential.prefix}…</div>
-                      <div className="mt-1 text-xs text-neutral-500">Principal {shortAddress(credential.principal.address)} · Created {new Date(credential.createdAt).toLocaleString()} · {credential.lastUsedAt ? `Last used ${new Date(credential.lastUsedAt).toLocaleString()}` : 'Never used'}{credential.revokedAt ? ` · Revoked ${new Date(credential.revokedAt).toLocaleString()}` : ''}</div>
+                      <div className="mt-1 text-xs text-neutral-500">Principal {shortAddress(credential.principal.address)} · Created {displayTimestamp(credential.createdAt)} · {credential.lastUsedAt ? `Last used ${displayTimestamp(credential.lastUsedAt)}` : 'Never used'}{credential.revokedAt ? ` · Revoked ${displayTimestamp(credential.revokedAt)}` : ''}</div>
                     </div>
                     {!credential.revokedAt && (pendingRevokeId === credential.credentialId ? (
                       <div className="mst-agent-revoke-confirm" role="group" aria-label={'Revoke ' + credential.label}>

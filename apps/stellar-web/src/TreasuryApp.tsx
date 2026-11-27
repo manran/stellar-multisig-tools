@@ -1,3 +1,4 @@
+import { displayAmount } from './stellar/displayFormat';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -75,7 +76,7 @@ function TreasuryCard({
           <div className="mt-1 font-mono text-xs text-neutral-500 dark:text-neutral-400" title={account.accountId}>{shortAccount(account.accountId)}</div>
         </div>
         <div className="shrink-0 text-right">
-          <div className="text-lg font-bold">{account.nativeBalance} XLM</div>
+          <div className="text-lg font-bold">{account.nativeBalance === undefined ? 'Unknown' : displayAmount(account.nativeBalance)} XLM</div>
           <div className="text-xs text-neutral-500 dark:text-neutral-400">Native balance</div>
         </div>
       </div>
@@ -239,7 +240,7 @@ function TreasuryDetail({
             {!adopted && relationship === 'personal_account' && <a href={treasurySigningHref(account.accountId, network, 'create-treasury')} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" />Create treasury</a>}
             {!adopted && relationship !== 'personal_account' && <button type="button" onClick={onAdopt} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 px-3 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300"><Plus className="h-4 w-4" />Use as Treasury</button>}
           </div>
-          <div className="mst-treasury-detail__balance"><div className="text-xl font-bold tabular-nums">{account.nativeBalance} XLM</div><div className="text-xs text-[var(--color-muted)]">Native balance · {assets.length} {assets.length === 1 ? 'asset' : 'assets'}</div></div>
+          <div className="mst-treasury-detail__balance"><div className="text-xl font-bold tabular-nums">{account.nativeBalance === undefined ? 'Unknown' : displayAmount(account.nativeBalance)} XLM</div><div className="text-xs text-[var(--color-muted)]">Native balance · {assets.length} {assets.length === 1 ? 'asset' : 'assets'}</div></div>
         </div>
 
         {adopted && (

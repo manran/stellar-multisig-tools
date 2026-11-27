@@ -1,3 +1,4 @@
+import { displayTimestamp } from './stellar/displayFormat';
 import { useMemo, useState } from 'react';
 import { Check, ClipboardCopy, KeyRound, LoaderCircle, Plus, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import IntegrationProfileWizard, { type IntegrationProfileWizardResult } from './IntegrationProfileWizard';
@@ -550,7 +551,7 @@ function WebhookDeliveryPanel({
               <div className="mt-2 break-all font-mono text-xs">{delivery.resourceKind === 'classic_request' ? 'Proposal' : 'Soroban Intent'} · {delivery.resourceId}</div>
               <div className="mt-1 break-all font-mono text-[11px] text-neutral-400">{delivery.eventId}</div>
               <div className="mt-2 text-xs text-neutral-500">
-                {new Date(eventTime).toLocaleString()}
+                {displayTimestamp(eventTime)}
                 {' · '}attempts {delivery.attemptCount}
                 {latest?.httpStatus ? ` · HTTP ${latest.httpStatus}` : ''}
                 {latest?.durationMs !== undefined ? ` · ${latest.durationMs} ms` : ''}
@@ -656,7 +657,7 @@ function ManagedClassicStatusPanel({
                       : channel.leaseState === 'free'
                         ? 'Free'
                         : 'Lease status unavailable'}</strong>
-                  {channel.leaseExpiresAt && <span>{channel.leaseState === 'active' ? 'Until ' : 'Expired '}{new Date(channel.leaseExpiresAt).toLocaleString()}</span>}
+                  {channel.leaseExpiresAt && <span>{channel.leaseState === 'active' ? 'Until ' : 'Expired '}{displayTimestamp(channel.leaseExpiresAt)}</span>}
                 </div>
               </div>)}
             </div>
