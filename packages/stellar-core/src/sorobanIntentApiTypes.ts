@@ -128,7 +128,7 @@ export interface IntegrationSorobanJobProjection {
   state: IntegrationJobState;
   nextActions: IntegrationJobNextAction[];
   actionCalls: Partial<Record<IntegrationJobNextAction,
-    { operationId: string; bodyDefaults: { action: string; transactionHash?: string }; reviewRequired?: true }
+    { operationId: string; bodyDefaults: { action: string; transactionHash?: string }; requiredInputs?: string[]; reviewRequired?: true }
     | { transport: 'external_stellar_submission'; transactionHash: string }>>;
   reviewUrl: string;
   waitingFor?: string[];

@@ -2,7 +2,7 @@ import { Account, Networks, TransactionBuilder, scValToNative } from '@stellar/s
 import { Api, Server } from '@stellar/stellar-sdk/rpc';
 import { Client } from '@stellar/stellar-sdk/contract';
 import { contractCallOperation, describeContractSpec } from '../../../../packages/stellar-core/src/contractSpec.js';
-import { enrichSorobanCallSummary, inspectSorobanHostFunctionXdr } from '../../../../packages/stellar-core/src/sorobanInspection.js';
+import { applyObservedSorobanTokenMetadata, enrichSorobanCallSummary, inspectSorobanHostFunctionXdr } from '../../../../packages/stellar-core/src/sorobanInspection.js';
 import { stellarRpcUrl } from '../../../../packages/stellar-core/src/sorobanRpc.js';
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import { configuredSorobanPlanningSource } from './sorobanIntentConfig.js';
@@ -54,4 +54,28 @@ export async function inspectSorobanReviewMetadata(encoded: string, network: Ste
   }
   const metadata = await entry.pending;
   return metadata ? enrichSorobanCallSummary(encoded, network, metadata.methods, metadata.token) : base;
+}
+
+/** Store only verified token observations. All raw amounts and addresses are
+ * derived again from the immutable HostFunction at read time. */
+export async function captureSorobanReviewTokenMetadata(encoded: string, network: StellarNetwork,
+  inspect = inspectSorobanReviewMetadata) {
+  const call = inspectSorobanHostFunctionXdr(encoded, network);
+  if (!call || call.nativeXlmTransfer || call.functionName !== 'transfer') return undefined;
+  try {
+    const transfer = (await inspect(encoded, network))?.tokenTransfer;
+    if (!transfer) return undefined;
+    const { symbol, decimals, observedLedger } = transfer;
+    return { symbol, decimals, observedLedger };
+  } catch {
+    return undefined;
+  }
+}
+
+export function storedSorobanReviewSummary(stored: Pick<import('./sorobanIntentStore.js').StoredSorobanIntent, 'intent' | 'network' | 'reviewTokenMetadata'>) {
+  const encoded = stored.intent.hostFunctionXdr;
+  const summary = inspectSorobanHostFunctionXdr(encoded, stored.network);
+  return summary && stored.reviewTokenMetadata
+    ? applyObservedSorobanTokenMetadata(encoded, summary, stored.reviewTokenMetadata)
+    : summary;
 }

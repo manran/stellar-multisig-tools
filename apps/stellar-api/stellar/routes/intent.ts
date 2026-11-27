@@ -1,5 +1,4 @@
-import { inspectSorobanReviewMetadata } from '../server/sorobanReviewMetadata.js';
-import { inspectSorobanHostFunctionXdr } from '../../../../packages/stellar-core/src/sorobanInspection.js';
+import { captureSorobanReviewTokenMetadata, inspectSorobanReviewMetadata, storedSorobanReviewSummary } from '../server/sorobanReviewMetadata.js';
 import { blobAgentCredentialStore } from '../server/blobAgentCredentialStore.js';
 import { blobAuthStore } from '../server/blobAuthStore.js';
 import {
@@ -284,9 +283,12 @@ export async function GET(request: Request): Promise<Response> {
     ]);
     const metadataRequested = new URL(request.url).searchParams.get('includeMetadata') === '1';
     const live = access.authorization.status === 'awaiting_authorization' || access.authorization.status === 'authorization_ready';
-    const callSummary = metadataRequested && live
+    const storedSummary = storedSorobanReviewSummary(access.stored);
+    const currentSummary = metadataRequested && live
       ? await inspectSorobanReviewMetadata(access.stored.intent.hostFunctionXdr, access.stored.network)
-      : inspectSorobanHostFunctionXdr(access.stored.intent.hostFunctionXdr, access.stored.network);
+      : null;
+    const callSummary = currentSummary?.tokenTransfer || !storedSummary?.tokenTransfer
+      ? currentSummary ?? storedSummary : storedSummary;
     return json({
       operation: 'contract.intent.inspect',
       version: 1,
@@ -401,6 +403,12 @@ export async function POST(request: Request): Promise<Response> {
       throw new ContractIntentServiceError('Network must be public or testnet.', 400, 'invalid_network');
     }
     assertDeploymentNetwork(network);
+    // Capture once after semantic validation and quota admission. Failed
+    // metadata reads never block creation or change the signed invocation.
+    const observedStore = withSorobanIntentCreate(sorobanIntentStore, async (value) => {
+      const reviewTokenMetadata = await captureSorobanReviewTokenMetadata(value.intent.hostFunctionXdr, value.network);
+      return sorobanIntentStore.createIntent({ ...value, ...(reviewTokenMetadata ? { reviewTokenMetadata } : {}) });
+    });
     const machineCaller = await machineCallerFromRequest(blobAgentCredentialStore, request);
     const integrationCredential = machineCaller?.kind === 'service' ? machineCaller.credential : null;
     const agent = machineCaller?.kind === 'agent' ? machineCaller.credential : null;
@@ -442,14 +450,14 @@ export async function POST(request: Request): Promise<Response> {
           errorMessage: 'This signer has created too many Intents recently. Try again later.',
         });
       });
-      const intent = await createImportedSorobanIntent(sorobanIntentStore, session.address, {
+      const intent = await createImportedSorobanIntent(observedStore, session.address, {
         network,
         preparedXdr: body.preparedXdr,
         privateNote: body.privateNote,
         externalReference: body.externalReference,
       }, { beforeCreate });
       const authorization = await getSorobanIntentAuthorization(sorobanIntentStore, intent.id);
-      return json({ operation: 'contract.intent.create', version: 1, replayed: false, intent, authorization }, 201);
+      return json({ operation: 'contract.intent.create', version: 1, replayed: false, intent: publicSorobanIntent(intent), authorization }, 201);
     }
     if (integrationCredential) {
       if (body.privateNote !== undefined && body.privateNote !== null && body.privateNote !== '') {
@@ -472,10 +480,10 @@ export async function POST(request: Request): Promise<Response> {
         });
       });
       const quotaStore = withSorobanIntentCreate(
-        sorobanIntentStore,
+        observedStore,
         async (...args) => {
           await beforeCreate();
-          return sorobanIntentStore.createIntent(...args);
+          return observedStore.createIntent(...args);
         },
       );
       const result = await createIntegrationSorobanIntent(
@@ -525,7 +533,7 @@ export async function POST(request: Request): Promise<Response> {
       };
       const result = await createAgentSorobanIntent(
         quotaStore,
-        sorobanIntentStore,
+        observedStore,
         agent,
         {
           network,
@@ -566,7 +574,7 @@ export async function POST(request: Request): Promise<Response> {
       });
     });
     const intent = await createHumanSorobanIntent(
-      sorobanIntentStore,
+      observedStore,
       session.address,
       {
         network,
@@ -586,7 +594,7 @@ export async function POST(request: Request): Promise<Response> {
       operation: 'contract.intent.create',
       version: 1,
       replayed: false,
-      intent,
+      intent: publicSorobanIntent(intent),
       authorization,
     }, 201);
   } catch (cause) {

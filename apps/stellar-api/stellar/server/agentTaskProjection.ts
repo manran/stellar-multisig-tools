@@ -3,7 +3,7 @@ import type {
   AgentTaskAction,
   AgentTaskProjection,
 } from '../../../../packages/stellar-core/src/agentTaskTypes.js';
-import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
+import { isClassicExecutionUnresolved, type SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
 import type { SorobanIntentAuthorizationSnapshot } from './sorobanIntentAuthorizationService.js';
 import { successfulSorobanExecution, unresolvedSorobanPreparations } from './sorobanIntentStore.js';
 import type {
@@ -29,7 +29,9 @@ function action(
     code,
     operationId: TASK_OPERATIONS[code],
     ...(code === 'decline' ? { bodyDefaults: { decision: 'decline' } }
-      : code.startsWith('contribute_') ? {} : { bodyDefaults: { action: code } }),
+      : code === 'contribute_signature' ? { requiredInputs: ['signedXdr'] }
+      : code === 'contribute_authorization' ? { requiredInputs: ['entryIndex', 'signatureBase64'] }
+      : { bodyDefaults: { action: code } }),
     requiredAccess,
     available: ACCESS_RANK[credentialAccess] >= ACCESS_RANK[requiredAccess],
   };
@@ -51,7 +53,7 @@ export function projectClassicAgentTask({
   const signatureRequired = request.status === 'awaiting_signatures' && request.statusReason !== 'quorum_unreachable' && !hasSigned && !declined;
 
   if (request.status === 'submitted') state = 'completed';
-  else if (request.executionOutcome?.outcome === 'unknown' && ['expired', 'stale', 'blocked'].includes(request.status)) state = 'execution_unknown';
+  else if (isClassicExecutionUnresolved(request)) state = 'execution_unknown';
   else if (request.status === 'expired') state = 'expired';
   else if (request.status === 'stale' || request.status === 'blocked') state = 'failed';
   else if (signatureRequired) {
@@ -60,7 +62,13 @@ export function projectClassicAgentTask({
       action('decline', 'write', credentialAccess),
     ];
     state = nextActions.some((item) => item.available) ? 'action_required' : 'waiting';
-  } else state = 'waiting';
+  } else {
+    state = 'waiting';
+    // Reconsideration is optional, not a new demand to sign.
+    if (request.status === 'awaiting_signatures' && !hasSigned && (declined || request.statusReason === 'quorum_unreachable')) {
+      nextActions = [{ ...action('contribute_signature', 'sign', credentialAccess), reviewRequired: true }];
+    }
+  }
 
   return {
     version: 1,
@@ -159,8 +167,9 @@ export function projectSorobanAgentTask({
   let nextActions: AgentTaskAction[] = [];
   if (latestObservation?.successful) state = 'completed';
   else if (unresolved.length) {
-    state = stored.cancellation ? 'cancelled' : 'action_required';
-    nextActions = [action('reconcile_execution', 'write', credentialAccess)];
+    state = 'action_required';
+    nextActions = [{ ...action('reconcile_execution', 'write', credentialAccess),
+      ...(unresolved.length === 1 ? { bodyDefaults: { action: 'reconcile_execution', transactionHash: unresolved[0].transactionHash } } : { requiredInputs: ['transactionHash'] }) }];
     const pending = unresolved.length === 1 ? unresolved[0] : undefined;
     if (!stored.integration && !stored.cancellation && pending
       && (pending.hasReleasedExecution || pending.releasedExecution)

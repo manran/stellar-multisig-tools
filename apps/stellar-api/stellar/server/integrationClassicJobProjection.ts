@@ -1,5 +1,5 @@
 import { stellarWebOrigin } from '../../../../packages/stellar-core/src/deploymentOrigins.js';
-import type { IntegrationClassicJobProjection, SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
+import { isClassicExecutionUnresolved, type IntegrationClassicJobProjection, type SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
 
 export function projectIntegrationClassicJob(request: SigningRequestSnapshot, externalReference?: string): IntegrationClassicJobProjection {
   const external = request.execution?.mode === 'external';
@@ -8,7 +8,7 @@ export function projectIntegrationClassicJob(request: SigningRequestSnapshot, ex
   const state: IntegrationClassicJobProjection['state'] = request.status === 'submitted' || outcome === 'successful' ? 'completed'
     : outcome === 'failed' ? 'failed'
     : outcome === 'not_included' ? 'expired'
-    : external && ['blocked', 'stale', 'expired'].includes(request.status) ? 'execution_unknown'
+    : isClassicExecutionUnresolved(request) ? 'execution_unknown'
     : request.status === 'expired' ? 'expired'
     : request.status === 'blocked' || request.status === 'stale' ? 'failed'
     : request.status === 'ready' ? 'ready' : request.status === 'waiting_preconditions' ? 'waiting_preconditions' : 'waiting_for_authorization';

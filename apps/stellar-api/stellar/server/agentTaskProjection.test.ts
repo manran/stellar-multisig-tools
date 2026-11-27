@@ -55,7 +55,7 @@ test('Read Agent can discover a pending signature without an executable task', (
   assert.equal(task.state, 'waiting');
   assert.equal(task.signatureRequired, true);
   assert.deepEqual(task.nextActions, [
-    { code: 'contribute_signature', operationId: 'proposal.contribute', requiredAccess: 'sign', available: false },
+    { code: 'contribute_signature', operationId: 'proposal.contribute', requiredInputs: ['signedXdr'], requiredAccess: 'sign', available: false },
     { code: 'decline', operationId: 'proposal.decline', bodyDefaults: { decision: 'decline' }, requiredAccess: 'write', available: false },
   ]);
 });
@@ -67,7 +67,7 @@ test('Classic Agent Task reports Principal action separately from credential cap
   assert.equal(task.state, 'action_required');
   assert.equal(task.signatureRequired, true);
   assert.deepEqual(task.nextActions, [
-    { code: 'contribute_signature', operationId: 'proposal.contribute', requiredAccess: 'sign', available: false },
+    { code: 'contribute_signature', operationId: 'proposal.contribute', requiredInputs: ['signedXdr'], requiredAccess: 'sign', available: false },
     { code: 'decline', operationId: 'proposal.decline', bodyDefaults: { decision: 'decline' }, requiredAccess: 'write', available: true },
   ]);
 });
@@ -81,13 +81,13 @@ test('Sign Agent can act on a pending signature', () => {
   assert.equal(task.nextActions.find((item) => item.code === 'contribute_signature')?.available, true);
 });
 
-test('Classic Agent Task does not notify a signer who declined', () => {
+test('Classic Agent Task exposes optional reconsideration without a mandatory signature demand', () => {
   const task = projectClassicAgentTask({
     request: classic('awaiting_signatures'), credentialAccess: 'read', hasSigned: false, declined: true,
   });
   assert.equal(task.state, 'waiting');
   assert.equal(task.signatureRequired, false);
-  assert.deepEqual(task.nextActions, []);
+  assert.deepEqual(task.nextActions, [{ code: 'contribute_signature', operationId: 'proposal.contribute', requiredInputs: ['signedXdr'], requiredAccess: 'sign', available: false, reviewRequired: true }]);
 });
 
 test('Classic Agent Task waits after this Principal has already signed', () => {
@@ -119,7 +119,7 @@ test('Soroban Agent Task exposes required Sign access without granting it', () =
   assert.equal(task.signatureRequired, true);
   assert.deepEqual(task.waitingFor, [OTHER]);
   assert.deepEqual(task.nextActions, [
-    { code: 'contribute_authorization', operationId: 'contract.intent.contribute', requiredAccess: 'sign', available: false },
+    { code: 'contribute_authorization', operationId: 'contract.intent.contribute', requiredInputs: ['entryIndex', 'signatureBase64'], requiredAccess: 'sign', available: false },
   ]);
 });
 
@@ -158,7 +158,7 @@ test('Soroban Agent Task reconciles a stale prepared package before refresh', ()
   });
   assert.equal(task.state, 'action_required');
   assert.deepEqual(task.nextActions, [
-    { code: 'reconcile_execution', operationId: 'contract.intent.execution.reconcile', bodyDefaults: { action: 'reconcile_execution' }, requiredAccess: 'write', available: true },
+    { code: 'reconcile_execution', operationId: 'contract.intent.execution.reconcile', bodyDefaults: { action: 'reconcile_execution', transactionHash: DIGEST }, requiredAccess: 'write', available: true },
   ]);
 });
 
@@ -169,7 +169,7 @@ test('creator Agent gets explicit cancellation as a write action', () => {
   });
   assert.equal(task.state, 'action_required');
   assert.deepEqual(task.nextActions, [
-    { code: 'contribute_authorization', operationId: 'contract.intent.contribute', requiredAccess: 'sign', available: false },
+    { code: 'contribute_authorization', operationId: 'contract.intent.contribute', requiredInputs: ['entryIndex', 'signatureBase64'], requiredAccess: 'sign', available: false },
     { code: 'cancel', operationId: 'contract.intent.cancel', bodyDefaults: { action: 'cancel' }, requiredAccess: 'write', available: true },
   ]);
 });
@@ -286,4 +286,76 @@ test('Soroban Agent retry actions mark resolved prior evidence for explicit revi
   assert.equal(expired.nextActions[0].reviewRequired, true);
   const integration = projectSorobanAgentTask({ ...input, stored: stored(true), authorization: authorization('authorization_ready', true) });
   assert.deepEqual(integration.nextActions, []);
+});
+
+test('unreachable quorum exposes only optional reviewed signature action, preserving credential limits', () => {
+  const request = { ...classic('awaiting_signatures'), statusReason: 'quorum_unreachable' as const };
+  for (const credentialAccess of ['read', 'write', 'sign'] as const) {
+    for (const declined of [true, false]) {
+      const task = projectClassicAgentTask({ request, credentialAccess, hasSigned: false, declined });
+      assert.equal(task.state, 'waiting');
+      assert.equal(task.signatureRequired, false);
+      assert.deepEqual(task.nextActions, [{ code: 'contribute_signature', operationId: 'proposal.contribute', requiredInputs: ['signedXdr'], requiredAccess: 'sign', available: credentialAccess === 'sign', reviewRequired: true }]);
+    }
+    assert.deepEqual(projectClassicAgentTask({ request, credentialAccess, hasSigned: true }).nextActions, []);
+  }
+});
+
+test('reconciliation requires explicit hash selection when multiple Soroban preparations remain unresolved', () => {
+  const prep = { version: 1 as const, transactionHash: DIGEST, authorizationPlanDigest: DIGEST, authorizationPlanRevision: 1, executionSource: PRINCIPAL,
+    transactionSequence: '1', validUntil: '2026-09-17T00:01:00Z', latestLedger: 10, effectsDigest: DIGEST, effectsAccepted: true, preparedAt: '2026-09-17T00:00:30Z' };
+  const task = projectSorobanAgentTask({ stored: stored(false, true), authorization: authorization('authorization_ready', true), credentialAccess: 'write', principalAddress: PRINCIPAL,
+    preparations: [prep, { ...prep, transactionHash: 'b'.repeat(64) }], now: new Date('2026-09-17T00:02:00Z') });
+  assert.deepEqual(task.nextActions, [{ code: 'reconcile_execution', operationId: 'contract.intent.execution.reconcile', bodyDefaults: { action: 'reconcile_execution' }, requiredInputs: ['transactionHash'], requiredAccess: 'write', available: true }]);
+  assert.equal(task.unresolvedTransactionHashes?.length, 2);
+});
+
+test('all emitted Agent action defaults and required inputs match their logical operation contracts', async () => {
+  const { createOpenApiDocument } = await import('./openApiDocument.js');
+  const doc = createOpenApiDocument() as any;
+  const contracts = doc['x-multisig-operations'];
+  const seen = new Set<string>();
+  const prep = {
+    version: 1 as const, transactionHash: DIGEST, authorizationPlanDigest: DIGEST,
+    authorizationPlanRevision: 1, executionSource: PRINCIPAL, transactionSequence: '1',
+    validUntil: '2026-09-17T01:00:00.000Z', latestLedger: 10, effectsDigest: DIGEST,
+    effectsAccepted: true, preparedAt: '2026-09-17T00:00:30.000Z',
+    preparedByAddress: PRINCIPAL, hasReleasedExecution: true,
+  };
+  const check = (task: ReturnType<typeof projectClassicAgentTask>) => {
+    for (const action of task.nextActions) {
+      const contract = contracts[action.operationId];
+      assert.ok(contract, action.operationId);
+      assert.equal(contract.access, 'principal:' + action.requiredAccess, action.operationId);
+      let schema = contract.requestBody.content['application/json'].schema;
+      if (schema.$ref) schema = doc.components.schemas[schema.$ref.split('/').at(-1)];
+      const defaults = action.bodyDefaults ?? {};
+      const keys = new Set([...Object.keys(defaults), ...(action.requiredInputs ?? [])]);
+      for (const field of schema.required ?? []) assert.ok(keys.has(field), action.operationId + ': ' + field);
+      for (const field of keys) assert.ok(schema.properties[field], action.operationId + ': ' + field);
+      for (const [field, value] of Object.entries(defaults)) {
+        const property = schema.properties[field];
+        if (property.const !== undefined) assert.equal(value, property.const);
+        if (property.enum) assert.ok(property.enum.includes(value));
+      }
+      seen.add(action.code);
+    }
+  };
+  for (const credentialAccess of ['read', 'write', 'sign'] as const) {
+    for (const declined of [true, false]) {
+      check(projectClassicAgentTask({ request: classic('awaiting_signatures'), credentialAccess, hasSigned: false, declined }));
+    }
+    for (const status of ['awaiting_authorization', 'authorization_ready', 'expired', 'blocked', 'cancelled'] as const) {
+      for (const preparations of [[], [prep], [prep, { ...prep, transactionHash: 'b'.repeat(64) }]]) {
+        check(projectSorobanAgentTask({ stored: stored(false, true), authorization: authorization(status, status === 'authorization_ready'),
+          credentialAccess, principalAddress: PRINCIPAL, preparations, now: new Date('2026-09-17T00:30:00.000Z') }));
+      }
+    }
+  }
+  check(projectSorobanAgentTask({ stored: stored(false, true), authorization: authorization('authorization_ready', true),
+    credentialAccess: 'write', principalAddress: PRINCIPAL, preparations: [prep], observations: [{
+      version: 1, transactionHash: DIGEST, authorizationPlanDigest: DIGEST, authorizationPlanRevision: 1,
+      executionSource: PRINCIPAL, ledger: 20, successful: false, observedAt: '2026-09-17T00:40:00.000Z',
+    }] }));
+  assert.deepEqual([...seen].sort(), ['cancel', 'contribute_authorization', 'contribute_signature', 'decline', 'prepare_execution', 'reconcile_execution', 'refresh_execution', 'replan', 'resume_execution']);
 });

@@ -12,7 +12,9 @@ export type InboxViewerAction =
   | 'waiting_preconditions'
   | 'waiting_execution'
   | 'attention'
-  | 'declined';
+  | 'declined'
+  | 'quorum_unreachable'
+  | 'execution_unknown';
 
 export interface InboxRequestSnapshot extends SigningRequestSnapshot {
   viewerAction: InboxViewerAction;
@@ -43,7 +45,7 @@ export function projectInboxViewerAction(
   if (status === 'awaiting_signatures') {
     if (options.hasSigned) return 'waiting_for_others';
     if (options.declined) return 'declined';
-    if (options.quorumUnreachable) return 'waiting_for_others';
+    if (options.quorumUnreachable) return 'quorum_unreachable';
     return 'sign';
   }
   return 'attention';
@@ -144,11 +146,15 @@ export function inboxViewerActionPresentation(action: InboxViewerAction): {
       };
     case 'declined':
       return {
-        label: 'You declined · waiting for others',
-        detail: 'Your decision is recorded; the proposal remains open for other signers.',
-        cta: 'View status',
+        label: 'You declined',
+        detail: 'Your decision is recorded. You can review the proposal again if you change your mind.',
+        cta: 'Review decision',
         tone: 'neutral',
       };
+    case 'quorum_unreachable':
+      return { label: 'Not enough approvals available', detail: 'A signer declined. Review the decision or wait for the signing policy to change.', cta: 'View proposal', tone: 'warning' };
+    case 'execution_unknown':
+      return { label: 'Payment result not confirmed', detail: 'The signing window has closed or the envelope cannot proceed. The owning Integration must reconcile the original transaction. Do not create a replacement based on this status.', cta: 'View status', tone: 'warning' };
     case 'waiting_for_others':
       return {
         label: 'You signed · waiting for others',

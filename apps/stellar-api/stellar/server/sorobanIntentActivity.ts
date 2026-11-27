@@ -32,7 +32,7 @@ export async function listSorobanIntentActivityItems(
     const activityAt = evidence.at(-1)?.occurredAt ?? stored.createdAt;
     return {
       kind: 'soroban_intent' as const,
-      callTitle: sorobanIntentCallTitle(stored.intent.hostFunctionXdr, stored.network),
+      callTitle: sorobanIntentCallTitle(stored.intent.hostFunctionXdr, stored.network, stored.reviewTokenMetadata),
       workId: stored.id,
       activityAt,
       intentId: stored.id,

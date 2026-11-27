@@ -653,16 +653,23 @@ function agentRequestTask(access: AuthorizedRequest, snapshot: Awaited<ReturnTyp
       snapshot.mergedXdr,
       snapshot.network,
     ),
-    declined,
+    declined: declined || (snapshot.declines?.some(item => item.signerAddress === access.agentCredential!.principal.address) ?? false),
   });
 }
 
 export async function GET(request: Request): Promise<Response> {
   try {
     const url = new URL(request.url);
-    const historyRequested = url.searchParams.get('view') === 'history';
-    const reconciliationRequested = url.searchParams.get('view') === 'reconciliation';
+    const view = url.searchParams.get('view');
+    if (view !== null && view !== 'history' && view !== 'reconciliation') {
+      throw new SigningRequestServiceError('Use view=history, view=reconciliation, or omit view.', 400, 'invalid_request_view');
+    }
+    const historyRequested = view === 'history';
+    const reconciliationRequested = view === 'reconciliation';
     const historyAccountId = url.searchParams.get('account')?.trim() ?? '';
+    if (historyAccountId && !historyRequested) {
+      throw new SigningRequestServiceError('account is only supported with view=history.', 400, 'invalid_request_view');
+    }
     if (historyAccountId && !isValidStellarAccountId(historyAccountId)) {
       throw new SigningRequestServiceError('Enter a valid Stellar account.', 400, 'invalid_account');
     }

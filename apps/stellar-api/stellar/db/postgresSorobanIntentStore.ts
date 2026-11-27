@@ -32,6 +32,7 @@ interface IntentRow {
   creator_address: string | null;
   creator_actor: MachineCallerProvenance | null;
   creation_input_hash: string | null;
+  review_token_metadata: StoredSorobanIntent['reviewTokenMetadata'] | null;
   integration_context: SorobanIntentIntegrationContext | null;
   external_reference: string | null;
   execution_policy: SorobanExecutionPolicy | null;
@@ -106,6 +107,7 @@ async function readIntent(
        i.creator_address,
        i.creator_actor,
        i.creation_input_hash,
+       i.review_token_metadata,
        i.integration_context,
        i.external_reference,
        i.execution_policy,
@@ -160,6 +162,7 @@ async function readIntent(
     ...(row.creator_address ? { creatorAddress: row.creator_address } : {}),
     ...(row.creator_actor ? { creatorActor: row.creator_actor } : {}),
     ...(row.creation_input_hash ? { creationInputHash: row.creation_input_hash } : {}),
+    ...(row.review_token_metadata ? { reviewTokenMetadata: row.review_token_metadata } : {}),
     discoverySignerKeys: signers,
     ...(row.integration_context ? { integration: row.integration_context } : {}),
     ...((row.bound_execution_policy ?? row.execution_policy)
@@ -246,10 +249,10 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
            authorization_plan_revision, authorization_plan_history,
            created_at, creator_address, creator_actor,
            integration_service_id, integration_context, external_reference, execution_policy,
-           has_private_note, creation_input_hash
+           has_private_note, creation_input_hash, review_token_metadata
          ) VALUES (
            $1, $2, $3, $4, $5, $6, $7,
-           $8, $9, $10, $11, $12, $13, $14, $15, $16
+           $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
          )`,
         [
           value.id,
@@ -268,6 +271,7 @@ export class PostgresSorobanIntentStore implements SorobanIntentStore {
           policy,
           Boolean(value.privateContext?.initialPrivateNote),
           value.creationInputHash ?? null,
+          value.reviewTokenMetadata ?? null,
         ],
       );
       await syncSigners(client, value);

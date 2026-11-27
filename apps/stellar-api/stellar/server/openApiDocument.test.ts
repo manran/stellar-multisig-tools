@@ -366,7 +366,7 @@ test('every registry operation has an exact resolvable logical contract and a re
   assert.deepEqual(input('integration.intent.browser.issue').required, ['action', 'signerAddress', 'origin']);
   for (const id of ['proposal.create', 'integration.request.create', 'contract.intent.create', 'integration.intent.create']) {
     assert.equal((contracts[id].retry as JsonObject).idempotencyKey, 'required');
-    assert.equal((contracts[id].parameters as JsonObject[]).find((p) => p.name === 'Idempotency-Key')?.required, true);
+    assert.equal((contracts[id].parameters as JsonObject[]).find((p) => p.name === 'Idempotency-Key')?.required, id.startsWith('integration.'));
   }
   assert.equal((contracts['integration.testnet.create'].retry as JsonObject).idempotencyKey, 'unsupported');
   const poll = contracts['agent.grant.poll'];
@@ -458,4 +458,28 @@ test('webhook contract documents both existing projections without reusable sign
   assert.equal(classic.mergedXdr, undefined);
   assert.ok(classic.executionOutcome);
   assert.ok(schemas.IntegrationWebhookEnvelope);
+});
+
+test('every logical Human-selected proposal or Intent action retains the conditional wallet header', () => {
+  const doc = createOpenApiDocument();
+  const ops = doc['x-multisig-operations'] as Record<string, any>;
+  for (const op of Object.values(ops)) {
+    if (!['/request', '/intent'].includes(op.path)) continue;
+    const human = op.security.some((s: any) => 'humanBearer' in s || 'humanSession' in s);
+    const header = op.parameters.find((p: any) => p.name === 'x-multisig-session-address');
+    assert.equal(Boolean(header), human, op.operationId);
+    if (human) {
+      assert.equal(header.required, op.access === 'human', op.operationId);
+      assert.match(header.description, /Human/);
+    }
+  }
+});
+
+test('invalid request selectors fail before accessing any request', async () => {
+  const { GET } = await import('../routes/request.js');
+  for (const query of ['view=bogus', 'account=GUNKNOWN', 'view=reconciliation&account=GUNKNOWN']) {
+    const response = await GET(new Request('https://example.test/request?' + query));
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).code, 'invalid_request_view');
+  }
 });

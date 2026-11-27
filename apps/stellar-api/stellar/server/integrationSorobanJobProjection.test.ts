@@ -137,7 +137,7 @@ test('projects a current execution package as executing', () => {
   assert.equal(job.state, 'executing');
   assert.deepEqual(job.nextActions, ['submit_execution', 'reconcile_execution']);
   assert.deepEqual(job.actionCalls.submit_execution, { transport: 'external_stellar_submission', transactionHash: job.execution?.transactionHash });
-  assert.deepEqual(job.actionCalls.reconcile_execution, { operationId: 'integration.intent.execution.reconcile', bodyDefaults: { action: 'reconcile_execution' } });
+  assert.deepEqual(job.actionCalls.reconcile_execution, { operationId: 'integration.intent.execution.reconcile', bodyDefaults: { action: 'reconcile_execution', transactionHash: 'c'.repeat(64) } });
   assert.deepEqual(job.execution, {
     owner: 'external_service',
     executor: 'GEXECUTOR',
@@ -258,7 +258,13 @@ test('cancelled Integration work allows only reconciliation of released executio
     reviewUrl: REVIEW_URL,
     now: BEFORE_EXPIRY,
   });
-  assert.equal(job.state, 'cancelled');
+  assert.equal(job.state, 'execution_unknown');
   assert.deepEqual(job.nextActions, ['reconcile_execution']);
   assert.equal(job.execution?.transactionHash, 'c'.repeat(64));
+});
+
+test('Integration reconciliation action identifies the required hash when more than one remains unresolved', () => {
+  const job = projectIntegrationSorobanJob({ stored: stored(), authorization: authorization('authorization_ready'), preparations: [preparation(), { ...preparation(), transactionHash: 'd'.repeat(64) }], reviewUrl: REVIEW_URL, now: BEFORE_EXPIRY });
+  assert.deepEqual(job.nextActions, ['reconcile_execution']);
+  assert.deepEqual(job.actionCalls.reconcile_execution, { operationId: 'integration.intent.execution.reconcile', bodyDefaults: { action: 'reconcile_execution' }, requiredInputs: ['transactionHash'] });
 });

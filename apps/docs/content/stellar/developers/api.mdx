@@ -142,3 +142,11 @@ Branch on stable error codes, not message text. See the [state and error referen
 | 429 | Rate limited | Retry with backoff. |
 | 502 | Upstream interface or network response unavailable | Inspect the input and retry with backoff if temporary. |
 | 503 | Dependency/storage unavailable | Retry with backoff and inspect current state. |
+
+### Action and receipt consistency
+
+Resolve each advertised operation ID through the logical OpenAPI registry. Supply all fields in its defaults and `requiredInputs`. A single unresolved Soroban hash is supplied automatically for reconciliation; with multiple hashes, select one explicitly from the unresolved list.
+
+A Classic signer task can offer an optional contribution marked `reviewRequired: true` while waiting after a refusal or unreachable quorum. This is reconsideration, not a signature demand. It does not increase the Inbox action count. An expired externally executed Classic payment remains visible until its outcome is proven. Signers cannot replace or submit it; the owning Integration reconciles the original hash.
+
+For shared Human/Agent operations, the selected Human wallet address header is conditional on Human access. Idempotency-Key remains required for Agent and Integration creation, not Human creation.

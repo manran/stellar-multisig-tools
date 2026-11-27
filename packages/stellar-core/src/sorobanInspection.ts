@@ -180,6 +180,8 @@ function inspectContractCall(func: HostFunctionShape): SorobanContractCallInspec
   };
 }
 
+export interface SorobanReviewTokenMetadata { symbol: string; decimals: number; observedLedger: number }
+
 export interface SorobanCallSummary extends SorobanContractCallInspection {
   nativeXlmTransfer?: { from: string; to: string; amount: string };
   argumentNames?: string[];
@@ -210,7 +212,7 @@ export function inspectSorobanHostFunctionXdr(encoded: string, network: StellarN
 export function enrichSorobanCallSummary(
   encoded: string, network: StellarNetwork,
   methods: readonly { name: string; inputs: readonly { name: string; typeLabel: string }[]; outputs: readonly string[] }[],
-  metadata?: { symbol: string; decimals: number; observedLedger: number },
+  metadata?: SorobanReviewTokenMetadata,
 ): SorobanCallSummary | null {
   const call = inspectSorobanHostFunctionXdr(encoded, network);
   if (!call) return null;
@@ -220,26 +222,34 @@ export function enrichSorobanCallSummary(
   if (call.nativeXlmTransfer || !metadata || method.name !== 'transfer'
     || method.inputs.length !== 3 || method.inputs[0].typeLabel !== 'Address'
     || !['Address', 'MuxedAddress'].includes(method.inputs[1].typeLabel)
-    || method.inputs[2].typeLabel !== 'I128'
+    || method.inputs[2].typeLabel !== 'I128') return summary;
+  return applyObservedSorobanTokenMetadata(encoded, summary, metadata);
+}
+
+/** Only call with metadata obtained from a verified read-only token interface observation. */
+export function applyObservedSorobanTokenMetadata(encoded: string, summary: SorobanCallSummary, metadata: SorobanReviewTokenMetadata): SorobanCallSummary {
+  if (summary.nativeXlmTransfer || summary.functionName !== 'transfer'
     || !Number.isSafeInteger(metadata.decimals) || metadata.decimals < 0 || metadata.decimals > 38
-    || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,23}$/.test(metadata.symbol)
+    || typeof metadata.symbol !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,23}$/.test(metadata.symbol)
     || !Number.isSafeInteger(metadata.observedLedger) || metadata.observedLedger <= 0) return summary;
   const func = xdr.HostFunction.fromXdr(encoded, 'base64');
   if (func.type !== 'hostFunctionTypeInvokeContract') return summary;
   const args = func.value.args;
-  if (args[0]?.type !== 'scvAddress' || args[1]?.type !== 'scvAddress' || args[2]?.type !== 'scvI128') return summary;
+  if (args.length !== 3 || args[0]?.type !== 'scvAddress' || args[1]?.type !== 'scvAddress' || args[2]?.type !== 'scvI128') return summary;
   const [from, to, raw] = args.map(value => scValToNative(value));
   if (typeof from !== 'string' || typeof to !== 'string' || typeof raw !== 'bigint' || raw < 0n) return summary;
   const scale = 10n ** BigInt(metadata.decimals);
   const amount = metadata.decimals === 0 ? raw.toString()
     : ((raw / scale).toString() + '.' + (raw % scale).toString().padStart(metadata.decimals, '0')).replace(/0+$/, '').replace(/\.$/, '');
-  return { ...summary, tokenTransfer: { from, to, rawAmount: raw.toString(), amount, ...metadata, basis: 'contract_reported' } };
+  return { ...summary, tokenTransfer: { from, to, rawAmount: raw.toString(), amount, symbol: metadata.symbol, decimals: metadata.decimals, observedLedger: metadata.observedLedger, basis: 'contract_reported' } };
 }
 
 /** Compact list label. Unknown contract amounts must not be represented as XLM. */
-export function sorobanIntentCallTitle(encoded: string, network: StellarNetwork): string {
-  const call = inspectSorobanHostFunctionXdr(encoded, network);
+export function sorobanIntentCallTitle(encoded: string, network: StellarNetwork, observedTokenMetadata?: SorobanReviewTokenMetadata): string {
+  const base = inspectSorobanHostFunctionXdr(encoded, network);
+  const call = base && observedTokenMetadata ? applyObservedSorobanTokenMetadata(encoded, base, observedTokenMetadata) : base;
   if (call?.nativeXlmTransfer) return `Transfer ${call.nativeXlmTransfer.amount} XLM`;
+  if (call?.tokenTransfer) return `Transfer ${call.tokenTransfer.amount} ${call.tokenTransfer.symbol} (reported at ledger ${call.tokenTransfer.observedLedger})`;
   return call ? `Call ${call.functionName}` : 'Soroban Intent';
 }
 

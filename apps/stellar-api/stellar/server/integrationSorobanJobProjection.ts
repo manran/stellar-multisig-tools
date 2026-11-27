@@ -80,8 +80,8 @@ export function projectIntegrationSorobanJob({
     && latestPreparation.authorizationPlanDigest === stored.authorizationPlan.authorizationPlanDigest;
   let state: IntegrationSorobanJobProjection['state'];
   if (latestObservation?.successful) state = 'completed';
+  else if (unresolved.length) state = stored.cancellation || preparationExpired || !currentUnresolvedPackage || authorization.status !== 'authorization_ready' ? 'execution_unknown' : 'executing';
   else if (stored.cancellation || authorization.status === 'cancelled') state = 'cancelled';
-  else if (unresolved.length) state = preparationExpired || !currentUnresolvedPackage || authorization.status !== 'authorization_ready' ? 'execution_unknown' : 'executing';
   else if (authorization.status === 'expired') state = 'expired';
   else if (authorization.status === 'blocked') state = 'failed';
   else if (authorization.status === 'awaiting_authorization') state = 'waiting_for_authorization';
@@ -109,7 +109,8 @@ export function projectIntegrationSorobanJob({
   const actionCalls: IntegrationSorobanJobProjection['actionCalls'] = Object.fromEntries(nextActions.map((action) => [action,
     action === 'submit_execution'
       ? { transport: 'external_stellar_submission' as const, transactionHash: latestPreparation!.transactionHash }
-      : { operationId: operationIds[action], bodyDefaults: { action, ...(action === 'resume_execution' ? { transactionHash: latestPreparation!.transactionHash } : {}) },
+      : { operationId: operationIds[action], bodyDefaults: { action, ...(action === 'resume_execution' ? { transactionHash: latestPreparation!.transactionHash } : action === 'reconcile_execution' && unresolved.length === 1 ? { transactionHash: unresolved[0].transactionHash } : {}) },
+          ...(action === 'reconcile_execution' && unresolved.length > 1 ? { requiredInputs: ['transactionHash'] } : {}),
           ...(!unresolved.length && (preparations.length || observations.length) && ['prepare_execution', 'refresh_execution', 'replan'].includes(action)
             ? { reviewRequired: true as const } : {}) },
   ]));

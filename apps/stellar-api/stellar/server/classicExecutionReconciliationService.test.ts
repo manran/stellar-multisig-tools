@@ -130,3 +130,34 @@ test('Classic RPC verifies the exact inner hash of a fee bump and rejects unrela
   assert.equal(result.receipt?.ledgerTransactionHash, Buffer.from(bumped.hash()).toString('hex'));
   await assert.rejects(probeClassicExecution('a'.repeat(64), 'testnet', start, end, fake, now), /Inconsistent/);
 });
+
+test('expired external work stays visible until actual terminal evidence, without demanding a new signature', async () => {
+  const { request, store, key } = fixture();
+  const record = { ...request, id: '0'.repeat(16) };
+  const { listSignerInbox, projectHumanInboxRequests } = await import('./requestInbox.js');
+  const { projectClassicAgentTask } = await import('./agentTaskProjection.js');
+  const { projectIntegrationClassicJob } = await import('./integrationClassicJobProjection.js');
+  const address = key.publicKey();
+  const accountLoader = async () => ({ accountId: address, sequence: '1', subentryCount: 0, numSponsoring: 0, numSponsored: 0,
+    nativeBalance: '100', nativeSellingLiabilities: '0', balances: [], thresholds: { low: 1, medium: 1, high: 1 },
+    signers: [{ key: address, type: 'ed25519_public_key' as const, weight: 1 }] });
+  const inboxStore = { ...store, listRequests: async () => [record], getRequest: async () => record };
+  const options = { network: 'testnet' as const, now, accountLoader };
+  const visible = await listSignerInbox(inboxStore, address, options);
+  assert.equal(visible.length, 1);
+  assert.equal(visible[0].executionOutcome?.outcome, 'unknown');
+  assert.equal((await projectHumanInboxRequests(inboxStore, address, visible))[0].viewerAction, 'execution_unknown');
+  const task = projectClassicAgentTask({ request: visible[0], credentialAccess: 'sign', hasSigned: false });
+  assert.equal(task.state, 'execution_unknown');
+  assert.equal(task.signatureRequired, false);
+  assert.deepEqual(task.nextActions, []);
+  const job = projectIntegrationClassicJob(visible[0]);
+  assert.equal(job.state, 'execution_unknown');
+  assert.deepEqual(job.nextActions, ['reconcile_execution']);
+  assert.deepEqual(await listSignerInbox(inboxStore, Keypair.random().publicKey(), options), []);
+  const ordinary = { ...record, executionPolicy: undefined, integration: undefined };
+  assert.deepEqual(await listSignerInbox({ ...inboxStore, listRequests: async () => [ordinary] }, address, options), []);
+  const result = await reconcileClassicExecution(store, request, { now, transactionLoader: missing, rpcProbe: async () => ({ proof }) });
+  assert.equal(result.outcome, 'not_included');
+  assert.deepEqual(await listSignerInbox(inboxStore, address, options), []);
+});

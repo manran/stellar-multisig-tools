@@ -213,6 +213,7 @@ export const API_ERROR_CATALOG = {
   "invalid_request_assignment_signer": {"statuses":[400],"meaning":"invalid request assignment signer","callerAction":"Correct the input according to the operation schema and error details."},
   "invalid_request_id": {"statuses":[400],"meaning":"invalid request id","callerAction":"Correct the input according to the operation schema and error details."},
   "invalid_request_input": {"statuses":[400],"meaning":"invalid request input","callerAction":"Correct the input according to the operation schema and error details."},
+  "invalid_request_view": {"statuses":[400],"meaning":"invalid request view","callerAction":"Correct the input according to the operation schema and error details."},
   "invalid_session": {"statuses":[401],"meaning":"invalid session","callerAction":"Authenticate with a valid credential of the documented type."},
   "invalid_signature": {"statuses":[400,401],"meaning":"invalid signature","callerAction":"Authenticate with a valid credential of the documented type."},
   "invalid_signer": {"statuses":[400],"meaning":"invalid signer","callerAction":"Correct the input according to the operation schema and error details."},

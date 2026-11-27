@@ -105,6 +105,8 @@ interface RequestServiceOptions {
   accountLoader?: AccountLoader;
   networkParametersLoader?: NetworkParametersLoader;
   transactionLoader?: TransactionLoader;
+  /** Discovery projects stored receipts; explicit inspection/reconciliation may observe the chain. */
+  observeClosedExecution?: boolean;
   sorobanExecutionVerifier?: SorobanExecutionVerifier;
   capabilityHash?: string;
   sorobanOrigin?: SorobanRequestOrigin;
@@ -1001,7 +1003,7 @@ export async function getSigningRequestForStoredRequest(
     executionEvidence,
     await (store.listActivityEvents?.(request.id) ?? Promise.resolve([])),
   );
-  if (submission || executionEvidence || !['stale', 'expired', 'blocked'].includes(snapshot.status)) return snapshot;
+  if (options.observeClosedExecution === false || submission || executionEvidence || !['stale', 'expired', 'blocked'].includes(snapshot.status)) return snapshot;
 
   let confirmed: TransactionSubmissionResult | null;
   try {

@@ -180,6 +180,8 @@ test('contract-reported token metadata preserves exact raw amount and does not g
   const result = enrichSorobanCallSummary(encoded, 'testnet', methods, reported);
   assert.deepEqual(result?.tokenTransfer, { from, to, rawAmount: '123456789012345678901', amount: '123456789012345.678901', ...reported, basis: 'contract_reported' });
   assert.deepEqual(result?.argumentNames, ['from', 'to', 'amount']);
+  assert.equal(sorobanIntentCallTitle(encoded, 'testnet', reported), 'Transfer 123456789012345.678901 TOKEN (reported at ledger 123)');
+  assert.equal(sorobanIntentCallTitle(encoded, 'testnet', { ...reported, decimals: 255 }), 'Call transfer');
   assert.equal(enrichSorobanCallSummary(encoded, 'testnet', methods)?.tokenTransfer, undefined);
   assert.equal(enrichSorobanCallSummary(encoded, 'testnet', methods, { ...reported, decimals: 255 })?.tokenTransfer, undefined);
   assert.equal(enrichSorobanCallSummary(encoded, 'testnet', methods, { ...reported, symbol: 'bad symbol' })?.tokenTransfer, undefined);

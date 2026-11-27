@@ -832,7 +832,7 @@ const components: OpenApiObject = {
           items: { type: 'string', enum: ['prepare_execution', 'submit_execution', 'reconcile_execution', 'refresh_execution', 'resume_execution', 'replan', 'cancel'] },
         },
         actionCalls: { type: 'object', description: 'Resolve each offered action by operationId and bodyDefaults. External submission is not an MST API call; use the exact prepared and authorized XDR matching transactionHash.', additionalProperties: { oneOf: [
-          { type: 'object', required: ['operationId', 'bodyDefaults'], properties: { operationId: { type: 'string' }, bodyDefaults: { type: 'object', required: ['action'], properties: { action: { type: 'string' }, transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' } }, additionalProperties: false }, reviewRequired: { const: true, description: 'Review the resolved prior attempt and current authorization before continuing this same Intent. This is a caller decision, not a new grant of signing authority.' } }, additionalProperties: false },
+          { type: 'object', required: ['operationId', 'bodyDefaults'], properties: { operationId: { type: 'string' }, bodyDefaults: { type: 'object', required: ['action'], properties: { action: { type: 'string' }, transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' } }, additionalProperties: false }, requiredInputs: { type: 'array', items: { type: 'string' }, description: 'Required fields not supplied by bodyDefaults.' }, reviewRequired: { const: true, description: 'Review the resolved prior attempt and current authorization before continuing this same Intent. This is a caller decision, not a new grant of signing authority.' } }, additionalProperties: false },
           { type: 'object', required: ['transport', 'transactionHash'], properties: { transport: { const: 'external_stellar_submission' }, transactionHash: { type: 'string', pattern: '^[0-9a-f]{64}$' } }, additionalProperties: false },
         ] } },
         reviewUrl: { type: 'string', format: 'uri' },
@@ -889,7 +889,7 @@ const components: OpenApiObject = {
               code: { type: 'string', enum: ['contribute_signature', 'contribute_authorization', 'decline', 'prepare_execution', 'refresh_execution', 'resume_execution', 'reconcile_execution', 'replan', 'cancel'] },
               requiredAccess: { type: 'string', enum: ['write', 'sign'] },
               available: { type: 'boolean' },
-              reviewRequired: { const: true, description: 'Review the resolved prior attempt before continuing this same Intent; availability alone does not authorize a retry.' },
+              reviewRequired: { const: true, description: 'Explicit review before proceeding. On a waiting Classic Task, this is optional reconsideration of a refusal or unreachable quorum, not a signature demand.' },
             },
             additionalProperties: false,
           },
@@ -1745,7 +1745,7 @@ const components: OpenApiObject = {
         total_pending_count: { type: 'integer', minimum: 0, description: 'Live scan count when includeTotals=1 and complete.' },
         total_pending_count_complete: { type: 'boolean' },
         total_pending_count_lower_bound: { type: 'integer', minimum: 501 },
-        action_count: { type: 'integer', minimum: 0, description: 'For Agent callers, the number of tasks on this page with at least one nextAction whose available flag is true.' },
+        action_count: { type: 'integer', minimum: 0, description: 'For Agent callers, tasks on this page outside waiting with at least one available action. Optional reconsideration does not increase this count.' },
         signature_required_count: { type: 'integer', minimum: 0, description: 'For Agent callers, the number of returned tasks with signatureRequired=true, regardless of scope.' },
         requests: { type: 'array', items: { type: 'object', additionalProperties: true } },
         intents: { type: 'array', items: { type: 'object', additionalProperties: true }, description: 'Pending Soroban Intents visible to the authenticated signer.' },
@@ -1982,12 +1982,12 @@ function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
     const { id, path, method, access, effect } = operation;
     const transport = (paths[path] as OpenApiObject)[method.toLowerCase()] as OpenApiObject;
     let parameters = ((transport.parameters ?? []) as OpenApiObject[]).filter((p) =>
-      (p.name !== 'x-multisig-session-address' || access === 'human')
+      (p.name !== 'x-multisig-session-address' || access === 'human' || (access.startsWith('principal:') && ['/intent', '/request'].includes(path)))
       && p.name !== 'x-multisig-capability'
       && (p.name !== 'X-MultiSig-Intent-Capability' || access.startsWith('browser:')));
     parameters = parameters.map((p) => ({
       ...p,
-      ...((p.name === 'Idempotency-Key' || p.name === 'x-multisig-session-address'
+      ...(((p.name === 'Idempotency-Key' && access.startsWith('integration:')) || (p.name === 'x-multisig-session-address' && access === 'human')
         || p.name === 'X-MultiSig-Intent-Capability'
         || (id === 'signer.auth.challenge' && ['account', 'network'].includes(String(p.name))))
         ? { required: true } : {}),

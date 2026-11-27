@@ -3,6 +3,7 @@ import type { MachineCallerProvenance } from '../../../../packages/stellar-core/
 import type { SorobanIntentIntegrationContext } from '../../../../packages/stellar-core/src/integrationTypes.js';
 import type { SorobanExecutionPolicy } from '../../../../packages/stellar-core/src/executionPolicy.js';
 import type { SorobanAuthorizationPlan } from '../../../../packages/stellar-core/src/sorobanAuthorizationPlan.js';
+import type { SorobanReviewTokenMetadata } from '../../../../packages/stellar-core/src/sorobanInspection.js';
 import type { SorobanIntent } from '../../../../packages/stellar-core/src/sorobanIntent.js';
 import type { SorobanExecutionNonInclusionProof, SorobanIntentExecutionResponse } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
 export type { SorobanExecutionNonInclusionProof } from '../../../../packages/stellar-core/src/sorobanIntentApiTypes.js';
@@ -100,6 +101,8 @@ export interface StoredSorobanIntent {
   creatorActor?: MachineCallerProvenance;
   /** Private idempotency evidence for an accepted semantic creation input. */
   creationInputHash?: string;
+  /** Optional immutable advisory observation, never part of the intent digest or authorization. */
+  reviewTokenMetadata?: SorobanReviewTokenMetadata;
   discoverySignerKeys: string[];
   integration?: SorobanIntentIntegrationContext;
   executionPolicy?: SorobanExecutionPolicy;
@@ -107,8 +110,8 @@ export interface StoredSorobanIntent {
   cancellation?: StoredSorobanIntentCancellation;
 }
 
-export function publicSorobanIntent(stored: StoredSorobanIntent): Omit<StoredSorobanIntent, 'creationInputHash'> {
-  const { creationInputHash: _internal, ...intent } = stored;
+export function publicSorobanIntent(stored: StoredSorobanIntent): Omit<StoredSorobanIntent, 'creationInputHash' | 'reviewTokenMetadata'> {
+  const { creationInputHash: _internal, reviewTokenMetadata: _review, ...intent } = stored;
   return intent;
 }
 

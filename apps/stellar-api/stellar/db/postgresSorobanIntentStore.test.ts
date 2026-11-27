@@ -107,7 +107,7 @@ test('Postgres Soroban store round-trips coordination facts while private note s
   const pool = coordinationPool();
   const privateStore = new MemoryPrivateStore();
   const store = createPostgresSorobanIntentStore(pool, privateStore);
-  const value = stored();
+  const value = { ...stored(), reviewTokenMetadata: { symbol: 'TOKEN', decimals: 6, observedLedger: 400 } };
 
   await store.createIntent(value);
   const loaded = await store.getIntent(value.id);

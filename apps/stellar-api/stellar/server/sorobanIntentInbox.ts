@@ -84,7 +84,7 @@ function snapshot(
 ): InboxSorobanIntentSnapshot {
   return {
     id: stored.id,
-    callTitle: sorobanIntentCallTitle(stored.intent.hostFunctionXdr, stored.network),
+    callTitle: sorobanIntentCallTitle(stored.intent.hostFunctionXdr, stored.network, stored.reviewTokenMetadata),
     network: stored.network,
     createdAt: stored.createdAt,
     ...(stored.creatorAddress ? { creatorAddress: stored.creatorAddress } : {}),

@@ -106,6 +106,11 @@ export interface SigningRequestSnapshot {
   template?: ReusableTemplateRef;
 }
 
+/** A closed signing window is not evidence of a failed external payment. */
+export function isClassicExecutionUnresolved(request: Pick<SigningRequestSnapshot, 'status' | 'executionOutcome'>): boolean {
+  return request.executionOutcome?.outcome === 'unknown' && ['expired', 'stale', 'blocked'].includes(request.status);
+}
+
 export interface IntegrationClassicJobProjection {
   version: 1;
   id: string;

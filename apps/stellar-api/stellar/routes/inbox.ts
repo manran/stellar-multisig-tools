@@ -72,7 +72,7 @@ export async function GET(request: Request): Promise<Response> {
       ...(nextCursor ? { nextCursor } : {}),
       ...(includeTotals ? inboxPendingTotals(candidates, soroban.intents) : {}),
       pending_count: tasks.length,
-      action_count: tasks.filter((task) => task.nextActions.some((action) => action.available)).length,
+      action_count: tasks.filter((task) => task.state !== 'waiting' && task.nextActions.some((action) => action.available)).length,
       signature_required_count: tasks.filter((task) => task.signatureRequired).length,
       requests,
       intents,

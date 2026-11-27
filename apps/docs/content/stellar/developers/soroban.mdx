@@ -166,3 +166,5 @@ Issue a capability from your service using `PUT /intent` with its Integration ke
 Return only the short-lived `capability` and the Intent ID to that browser. The default maximum lifetime is 30 minutes; a changed plan or no longer actionable signer invalidates its use earlier. Browser GET and PATCH requests must send the exact matching `Origin` header (normally supplied by the browser) and `X-MultiSig-Intent-Capability` plus `X-MultiSig-Intent-Id`. Do not expose the Integration bearer token in the browser.
 
 The browser can inspect its signer-specific challenge and contribute authorization. It cannot create arbitrary Intents, cancel/replan, change execution ownership, or become a Stellar signer without valid wallet cryptographic evidence.
+
+For new non-native token transfer Intents, MultiSig Tools can save a read-only token symbol and precision observation with its ledger. Inbox and Activity use that observation, not a guessed conversion or a live lookup for every row. The exact invocation XDR and raw amount remain authoritative. Older Intents without a saved observation keep a generic summary. Current metadata may differ from the recorded observation.

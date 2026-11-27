@@ -153,3 +153,15 @@ The original review's concrete high-priority findings have repair and internal r
 - Overview, Inbox and Proposal show the service-provided signing deadline, not merely the XDR envelope maximum time. Transaction review displays the envelope validity separately. Remaining time is an estimate from the device clock, updated through one shared local timer; a passed estimate says to check current status, never changes the authoritative server/ledger status. Soroban AUTH expiration remains a ledger number.
 - Receipt/PDF, Treasury audit, security audit and operator delivery logs retain UTC. All protocol timestamps, expiry logic, API schemas and webhook payloads are unchanged.
 - 1015/1015 unit tests, full build and 111/111 browser fixture regressions passed. Targeted light and dark audits at 375/1280 px cover Tokyo and Kolkata timezones, refresh persistence, keyboard focus, unchanged UTC audit evidence, skewed clock, no additional requests on timezone toggle, and the existing proposal submission/receipt flow. No axe violations in the targeted screenshots. Unit coverage includes DST and date rollover. No fresh on-chain payment was required for this display-only change.
+
+## Horizontal review follow-up — 2026-11-27
+
+- S1: logical contracts preserve the selected-wallet header for Human access; Agent/Integration creation still requires idempotency keys. Checked all applicable logical contracts.
+- A3: refusal and unreachable quorum expose optional reviewed reconsideration without a mandatory signature demand or Inbox action count. Shared projection preserves credential scope.
+- A14/U8: expired, stale or blocked external Classic work with unknown execution remains discoverable to authorized signers. No signing action or replacement is offered; owning Integration reconciles the original hash. Proven terminal evidence removes it from pending work.
+- A5: reconcile actions supply the unique unresolved Soroban hash or explicitly require a hash selection; signature contribution actions identify missing inputs. Contract tests compare Agent action defaults and required fields with logical schemas.
+- A7: unsupported Request view and account/view combinations reject with structured 400.
+- A11/U2: optional observed token precision and symbol are stored once for new non-native transfer Intents (migration 0024). All summaries derive raw data from the exact invocation and label the observation ledger. Older Intents without observations stay generic; no fabricated historical backfill. Metadata is advisory and never changes authorization.
+- Legacy cancellation with unresolved Soroban execution preserves reconciliation rather than presenting it as a completed cancellation.
+
+Verification: 1022 regular automated tests, 42 disposable PostgreSQL tests, 111 browser fixture checks, 186 OpenAPI example/parameter checks, and application builds passed. Independent black-box acceptance, real wallet/accessibility review and previously outstanding minor documentation/UX suggestions are not thereby closed. Only Testnet is in release scope.

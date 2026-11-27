@@ -4,11 +4,11 @@ import type { ActivityCoordinationEvent } from '../../../../packages/stellar-cor
 import type { StellarNetwork } from '../../../../packages/stellar-core/src/types.js';
 import type { InboxRequestSnapshot } from '../../../../packages/stellar-core/src/inboxPresentation.js';
 import { projectInboxViewerAction } from '../../../../packages/stellar-core/src/inboxPresentation.js';
-import type { SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
+import { isClassicExecutionUnresolved, type SigningRequestSnapshot } from '../../../../packages/stellar-core/src/requestTypes.js';
 import { isValidSigningRequestId } from './requestLocator.js';
 import { compareInboxPageKeys, type InboxPageKey } from './inboxPage.js';
-import type { SigningRequestStore, StoredSigningRequest } from './requestStore.js';
-import { getSigningRequest } from './requestService.js';
+import { isExternalClassicRequest, type SigningRequestStore, type StoredSigningRequest } from './requestStore.js';
+import { getSigningRequestForStoredRequest } from './requestService.js';
 import { signerCanAccessTransaction, signerHasSignedTransaction } from './requestAccess.js';
 import { inspectTransactionXdr } from '../../../../packages/stellar-core/src/transactionXdr.js';
 
@@ -70,7 +70,7 @@ export async function listSignerInbox(
   const requests = (await discoveryCandidates(store, address, options.network, options.includeProposed !== false, options.sourceAccountIds ?? []))
     .filter((request) => isValidSigningRequestId(request.id))
     .filter((request) => (!options.network || request.network === options.network))
-    .filter((request) => new Date(request.expiresAt).getTime() > now.getTime())
+    .filter((request) => isExternalClassicRequest(request) || new Date(request.expiresAt).getTime() > now.getTime())
     .filter((item) => !options.after || compareInboxPageKeys({ kind: 'request', id: item.id, createdAt: item.createdAt }, options.after) > 0)
     .sort((a, b) => compareInboxPageKeys({ ...a, kind: 'request' }, { ...b, kind: 'request' }));
 
@@ -94,12 +94,13 @@ export async function listSignerInbox(
       }
       if (!authorized) return null;
 
-      const snapshot = await getSigningRequest(store, request.id, {
+      const snapshot = await getSigningRequestForStoredRequest(store, request, {
         now,
         accountLoader: cachedAccountLoader,
         networkParametersLoader,
+        ...(isExternalClassicRequest(request) ? { observeClosedExecution: false } : {}),
       });
-      if (snapshot.status === 'submitted' || snapshot.status === 'expired' || (snapshot.status === 'stale' && snapshot.executionOutcome?.outcome !== 'unknown')) return null;
+      if (snapshot.status === 'submitted' || snapshot.executionOutcome?.outcome === 'failed' || snapshot.executionOutcome?.outcome === 'not_included' || (['expired', 'stale'].includes(snapshot.status) && !isClassicExecutionUnresolved(snapshot))) return null;
       return snapshot;
     }));
 
@@ -149,8 +150,8 @@ export async function projectHumanInboxRequests(
 ): Promise<InboxRequestSnapshot[]> {
   return Promise.all(requests.map(async (snapshot) => {
     const declined = snapshot.declines?.some(item => item.signerAddress === address) ?? false;
-    const viewerAction = snapshot.proposerAddress === address
-      ? snapshot.status === 'awaiting_signatures' ? 'proposer_waiting' as const
+    const viewerAction = isClassicExecutionUnresolved(snapshot) ? 'execution_unknown' as const : snapshot.proposerAddress === address
+      ? snapshot.status === 'awaiting_signatures' ? (snapshot.statusReason === 'quorum_unreachable' ? 'quorum_unreachable' as const : 'proposer_waiting' as const)
         : snapshot.status === 'ready' ? 'proposer_ready' as const
           : projectInboxViewerAction(snapshot.status, { hasSigned: true,
               executionMode: projectedRequestExecutionMode(snapshot) })

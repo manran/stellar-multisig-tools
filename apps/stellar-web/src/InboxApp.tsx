@@ -166,7 +166,7 @@ function DetailPane({
       </div>
       <h2 className="mst-inbox-detail__title">{description.title}</h2>
       <p className="mst-inbox-detail__summary">{description.summary}</p>
-      <p className="mt-2 text-xs text-[var(--color-muted)]">Signing closes <HumanDeadline value={request.expiresAt} /></p>
+      <p className="mt-2 text-xs text-[var(--color-muted)]">{request.viewerAction === 'execution_unknown' ? <>Signing deadline <HumanTime value={request.expiresAt} /></> : <>Signing closes <HumanDeadline value={request.expiresAt} /></>}</p>
       <div className="mst-inbox-next-action">
         <div className="mst-inbox-next-action__label">Your next step</div>
         <div className="mt-2"><StatusBadge tone={urgentEmailFailure ? 'danger' : viewerAction.tone}>{urgentEmailFailure ? 'Follow-up needed' : viewerAction.label}</StatusBadge></div>
@@ -418,7 +418,7 @@ export default function InboxApp() {
                       <button key={request.id} type="button" data-selected={selected ? 'true' : 'false'} aria-current={selected ? 'true' : undefined} onClick={() => { if (window.matchMedia('(min-width: 1280px)').matches) setSelectedId(request.id); else openRequestDetails(request, followUp); }} className="mst-inbox-item">
                         <div className="mst-inbox-item__head">
                           <StatusBadge tone={urgentEmailFailure ? 'danger' : viewerAction.tone}>{urgentEmailFailure ? 'Follow-up needed' : viewerAction.label}</StatusBadge>
-                          <HumanDeadline className="mst-inbox-item__deadline" value={request.expiresAt} passive />
+                          {request.viewerAction === 'execution_unknown' ? <HumanTime className="mst-inbox-item__deadline" value={request.expiresAt} passive /> : <HumanDeadline className="mst-inbox-item__deadline" value={request.expiresAt} passive />}
                         </div>
                         <h2 className="mst-inbox-item__title">{description.title}</h2>
                         <p className="mst-inbox-item__summary">{description.summary}</p>
