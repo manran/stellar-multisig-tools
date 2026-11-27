@@ -1,4 +1,4 @@
-/** Real, isolated Varial extension 2-of-2 Testnet E2E, including signature rejection. Not part of routine CI. */
+/** Real, isolated Varial extension 2-of-2 Testnet E2E for Classic or --soroban, including signature rejection. Not part of routine CI. */
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { tmpdir } from 'node:os';
@@ -157,7 +157,8 @@ async function createWallet(label) {
 }
 
 const require=createRequire(import.meta.url);
-const {Keypair,Horizon,Networks,Operation,TransactionBuilder,Asset}=require('@stellar/stellar-sdk');
+const {Keypair,Horizon,Networks,Operation,TransactionBuilder,Asset,rpc}=require('@stellar/stellar-sdk');
+const SOROBAN_LIVE=process.argv.includes('--soroban');
 const horizon=new Horizon.Server('https://horizon-testnet.stellar.org');
 const mst='https://stellar-testnet.multisig.tools';
 let a=null,b=null;let pA=null,pB=null;
@@ -203,6 +204,146 @@ async function loginMst(wallet){
   log('mst_authenticated',{wallet:wallet.label,address:wallet.address});
   return page;
 }
+// The same isolated real extension profiles exercise detached AUTH and the
+// final, separately signed Soroban envelope. No software signer supplies AUTH.
+async function intentApi(page, address, id, method='GET', body) {
+ const result=await page.evaluate(async ({address,id,method,body})=>{
+  const r=await fetch('/api/intent'+(method==='GET'?'?includeMetadata=1':''),{
+   method,credentials:'include',cache:'no-store',
+   headers:{'Content-Type':'application/json','x-multisig-session-address':address,...(id?{'X-MultiSig-Intent-Id':id}:{})},
+   ...(body===undefined?{}:{body:JSON.stringify(body)}),
+  });
+  const data=await r.json().catch(()=>({}));
+  return {status:r.status,data};
+ },{address,id,method,body});
+ if(result.status<200||result.status>=300)throw new Error('Intent '+method+' HTTP '+result.status+': '+(result.data.code||result.data.error||'unknown'));
+ return result.data;
+}
+function invariant(value,message){if(!value)throw new Error(message);}
+function nativeBalance(account){
+ const amount=account.balances.find(b=>b.asset_type==='native')?.balance;
+ invariant(typeof amount==='string','Missing native balance');
+ const [whole,fraction='']=amount.split('.');
+ return BigInt(whole)*10000000n+BigInt(fraction.padEnd(7,'0'));
+}
+async function realSoroban(treasury){
+ const source=treasury.publicKey(),destination=a.address;
+ pA=await loginMst(a);
+ pB=await loginMst(b);
+ const beforeBalance=nativeBalance(await horizon.loadAccount(destination));
+ const created=await intentApi(pA,a.address,'','POST',{network:'testnet',
+  contractId:Asset.native().contractId(Networks.TESTNET),method:'transfer',
+  arguments:{from:source,to:destination,amount:'5000000'}});
+ const id=created.intent?.id;
+ invariant(/^[0-9A-HJKMNP-TV-Z]{16}$/.test(id),'Invalid Intent ID');
+ invariant(created.authorization?.status==='awaiting_authorization','New Intent must await AUTH');
+ const url=mst+'/a#'+id;
+ log('soroban_intent_created',{id,source,destination});
+ const inspect=(page,wallet)=>intentApi(page,wallet.address,id);
+ for(const [index,page,wallet] of [[1,pA,a],[2,pB,b]]){
+  await page.goto(url,{waitUntil:'domcontentloaded'});
+  await page.getByRole('heading',{name:'Send 0.5 XLM',exact:true}).waitFor({state:'visible',timeout:35000});
+  const button=page.getByRole('button',{name:'Authorize contract Intent',exact:true});
+  await button.waitFor({state:'visible',timeout:35000});
+  const initial=await inspect(page,wallet);
+  invariant(initial.callSummary?.nativeXlmTransfer?.amount==='0.5' &&
+   initial.callSummary.nativeXlmTransfer.from===source && initial.callSummary.nativeXlmTransfer.to===destination,'Intent review summary mismatch');
+  if(index===1){
+   await button.click();
+   const refusal=await extensionPrompt(wallet.context,/Confirm Authorizations?|Confirm Authorization|Sign Authorization/i,30000);
+   invariant(/Test Net|Testnet/i.test(refusal.body),'AUTH refusal prompt is not on Testnet');
+   const reject=refusal.page.getByRole('button',{name:/^(Reject|Cancel|Decline|Deny)$/i}).first();
+   await reject.waitFor({state:'visible',timeout:10000});
+   await reject.click();
+   await button.waitFor({state:'visible',timeout:15000});
+   await waitFor(()=>button.isEnabled(),15000);
+   const unchanged=await inspect(page,wallet);
+   invariant(unchanged.authorization.contributionCount===0 && unchanged.authorization.status==='awaiting_authorization' &&
+    unchanged.intent.authorizationPlan.authorizationPlanDigest===initial.intent.authorizationPlan.authorizationPlanDigest,'Rejected AUTH changed the plan or contributions');
+   log('soroban_auth_rejected_without_mutation');
+  }
+  await button.click();
+  await approvePrompt(wallet.context,/Confirm Authorizations?|Confirm Authorization|Sign Authorization/i);
+  const expected=index===1?'awaiting_authorization':'authorization_ready';
+  const approved=await waitFor(async()=>{
+   const state=await inspect(page,wallet);
+   return state.authorization.contributionCount===index && state.authorization.status===expected?state:null;
+  },35000);
+  invariant(approved.authorization.authorizers.some(item=>item.authorizer===source && item.signedWeight===index && item.threshold===2 &&
+   item.signerEvidence.some(signer=>signer.publicKey===wallet.address)),'Incorrect AUTH signer evidence or weight');
+  log('soroban_real_wallet_auth',{signer:index,status:expected});
+ }
+ const prepare=pB.getByRole('button',{name:'Continue with this wallet',exact:true});
+ await prepare.waitFor({state:'visible',timeout:35000});
+ const capture=pB.waitForResponse(r=>r.url().includes('/api/intent') && r.request().method()==='PUT' && r.ok(),{timeout:45000});
+ await prepare.click();
+ const prepared=(await (await capture).json()).execution;
+ invariant(prepared?.xdr && prepared.executionSource===b.address,'Missing executor package');
+ const envelope=TransactionBuilder.fromXDR(prepared.xdr,Networks.TESTNET);
+ invariant(envelope.source===b.address && Buffer.from(envelope.hash()).toString('hex')===prepared.transactionHash,'Prepared envelope identity mismatch');
+ await pB.waitForURL(u=>u.pathname.endsWith('/signing-room'),{timeout:35000});
+ // Leave without signing and recover the exact same released envelope.
+ await pB.goto(url,{waitUntil:'domcontentloaded'});
+ const resume=pB.getByRole('button',{name:'Resume signing',exact:true});
+ await resume.waitFor({state:'visible',timeout:35000});
+ const response=pB.waitForResponse(r=>r.url().includes('/api/intent')&&r.request().method()==='PUT'&&r.ok(),{timeout:35000});
+ await resume.click();
+ const recovered=(await (await response).json()).execution;
+ invariant(recovered?.xdr===prepared.xdr && recovered.transactionHash===prepared.transactionHash &&
+  recovered.transactionSequence===prepared.transactionSequence && recovered.validUntil===prepared.validUntil,'Resume changed released Soroban envelope');
+ log('soroban_real_wallet_resume',{transactionHash:prepared.transactionHash});
+ await pB.waitForURL(u=>u.pathname.endsWith('/signing-room'),{timeout:35000});
+ const next=pB.getByRole('button',{name:'Continue to signatures',exact:true});
+ await next.waitFor({state:'visible',timeout:35000});
+ await next.click();
+ const transition=await waitFor(async()=>{
+  if(new URL(pB.url()).pathname.endsWith('/s'))return 'session_reused';
+  for(const page of b.context.pages()){
+   if(page.url().startsWith('chrome-extension://')&&/Sign message|Confirm Transaction/i.test(await page.locator('body').innerText().catch(()=>'')))return 'confirmation_required';
+  }
+  return null;
+ },35000);
+ if(transition==='confirmation_required')await approvePrompt(b.context,/Sign message|Confirm Transaction/i);
+ await pB.waitForURL(u=>u.pathname.endsWith('/s')&&u.hash.length>20,{timeout:35000});
+ const locator=new URL(pB.url()).hash.slice(1);
+ const requestId=locator.slice(0,16),cap=locator.slice(16);
+ const snapshot=()=>coordination(pB,requestId,cap,b.address);
+ const unsigned=await snapshot();
+ invariant(unsigned.request.transactionHash===prepared.transactionHash && unsigned.request.signatureCount===0,'Final Proposal did not preserve the released envelope');
+ const sign=pB.getByRole('button',{name:'Sign',exact:true});
+ await sign.waitFor({state:'visible',timeout:35000});
+ await sign.click();
+ await approvePrompt(b.context,/Confirm Transaction/i);
+ const ready=await waitFor(async()=>{
+  const state=await snapshot();
+  return state.request.signatureCount===1 && ['ready','submitted'].includes(state.request.status)?state.request:null;
+ },35000);
+ invariant(ready.transactionHash===prepared.transactionHash,'Envelope signature changed the hash');
+ log('soroban_real_wallet_envelope_signed',{requestId,transactionHash:ready.transactionHash});
+ if(ready.status==='ready'){
+  const route=pB.getByRole('button',{name:/MultiSigTools submits/});
+  const submit=pB.getByRole('button',{name:'Submit transaction',exact:true});
+  const action=await waitFor(async()=>await submit.isVisible()?'submit':await route.isVisible()?'route':null,35000);
+  if(action==='route')await route.click();
+  await submit.waitFor({state:'visible',timeout:35000});
+  await submit.click();
+ }
+ await pB.getByText('Transaction confirmed',{exact:true}).first().waitFor({state:'visible',timeout:45000});
+ const chain=await new rpc.Server('https://soroban-testnet.stellar.org',{timeout:15000}).getTransaction(prepared.transactionHash);
+ invariant(chain.status==='SUCCESS' && Number.isInteger(chain.ledger),'Soroban RPC did not confirm the exact hash');
+ const afterBalance=nativeBalance(await horizon.loadAccount(destination));
+ invariant(afterBalance-beforeBalance===5000000n,'Recipient did not receive exactly 0.5 XLM');
+ const reconciled=await intentApi(pB,b.address,id,'PUT',{action:'reconcile_execution',transactionHash:prepared.transactionHash});
+ invariant(reconciled.outcome==='successful' && reconciled.observation?.successful===true && reconciled.observation.ledger===chain.ledger,'MST reconciliation differs from RPC receipt');
+ for(const [page,wallet] of [[pA,a],[pB,b]]){
+  await page.goto(url,{waitUntil:'domcontentloaded'});
+  await page.getByRole('heading',{name:'Transaction confirmed',exact:true}).waitFor({state:'visible',timeout:35000});
+  const complete=await inspect(page,wallet);
+  invariant(complete.authorization.status==='completed'&&!complete.authorization.authorizationEntriesXdr.length&&!complete.challenges?.length,'Historical contributor receipt missing or AUTH leaked');
+ }
+ log('MST_VARIAL_REAL_SOROBAN_PASS',{intentId:id,requestId,transactionHash:prepared.transactionHash,ledger:chain.ledger,amount:'0.5 XLM',walletVersion:extensionVersion});
+}
+
 try{
  a=await createWallet('mst-a'); b=await createWallet('mst-b');
  const treasury=Keypair.random();
@@ -212,13 +353,16 @@ try{
  const configure=new TransactionBuilder(account,{fee:'100',networkPassphrase:Networks.TESTNET})
  .addOperation(Operation.setOptions({signer:{ed25519PublicKey:a.address,weight:1}}))
  .addOperation(Operation.setOptions({signer:{ed25519PublicKey:b.address,weight:1}}))
- .addOperation(Operation.setOptions({masterWeight:0,lowThreshold:1,medThreshold:2,highThreshold:2}))
+ .addOperation(Operation.setOptions({masterWeight:0,lowThreshold:SOROBAN_LIVE?2:1,medThreshold:2,highThreshold:2}))
  .setTimeout(180).build();
  configure.sign(treasury);
  const configured=await horizon.submitTransaction(configure);
  const live=await horizon.loadAccount(treasury.publicKey());
  if(live.thresholds.med_threshold!==2||![a.address,b.address].every(x=>live.signers.some(y=>y.key===x&&y.weight===1)))throw new Error('Treasury policy mismatch');
  log('treasury_ready',{address:treasury.publicKey(),signers:2,threshold:2,setupTransaction:configured.hash});
+ if(SOROBAN_LIVE){
+  await realSoroban(treasury);
+ }else{
  const pay=new TransactionBuilder(live,{fee:'100',networkPassphrase:Networks.TESTNET})
  .addOperation(Operation.payment({destination:a.address,asset:Asset.native(),amount:'0.0500000'})).setTimeout(900).build();
  const unsignedXdr=pay.toEnvelope().toXDR('base64');
@@ -355,6 +499,7 @@ try{
  if(!receipt.successful||!Number.isInteger(receipt.ledger))throw new Error('Horizon receipt not confirmed');
  log('MST_VARIAL_REAL_MULTISIG_PASS',{transactionHash:receipt.hash,ledger:receipt.ledger,treasury:treasury.publicKey(),walletVersion:extensionVersion});
  if(EMAIL_LIVE && mailStatus==='unconfirmed')throw new Error('Wallet and chain PASS; email invite/reminder still queued with no provider acceptance/delivery evidence');
+ }
 
 }catch(e){
  log('MST_VARIAL_E2E_FAILED',{message:String(e.message).slice(0,330)});
