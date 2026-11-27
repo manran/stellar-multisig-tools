@@ -122,6 +122,7 @@ test('wallet selection keeps Kit behavior in a native focus-contained modal', ()
   assert.match(walletKit, /dialog.showModal\(\)/);
   assert.match(walletKit, /kit.authModal\(\{ container: dialog \}\)/);
   assert.match(walletKit, /row.tabIndex = 0/);
+  assert.doesNotMatch(walletKit, /row.className.includes\('cursor-pointer'\)/);
   assert.match(walletKit, /event.key === 'Enter' \|\| event.key === ' '/);
   assert.match(walletKit, /closeEvent.next\(\)/);
   assert.match(walletKit, /previousFocus.focus\(\)/);

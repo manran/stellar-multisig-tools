@@ -1,3 +1,4 @@
+import { logicalResponseExample, logicalParameterExample } from './openApiExamples.js';
 import { API_ERROR_CATALOG } from './apiErrorCatalog.generated.js';
 import {
   HEADLESS_API_REVISION,
@@ -1924,6 +1925,26 @@ const paymentExample = { network: 'testnet', sourceAccount: exampleSource,
 const intentExample = { network: 'testnet', contractId: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC', method: 'transfer',
   arguments: { from: exampleSource, to: exampleDestination, amount: '15000000' } };
 const logicalBodyExamples: Record<string, OpenApiObject> = {
+  'signer.auth.exchange': { network: 'testnet', transaction: '<signed authentication challenge XDR>', unlock_seconds: 3600 },
+  'agent.grant.poll': { action: 'poll', deviceCode: 'mgd_' + 'a'.repeat(32) + '_' + 'A'.repeat(43) },
+  'agent.grant.approve': { action: 'approve', requestId: 'a'.repeat(32), mode: 'transaction', transaction: '<signed consent challenge XDR>' },
+  'agent.access.revoke': { credentialId: 'example-credential' },
+  'integration.testnet.create': { serviceId: 'example-finance-01', label: 'Example integration', classicSourceAccounts: [exampleSource], profile: { authorizationExperience: 'hosted' } },
+  'contract.intent.contribute': { entryIndex: 0, signatureBase64: '<base64 AUTH signature>' },
+  'integration.intent.browser.contribute': { entryIndex: 0, signatureBase64: '<base64 AUTH signature>' },
+  'contract.call.build': { ...intentExample, transactionSource: exampleSource, lifetimeSeconds: 3600 },
+  'contract.call.prepare': { network: 'testnet', mode: 'record', xdr: '<contract.call.build xdr>' },
+  'contract.workspace.keep': { network: 'testnet', contractId: intentExample.contractId },
+  'contract.workspace.forget': { network: 'testnet', contractId: intentExample.contractId },
+  'classic.account.create.prepare': { network: 'testnet', sourceAccount: exampleSource, destination: exampleDestination, startingBalance: '5', lifetimeSeconds: 3600 },
+  'integration.classic.account.create.prepare': { network: 'testnet', sourceAccount: exampleSource, destination: exampleDestination, startingBalance: '5', lifetimeSeconds: 3600 },
+  'signer.contacts.save': { address: exampleDestination, subject_type: 'signer', label: 'Example signer' },
+  'signer.contacts.delete': { address: exampleDestination, subject_type: 'signer' },
+  'proposal.create': { network: 'testnet', xdr: '<classic.payment.prepare xdr>' },
+  'integration.request.create': { network: 'testnet', xdr: '<classic.payment.prepare xdr>' },
+  'proposal.contribute': { signedXdr: '<signed Request envelope XDR>' },
+  'proposal.submit': {},
+  'integration.request.submit': {},
   'agent.grant.request': { action: 'request', network: 'testnet', label: 'Finance assistant', access: 'read' },
   'agent.grant.deny': { action: 'deny', requestId: 'a'.repeat(32) },
   'classic.payment.prepare': paymentExample,
@@ -1972,6 +1993,7 @@ function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
         ? { required: true } : {}),
     }));
     if (access === 'treasury:audit') parameters = parameters.filter((p) => p.name !== 'view');
+    if (access.startsWith('browser:')) parameters.push(parameter('Origin', 'header', true, { type: 'string', format: 'uri' }, 'Exact origin bound when the browser capability was issued. The browser normally sets this header.'));
     let request = transport.requestBody as OpenApiObject | undefined;
     let result: OpenApiObject | undefined;
     let statuses: string[] | undefined;
@@ -2081,9 +2103,15 @@ function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
       .filter(([status]) => !status.startsWith('2') || !statuses || statuses.includes(status))
       .map(([status, value]) => [status, status.startsWith('2') && result ? response(status === '201' ? 'Created.' : 'Successful operation.', result) : value]));
     if (request && logicalBodyExamples[id]) request = withJsonExample(request, logicalBodyExamples[id]);
-    if (id === 'signer.auth.status' || id === 'signer.auth.logout') {
-      responses['200'] = withJsonExample(responses['200'] as OpenApiObject, { unlocked: false, authenticated: false });
+    for (const [status, value] of Object.entries(responses)) {
+      if (!status.startsWith('2')) continue;
+      const example = logicalResponseExample(id, status);
+      if (example) responses[status] = withJsonExample(value as OpenApiObject, example);
     }
+    parameters = parameters.map(p => {
+      const example = logicalParameterExample(p);
+      return example === undefined ? p : { ...p, example };
+    });
     const retry = logicalOperationRetry(operation);
     return [id, { operationId: id, method, path, access, effect, summary: operation.summary, security, parameters,
       ...(request ? { requestBody: request } : {}), ...(dispatch ? { dispatch } : {}), responses, retry }];
@@ -2149,7 +2177,7 @@ export function createOpenApiDocument(
     info: {
       title: 'MultiSigTools Headless Operations',
       version: HEADLESS_API_REVISION,
-      description: 'Composable Stellar coordination operations for Human, signer Agent, bot, script, wallet, plugin, MCP, CLI, and scoped external-service consumers. Building or preparing XDR never grants signer authority. Signer Agent credentials cannot directly submit. Integration-owned Requests may be automatically submitted at quorum, retried by their Integration, or designated for external execution.',
+      description: 'Composable Stellar coordination operations for Human, signer Agent, bot, script, wallet, plugin, MCP, CLI, and scoped external-service consumers. Building or preparing XDR never grants signer authority. Signer Agent credentials cannot directly submit. Integration-owned Requests may be automatically submitted at quorum, retried by their Integration, or designated for external execution. Logical operation examples illustrate Testnet message structure; placeholder XDR, signatures, IDs, credentials, digests and receipts are not executable or verified evidence. Use values from the actual preceding operation.',
     },
     tags: [...new Set(HEADLESS_OPERATION_CATALOG.map(item => item.id.split('.')[0]))].map(name => ({ name })),
     servers: [{ url: origin }],

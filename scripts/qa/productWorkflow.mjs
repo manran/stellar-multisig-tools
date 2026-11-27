@@ -13,9 +13,35 @@ import { createServer } from 'vite';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const output = process.env.MST_QA_OUTPUT || path.join(os.tmpdir(), 'mst-product-workflow-qa');
 const { chromium } = await import(process.env.MST_QA_PLAYWRIGHT_MODULE || 'playwright');
-const widths = [320, 375, 414, 768, 1280];
+const widths = process.env.MST_QA_WIDTHS
+  ? process.env.MST_QA_WIDTHS.split(',').map(Number) : [320, 375, 414, 768, 1280];
+const filter = process.env.MST_QA_FILTER ? new RegExp(process.env.MST_QA_FILTER) : null;
+const axePath = process.env.MST_QA_AXE_PATH;
+const accessibility = [];
 const requestId = 'QA00000000000001';
 const capability = 'QA'.repeat(13);
+const intentId = 'QA00000000000002';
+function intentReviewFixture() {
+  const network = 'testnet';
+  const intentDigest = 'b'.repeat(64);
+  const planDigest = 'c'.repeat(64);
+  const contractAddress = 'CCIEJ77SUO3A5JYMWZQMX5KGEAF3MQZ5Q5IUTDNW6X3DR32H7FQOCMO4';
+  const effects = { version: 1, digest: 'd'.repeat(64), structureDigest: 'e'.repeat(64), stateChangeCount: 0, eventCount: 0, stateChanges: [], events: [], numericEffects: [], truncated: false };
+  return {
+    intent: { version: 1, id: intentId, network, creatorAddress: addresses.alice, createdAt: now,
+      intent: { version: 1, network, hostFunctionXdr: '', intentDigest },
+      authorizationPlan: { version: 1, network, intentDigest, authorizationPlanDigest: planDigest, authorizationEntriesXdr: [], effects, executionBinding: 'detached' },
+      authorizationPlanRevision: 1, discoverySignerKeys: [addresses.alice] },
+    authorization: { id: intentId, network, intentDigest, authorizationPlanDigest: planDigest, executionBinding: 'detached', status: 'awaiting_authorization', authorizationEntriesXdr: [], contributionCount: 0, authorizers: [
+      { entryIndex: 0, authorizer: addresses.source, credentialType: 'address', expirationLedger: 6000000, threshold: 1, signedWeight: 0, signerEvidence: [], activeSigners: [{ publicKey: addresses.alice, weight: 1 }], ready: false },
+    ] },
+    evidence: [],
+    callSummary: { contractAddress, functionName: 'transfer', argumentPreviews: [addresses.source, addresses.recipient, '5000000'], argumentNames: ['from', 'to', 'amount'], interfaceBasis: 'current_contract',
+      tokenTransfer: { from: addresses.source, to: addresses.recipient, rawAmount: '5000000', amount: '0.5', symbol: 'QATEST', decimals: 7, observedLedger: 5944661, basis: 'contract_reported' } },
+  };
+}
+
+
 // Published deterministic test seeds are used only inside intercepted fixtures.
 const keys = Object.fromEntries(['alice', 'bob', 'carol', 'source', 'recipient'].map((name, index) =>
   [name, Keypair.fromRawEd25519Seed(Buffer.alloc(32, index + 1))]));
@@ -166,7 +192,7 @@ function walletState(address = addresses.alice, unlocked = true) {
 }
 
 async function fixturePage(width, options = {}) {
-  const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', timezoneId: 'Asia/Shanghai' });
+  const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', timezoneId: 'Asia/Shanghai', colorScheme: process.env.MST_QA_COLOR_SCHEME === 'dark' ? 'dark' : 'light' });
   const page = await context.newPage();
   page.setDefaultTimeout(10_000);
   const errors = [];
@@ -223,6 +249,12 @@ async function fixturePage(width, options = {}) {
       return route.abort();
     }
     if (!url.pathname.startsWith('/api/')) return route.continue();
+    if (url.pathname === '/api/intent' && state.intentReview) {
+      assert.equal(request.method(), 'GET', 'Review-only fixture must not modify the intent');
+      assert.equal(request.headers()['x-multisig-intent-id'], intentId);
+      assert.equal(url.searchParams.get('includeMetadata'), '1');
+      return json(state.intentReview);
+    }
     if (url.pathname === '/api/templates') {
       if (request.method() === 'PATCH') {
         const body = request.postDataJSON();
@@ -470,9 +502,21 @@ async function snapshot(page, name, width) {
   assert.ok(overflow.document <= overflow.width + 1 && overflow.body <= overflow.width + 1, `${name}: horizontal overflow ${JSON.stringify(overflow)}`);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: path.join(output, `${name}-${width}.png`), fullPage: true });
+  if (axePath) {
+    if (!(await page.evaluate(() => Boolean(window.axe)))) await page.addScriptTag({ path: axePath });
+    const audit = await page.evaluate(async () => {
+      const report = await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } });
+      return { violations: report.violations.map(rule => ({
+        id: rule.id, impact: rule.impact, nodes: rule.nodes.map(n => ({ target: n.target, summary: n.failureSummary })),
+      })), incomplete: report.incomplete.map(rule => ({ id: rule.id, count: rule.nodes.length })) };
+    });
+    accessibility.push({ name, width, ...audit });
+    console.log(`AXE ${name} ${width}px: ${audit.violations.reduce((n, v) => n + v.nodes.length, 0)} violations`);
+  }
 }
 
 async function run(name, width, options, check) {
+  if (filter && !filter.test(name)) return;
   const fixture = await fixturePage(width, options);
   try {
     await check(fixture);
@@ -491,6 +535,19 @@ async function run(name, width, options, check) {
 
 try {
   for (const width of widths) {
+    await run('soroban-review', width, { state: { intentReview: intentReviewFixture() } }, async ({ page }) => {
+      await page.goto(origin + '/a#' + intentId);
+      await visible(page, 'Transfer 0.5 QATEST', 'heading');
+      await visible(page, 'from: ' + addresses.source);
+      await visible(page, 'to: ' + addresses.recipient);
+      await visible(page, 'amount: 5000000');
+      await snapshot(page, 'soroban-review', width);
+      await page.getByRole('button', { name: 'Cancel Intent', exact: true }).click();
+      await visible(page, 'Cancel this contract request?', 'heading');
+      await snapshot(page, 'soroban-cancel-confirmation', width);
+      await page.getByRole('button', { name: 'Keep request', exact: true }).click();
+      assert.equal(await page.getByRole('heading', { name: 'Cancel this contract request?' }).count(), 0);
+    });
     await run('templates-locked-and-cancel', width, { wallet: walletState('', false) }, async ({ page }) => {
       await page.goto(`${origin}/new`);
       await visible(page, 'Your templates', 'heading');
@@ -1638,6 +1695,10 @@ try {
     generatedAt: new Date().toISOString(), method: 'Actual React UI in Chromium; fixture wallet, API, and Horizon; no broadcast or email.', widths,
     passed: results.filter((item) => item.passed).length, failed: results.filter((item) => !item.passed).length, unexpectedRequests, pageErrors, results };
   await writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+  if (axePath) {
+    await writeFile(path.join(output, 'accessibility.json'), JSON.stringify(accessibility, null, 2) + '\n');
+    if (accessibility.some(item => item.violations.length)) process.exitCode = 1;
+  }
   console.log(JSON.stringify({ passed: report.passed, failed: report.failed, unexpectedRequests, pageErrors, output }));
   if (report.failed || unexpectedRequests.length) process.exitCode = 1;
 }

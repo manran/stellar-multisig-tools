@@ -596,12 +596,43 @@ async function integrationE2E() {
   console.log(JSON.stringify({ evidence: trace }, null, 2));
 }
 
+// Issue and wrap an isolated Testnet asset before changing the source signer policy.
+async function createQaAsset(source, destination) {
+  const issuer = Keypair.random();
+  await fund(issuer.publicKey());
+  const asset = new Asset('QATEST', issuer.publicKey());
+  async function classic(signer, operation) {
+    const current = await horizon('/accounts/' + signer.publicKey());
+    const tx = new TransactionBuilder(new Account(signer.publicKey(), current.sequence), { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
+      .addOperation(operation).setTimeout(120).build();
+    tx.sign(signer);
+    check((await submitXdr(tx.toXDR())).successful, 'QA asset preparation failed');
+  }
+  await Promise.all([source, destination].map(signer => classic(signer, Operation.changeTrust({ asset }))));
+  await classic(issuer, Operation.payment({ destination: source.publicKey(), asset, amount: '2' }));
+  const server = new rpc.Server('https://soroban-testnet.stellar.org', { timeout: 15000 });
+  const account = await server.getAccount(destination.publicKey());
+  const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
+    .addOperation(Operation.createStellarAssetContract({ asset })).setTimeout(120).build();
+  const prepared = await server.prepareTransaction(tx);
+  prepared.sign(destination);
+  const submitted = await server.sendTransaction(prepared);
+  check(['PENDING', 'DUPLICATE'].includes(submitted.status), 'QA asset contract deployment rejected: ' + submitted.status);
+  const hash = Buffer.from(prepared.hash()).toString('hex');
+  const receipt = await server.pollTransaction(hash);
+  check(receipt.status === 'SUCCESS', 'QA asset contract deployment not confirmed');
+  const contractId = asset.contractId(Networks.TESTNET);
+  record('soroban-non-native-asset-deployed', { contractId, issuer: issuer.publicKey(), ledger: receipt.ledger, transactionHash: hash });
+  return { asset, contractId };
+}
+
 async function sorobanE2E() {
   await discoverIntegration();
   check(LIVE, 'Pass --live to authorize disposable Testnet-only transactions.');
   const alice = Keypair.random(), bob = Keypair.random(), carol = Keypair.random(), executor = Keypair.random();
   const source = alice.publicKey(), destination = executor.publicKey();
   await Promise.all([fund(source), fund(destination)]);
+  const issued = process.argv.includes('--soroban-asset') ? await createQaAsset(alice, executor) : null;
   const account = await horizon('/accounts/' + source);
   const setup = new TransactionBuilder(new Account(source, account.sequence), { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
     .addOperation(Operation.setOptions({ signer: { ed25519PublicKey: bob.publicKey(), weight: 1 } }))
@@ -611,7 +642,7 @@ async function sorobanE2E() {
   setup.sign(alice);
   check((await submitXdr(setup.toXDR())).successful, 'Temporary Treasury setup failed');
   record('soroban-disposable-2-of-3-treasury', { account: source, executor: destination });
-  const contractId = Asset.native().contractId(Networks.TESTNET);
+  const contractId = issued?.contractId ?? Asset.native().contractId(Networks.TESTNET);
   const serviceId = 'soroban-qa-' + randomBytes(6).toString('hex');
   const profile = await call('/integration-testnet', 'POST', { serviceId, label: 'Soroban recovery QA',
     sorobanContracts: [{ contractId, methods: ['transfer'], execution: { mode: 'external', executor: destination } }],
@@ -627,8 +658,20 @@ async function sorobanE2E() {
   const replay = await call('/intent', 'POST', input, idem);
   check(replay.replayed && replay.intent.id === id, 'Intent idempotency failed');
   const summary = (await call('/intent?includeMetadata=1', 'GET', undefined, scoped)).callSummary;
-  check(summary?.nativeXlmTransfer?.amount === '0.5' && summary.nativeXlmTransfer.from === source && summary.nativeXlmTransfer.to === destination,
-    'Incorrect human-readable native transfer summary');
+  if (issued) {
+    const expectedSymbol = issued.asset.getCode();
+    check(!summary?.nativeXlmTransfer && summary?.tokenTransfer?.amount === '0.5' &&
+      summary.tokenTransfer.rawAmount === '5000000' && summary.tokenTransfer.decimals === 7 &&
+      summary.tokenTransfer.from === source && summary.tokenTransfer.to === destination &&
+      summary.tokenTransfer.symbol === expectedSymbol &&
+      summary.contractAddress === contractId && summary.tokenTransfer.observedLedger > 0,
+      'Incorrect human-readable non-native transfer summary');
+    assert.deepEqual(summary.argumentNames, ['from', 'to', 'amount']);
+    record('soroban-non-native-summary', { contractId, symbol: expectedSymbol, observedLedger: summary.tokenTransfer.observedLedger });
+  } else {
+    check(summary?.nativeXlmTransfer?.amount === '0.5' && summary.nativeXlmTransfer.from === source && summary.nativeXlmTransfer.to === destination,
+      'Incorrect human-readable native transfer summary');
+  }
   record('soroban-exact-intent-and-replay', { intentId: id });
   const paired = [];
   try {
@@ -699,7 +742,7 @@ async function sorobanE2E() {
 }
 
 async function main() {
-  if (process.argv.includes('--soroban')) return sorobanE2E();
+  if (process.argv.includes('--soroban') || process.argv.includes('--soroban-asset')) return sorobanE2E();
   if (INTEGRATION) return integrationE2E();
   const runtime = await call('/runtime-config');
   check(runtime.fixedNetwork === 'testnet', 'Refusing non-Testnet API deployment');

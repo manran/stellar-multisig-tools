@@ -20,6 +20,25 @@ test.afterEach(() => {
   else process.env[networkVariable] = originalNetwork;
 });
 
+test('logical operation examples cover requests, success responses and required parameters', () => {
+  const document = createOpenApiDocument(STELLAR_TESTNET_API_BASE, 'testnet');
+  const operations = document['x-multisig-operations'] as Record<string, any>;
+  for (const [id, operation] of Object.entries(operations)) {
+    if (operation.requestBody) {
+      assert.notEqual(operation.requestBody.content['application/json'].example, undefined, id);
+    }
+    for (const parameter of operation.parameters ?? []) {
+      if (parameter.required) assert.notEqual(parameter.example, undefined, id + ': ' + parameter.name);
+    }
+    for (const [status, response] of Object.entries(operation.responses) as [string, any][]) {
+      if (status.startsWith('2')) assert.notEqual(response.content['application/json'].example, undefined, id + ': ' + status);
+    }
+  }
+  for (const id of ['integration.intent.browser.inspect', 'integration.intent.browser.contribute']) {
+    assert.ok(operations[id].parameters.some((p: any) => p.name === 'Origin' && p.in === 'header' && p.required), id);
+  }
+});
+
 function documentedOperations(document: JsonObject) {
   const paths = document.paths as Record<string, JsonObject>;
   return Object.entries(paths).flatMap(([path, pathItem]) =>

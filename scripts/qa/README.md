@@ -112,6 +112,13 @@ This is proof for the deployed Testnet API, not evidence that unmerged
 product UI commits have been deployed.
 
 
+### Round-two acceptance extensions
+
+- Run the hosted lifecycle with `--soroban-asset` to issue a disposable Testnet token, verify its decimals/amount/ABI summary, and complete the same two-Agent execution and receipt workflow. Do not use a Mainnet account.
+- Optional browser audit: set `MST_QA_AXE_PATH` to axe-core's `axe.min.js`, `MST_QA_COLOR_SCHEME` to light or dark, `MST_QA_WIDTHS` to comma-separated widths, and `MST_QA_FILTER` to a scenario name regex. The report records violations and incomplete checks separately.
+- `hostedWalletChooser.mjs` uses the real wallet selector without connecting a wallet. Set `MST_QA_PLAYWRIGHT_MODULE`, `MST_QA_AXE_PATH`, `MST_QA_OUTPUT`, and optionally `MST_QA_ORIGIN` (default: public Testnet web). It tests Tab reachability, native dialog focus containment, Escape and focus restoration.
+- Install pinned `ajv@8.17.1` and `ajv-formats@3.0.1` in an isolated QA directory. Set `MST_QA_AJV_DIR` to that directory and run `node scripts/qa/validateOpenApiExamples.mjs < openapi.json`. All logical request bodies, success response bodies and required/example-bearing parameters must match the published schema. Illustrative XDR and tokens are not executable fixtures.
+
 ### Execution evidence contract
 
 Export the current OpenAPI document to a local JSON file, then run `python3 scripts/qa/validateExecutionEvidence.py < openapi.json` with the Python `jsonschema` package installed in an isolated QA environment. The test rejects missing or contradictory terminal evidence for both protocols. The hosted Testnet external lifecycle also checks response-loss recovery by original Request, and never submits its short-validity non-inclusion fixture. It requires no production keys.

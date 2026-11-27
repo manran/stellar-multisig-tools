@@ -213,7 +213,6 @@ export function isWalletAuthEntrySigningUnsupported(cause: unknown): boolean {
  * focus containment and keyboard semantics for its pinned 2.6.0 list UI. */
 async function accessibleWalletSelection(kit: Awaited<ReturnType<typeof loadKit>>) {
   const { closeEvent } = await import('@creit.tech/stellar-wallets-kit/state');
-  const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const dialog = document.createElement('dialog');
   dialog.className = 'mst-wallet-dialog';
   dialog.setAttribute('aria-label', 'Choose a wallet');
@@ -228,11 +227,12 @@ async function accessibleWalletSelection(kit: Awaited<ReturnType<typeof loadKit>
     cancelTimer = setTimeout(closeWhenReady, 100);
   }
   function enhance() {
-    for (const row of dialog.querySelectorAll<HTMLElement>('li')) {
-      // The upstream auth and hardware-account lists use clickable li elements.
-      if (!row.className.includes('cursor-pointer')) continue;
+    for (const row of dialog.querySelectorAll<HTMLElement>('section.stellar-wallets-kit li')) {
+      // Kit 2.6.0 uses clickable li elements for wallet/account choices.
+      // Its Twind classes are hashed in production; do not match class text.
       row.tabIndex = 0;
       row.setAttribute('role', 'button');
+      if (row.parentElement?.tagName === 'UL') row.parentElement.setAttribute('role', 'presentation');
     }
     for (const header of dialog.querySelectorAll('header')) {
       const buttons = [...header.querySelectorAll('button')];
@@ -264,12 +264,12 @@ async function accessibleWalletSelection(kit: Awaited<ReturnType<typeof loadKit>
     if (cancelTimer !== undefined) clearTimeout(cancelTimer);
     dialog.close();
     dialog.remove();
-    if (previousFocus?.isConnected) previousFocus.focus();
   }
 }
 
 export async function connectWalletIdentity(preferredNetwork?: StellarNetwork): Promise<WalletIdentity> {
   if (walletSelectionPending) throw new Error('Finish the current wallet selection first.');
+  const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   walletSelectionPending = true;
   walletSelectionVersion += 1;
   try {
@@ -291,6 +291,11 @@ export async function connectWalletIdentity(preferredNetwork?: StellarNetwork): 
     }
   } finally {
     walletSelectionPending = false;
+    // The caller clears its busy state after this promise settles. Restore
+    // focus on the next frame, once the original button is enabled again.
+    requestAnimationFrame(() => {
+      if (previousFocus?.isConnected && document.activeElement === document.body) previousFocus.focus();
+    });
   }
 }
 
