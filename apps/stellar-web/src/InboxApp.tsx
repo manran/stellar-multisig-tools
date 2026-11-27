@@ -1,4 +1,4 @@
-import { displayTimestamp } from './stellar/displayFormat';
+import { HumanTime, HumanDeadline, TimeZoneControl } from './HumanTime';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, CircleAlert, Inbox, LoaderCircle, RefreshCw } from 'lucide-react';
 import { useAddressBook } from './AddressBookContext';
@@ -14,7 +14,6 @@ import {
 import type { InboxActionCounts, InboxRequestSnapshot } from '../../../packages/stellar-core/src/inboxPresentation';
 import {
   describeInboxRequest,
-  inboxDeadlineLabel,
   inboxOutgoingSignerProgress,
 } from './stellar/inboxRequestPresentation';
 import { inboxHasFailedSignerEmail, inboxSenderProgress } from './stellar/inboxSenderProgress';
@@ -105,11 +104,11 @@ function OutgoingProgress({
             <span className={item.needsAttention ? 'font-semibold text-[var(--color-danger)]' : item.signature === 'transaction' ? 'font-semibold text-[var(--color-success)]' : ''}> · {item.label}</span>
           </div>
           <div>
-            {item.notification && <span>{item.notification.label}{!compact && <> · <time dateTime={item.notification.occurredAt}>{displayTimestamp(item.notification.occurredAt)}</time></>}</span>}
-            {item.viewedAt && <span>{item.notification && ' · '}Viewed{!compact && <> · <time dateTime={item.viewedAt}>{displayTimestamp(item.viewedAt)}</time></>}</span>}
+            {item.notification && <span>{item.notification.label}{!compact && <> · <HumanTime value={item.notification.occurredAt} relative /></>}</span>}
+            {item.viewedAt && <span>{item.notification && ' · '}Viewed{!compact && <> · <HumanTime value={item.viewedAt} relative /></>}</span>}
           </div>
           {!compact && <>
-            <div>Asked <time dateTime={item.askedAt}>{displayTimestamp(item.askedAt)}</time></div>
+            <div>Asked <HumanTime value={item.askedAt} relative /></div>
             <p className="mt-1 text-[var(--color-ink-2)]">{item.detail}</p>
           </>}
         </div>
@@ -167,6 +166,7 @@ function DetailPane({
       </div>
       <h2 className="mst-inbox-detail__title">{description.title}</h2>
       <p className="mst-inbox-detail__summary">{description.summary}</p>
+      <p className="mt-2 text-xs text-[var(--color-muted)]">Signing closes <HumanDeadline value={request.expiresAt} /></p>
       <div className="mst-inbox-next-action">
         <div className="mst-inbox-next-action__label">Your next step</div>
         <div className="mt-2"><StatusBadge tone={urgentEmailFailure ? 'danger' : viewerAction.tone}>{urgentEmailFailure ? 'Follow-up needed' : viewerAction.label}</StatusBadge></div>
@@ -340,7 +340,7 @@ export default function InboxApp() {
               title="Inbox"
               description="Act on what needs you. Follow the rest without opening each proposal."
               meta={data ? <>{!fixedDeploymentNetwork && <NetworkBadge network={unlockedNetwork} />}<span>{data.pending_count} open {data.pending_count === 1 ? 'work item' : 'work items'}</span></> : !fixedDeploymentNetwork ? <NetworkBadge network={unlockedNetwork} /> : undefined}
-              actions={<ActionButton variant="secondary" disabled={loading || authBusy || walletBusy} onClick={() => void loadInbox()} aria-label="Refresh inbox" aria-busy={loading}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">{loading ? 'Refreshing…' : 'Refresh'}</span></ActionButton>}
+              actions={<><TimeZoneControl /><ActionButton variant="secondary" disabled={loading || authBusy || walletBusy} onClick={() => void loadInbox()} aria-label="Refresh inbox" aria-busy={loading}><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">{loading ? 'Refreshing…' : 'Refresh'}</span></ActionButton></>}
             />
             </div>
 
@@ -418,7 +418,7 @@ export default function InboxApp() {
                       <button key={request.id} type="button" data-selected={selected ? 'true' : 'false'} aria-current={selected ? 'true' : undefined} onClick={() => { if (window.matchMedia('(min-width: 1280px)').matches) setSelectedId(request.id); else openRequestDetails(request, followUp); }} className="mst-inbox-item">
                         <div className="mst-inbox-item__head">
                           <StatusBadge tone={urgentEmailFailure ? 'danger' : viewerAction.tone}>{urgentEmailFailure ? 'Follow-up needed' : viewerAction.label}</StatusBadge>
-                          <span className="mst-inbox-item__deadline">{inboxDeadlineLabel(description.inspection)}</span>
+                          <HumanDeadline className="mst-inbox-item__deadline" value={request.expiresAt} passive />
                         </div>
                         <h2 className="mst-inbox-item__title">{description.title}</h2>
                         <p className="mst-inbox-item__summary">{description.summary}</p>

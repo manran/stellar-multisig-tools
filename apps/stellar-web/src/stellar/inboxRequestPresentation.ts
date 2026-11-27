@@ -77,22 +77,6 @@ export function describeInboxRequest(request: SigningRequestSnapshot): InboxRequ
   );
 }
 
-export function inboxDeadlineLabel(inspection: TransactionXdrInspection) {
-  const maxTime = inspection.timeBounds?.maxTime;
-  if (!maxTime || maxTime === '0') return 'No deadline';
-  const deadline = Number(maxTime) * 1000;
-  if (!Number.isFinite(deadline)) return '';
-  const remaining = deadline - Date.now();
-  if (remaining <= 0) return 'Expired';
-  const hours = remaining / 3_600_000;
-  if (hours < 1) return `${Math.max(1, Math.ceil(remaining / 60_000))}m left`;
-  if (hours < 24) return `${Math.ceil(hours)}h left`;
-  if (hours < 48) return 'Tomorrow';
-  return new Date(deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-
-
 export interface ProposalNextStep {
   heading: 'Next step' | 'Current status';
   title: string;

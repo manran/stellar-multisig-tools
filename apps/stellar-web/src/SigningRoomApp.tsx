@@ -1,6 +1,6 @@
-import { displayTimestamp } from './stellar/displayFormat';
+import { HumanTime } from './HumanTime';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { Networks, TransactionBuilder } from '@stellar/stellar-sdk/base';
 import {
   CheckCircle2,
@@ -52,7 +52,7 @@ function friendlyPreconditionState(
   preconditions: ReturnType<typeof assessTransactionPreconditions>,
   inspection: TransactionXdrInspection,
   hasNetworkState: boolean,
-): { title: string; detail: string } {
+): { title: string; detail: ReactNode } {
   if (!hasNetworkState) {
     return { title: 'Unable to confirm network readiness', detail: 'Latest Stellar network state could not be loaded. You can still review or collect signatures and try again.' };
   }
@@ -62,7 +62,7 @@ function friendlyPreconditionState(
     return {
       title: 'Transaction expired',
       detail: Number.isFinite(millis)
-        ? `This transaction expired at ${displayTimestamp(millis)}. Create a fresh transaction to continue.`
+        ? <>This transaction expired at <HumanTime value={millis} />. Create a fresh transaction to continue.</>
         : 'This transaction is past its valid execution window. Create a fresh transaction before collecting more signatures.',
     };
   }

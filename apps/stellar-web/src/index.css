@@ -4106,3 +4106,36 @@ html.stellar-ui [data-stellar-network="testnet"] :where(button, a, input, textar
 .mst-wallet-dialog { margin: auto; padding: 0; border: 0; max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); background: transparent; color: inherit; overflow: auto; }
 .mst-wallet-dialog::backdrop { background: rgb(0 0 0 / 55%); }
 .mst-wallet-dialog :is(button, [role="button"]):focus-visible { outline: 2px solid #24745d; outline-offset: -2px; }
+
+/* Time labels share one display preference; audit timestamps stay plain UTC. */
+.mst-human-time, .mst-human-deadline { font-variant-numeric: tabular-nums; white-space: normal; }
+.mst-time-zone-control {
+  display: inline-block;
+  min-height: 24px;
+  font: inherit;
+  color: var(--color-ink-2);
+  border: 0;
+  background: transparent;
+  padding: 0.125rem 0.25rem;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+.mst-time-zone-control:hover { color: var(--color-ink); }
+.mst-time-zone-control:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; border-radius: 2px; }
+.mst-time-focus-detail { display: none; }
+.mst-time-zone-control:focus-visible + .mst-time-focus-detail {
+  display: block;
+  color: var(--color-ink-2);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.mst-inbox-item__head { flex-wrap: wrap; }
+.mst-inbox-item__deadline { white-space: normal; text-align: right; min-width: 0; }
+@media print {
+  .mst-time-zone-control { text-decoration: none; }
+  .mst-time-focus-detail { display: none !important; }
+}

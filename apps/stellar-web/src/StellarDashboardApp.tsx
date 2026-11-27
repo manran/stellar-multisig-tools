@@ -1,3 +1,4 @@
+import { HumanDeadline, TimeZoneControl } from './HumanTime';
 import { useEffect, useMemo, useState } from 'react';
 import type { MouseEvent } from 'react';
 import { ArrowRight, History, Inbox, Plus, Vault } from 'lucide-react';
@@ -7,7 +8,7 @@ import { useStellarWallet } from './StellarWalletContext';
 import { isWalletUserRejected } from './stellar/walletKit';
 import { inboxActionCountPresentations, inboxViewerActionNeedsAction, inboxViewerActionPresentation } from '../../../packages/stellar-core/src/inboxPresentation';
 import type { InboxActionCounts, InboxRequestSnapshot } from '../../../packages/stellar-core/src/inboxPresentation';
-import { describeInboxRequest, inboxDeadlineLabel } from './stellar/inboxRequestPresentation';
+import { describeInboxRequest } from './stellar/inboxRequestPresentation';
 import { inboxHasFailedSignerEmail } from './stellar/inboxSenderProgress';
 import { intentAuthorizationWindowLabel, intentViewerActionNeedsAction, intentViewerActionPresentation } from './stellar/sorobanIntentPresentation';
 import type { InboxSorobanIntentSnapshot } from '../../../packages/stellar-core/src/sorobanIntentApiTypes';
@@ -145,6 +146,7 @@ export default function StellarDashboardApp() {
             eyebrow={<span className={accentText}>Your workspace</span>}
             title="Overview"
             description="Your current work, in one place."
+            actions={inboxSummary && inboxSummary.requests.length > 0 ? <TimeZoneControl /> : undefined}
           />
 
           <section className="mt-8" aria-labelledby="dashboard-attention">
@@ -229,7 +231,7 @@ export default function StellarDashboardApp() {
                         <div className="mst-work-row__meta">
                           <StatusBadge tone={urgentEmailFailure ? 'danger' : action.tone}>{urgentEmailFailure ? 'Follow-up needed' : action.label}</StatusBadge>
                           <NetworkBadge network={request.network} />
-                          <span>{inboxDeadlineLabel(description.inspection)}</span>
+                          <HumanDeadline value={request.expiresAt} passive />
                         </div>
                         <div className="mst-work-row__title">{description.title}</div>
                         <p className="mst-work-row__copy">{description.summary}</p>

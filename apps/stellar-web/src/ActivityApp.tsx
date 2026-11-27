@@ -1,4 +1,5 @@
 import { displayTimestamp, displayDate, displayAmount } from './stellar/displayFormat';
+import { HumanTime, TimeZoneControl } from './HumanTime';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -225,7 +226,7 @@ function ActivityCard({
           </div>
           <div className="flex shrink-0 items-start gap-3">
             <div className="text-right text-xs text-neutral-400">
-              <div>{displayDate(item.createdAt)}</div>
+              <div>{scopeAccountId ? displayDate(item.createdAt) : <HumanTime value={item.createdAt} dateOnly passive />}</div>
               <div className="mt-1 font-mono">{item.requestId.match(/.{1,4}/g)?.join('-') ?? item.requestId}</div>
             </div>
             <ChevronDown className={`mt-0.5 h-4 w-4 text-neutral-400 transition ${open ? 'rotate-180' : ''}`} />
@@ -245,7 +246,7 @@ function ActivityCard({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <div className="text-sm font-semibold">{copy.title}</div>
-                    <time className="text-xs text-neutral-400">{displayTimestamp(event.occurredAt)}</time>
+                    <span className="text-xs text-neutral-400">{scopeAccountId ? <time dateTime={event.occurredAt}>{displayTimestamp(event.occurredAt)}</time> : <HumanTime value={event.occurredAt} relative />}</span>
                   </div>
                   {event.detail && <p className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">{event.detail}</p>}
                 </div>
@@ -460,7 +461,7 @@ export default function ActivityApp() {
               <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">{subheading}</p>
             </div>
             {privateReady && data && (
-              <button type="button" disabled={loading} onClick={() => void loadActivity()} aria-label="Refresh Activity" className="rounded-xl border border-black/10 p-2.5 hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/10"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button>
+              <div className="flex flex-wrap items-center gap-3">{!isTreasuryActivity && <TimeZoneControl />}<button type="button" disabled={loading} onClick={() => void loadActivity()} aria-label="Refresh Activity" className="rounded-xl border border-black/10 p-2.5 hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/10"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button></div>
             )}
           </div>
 

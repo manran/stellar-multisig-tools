@@ -1,4 +1,5 @@
 import { displayTimestamp } from './stellar/displayFormat';
+import { HumanTime, HumanDeadline } from './HumanTime';
 /* Hallmark · pre-emit critique: P5 H4 E5 S5 R5 V4 */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
@@ -929,7 +930,7 @@ export default function RequestApp() {
                 eyebrow={<div className="flex flex-wrap items-center gap-2"><span className="text-[var(--color-muted)]">Proposal</span><RequestStatusBadge status={snapshot.status} />{(!deploymentNetwork || deploymentNetwork !== snapshot.network) && <NetworkFact network={snapshot.network} />}</div>}
                 title={proposalDescription?.title ?? 'Proposal'}
                 description={proposalDescription?.summary}
-                meta={<><span className="font-mono">ID {displayRequestId(snapshot.id)}</span>{!['submitted', 'expired', 'stale', 'blocked'].includes(snapshot.status) && <span>Signing closes <time dateTime={snapshot.expiresAt}>{displayTimestamp(snapshot.expiresAt)}</time></span>}</>}
+                meta={<><span className="font-mono">ID {displayRequestId(snapshot.id)}</span>{!['submitted', 'expired', 'stale', 'blocked'].includes(snapshot.status) && <span>Signing closes <HumanDeadline value={snapshot.expiresAt} /></span>}</>}
                 actions={
                   <>
                     <ActionButton variant="secondary" size="sm" className="min-h-11" onClick={() => void load(requestLocatorString(snapshot.id, capability))} disabled={loading}>
@@ -1180,8 +1181,8 @@ export default function RequestApp() {
                 <div className="mt-5 space-y-6 border-t border-black/10 pt-5 dark:border-white/10">
                   <div className="mst-request-advanced-facts">
                     <div><span className="font-semibold">Request id:</span> <span className="break-all font-mono">{displayRequestId(snapshot.id)}</span></div>
-                    {snapshot.sorobanOrigin && <div className="mt-2"><span className="font-semibold">Soroban origin:</span> Intent <span className="font-mono">{displayRequestId(snapshot.sorobanOrigin.intentId)}</span> · plan revision {snapshot.sorobanOrigin.authorizationPlanRevision} · prepared {displayTimestamp(snapshot.sorobanOrigin.executionPreparedAt)}</div>}
-                    <div className="mt-2">Created {displayTimestamp(snapshot.createdAt)} · signing closes {displayTimestamp(snapshot.expiresAt)}</div>
+                    {snapshot.sorobanOrigin && <div className="mt-2"><span className="font-semibold">Soroban origin:</span> Intent <span className="font-mono">{displayRequestId(snapshot.sorobanOrigin.intentId)}</span> · plan revision {snapshot.sorobanOrigin.authorizationPlanRevision} · prepared <HumanTime value={snapshot.sorobanOrigin.executionPreparedAt} /></div>}
+                    <div className="mt-2">Created <HumanTime value={snapshot.createdAt} /> · signing closes <HumanTime value={snapshot.expiresAt} /></div>
                     <div className="mt-2">{snapshot.contributionCount} contribution{snapshot.contributionCount === 1 ? '' : 's'} · {snapshot.signatureCount} signature{snapshot.signatureCount === 1 ? '' : 's'}</div>
                     <div className="mt-2 break-all font-mono opacity-60">{snapshot.transactionHash}</div>
                     <div className="mt-3 flex flex-wrap gap-2">

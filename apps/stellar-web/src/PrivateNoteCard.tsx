@@ -1,3 +1,4 @@
+import { HumanTime } from './HumanTime';
 import { displayTimestamp } from './stellar/displayFormat';
 import { useEffect, useMemo, useState } from 'react';
 import { Eye, EyeOff, FileText, LoaderCircle, LockKeyhole } from 'lucide-react';
@@ -11,9 +12,10 @@ interface Props {
   locked?: boolean;
   allowConceal?: boolean;
   printIncluded?: boolean;
+  auditTime?: boolean;
 }
 
-export default function PrivateNoteCard({ note, busy, onSave, locked = false, allowConceal = true, printIncluded = false }: Props) {
+export default function PrivateNoteCard({ note, busy, onSave, locked = false, allowConceal = true, printIncluded = false, auditTime = false }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note?.text ?? '');
   const [concealed, setConcealed] = useState(false);
@@ -92,7 +94,7 @@ export default function PrivateNoteCard({ note, busy, onSave, locked = false, al
           ) : (
             <div className="whitespace-pre-wrap break-words text-sm leading-6">{note.text}</div>
           )}
-          <div className="mt-2 text-xs text-neutral-400">Added {displayTimestamp(note.createdAt)}</div>
+          <div className="mt-2 text-xs text-neutral-400">Added {auditTime ? displayTimestamp(note.createdAt) : <HumanTime value={note.createdAt} />}</div>
         </div>
       )}
 

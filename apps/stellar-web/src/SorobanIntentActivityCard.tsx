@@ -1,4 +1,4 @@
-import { displayTimestamp, displayDate } from './stellar/displayFormat';
+import { HumanTime } from './HumanTime';
 import { CheckCircle2, ChevronDown, CircleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { horizonTransactionUrl } from '../../../packages/stellar-core/src/horizon';
@@ -58,7 +58,7 @@ export default function SorobanIntentActivityCard({
             <p className="mt-1 break-all font-mono text-xs text-neutral-400">{item.intentDigest}</p>
           </div>
           <div className="flex shrink-0 items-start gap-3">
-            <div className="text-right text-xs text-neutral-400"><div>{displayDate(item.createdAt)}</div><div className="mt-1 font-mono">{item.intentId.match(/.{1,4}/g)?.join('-') ?? item.intentId}</div></div>
+            <div className="text-right text-xs text-neutral-400"><div><HumanTime value={item.createdAt} dateOnly passive /></div><div className="mt-1 font-mono">{item.intentId.match(/.{1,4}/g)?.join('-') ?? item.intentId}</div></div>
             <ChevronDown className={`mt-0.5 h-4 w-4 text-neutral-400 transition ${open ? 'rotate-180' : ''}`} />
           </div>
         </div>
@@ -71,7 +71,7 @@ export default function SorobanIntentActivityCard({
             return <div key={event.eventId} className="relative grid grid-cols-[18px_minmax(0,1fr)] gap-3 pb-5 last:pb-0">
               {!isLast && <div className="absolute left-[4px] top-3 h-[calc(100%-0.25rem)] w-px bg-black/10 dark:bg-white/10" />}
               <div className={`relative z-10 mt-1.5 h-2.5 w-2.5 rounded-full ${dotClass(copy.tone)}`} />
-              <div className="min-w-0"><div className="flex flex-wrap items-baseline justify-between gap-2"><div className="text-sm font-semibold">{copy.title}</div><time className="text-xs text-neutral-400">{displayTimestamp(event.occurredAt)}</time></div>{event.transactionHash && <div className="mt-1 break-all font-mono text-[11px] text-neutral-400">{event.transactionHash}</div>}</div>
+              <div className="min-w-0"><div className="flex flex-wrap items-baseline justify-between gap-2"><div className="text-sm font-semibold">{copy.title}</div><HumanTime value={event.occurredAt} relative className="text-xs text-neutral-400" /></div>{event.transactionHash && <div className="mt-1 break-all font-mono text-[11px] text-neutral-400">{event.transactionHash}</div>}</div>
             </div>;
           })}
         </div>

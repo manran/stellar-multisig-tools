@@ -192,7 +192,7 @@ function walletState(address = addresses.alice, unlocked = true) {
 }
 
 async function fixturePage(width, options = {}) {
-  const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', timezoneId: 'Asia/Shanghai', colorScheme: process.env.MST_QA_COLOR_SCHEME === 'dark' ? 'dark' : 'light' });
+  const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: 'reduce', timezoneId: options.timezoneId || 'Asia/Shanghai', colorScheme: process.env.MST_QA_COLOR_SCHEME === 'dark' ? 'dark' : 'light' });
   const page = await context.newPage();
   page.setDefaultTimeout(10_000);
   const errors = [];
@@ -363,6 +363,10 @@ async function fixturePage(width, options = {}) {
       }
     }
     if (url.pathname === '/api/contracts') return json({ contracts: [] });
+    if (url.pathname === '/api/activity' && state.timeActivity) {
+      if (url.searchParams.has('account')) return json({ address: addresses.alice, network: 'testnet', accountId: url.searchParams.get('account'), items: [state.timeActivity] });
+      return json({ address: addresses.alice, network: 'testnet', actor: 'human', workItems: [{ kind: 'request', workId: requestId, activityAt: state.timeActivity.createdAt, request: state.timeActivity }] });
+    }
     if (url.pathname === '/api/treasury-box') return json({ metadataByAccount: {} });
     if (url.pathname === '/api/runtime-config') return json({ stellarNetwork: 'testnet', fixedNetwork: 'testnet', capabilities: { classicManagedExecution: { testnet: false, public: false } } });
     if (url.pathname === '/api/request') {
@@ -1044,6 +1048,61 @@ try {
       });
     }
 
+    if (width === 375 || width === 1280) {
+      const zone = width === 375 ? 'Asia/Tokyo' : 'Asia/Kolkata';
+      const offset = width === 375 ? 'UTC+09:00' : 'UTC+05:30';
+      const eventAt = new Date(Date.now() - 5 * 60000).toISOString();
+      const closingAt = new Date(Date.now() + 30 * 60000).toISOString();
+      const inbox = inboxFixture();
+      inbox.requests[0].expiresAt = closingAt;
+      const activity = { requestId, network: 'testnet', transactionHash: Buffer.from(unsigned.hash()).toString('hex'), baseXdr: unsigned.toXDR(),
+        createdAt: eventAt, expiresAt: closingAt, accountIds: [addresses.source],
+        events: [{ version: 1, requestId, eventId: 'qa-time', type: 'request_created', occurredAt: eventAt }] };
+      await run('human-time-preference', width, { timezoneId: zone, state: { inbox, timeActivity: activity } }, async ({ page, state }) => {
+        await page.goto(origin + '/inbox');
+        const deadline = page.locator('.mst-inbox-list .mst-human-deadline').first();
+        await deadline.waitFor({ state: 'visible' });
+        assert.equal(await deadline.locator('time').getAttribute('datetime'), closingAt, 'Use the service signing deadline, not the XDR expiry');
+        assert.ok((await deadline.innerText()).includes(offset));
+        assert.match(await deadline.innerText(), /About (29|30) min left/);
+        assert.equal(await deadline.locator('button').count(), 0, 'A clickable Inbox card must not contain nested buttons');
+        const before = state.inboxGetCount;
+        await page.getByRole('button', { name: 'Switch all times to UTC', exact: true }).click();
+        assert.ok((await deadline.innerText()).includes(' UTC'));
+        assert.ok(!(await deadline.innerText()).includes(offset));
+        assert.equal(state.inboxGetCount, before, 'Time display changes must not refetch private data');
+        await page.goto(origin + '/activity');
+        const timeline = page.locator('.mst-activity-timeline .mst-human-time').first();
+        await timeline.waitFor({ state: 'visible' });
+        assert.equal(await timeline.locator('time').innerText(), eventAt.slice(0, 19).replace('T', ' '));
+        const toggle = timeline.getByRole('button', { name: /Switch all times to local time/ });
+        await toggle.focus();
+        await page.keyboard.press('Tab');
+        await page.keyboard.press('Shift+Tab');
+        await timeline.locator('.mst-time-focus-detail').waitFor({ state: 'visible' });
+        assert.match(await timeline.locator('.mst-time-focus-detail').innerText(), /Local: .*UTC: /);
+        await page.keyboard.press('Enter');
+        assert.match(await timeline.locator('time').innerText(), /5 mins ago|6 mins ago/);
+        assert.ok((await timeline.innerText()).includes(offset));
+        await page.reload();
+        await timeline.waitFor({ state: 'visible' });
+        assert.ok((await timeline.innerText()).includes(offset), 'Preference survives reload');
+        await snapshot(page, 'human-time-local-activity', width);
+        await page.goto(origin + '/treasury/activity?account=' + addresses.source + '&network=testnet');
+        await page.locator('.mst-activity-timeline time').first().waitFor();
+        assert.equal(await page.locator('.mst-activity-timeline time').first().innerText(), eventAt.slice(0, 19).replace('T', ' ') + ' UTC');
+        assert.equal(await page.locator('.mst-activity-timeline .mst-time-zone-control').count(), 0);
+        await snapshot(page, 'human-time-treasury-audit', width);
+        await page.clock.setFixedTime(new Date(Date.parse(closingAt) + 60000));
+        await page.goto(origin + '/inbox');
+        await deadline.waitFor({ state: 'visible' });
+        assert.match(await deadline.innerText(), /Check current status/);
+        assert.doesNotMatch(await deadline.innerText(), /Expired/);
+        assert.equal(state.inbox.requests[0].status, 'awaiting_signatures');
+        await snapshot(page, 'human-time-clock-skew', width);
+      });
+    }
+
     await run('inbox-progress', width, {}, async ({ page }) => {
       await page.goto(`${origin}/inbox`);
       await visible(page, 'November supplier payment');
@@ -1411,6 +1470,8 @@ try {
       await snapshot(page, 'proposal-confirmed', width);
       await confirmation.getByRole('button', { name: 'View receipt' }).click();
       await visible(page, 'Transaction receipt', 'heading');
+      assert.equal(await page.locator('.mst-time-zone-control').count(), 0, 'Receipts must use fixed UTC, regardless of the Human time preference');
+      assert.ok((await page.locator('main').innerText()).includes(' UTC'), 'Receipt timestamps identify UTC explicitly');
       await visible(page, 'Confirmed on Stellar');
       const printButton = page.getByRole('button', { name: 'Print or save PDF' });
       await printButton.waitFor({ state: 'visible' });

@@ -1,4 +1,5 @@
-import { displayTimestamp, displayAmount } from './stellar/displayFormat';
+import { displayAmount } from './stellar/displayFormat';
+import { HumanDeadline } from './HumanTime';
 import { useEffect, useState } from 'react';
 import { ArrowRight, CheckCircle2, Clock3, Settings2, ShieldAlert } from 'lucide-react';
 import AddressIdentity from './AddressIdentity';
@@ -25,12 +26,12 @@ interface Props {
   mode?: 'review' | 'history';
 }
 
-function validityLabel(inspection: TransactionXdrInspection): string {
+function validityLabel(inspection: TransactionXdrInspection) {
   const maxTime = inspection.timeBounds?.maxTime;
   if (!maxTime || maxTime === '0') return 'No expiration time set';
   const millis = Number(maxTime) * 1000;
   if (!Number.isFinite(millis)) return 'Transaction validity could not be read';
-  return `Valid until ${displayTimestamp(millis)}`;
+  return <span>Valid until <HumanDeadline value={millis} /></span>;
 }
 
 function memoLabel(type: string): string {

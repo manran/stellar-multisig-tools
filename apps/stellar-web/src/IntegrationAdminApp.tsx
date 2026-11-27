@@ -1,4 +1,5 @@
 import { displayTimestamp } from './stellar/displayFormat';
+import { HumanTime, HumanDeadline } from './HumanTime';
 import { useMemo, useState } from 'react';
 import { Check, ClipboardCopy, KeyRound, LoaderCircle, Plus, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import IntegrationProfileWizard, { type IntegrationProfileWizardResult } from './IntegrationProfileWizard';
@@ -657,7 +658,7 @@ function ManagedClassicStatusPanel({
                       : channel.leaseState === 'free'
                         ? 'Free'
                         : 'Lease status unavailable'}</strong>
-                  {channel.leaseExpiresAt && <span>{channel.leaseState === 'active' ? 'Until ' : 'Expired '}{displayTimestamp(channel.leaseExpiresAt)}</span>}
+                  {channel.leaseExpiresAt && <span>{channel.leaseState === 'active' ? <>Until <HumanDeadline value={channel.leaseExpiresAt} /></> : <>Expired <HumanTime value={channel.leaseExpiresAt} /></>}</span>}
                 </div>
               </div>)}
             </div>
