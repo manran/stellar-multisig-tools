@@ -1,4 +1,4 @@
-/** Real, isolated Varial extension 2-of-2 Testnet E2E. Not part of routine CI. */
+/** Real, isolated Varial extension 2-of-2 Testnet E2E, including signature rejection. Not part of routine CI. */
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { tmpdir } from 'node:os';
@@ -229,16 +229,50 @@ try{
  await pA.getByRole('button',{name:'Continue to signatures'}).waitFor({state:'visible',timeout:35000});
  log('import_review_ready');
  await pA.getByRole('button',{name:'Continue to signatures'}).click();
- await approvePrompt(a.context,/Sign message|Confirm Transaction/i);
- log('mst_review_wallet_reconfirmed');
+ const proposalReady=()=>new URL(pA.url()).pathname.endsWith('/s')&&new URL(pA.url()).hash.length>20;
+ const handoff=await waitFor(async()=>{
+  if(proposalReady())return 'session_reused';
+  if(await unlockFreighterIfNeeded(a.context))return null;
+  for(const page of a.context.pages()){
+   if(!page.url().startsWith('chrome-extension://'))continue;
+   const body=await page.locator('body').innerText().catch(()=> '');
+   if(/Sign message|Confirm Transaction/i.test(body))return 'confirmation_required';
+  }
+  return null;
+ },35000);
+ if(handoff==='confirmation_required')await approvePrompt(a.context,/Sign message|Confirm Transaction/i);
  await pA.waitForURL(u=>u.pathname.endsWith('/s')&&u.hash.length>20,{timeout:35000});
+ log('mst_review_handoff',{mode:handoff});
  const shareUrl=pA.url();
  log('mst_proposal_created',{id:new URL(shareUrl).hash.slice(1,17)});
- await pA.getByRole('button',{name:'Sign',exact:true}).waitFor({state:'visible',timeout:35000});
- await pA.getByRole('button',{name:'Sign',exact:true}).click();
+ const signA=pA.getByRole('button',{name:'Sign',exact:true});
+ await signA.waitFor({state:'visible',timeout:35000});
+ const locator=new URL(shareUrl).hash.slice(1);
+ const requestId=locator.slice(0,16),capability=locator.slice(16);
+ const before=await coordination(pA,requestId,capability,a.address);
+ await signA.click();
+ const refusal=await extensionPrompt(a.context,/Confirm Transaction/i);
+ if(!/Test Net|Testnet/i.test(refusal.body))throw new Error('Refusal prompt is not on Testnet');
+ const reject=refusal.page.getByRole('button',{name:/^(Reject|Cancel|Decline|Deny)$/i}).first();
+ await reject.waitFor({state:'visible',timeout:10000});
+ await reject.click();
+ await waitFor(()=>signA.isEnabled().catch(()=>false),15000);
+ const after=await coordination(pA,requestId,capability,a.address);
+ if(before.request?.signatureCount!==0||after.request?.signatureCount!==before.request.signatureCount||
+    after.request?.transactionHash!==before.request.transactionHash||after.request?.status!=='awaiting_signatures'){
+  throw new Error('Rejected wallet prompt changed the proposal or its signature count');
+ }
+ if((await pA.locator('body').innerText()).includes('The user rejected this request.'))throw new Error('Raw wallet rejection leaked into the UI');
+ log('mst_signature_rejected_without_mutation',{signatureCount:after.request.signatureCount});
+ await signA.click();
  await approvePrompt(a.context,/Confirm Transaction/i);
- await pA.getByRole('button',{name:'Signed',exact:true}).waitFor({state:'visible',timeout:30000});
- log('mst_owner_signed');
+ await pA.getByRole('heading',{name:'Your signature is recorded',exact:true}).waitFor({state:'visible',timeout:30000});
+ const first=await waitFor(async()=>{
+  const state=await coordination(pA,requestId,capability,a.address);
+  return state.request?.signatureCount===1 && state.request.status==='awaiting_signatures' ? state.request : null;
+ },15000);
+ if(first.transactionHash!==before.request.transactionHash)throw new Error('First signature changed the transaction hash');
+ log('mst_owner_signed',{signatureCount:first.signatureCount});
  if(EMAIL_LIVE){
  const id=new URL(shareUrl).hash.slice(1,17);
  const cap=new URL(shareUrl).hash.slice(17);
@@ -268,9 +302,16 @@ try{
  pB=await loginMst(b);
  await pB.goto(EMAIL_LIVE ? mst+'/s#'+new URL(shareUrl).hash.slice(1,17) : shareUrl,{waitUntil:'domcontentloaded'});
  if(EMAIL_LIVE)log('recipient_email_locator_opened',{hasCapability:false});
- await pB.waitForTimeout(1200);
  const open=pB.getByRole('button',{name:/Open proposal|Open transaction/i}).first();
- if(await open.count()&&await open.isVisible()){
+ const reviewContinue=pB.getByRole('button',{name:'Continue to signatures',exact:true}).first();
+ const signB=pB.getByRole('button',{name:'Sign',exact:true});
+ const entry=await waitFor(async()=>{
+  if(await open.isVisible())return 'open';
+  if(await reviewContinue.isVisible())return 'review';
+  if(await signB.isVisible())return 'sign';
+  return null;
+ },35000);
+ if(entry==='open'){
   await open.click();
   if(EMAIL_LIVE)await approvePrompt(b.context,/Sign message|Confirm Transaction/i).catch(()=>{});
  }
@@ -280,22 +321,30 @@ try{
   log('recipient_viewed',{recorded:wasViewed});
   if(!wasViewed)throw new Error('Recipient Viewed fact not recorded');
  }
- const reviewContinue=pB.getByRole('button',{name:'Continue to signatures'}).first();
- if(await reviewContinue.count()&&await reviewContinue.isVisible()){await reviewContinue.click();log('mst_recipient_reviewed');}
- await pB.getByRole('button',{name:'Sign',exact:true}).waitFor({state:'visible',timeout:35000});
- await pB.getByRole('button',{name:'Sign',exact:true}).click();
+ const next=await waitFor(async()=>await reviewContinue.isVisible()?'review':await signB.isVisible()?'sign':null,35000);
+ if(next==='review'){await reviewContinue.click();log('mst_recipient_reviewed');}
+ await signB.waitFor({state:'visible',timeout:35000});
+ await signB.click();
  await approvePrompt(b.context,/Confirm Transaction/i);
- await pB.waitForTimeout(1500);
- log('mst_recipient_signed',{ui:await ui(pB)});
- const route=pB.getByRole('button',{name:'MultiSigTools submits'});
- if(await route.count())await route.click();
- await pB.getByRole('button',{name:'Submit transaction',exact:true}).waitFor({state:'visible',timeout:20000});
- await pB.getByRole('button',{name:'Submit transaction',exact:true}).click();
- await pB.getByText('Transaction confirmed',{exact:true}).waitFor({state:'visible',timeout:35000});
+ const ready=await waitFor(async()=>{
+  const state=await coordination(pB,requestId,capability,b.address);
+  return state.request?.signatureCount===2 && ['ready','submitted'].includes(state.request.status) ? state.request : null;
+ },30000);
+ if(ready.transactionHash!==first.transactionHash)throw new Error('Second signature changed the transaction hash');
+ log('mst_recipient_signed',{signatureCount:ready.signatureCount,status:ready.status});
+ if(ready.status==='ready'){
+  const route=pB.getByRole('button',{name:/MultiSigTools submits/});
+  const submit=pB.getByRole('button',{name:'Submit transaction',exact:true});
+  const action=await waitFor(async()=>await submit.isVisible()?'submit':await route.isVisible()?'route':null,20000);
+  if(action==='route')await route.click();
+  await submit.waitFor({state:'visible',timeout:20000});
+  await submit.click();
+ }
+ await pB.getByText('Transaction confirmed',{exact:true}).first().waitFor({state:'visible',timeout:35000});
  const recent=await horizon.transactions().forAccount(treasury.publicKey()).order('desc').limit(5).call();
  let found=null;
  for(const tx of recent.records){
-   if(!tx.successful||tx.hash===configured.hash)continue;
+   if(!tx.successful||tx.hash!==first.transactionHash)continue;
    const operations=await horizon.operations().forTransaction(tx.hash).call();
    if(operations.records.some(op=>op.type==='payment'&&op.from===treasury.publicKey()&&op.to===a.address&&op.amount==='0.0500000'&&op.asset_type==='native')){found=tx;break}
  }

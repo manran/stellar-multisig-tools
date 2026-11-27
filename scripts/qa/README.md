@@ -119,6 +119,12 @@ product UI commits have been deployed.
 - `hostedWalletChooser.mjs` uses the real wallet selector without connecting a wallet. Set `MST_QA_PLAYWRIGHT_MODULE`, `MST_QA_AXE_PATH`, `MST_QA_OUTPUT`, and optionally `MST_QA_ORIGIN` (default: public Testnet web). It tests Tab reachability, native dialog focus containment, Escape and focus restoration.
 - Install pinned `ajv@8.17.1` and `ajv-formats@3.0.1` in an isolated QA directory. Set `MST_QA_AJV_DIR` to that directory and run `node scripts/qa/validateOpenApiExamples.mjs < openapi.json`. All logical request bodies, success response bodies and required/example-bearing parameters must match the published schema. Illustrative XDR and tokens are not executable fixtures.
 
+### Real Varial browser extension
+
+Use the official Chrome Web Store extension (ID `bcacfldlkkdogcmkkibnjlakofdplcbk`), verify its signed CRX before unpacking, and mount only that unpacked extension into an isolated Chromium/Playwright environment. Set `MST_VARIAL_LIVE_E2E=1`, `MST_VARIAL_EXTENSION_DIR`, and `MST_VARIAL_PLAYWRIGHT_MODULE`, then run `node scripts/qa/realVarialMultisig.mjs` with a graphical display. In a disposable Linux container, Xvfb can supply the display. Do not use an existing wallet profile.
+
+The script creates two fresh extension wallets and a 2-of-2 Testnet Treasury, verifies rejection leaves the original transaction and signature count unchanged, checks both independent contributions against the canonical Request, and verifies the same hash and payment on Testnet Horizon. It permits reuse of a valid Human session at the review handoff, waits for the recipient's actual review stage, and removes the temporary wallet profiles on exit. The optional email path is disabled unless explicitly enabled.
+
 ### Execution evidence contract
 
 Export the current OpenAPI document to a local JSON file, then run `python3 scripts/qa/validateExecutionEvidence.py < openapi.json` with the Python `jsonschema` package installed in an isolated QA environment. The test rejects missing or contradictory terminal evidence for both protocols. The hosted Testnet external lifecycle also checks response-loss recovery by original Request, and never submits its short-validity non-inclusion fixture. It requires no production keys.
