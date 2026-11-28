@@ -54,6 +54,7 @@ services:
     environment:
       PORT: "3000"
       VITE_STELLAR_DEPLOYMENT_NETWORK: testnet
+      STELLAR_SOROBAN_PLANNING_SOURCE_TESTNET: ${STELLAR_SOROBAN_PLANNING_SOURCE_TESTNET:?Existing active Testnet Soroban planning account is required}
       SAINT_TESTNET_CONSUMER_URL: ${SAINT_TESTNET_CONSUMER_URL:-http://100.96.0.4:18510}
       DATABASE_URL: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}
       DATABASE_URL_UNPOOLED: postgresql://${POSTGRES_USER:-mst}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mst_testnet}

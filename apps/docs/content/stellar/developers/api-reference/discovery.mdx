@@ -1,0 +1,208 @@
+---
+title: Discovery
+description: Generated logical operation contracts for discovery.
+---
+
+[All operations](/stellar/developers/api-reference)
+
+Contract revision: **1.1.3**. Generated from the same source as the [machine-readable OpenAPI](https://api-testnet.multisig.tools/stellar/openapi.json).
+
+Base URL: https://api-testnet.multisig.tools/stellar. Examples illustrate structure; replace all example credentials, identifiers, XDR and signatures with actual values. For conditional permissions, see [API and webhooks](/stellar/developers/api).
+
+Security alternatives: humanBearer = verified Human bearer token; humanSession = verified browser session; agentBearer = scoped MSA; integrationBearer = scoped MSI; treasuryAuditBearer = scoped MTA; requestCapability = private Request link; intentCapability = origin-bound browser capability.
+
+## discovery.operations.list
+
+Read operation IDs, authority, effect and schema pointers.
+
+**HTTP:** `GET /operations`  
+**Access:** `public` · **Effect:** `none`
+
+**Authentication:** public
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "contract": "multisig-tools.headless-operations",
+  "version": 1,
+  "apiVersion": "1.1.3",
+  "base": "https://api-testnet.multisig.tools/stellar",
+  "openapi": "https://api-testnet.multisig.tools/stellar/openapi.json",
+  "documentation": "https://docs.multisig.tools/stellar/developers",
+  "operations": [
+    {
+      "id": "discovery.operations.list",
+      "version": 1,
+      "method": "GET",
+      "path": "/operations",
+      "access": "public",
+      "effect": "none",
+      "summary": "Read operation IDs, authority, effect and schema pointers.",
+      "schema": {
+        "href": "https://api-testnet.multisig.tools/stellar/openapi.json",
+        "path": "/operations",
+        "method": "GET",
+        "pointer": "#/x-multisig-operations/discovery.operations.list"
+      }
+    }
+  ]
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## discovery.openapi.read
+
+Read the versioned OpenAPI description.
+
+**HTTP:** `GET /openapi.json`  
+**Access:** `public` · **Effect:** `none`
+
+**Authentication:** public
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "MultiSigTools Headless Operations",
+    "version": "1.1.3"
+  },
+  "paths": {},
+  "components": {}
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```

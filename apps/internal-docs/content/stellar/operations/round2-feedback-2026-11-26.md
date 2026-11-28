@@ -165,3 +165,71 @@ The original review's concrete high-priority findings have repair and internal r
 - Legacy cancellation with unresolved Soroban execution preserves reconciliation rather than presenting it as a completed cancellation.
 
 Verification: 1022 regular automated tests, 42 disposable PostgreSQL tests, 111 browser fixture checks, 186 OpenAPI example/parameter checks, and application builds passed. Independent black-box acceptance, real wallet/accessibility review and previously outstanding minor documentation/UX suggestions are not thereby closed. Only Testnet is in release scope.
+
+## Closeout matrix — 2026-11-28
+
+Status is maintainer evidence, not the original reviewer's independent acceptance. PASS means the reported defect has a fix and supporting source, regression or hosted evidence. DESIGN means the proposed expansion is deliberately not implemented; the existing behavior is explained. The original report includes recommendations as well as defects. Prior evidence is recorded in the preceding sections; new closeout evidence is recorded below.
+
+| Finding | Disposition | Evidence / retained boundary |
+| --- | --- | --- |
+| A1 | PASS | Closed-schema unknown-field rejection, catalog and live typo checks. |
+| A2 | PASS | Unresolved execution blocks cancellation; confirmed historical contributors retain receipt access. Live Soroban flow. |
+| A3 | PASS | Decline actor/time, quorum_unreachable, optional reconsideration; Agent/Human projection regressions. |
+| A4 | DESIGN | Human may intentionally prepare work for another authorizer; Agent creation stays scoped. |
+| A5 | PASS | Required executor, signature inputs and exact reconciliation hash defaults/selection; operation contract regressions. |
+| A6 | PASS | Reported decision, amount, lifetime, service ID, network and contract query diagnostics corrected; structured field information for known validation errors. Dynamic provider errors remain possible. |
+| A7 | PASS | Strict Inbox/Activity/Request query selectors; invalid view 400. |
+| A8 | DESIGN | Own-profile redacted inspection added. Operator manages rotation, changes and removal; no unapproved self-service privilege expansion. |
+| A9 | PASS | Classic Integration Job uses canonical projection; both task/job shapes remain documented and compatible. |
+| A10 | PASS | Optional first-page totals, explicit lower bound if enumeration is capped. |
+| A11 | PASS | XDR-derived summary, ABI and contract-reported token metadata. New live non-native creation-time observation and historical read verified. Old observations are not fabricated. |
+| A12 | DESIGN | Public discovery gzip, ETag, cache, HEAD, request IDs and known pairing limits. No universal fabricated limit or authenticated HEAD support. |
+| A13 | PASS | Missing contract is structured JSON 404. |
+| A14 | PASS | Closed stale work removed except unresolved external outcomes; actor-specific counts documented. |
+| A15 | PASS | SEP-10 stellar.toml, robots, favicon and absent sitemap public routing verified. |
+| S1 | PASS | Human, MSA, MSI, capabilities and conditional selected-wallet headers align with runtime; new optional workspace selector prevents wallet mismatch. |
+| S2 | PASS | Source-generated error catalog and recovery rules with drift test; dynamic providers not exhaustively enumerated. |
+| S3 | PASS | Auth status and logout logical operations. |
+| S4 | PASS | All 62 logical operations have validated examples and summaries; rendered reference generated from same schemas. No invented contact/license; field descriptions remain incremental. |
+| S5 | PASS | Short transport operation IDs, stable logical IDs. |
+| S6 | DESIGN | Preserve existing wire names and case-insensitive HTTP headers, document rather than silently rename. |
+| S7 | PASS | Contract revision, changelog and discovery paths; reference drift check. |
+| D1 | PASS | AUTH preimage, signature examples and signer-specific challenges; actual two-signer Testnet acceptance. |
+| D2 | PASS | Profile, create/authorize/prepare/execute/reconcile walkthrough. |
+| D3 | PASS | Native SAC Testnet address verified. |
+| D4 | PASS | Explicit smallest-unit amount and 1 XLM example. |
+| D5 | PASS | Webhook registration, secret, payload, retries, operator lifecycle and OpenAPI webhook. External delivery was outside original test; no claim of live external receiver validation. |
+| D6 | PASS | Mainnet unpublished; inaccessible URLs removed. |
+| D7 | PASS | Directory human entry to Testnet and docs verified previously. |
+| D8 | PASS | Unique service ID guidance and examples. |
+| D9 | PASS | Hosted/native/headless mapping and behavior. |
+| D10 | PASS | Ownership table distinguishes transaction construction, source and submission. |
+| D11 | PASS | Prepare prerequisite, Origin, expiry, Job shape described. |
+| D12 | PASS | Credential naming, response, lifetime/unlock, payment example, review link and terminology; existing wire kind values documented. |
+| D13 | PASS | State/error/retry/glossary/rate/version reference; generated grouped API reference, Agent recovery page and llms links. |
+| U1 | PASS | Accessible Testnet legal pages; unavailable Mainnet/demo links removed. |
+| U2 | PASS | Human-readable Soroban summary and metadata provenance, invocation details and collapsible evidence. Live native and non-native flows. |
+| U3 | PASS | Mobile Soroban full addresses and wrapping. |
+| U4 | PASS | Canonical fragment and accepted legacy query link. |
+| U5 | PASS | Resume exact package with same hash/XDR/sequence/expiry; actual wallet and Agent E2E. |
+| U6 | PASS | Creation-time policy snapshot, honest unavailable basis for older requests. |
+| U7 | PASS | Keyboard-accessible wallet chooser, Escape/focus restore, CSP-safe images, real Varial extension acceptance. |
+| U8 | PASS | Stale/expired projection excludes futile work; unresolved result is not a signature demand. |
+| U9 | PASS | Pairing scope, expiry, separate wallet approvals and truthful empty states. |
+| U10 | PASS | Full mobile Classic addresses. |
+| U11 | PASS | Product landing and user terminology, approval weight distinction. |
+| U12 | PASS | Self-managed default when managed unavailable, inline validation, readable method docs and navigation. |
+| U13 | PASS | Automated axe and manual incomplete chooser contrast inspection. Full assistive technology audit remains separate. |
+| U14 | PASS | Shared navigation, time/amount formatting, wallet rejection, policy receipt, Treasury adoption effect, form validation, contract save guard, visible contact removal, confirm/cancel, theme, metadata, skip link, draft review back-link and reduced cold load. New wallet-scoped contract collection and auto-load regression; full browser suite required for release. |
+
+Table total: 45 PASS, 4 DESIGN. A9 is PASS for its core requested Classic Job; existing wire shape remains compatible. No independent reviewer has re-run the original report.
+
+### New hosted defect and release guard
+
+A fresh non-native Testnet lifecycle against 1.1.2 exposed HTTP 503 planning_source_not_configured. The self-hosted Compose runtime env had lost the existing public planning account during the last release. Restored only the existing non-secret G-address from the previous verified Testnet environment after confirming the account is active on Horizon. No credential, port, firewall, database or Mainnet change. Compose now rejects a missing planning account. Public health and discovery are insufficient for release acceptance.
+
+After restoration, the real non-native lifecycle passed 23 checks: creation-time observed metadata returned without live lookup, exact Inbox/Activity summary, two separate signer contributions, exact package resume, cancellation guard, on-chain submission and receipt replay. Intent 15J7AAP8N86Q6BMR, transaction b5df297549838e28cd47d2d152b5957d1456c76dfd75c11f2d4d46e981acc79f, ledger 5961514. Both disposable signer credentials revoked. The initial failed run left a disposable test profile and funded test accounts; no real user assets involved.
+
+### Independent acceptance — BLOCKED
+
+Use a fresh reviewer, separate from the implementation context. Provide only the public Testnet entry (https://stellar-testnet.multisig.tools), docs (https://docs.multisig.tools/stellar), the business objective of coordinating and reviewing a Classic multisig payment and a Soroban authorization/execution through Human, Agent and Integration roles, and the original feedback report. Use only disposable Testnet accounts; no Mainnet, private keys, real assets, security changes, or external delivery without approval. Discover the contract and workflow independently, compare behavior with advertised contracts, report reproducible findings and verified outcomes. This maintainer cannot substitute its own scripted checks for an independent reviewer.

@@ -1,0 +1,15 @@
+{
+  "title": "API reference",
+  "pages": [
+    "index",
+    "discovery",
+    "runtime",
+    "signer",
+    "agent",
+    "integration",
+    "contract",
+    "classic",
+    "treasury",
+    "proposal"
+  ]
+}

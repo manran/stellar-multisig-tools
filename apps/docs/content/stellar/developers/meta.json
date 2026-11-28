@@ -1,4 +1,4 @@
 {
   "title": "Developers",
-  "pages": ["index", "agent-quickstart", "testnet-quickstart", "classic", "soroban", "api", "security", "agent-api", "reference"]
+  "pages": ["index", "agent-quickstart", "agent-recovery", "testnet-quickstart", "classic", "soroban", "api", "security", "agent-api", "reference", "api-reference"]
 }

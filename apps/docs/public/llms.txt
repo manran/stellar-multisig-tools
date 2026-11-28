@@ -23,3 +23,6 @@ Start on Testnet. Public runtime discovery is available via the RFC 9727 API Cat
 - [Soroban integration](https://docs.multisig.tools/stellar/developers/soroban): Profile, detached AUTH, execution and exact-hash recovery.
 - [Security](https://docs.multisig.tools/stellar/developers/security): Credential and authorization boundaries.
 - [State and error reference](https://docs.multisig.tools/stellar/developers/reference): Lifecycle states, retry vocabulary and error catalogue.
+
+- [Rendered API reference](https://docs.multisig.tools/stellar/developers/api-reference): Generated logical operation contracts, parameters, examples and retry rules.
+- [Agent pairing recovery](https://docs.multisig.tools/stellar/developers/agent-recovery): Lost exchange recovery and independent signing tool approval.

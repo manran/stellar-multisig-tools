@@ -1,0 +1,231 @@
+---
+title: Classic transaction preparation
+description: Generated logical operation contracts for classic.
+---
+
+[All operations](/stellar/developers/api-reference)
+
+Contract revision: **1.1.3**. Generated from the same source as the [machine-readable OpenAPI](https://api-testnet.multisig.tools/stellar/openapi.json).
+
+Base URL: https://api-testnet.multisig.tools/stellar. Examples illustrate structure; replace all example credentials, identifiers, XDR and signatures with actual values. For conditional permissions, see [API and webhooks](/stellar/developers/api).
+
+Security alternatives: humanBearer = verified Human bearer token; humanSession = verified browser session; agentBearer = scoped MSA; integrationBearer = scoped MSI; treasuryAuditBearer = scoped MTA; requestCapability = private Request link; intentCapability = origin-bound browser capability.
+
+## classic.payment.prepare
+
+Prepare one exact unsigned Classic payment transaction from business payment inputs and fresh Stellar state.
+
+**HTTP:** `POST /payment-prepare`  
+**Access:** `principal:write` · **Effect:** `none`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession`
+
+**Request example**
+
+```json
+{
+  "network": "testnet",
+  "sourceAccount": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+  "payments": [
+    {
+      "destination": "GDJXYXYMPGVWATWB7KUC6C5KGB3DDUWP76WBPBAL5V4WN6UUR6JKWWXB",
+      "amount": "1.5",
+      "asset": {
+        "type": "native"
+      }
+    }
+  ],
+  "memo": "invoice-42",
+  "lifetimeSeconds": 3600
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "classic.payment.prepare",
+  "version": 1,
+  "network": "testnet",
+  "sourceAccount": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+  "sourceSequence": "100",
+  "feeStroops": "100",
+  "validUntil": "2026-01-01T01:00:00Z",
+  "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "xdr": "<prepared envelope XDR>",
+  "paymentCount": 1
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## classic.account.create.prepare
+
+Prepare one exact unsigned Classic CreateAccount transaction from explicit account-creation inputs and fresh Stellar state.
+
+**HTTP:** `POST /account-create-prepare`  
+**Access:** `principal:write` · **Effect:** `none`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession`
+
+**Request example**
+
+```json
+{
+  "network": "testnet",
+  "sourceAccount": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+  "destination": "GDJXYXYMPGVWATWB7KUC6C5KGB3DDUWP76WBPBAL5V4WN6UUR6JKWWXB",
+  "startingBalance": "5",
+  "lifetimeSeconds": 3600
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "classic.account.create.prepare",
+  "version": 1,
+  "network": "testnet",
+  "sourceAccount": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+  "sourceSequence": "100",
+  "feeStroops": "100",
+  "validUntil": "2026-01-01T01:00:00Z",
+  "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "xdr": "<prepared envelope XDR>",
+  "destination": "GDJXYXYMPGVWATWB7KUC6C5KGB3DDUWP76WBPBAL5V4WN6UUR6JKWWXB",
+  "startingBalance": "5"
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```

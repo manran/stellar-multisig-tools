@@ -658,6 +658,12 @@ async function sorobanE2E() {
   const replay = await call('/intent', 'POST', input, idem);
   check(replay.replayed && replay.intent.id === id, 'Intent idempotency failed');
   const summary = (await call('/intent?includeMetadata=1', 'GET', undefined, scoped)).callSummary;
+  const observed = (await call('/intent', 'GET', undefined, scoped)).callSummary;
+  const storedTitle = issued ? 'Transfer 0.5 ' + issued.asset.getCode() + ' (reported at ledger ' + observed?.tokenTransfer?.observedLedger + ')' : 'Transfer 0.5 XLM';
+  if (issued) {
+    check(observed?.tokenTransfer?.rawAmount === '5000000' && observed.tokenTransfer.amount === '0.5' && observed.tokenTransfer.symbol === issued.asset.getCode() && observed.tokenTransfer.observedLedger > 0, 'Creation-time observation not returned without metadata lookup');
+    record('soroban-persisted-creation-observation', { observedLedger: observed.tokenTransfer.observedLedger });
+  }
   if (issued) {
     const expectedSymbol = issued.asset.getCode();
     check(!summary?.nativeXlmTransfer && summary?.tokenTransfer?.amount === '0.5' &&
@@ -681,6 +687,7 @@ async function sorobanE2E() {
       const auth = { Authorization: 'Bearer ' + pair.agent.apiKey, 'X-MultiSig-Intent-Id': id };
       const inbox = await call('/inbox', 'GET', undefined, { Authorization: auth.Authorization });
       check(inbox.tasks?.some(t => t.id === id && t.signatureRequired), 'Agent cannot discover required AUTH in Inbox');
+      check(inbox.intents?.find(t => t.id === id)?.callTitle === storedTitle, 'Inbox summary differs from persisted observation');
       const snapshot = await call('/intent', 'GET', undefined, auth);
       const challenge = snapshot.challenges?.find(c => c.authorizer === source);
       check(challenge?.preimageXdr, 'Required AUTH preimage not provided');
@@ -728,6 +735,9 @@ async function sorobanE2E() {
     for (const item of paired) {
       const terminal = await call('/intent', 'GET', undefined, { Authorization: 'Bearer ' + item.agent.apiKey, 'X-MultiSig-Intent-Id': id });
       check(terminal.authorization.status === 'completed' && !terminal.authorization.authorizationEntriesXdr.length && !terminal.challenges?.length, 'Contributor cannot read historical receipt or reusable AUTH leaked');
+      const activity = await call('/activity?view=work', 'GET', undefined, { Authorization: 'Bearer ' + item.agent.apiKey });
+      check(activity.workItems?.find(t => t.intentId === id)?.callTitle === storedTitle, 'Historical Activity summary differs from persisted observation');
+      if (issued) assert.deepEqual(terminal.callSummary?.tokenTransfer, observed.tokenTransfer, 'Historical token observation changed');
     }
     record('soroban-historical-contributor-receipt');
   } finally {

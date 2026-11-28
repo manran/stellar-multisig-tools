@@ -27,7 +27,7 @@ export interface HeadlessOperationDescriptor {
 }
 
 // Wire operation versions remain 1. This revision identifies the complete published description.
-export const HEADLESS_API_REVISION = '1.1.2';
+export const HEADLESS_API_REVISION = '1.1.3';
 
 export const HEADLESS_OPERATION_CATALOG: readonly HeadlessOperationDescriptor[] = [
   {

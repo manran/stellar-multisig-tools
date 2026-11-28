@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useStellarWallet } from './StellarWalletContext';
+import { privateSessionAddressHeaders } from '../../../packages/stellar-core/src/privateSessionTransport';
 import { preferredAddressEntry, preferredAddressLabel } from './stellar/addressIdentity';
 
 export type AddressAliasSubjectType = 'account' | 'signer';
@@ -82,8 +83,8 @@ function newestEntry(entries: AddressAliasEntry[]): AddressAliasEntry | null {
 }
 
 export function AddressBookProvider({ children }: { children: ReactNode }) {
-  const { privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
-  const owner = privateUnlocked && unlockedAddress && unlockedNetwork ? `${unlockedNetwork}:${unlockedAddress}` : '';
+  const { address, network, privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
+  const owner = privateUnlocked && unlockedAddress && unlockedNetwork && address === unlockedAddress && network === unlockedNetwork ? `${unlockedNetwork}:${unlockedAddress}` : '';
   const scopeRef = useRef({ owner, revision: 0 });
   if (scopeRef.current.owner !== owner) scopeRef.current = { owner, revision: 0 };
   const scope = scopeRef.current;
@@ -126,7 +127,7 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
     const controller = new AbortController();
     void fetch('/api/address-book', {
       signal: controller.signal,
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json', ...privateSessionAddressHeaders(unlockedAddress) },
     })
       .then(async (response) => {
         const body = await response.json().catch(() => ({})) as { entries?: unknown[]; error?: string };
@@ -207,7 +208,7 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
     try {
       const response = await fetch('/api/address-book', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...privateSessionAddressHeaders(unlockedAddress) },
         body: JSON.stringify({
           address,
           subject_type: subjectType,
@@ -224,10 +225,10 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
       replaceEntries((current) => [...current.filter((item) => item.address !== address), entry]);
 
       const opposite = subjectType === 'account' ? 'signer' : 'account';
-      if (previousForAddress.some((item) => item.subjectType === opposite)) {
+      if (scopeRef.current === scope && previousForAddress.some((item) => item.subjectType === opposite)) {
         void fetch('/api/address-book', {
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...privateSessionAddressHeaders(unlockedAddress) },
           body: JSON.stringify({ address, subject_type: opposite }),
         }).catch(() => undefined);
       }
@@ -253,7 +254,7 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
       await Promise.all(types.map(async (type) => {
         const response = await fetch('/api/address-book', {
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...privateSessionAddressHeaders(unlockedAddress) },
           body: JSON.stringify({ address, subject_type: type }),
         });
         const body = await response.json().catch(() => ({})) as { error?: string };

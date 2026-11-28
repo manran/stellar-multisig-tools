@@ -4,7 +4,7 @@ import { StrKey } from '@stellar/stellar-sdk/base';
 import { NetworkBadge } from './MultiSigUi';
 import StellarWorkspaceShell from './StellarWorkspaceShell';
 import { useContractWorkspaces } from './ContractWorkspaceContext';
-import { inspectContractOperation, keepContractOperation } from './contractOperationsClient';
+import { inspectContractOperation } from './contractOperationsClient';
 import type { ContractMethodDescriptor } from '../../../packages/stellar-core/src/contractSpec';
 import { resolveStellarNetwork } from './stellar/networkPreference';
 import type { StellarNetwork } from '../../../packages/stellar-core/src/types';
@@ -22,15 +22,15 @@ export default function ContractWorkspaceApp() {
   const route = useMemo(routeObject, []);
   const contractId = route?.contractId ?? '';
   const network = route?.network ?? 'public';
-  const { contracts, ready, forget } = useContractWorkspaces();
-  const { unlock, authBusy } = useStellarWallet();
+  const { contracts, ready, keep, forget } = useContractWorkspaces();
+  const { unlock, authBusy, address, privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
   const [methods, setMethods] = useState<ContractMethodDescriptor[]>([]);
   const [loading, setLoading] = useState(Boolean(route));
   const [saving, setSaving] = useState(false);
   const [interfaceReady, setInterfaceReady] = useState(false);
-  const [savedOverride, setSavedOverride] = useState(false);
+  const privateReady = Boolean(privateUnlocked && address && unlockedAddress === address && unlockedNetwork === network);
   const [error, setError] = useState('');
-  const saved = savedOverride || contracts.some(
+  const saved = privateReady && contracts.some(
     (item) => item.contractId === contractId && item.network === network,
   );
 
@@ -70,9 +70,8 @@ export default function ContractWorkspaceApp() {
     setSaving(true);
     setError('');
     try {
-      if (!ready) await unlock(undefined, network);
-      await keepContractOperation(contractId, network);
-      setSavedOverride(true);
+      const verifiedAddress = privateReady ? unlockedAddress! : await unlock(undefined, network);
+      await keep(contractId, network, verifiedAddress);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to save this contract.');
     } finally {
@@ -81,7 +80,7 @@ export default function ContractWorkspaceApp() {
   }
 
   async function forgetContract() {
-    if (!ready || saving) return;
+    if (!ready || !privateReady || saving) return;
     setSaving(true);
     setError('');
     try {

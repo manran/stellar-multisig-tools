@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, Braces, CircleAlert, LoaderCircle } from 'lucide-react';
 import { NetworkBadge, WorkflowProgress } from './MultiSigUi';
 import { useContractWorkspaces } from './ContractWorkspaceContext';
-import { inspectContractOperation, keepContractOperation } from './contractOperationsClient';
+import { inspectContractOperation } from './contractOperationsClient';
 import { useStellarWallet } from './StellarWalletContext';
 import { isValidContractId } from '../../../packages/stellar-core/src/contractSpec';
 import type { ContractInputDescriptor, ContractMethodDescriptor } from '../../../packages/stellar-core/src/contractSpec';
@@ -57,8 +57,8 @@ function MethodFact({ method }: { method: ContractMethodDescriptor }) {
 }
 
 export default function ContractCallComposer({ network }: Props) {
-  const { unlock, authBusy, privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
-  const { contracts, ready: workspaceReady } = useContractWorkspaces();
+  const { unlock, authBusy, address, privateUnlocked, unlockedAddress, unlockedNetwork } = useStellarWallet();
+  const { contracts, keep } = useContractWorkspaces();
   const params = new URLSearchParams(window.location.search);
   const routeContractId = (params.get('contract') ?? '').trim();
   const routeMethod = (params.get('method') ?? '').trim();
@@ -71,10 +71,10 @@ export default function ContractCallComposer({ network }: Props) {
   const [loadingSpec, setLoadingSpec] = useState(false);
   const [building, setBuilding] = useState(false);
   const [savingContract, setSavingContract] = useState(false);
-  const [savedOverride, setSavedOverride] = useState(false);
+  const privateReady = Boolean(privateUnlocked && address && unlockedAddress === address && unlockedNetwork === network);
   const [error, setError] = useState('');
 
-  const workspaceSaved = savedOverride || contracts.some(
+  const workspaceSaved = privateReady && contracts.some(
     (item) => item.contractId === contractId && item.network === network,
   );
   const selectedMethod = useMemo(
@@ -88,17 +88,12 @@ export default function ContractCallComposer({ network }: Props) {
   const privateNoteBytes = privateNoteByteLength(privateNote.trim());
   const privateNoteValid = privateNoteBytes <= MAX_PRIVATE_NOTE_BYTES;
   const testnet = network === 'testnet';
-  const autoLoadContractRef = useRef('');
+  const interfaceRequest = useRef<Promise<unknown> | null>(null);
 
   // Auto-load the interface once a complete C-address is valid.
+  // StrictMode may cancel the first scheduled effect before it runs.
   useEffect(() => {
-    if (!contractValid) {
-      autoLoadContractRef.current = '';
-      return;
-    }
-    const key = `${network}:${contractId}`;
-    if (autoLoadContractRef.current === key) return;
-    autoLoadContractRef.current = key;
+    if (!contractValid) return;
     const timer = window.setTimeout(() => { void loadInterface(); }, 200);
     return () => window.clearTimeout(timer);
   }, [contractId, contractValid, network]);
@@ -112,11 +107,13 @@ export default function ContractCallComposer({ network }: Props) {
   }
 
   async function loadInterface() {
-    if (!contractValid || loadingSpec) return;
+    if (!contractValid || interfaceRequest.current) return;
     setLoadingSpec(true);
     setError('');
     try {
-      const next = await inspectContractOperation(contractId, network);
+      const request = inspectContractOperation(contractId, network);
+      interfaceRequest.current = request;
+      const next = await request;
       const methods = [...next.methods].sort((a, b) => a.name.localeCompare(b.name));
       setLoaded({ ...next, methods });
       const requested = routeMethod ? next.methods.find((method) => method.name === routeMethod) ?? null : null;
@@ -134,6 +131,7 @@ export default function ContractCallComposer({ network }: Props) {
       setRawArgs({});
       setError(cause instanceof Error ? cause.message : 'Unable to load this contract interface.');
     } finally {
+      interfaceRequest.current = null;
       setLoadingSpec(false);
     }
   }
@@ -181,9 +179,8 @@ export default function ContractCallComposer({ network }: Props) {
     setSavingContract(true);
     setError('');
     try {
-      if (!workspaceReady) await unlock(undefined, network);
-      await keepContractOperation(contractId, network);
-      setSavedOverride(true);
+      const verifiedAddress = privateReady ? unlockedAddress! : await unlock(undefined, network);
+      await keep(contractId, network, verifiedAddress);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to save this contract.');
     } finally {
@@ -225,10 +222,10 @@ export default function ContractCallComposer({ network }: Props) {
           <div>
             <label htmlFor="contract-id" className="text-sm font-semibold">Contract</label>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-              <input id="contract-id" value={contractId} disabled={loadingSpec || building} onChange={(event) => resetInterface(event.target.value)} placeholder="C... contract address" spellCheck={false} className="mst-contract-control min-w-0 flex-1 font-mono disabled:opacity-50" />
+              <input id="contract-id" value={contractId} disabled={loadingSpec || building || savingContract || authBusy} onChange={(event) => resetInterface(event.target.value)} placeholder="C... contract address" spellCheck={false} className="mst-contract-control min-w-0 flex-1 font-mono disabled:opacity-50" />
               <button
                 type="button"
-                disabled={!contractValid || loadingSpec || building}
+                disabled={!contractValid || loadingSpec || building || savingContract || authBusy}
                 onClick={() => void loadInterface()}
                 className="mst-action-secondary shrink-0 disabled:opacity-40"
               >

@@ -297,6 +297,7 @@ export const API_ERROR_CATALOG = {
   "saint_history_unavailable": {"statuses":[503],"meaning":"saint history unavailable","callerAction":"Follow the operation-specific recovery policy; a lost response is not proof of failure."},
   "saint_not_configured": {"statuses":[503],"meaning":"saint not configured","callerAction":"Follow the operation-specific recovery policy; a lost response is not proof of failure."},
   "saint_unavailable": {"statuses":[503],"meaning":"saint unavailable","callerAction":"Follow the operation-specific recovery policy; a lost response is not proof of failure."},
+  "session_address_mismatch": {"statuses":[403],"meaning":"session address mismatch","callerAction":"Stop and check credential scope or signer authority."},
   "session_identity_mismatch": {"statuses":[401],"meaning":"session identity mismatch","callerAction":"Authenticate with a valid credential of the documented type."},
   "session_network_mismatch": {"statuses":[401],"meaning":"session network mismatch","callerAction":"Authenticate with a valid credential of the documented type."},
   "soroban_authorization_expired": {"statuses":[400],"meaning":"soroban authorization expired","callerAction":"Correct the input according to the operation schema and error details."},

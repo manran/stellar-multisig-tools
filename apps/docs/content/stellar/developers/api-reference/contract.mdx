@@ -1,0 +1,2264 @@
+---
+title: Soroban contracts and Intents
+description: Generated logical operation contracts for contract.
+---
+
+[All operations](/stellar/developers/api-reference)
+
+Contract revision: **1.1.3**. Generated from the same source as the [machine-readable OpenAPI](https://api-testnet.multisig.tools/stellar/openapi.json).
+
+Base URL: https://api-testnet.multisig.tools/stellar. Examples illustrate structure; replace all example credentials, identifiers, XDR and signatures with actual values. For conditional permissions, see [API and webhooks](/stellar/developers/api).
+
+Security alternatives: humanBearer = verified Human bearer token; humanSession = verified browser session; agentBearer = scoped MSA; integrationBearer = scoped MSI; treasuryAuditBearer = scoped MTA; requestCapability = private Request link; intentCapability = origin-bound browser capability.
+
+## contract.interface.inspect
+
+Resolve the callable interface of one Soroban contract.
+
+**HTTP:** `GET /contract-interface`  
+**Access:** `public` · **Effect:** `none`
+
+**Authentication:** public
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `network` | query | Yes | Must match this deployment. | `testnet` |
+| `contract` | query | Yes | Stellar contract address. | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.interface.inspect",
+  "version": 1,
+  "network": "testnet",
+  "contractId": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+  "methods": [
+    {
+      "name": "transfer",
+      "doc": "Transfer amount from one address to another.",
+      "inputs": [
+        {
+          "name": "from",
+          "doc": "",
+          "typeLabel": "Address",
+          "abiType": {
+            "kind": "primitive",
+            "name": "address"
+          },
+          "composition": {
+            "mode": "typed_json",
+            "guided": true
+          },
+          "kind": "address"
+        },
+        {
+          "name": "to",
+          "doc": "",
+          "typeLabel": "Address",
+          "abiType": {
+            "kind": "primitive",
+            "name": "address"
+          },
+          "composition": {
+            "mode": "typed_json",
+            "guided": true
+          },
+          "kind": "address"
+        },
+        {
+          "name": "amount",
+          "doc": "",
+          "typeLabel": "I128",
+          "abiType": {
+            "kind": "primitive",
+            "name": "i128"
+          },
+          "composition": {
+            "mode": "typed_json",
+            "guided": true
+          },
+          "kind": "integer"
+        }
+      ],
+      "outputs": [],
+      "guided": true
+    }
+  ],
+  "abi": {
+    "schema": "fresnica-soroban-abi-v1",
+    "functions": [
+      {
+        "name": "transfer",
+        "doc": "Transfer amount from one address to another.",
+        "inputs": [
+          {
+            "name": "from",
+            "doc": "",
+            "type": {
+              "kind": "primitive",
+              "name": "address"
+            },
+            "example": null,
+            "composition": {
+              "mode": "typed_json",
+              "guided": true
+            }
+          },
+          {
+            "name": "to",
+            "doc": "",
+            "type": {
+              "kind": "primitive",
+              "name": "address"
+            },
+            "example": null,
+            "composition": {
+              "mode": "typed_json",
+              "guided": true
+            }
+          },
+          {
+            "name": "amount",
+            "doc": "",
+            "type": {
+              "kind": "primitive",
+              "name": "i128"
+            },
+            "example": null,
+            "composition": {
+              "mode": "typed_json",
+              "guided": true
+            }
+          }
+        ],
+        "outputs": []
+      }
+    ],
+    "types": []
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## contract.intent.create
+
+Create a source-free Soroban Intent and discover its authorization plan. An Agent Principal must be a current signer for at least one required authorizer unless no authorization is required.
+
+**HTTP:** `POST /intent`  
+**Access:** `principal:write` · **Effect:** `coordination-state`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Conditional / optional | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `Idempotency-Key` | header | Conditional / optional | Required for Agent or Integration Intent creation; Human sessions do not need it. | `example-transfer-01` |
+
+**Request example**
+
+```json
+{
+  "network": "testnet",
+  "contractId": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+  "method": "transfer",
+  "arguments": {
+    "from": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+    "to": "GDJXYXYMPGVWATWB7KUC6C5KGB3DDUWP76WBPBAL5V4WN6UUR6JKWWXB",
+    "amount": "15000000"
+  }
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.intent.create",
+  "version": 1,
+  "intent": {
+    "version": 1,
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intent": {
+      "version": 1,
+      "network": "testnet",
+      "hostFunctionXdr": "<HostFunction XDR>",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "authorizationPlan": {
+      "version": 1,
+      "network": "testnet",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "authorizationEntriesXdr": [
+        "<authorization entry XDR>"
+      ],
+      "effects": {
+        "version": 1,
+        "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "structureDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "stateChangeCount": 0,
+        "eventCount": 0,
+        "stateChanges": [],
+        "events": [],
+        "numericEffects": [],
+        "truncated": false
+      },
+      "executionBinding": "detached"
+    },
+    "authorizationPlanRevision": 1,
+    "createdAt": "2026-01-01T00:00:00Z",
+    "discoverySignerKeys": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+    ]
+  },
+  "authorization": {
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "executionBinding": "detached",
+    "status": "awaiting_authorization",
+    "authorizationEntriesXdr": [
+      "<authorization entry XDR>"
+    ],
+    "contributionCount": 0,
+    "authorizers": [
+      {
+        "entryIndex": 0,
+        "authorizer": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+        "credentialType": "address",
+        "expirationLedger": 6000000,
+        "threshold": 1,
+        "signedWeight": 0,
+        "signerEvidence": [],
+        "activeSigners": [
+          {
+            "publicKey": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+            "weight": 1
+          }
+        ],
+        "ready": false
+      }
+    ]
+  },
+  "replayed": true
+}
+```
+
+**Response 201** — Created.
+
+```json
+{
+  "operation": "contract.intent.create",
+  "version": 1,
+  "intent": {
+    "version": 1,
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intent": {
+      "version": 1,
+      "network": "testnet",
+      "hostFunctionXdr": "<HostFunction XDR>",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "authorizationPlan": {
+      "version": 1,
+      "network": "testnet",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "authorizationEntriesXdr": [
+        "<authorization entry XDR>"
+      ],
+      "effects": {
+        "version": 1,
+        "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "structureDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "stateChangeCount": 0,
+        "eventCount": 0,
+        "stateChanges": [],
+        "events": [],
+        "numericEffects": [],
+        "truncated": false
+      },
+      "executionBinding": "detached"
+    },
+    "authorizationPlanRevision": 1,
+    "createdAt": "2026-01-01T00:00:00Z",
+    "discoverySignerKeys": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+    ]
+  },
+  "authorization": {
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "executionBinding": "detached",
+    "status": "awaiting_authorization",
+    "authorizationEntriesXdr": [
+      "<authorization entry XDR>"
+    ],
+    "contributionCount": 0,
+    "authorizers": [
+      {
+        "entryIndex": 0,
+        "authorizer": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+        "credentialType": "address",
+        "expirationLedger": 6000000,
+        "threshold": 1,
+        "signedWeight": 0,
+        "signerEvidence": [],
+        "activeSigners": [
+          {
+            "publicKey": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+            "weight": 1
+          }
+        ],
+        "ready": false
+      }
+    ]
+  },
+  "replayed": false
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "required",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": [],
+    "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+  },
+  "onError": {
+    "idempotency_conflict": {
+      "strategy": "stop",
+      "nextOperationIds": [],
+      "condition": "Do not change the payload or key merely to bypass a conflict."
+    }
+  },
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "contract.intent.inspect"
+    ]
+  }
+}
+```
+
+## contract.intent.inspect
+
+Inspect one Soroban Intent and its live authorization state.
+
+**HTTP:** `GET /intent`  
+**Access:** `principal:read` · **Effect:** `none`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Conditional / optional | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+| `includeMetadata` | query | Conditional / optional | Include optional current contract ABI names and read-only token metadata when available. Never substitutes for exact XDR or historical evidence. | `1` |
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.intent.inspect",
+  "version": 1,
+  "intent": {
+    "version": 1,
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intent": {
+      "version": 1,
+      "network": "testnet",
+      "hostFunctionXdr": "<HostFunction XDR>",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "authorizationPlan": {
+      "version": 1,
+      "network": "testnet",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "authorizationEntriesXdr": [
+        "<authorization entry XDR>"
+      ],
+      "effects": {
+        "version": 1,
+        "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "structureDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "stateChangeCount": 0,
+        "eventCount": 0,
+        "stateChanges": [],
+        "events": [],
+        "numericEffects": [],
+        "truncated": false
+      },
+      "executionBinding": "detached"
+    },
+    "authorizationPlanRevision": 1,
+    "createdAt": "2026-01-01T00:00:00Z",
+    "discoverySignerKeys": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+    ]
+  },
+  "authorization": {
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "executionBinding": "detached",
+    "status": "awaiting_authorization",
+    "authorizationEntriesXdr": [
+      "<authorization entry XDR>"
+    ],
+    "contributionCount": 0,
+    "authorizers": [
+      {
+        "entryIndex": 0,
+        "authorizer": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+        "credentialType": "address",
+        "expirationLedger": 6000000,
+        "threshold": 1,
+        "signedWeight": 0,
+        "signerEvidence": [],
+        "activeSigners": [
+          {
+            "publicKey": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+            "weight": 1
+          }
+        ],
+        "ready": false
+      }
+    ]
+  },
+  "evidence": [],
+  "callSummary": {
+    "contractAddress": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+    "functionName": "transfer",
+    "argumentPreviews": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+      "GDJXYXYMPGVWATWB7KUC6C5KGB3DDUWP76WBPBAL5V4WN6UUR6JKWWXB",
+      "15000000"
+    ],
+    "nativeXlmTransfer": {
+      "from": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+      "to": "GDJXYXYMPGVWATWB7KUC6C5KGB3DDUWP76WBPBAL5V4WN6UUR6JKWWXB",
+      "amount": "1.5"
+    }
+  },
+  "challenges": [
+    {
+      "entryIndex": 0,
+      "authorizer": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+      "preimageXdr": "<signer AUTH preimage XDR>",
+      "expiresAtLedger": 6000000
+    }
+  ]
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "contract.intent.inspect"
+    ]
+  }
+}
+```
+
+## contract.intent.contribute
+
+Add one verified detached Soroban authorization signature.
+
+**HTTP:** `PATCH /intent`  
+**Access:** `principal:sign` · **Effect:** `coordination-state`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Conditional / optional | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+
+**Request example**
+
+```json
+{
+  "entryIndex": 0,
+  "signatureBase64": "<base64 AUTH signature>"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.intent.contribute",
+  "version": 1,
+  "added": true,
+  "authorization": {
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "executionBinding": "detached",
+    "status": "authorization_ready",
+    "authorizationEntriesXdr": [
+      "<signed authorization entry XDR>"
+    ],
+    "contributionCount": 1,
+    "authorizers": [
+      {
+        "entryIndex": 0,
+        "authorizer": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+        "credentialType": "address",
+        "expirationLedger": 6000000,
+        "threshold": 1,
+        "signedWeight": 1,
+        "signerEvidence": [
+          {
+            "publicKey": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+            "weight": 1
+          }
+        ],
+        "activeSigners": [
+          {
+            "publicKey": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+            "weight": 1
+          }
+        ],
+        "ready": true
+      }
+    ]
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "contract.intent.inspect"
+    ]
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "contract.intent.inspect"
+    ]
+  }
+}
+```
+
+## contract.intent.execution.prepare
+
+Late-bind an execution source, compare enforcing effects with reviewed evidence, and prepare the final unsigned Soroban transaction.
+
+**HTTP:** `PUT /intent`  
+**Access:** `principal:write` · **Effect:** `coordination-state`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Conditional / optional | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+
+**Request example**
+
+```json
+{
+  "action": "prepare_execution",
+  "executor": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.intent.execution.prepare",
+  "version": 1,
+  "execution": {
+    "version": 1,
+    "intentId": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "authorizationPlanRevision": 1,
+    "executionSource": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+    "transactionSequence": "101",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "validUntil": "2026-01-01T01:00:00Z",
+    "latestLedger": 5999900,
+    "effectsDiff": {
+      "version": 1,
+      "kind": "unchanged",
+      "severity": "none",
+      "requiresExplicitReview": false,
+      "requiresReauthorization": false,
+      "expectedDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "currentDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "structureChanged": false,
+      "maxChangeBasisPoints": 0,
+      "numericChanges": []
+    },
+    "effects": {
+      "version": 1,
+      "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "structureDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "stateChangeCount": 0,
+      "eventCount": 0,
+      "stateChanges": [],
+      "events": [],
+      "numericEffects": [],
+      "truncated": false
+    },
+    "effectsAccepted": false,
+    "preparedAt": "2026-01-01T00:00:00Z",
+    "xdr": "<prepared envelope XDR>"
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "contract.intent.inspect"
+    ]
+  },
+  "onError": {
+    "intent_execution_outcome_unknown": {
+      "strategy": "reconcile_first",
+      "nextOperationIds": [
+        "contract.intent.inspect",
+        "contract.intent.execution.reconcile"
+      ],
+      "condition": "Reconcile every unresolvedTransactionHash before creating another execution package or plan."
+    },
+    "intent_already_executed": {
+      "strategy": "inspect_terminal",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "intent_execution_effects_reauthorization_required": {
+      "strategy": "review_and_reauthorize",
+      "nextOperationIds": [
+        "contract.intent.inspect",
+        "contract.intent.replan"
+      ]
+    },
+    "intent_execution_effects_review_required": {
+      "strategy": "human_review",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ],
+      "condition": "Review the exact effects digest before accepting it."
+    }
+  },
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "contract.intent.inspect"
+    ]
+  }
+}
+```
+
+## contract.intent.execution.resume
+
+Retrieve the original unexpired execution package as its preparing signer. Never prepares a replacement.
+
+**HTTP:** `PUT /intent`  
+**Access:** `principal:write` · **Effect:** `none`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Conditional / optional | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+
+**Request example**
+
+```json
+{
+  "action": "resume_execution",
+  "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.intent.execution.resume",
+  "version": 1,
+  "execution": {
+    "version": 1,
+    "intentId": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "authorizationPlanRevision": 1,
+    "executionSource": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+    "transactionSequence": "101",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "validUntil": "2026-01-01T01:00:00Z",
+    "latestLedger": 5999900,
+    "effectsDiff": {
+      "version": 1,
+      "kind": "unchanged",
+      "severity": "none",
+      "requiresExplicitReview": false,
+      "requiresReauthorization": false,
+      "expectedDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "currentDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "structureChanged": false,
+      "maxChangeBasisPoints": 0,
+      "numericChanges": []
+    },
+    "effects": {
+      "version": 1,
+      "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "structureDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "stateChangeCount": 0,
+      "eventCount": 0,
+      "stateChanges": [],
+      "events": [],
+      "numericEffects": [],
+      "truncated": false
+    },
+    "effectsAccepted": false,
+    "preparedAt": "2026-01-01T00:00:00Z",
+    "xdr": "<prepared envelope XDR>"
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "contract.intent.inspect"
+    ]
+  }
+}
+```
+
+## contract.intent.execution.reconcile
+
+Independently verify a persisted Soroban execution preparation against Stellar and retain the observed ledger result or verified non-inclusion.
+
+**HTTP:** `PUT /intent`  
+**Access:** `principal:write` · **Effect:** `coordination-state`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Conditional / optional | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+
+**Request example**
+
+```json
+{
+  "action": "reconcile_execution",
+  "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.intent.execution.reconcile",
+  "version": 1,
+  "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "replayed": false,
+  "outcome": "unknown",
+  "observed": false
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": [
+      "contract.intent.execution.reconcile"
+    ],
+    "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "contract.intent.execution.reconcile"
+      ],
+      "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "contract.intent.execution.reconcile"
+      ],
+      "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "contract.intent.execution.reconcile"
+      ],
+      "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "contract.intent.execution.reconcile"
+      ],
+      "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "contract.intent.execution.reconcile"
+      ],
+      "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "contract.intent.inspect"
+    ]
+  },
+  "onOutcome": {
+    "unknown": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "contract.intent.execution.reconcile"
+      ],
+      "condition": "Do not create or sign a replacement while execution remains unknown. Stop automatic polling and escalate for manual reconciliation if bounded retries do not resolve it, or the signed validity window or historical coverage is unavailable."
+    },
+    "successful": {
+      "strategy": "complete",
+      "nextOperationIds": [],
+      "condition": "Retain the verified ledger receipt. Do not repeat the business payment."
+    },
+    "failed": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ],
+      "condition": "Review the resolved attempt and current Intent before another attempt. Continue only the SAME Intent if all released hashes are resolved, current AUTH and effects allow it, and the caller explicitly decides to retry. Use replan and fresh AUTH when required. Actions marked reviewRequired are technically available, not automatic permission. Never create another business payment to recover this one."
+    },
+    "not_included": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ],
+      "condition": "Review the resolved attempt and current Intent before another attempt. Continue only the SAME Intent if all released hashes are resolved, current AUTH and effects allow it, and the caller explicitly decides to retry. Use replan and fresh AUTH when required. Actions marked reviewRequired are technically available, not automatic permission. Never create another business payment to recover this one."
+    }
+  }
+}
+```
+
+## contract.intent.replan
+
+Replace an expired or structurally changed authorization plan with a fresh revision for the same Soroban Intent.
+
+**HTTP:** `PUT /intent`  
+**Access:** `principal:write` · **Effect:** `coordination-state`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Conditional / optional | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+
+**Request example**
+
+```json
+{
+  "action": "replan"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.intent.replan",
+  "version": 1,
+  "intent": {
+    "version": 1,
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intent": {
+      "version": 1,
+      "network": "testnet",
+      "hostFunctionXdr": "<HostFunction XDR>",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "authorizationPlan": {
+      "version": 1,
+      "network": "testnet",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "authorizationPlanDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "authorizationEntriesXdr": [
+        "<authorization entry XDR>"
+      ],
+      "effects": {
+        "version": 1,
+        "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "structureDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "stateChangeCount": 0,
+        "eventCount": 0,
+        "stateChanges": [],
+        "events": [],
+        "numericEffects": [],
+        "truncated": false
+      },
+      "executionBinding": "detached"
+    },
+    "authorizationPlanRevision": 2,
+    "createdAt": "2026-01-01T00:00:00Z",
+    "discoverySignerKeys": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+    ]
+  },
+  "authorization": {
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "executionBinding": "detached",
+    "status": "awaiting_authorization",
+    "authorizationEntriesXdr": [
+      "<authorization entry XDR>"
+    ],
+    "contributionCount": 0,
+    "authorizers": [
+      {
+        "entryIndex": 0,
+        "authorizer": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+        "credentialType": "address",
+        "expirationLedger": 6000000,
+        "threshold": 1,
+        "signedWeight": 0,
+        "signerEvidence": [],
+        "activeSigners": [
+          {
+            "publicKey": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+            "weight": 1
+          }
+        ],
+        "ready": false
+      }
+    ]
+  },
+  "previousAuthorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "authorizationPlanRevision": 2
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "contract.intent.inspect"
+    ]
+  },
+  "onError": {
+    "intent_execution_outcome_unknown": {
+      "strategy": "reconcile_first",
+      "nextOperationIds": [
+        "contract.intent.inspect",
+        "contract.intent.execution.reconcile"
+      ],
+      "condition": "Reconcile every unresolvedTransactionHash before creating another execution package or plan."
+    },
+    "intent_already_executed": {
+      "strategy": "inspect_terminal",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "intent_execution_effects_reauthorization_required": {
+      "strategy": "review_and_reauthorize",
+      "nextOperationIds": [
+        "contract.intent.inspect",
+        "contract.intent.replan"
+      ]
+    },
+    "intent_execution_effects_review_required": {
+      "strategy": "human_review",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ],
+      "condition": "Review the exact effects digest before accepting it."
+    }
+  },
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "contract.intent.inspect"
+    ]
+  }
+}
+```
+
+## contract.intent.cancel
+
+Cancel a creator-owned Soroban Intent inside MultiSigTools coordination. Detached AUTH or prepared XDR already disclosed outside MultiSigTools is not revoked.
+
+**HTTP:** `PUT /intent`  
+**Access:** `principal:write` · **Effect:** `coordination-state`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Conditional / optional | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+
+**Request example**
+
+```json
+{
+  "action": "cancel"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.intent.cancel",
+  "version": 1,
+  "replayed": false,
+  "intent": {
+    "version": 1,
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intent": {
+      "version": 1,
+      "network": "testnet",
+      "hostFunctionXdr": "<HostFunction XDR>",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "authorizationPlan": {
+      "version": 1,
+      "network": "testnet",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "authorizationEntriesXdr": [
+        "<authorization entry XDR>"
+      ],
+      "effects": {
+        "version": 1,
+        "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "structureDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "stateChangeCount": 0,
+        "eventCount": 0,
+        "stateChanges": [],
+        "events": [],
+        "numericEffects": [],
+        "truncated": false
+      },
+      "executionBinding": "detached"
+    },
+    "authorizationPlanRevision": 1,
+    "createdAt": "2026-01-01T00:00:00Z",
+    "discoverySignerKeys": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+    ],
+    "cancellation": {
+      "version": 1,
+      "cancelledAt": "2026-01-01T00:00:00Z",
+      "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "authorizationPlanRevision": 1
+    }
+  },
+  "authorization": {
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "executionBinding": "detached",
+    "status": "cancelled",
+    "authorizationEntriesXdr": [],
+    "contributionCount": 0,
+    "authorizers": [
+      {
+        "entryIndex": 0,
+        "authorizer": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+        "credentialType": "address",
+        "expirationLedger": 6000000,
+        "threshold": 1,
+        "signedWeight": 0,
+        "signerEvidence": [],
+        "activeSigners": [
+          {
+            "publicKey": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+            "weight": 1
+          }
+        ],
+        "ready": false
+      }
+    ]
+  },
+  "cancellation": {
+    "version": 1,
+    "cancelledAt": "2026-01-01T00:00:00Z",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "authorizationPlanRevision": 1
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "contract.intent.inspect"
+    ]
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.intent.inspect"
+      ]
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "contract.intent.inspect"
+    ]
+  }
+}
+```
+
+## contract.call.build
+
+Build an unsigned contract-call transaction from typed string inputs.
+
+**HTTP:** `POST /contract-call`  
+**Access:** `public` · **Effect:** `none`
+
+**Authentication:** public
+
+**Request example**
+
+```json
+{
+  "network": "testnet",
+  "contractId": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+  "method": "transfer",
+  "arguments": {
+    "from": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+    "to": "GDJXYXYMPGVWATWB7KUC6C5KGB3DDUWP76WBPBAL5V4WN6UUR6JKWWXB",
+    "amount": "15000000"
+  },
+  "transactionSource": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+  "lifetimeSeconds": 3600
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.call.build",
+  "version": 1,
+  "network": "testnet",
+  "transactionSource": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+  "sourceSequence": "100",
+  "contractId": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+  "method": "transfer",
+  "xdr": "<unsigned invocation envelope XDR>",
+  "validUntil": "2026-01-01T01:00:00Z"
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## contract.call.prepare
+
+Record-simulate and assemble current Soroban execution resources and authorization requirements.
+
+**HTTP:** `POST /contract-prepare`  
+**Access:** `public` · **Effect:** `none`
+
+**Authentication:** public
+
+**Request example**
+
+```json
+{
+  "network": "testnet",
+  "mode": "record",
+  "xdr": "<contract.call.build xdr>"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.call.prepare",
+  "version": 1,
+  "mode": "record",
+  "simulation": {
+    "endpointUrl": "https://soroban-testnet.stellar.org",
+    "network": "testnet",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "latestLedger": 5999900,
+    "minResourceFee": "5000",
+    "transactionDataXdr": "<Soroban transaction data XDR>",
+    "returnValuePreview": null,
+    "authorizationEntries": [],
+    "effects": {
+      "version": 1,
+      "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "structureDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "stateChangeCount": 0,
+      "eventCount": 0,
+      "stateChanges": [],
+      "events": [],
+      "numericEffects": [],
+      "truncated": false
+    },
+    "eventCount": 0,
+    "stateChangeCount": 0,
+    "restoreRequired": false,
+    "cpuInstructions": null,
+    "memoryBytes": null,
+    "assembledXdr": "<prepared envelope XDR>"
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## contract.workspace.list
+
+List contracts kept by one signer Principal.
+
+**HTTP:** `GET /contracts`  
+**Access:** `principal:read` · **Effect:** `none`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Conditional / optional | Optional Human wallet selector. If supplied, must match the authenticated Human signer. Not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.workspace.list",
+  "version": 1,
+  "principal": {
+    "type": "signer",
+    "network": "testnet",
+    "address": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+  },
+  "contracts": [
+    {
+      "contractId": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+      "network": "testnet",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## contract.workspace.keep
+
+Keep a contract in one signer workspace.
+
+**HTTP:** `PUT /contracts`  
+**Access:** `principal:write` · **Effect:** `private-state`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Conditional / optional | Optional Human wallet selector. If supplied, must match the authenticated Human signer. Not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+
+**Request example**
+
+```json
+{
+  "network": "testnet",
+  "contractId": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.workspace.keep",
+  "version": 1,
+  "principal": {
+    "type": "signer",
+    "network": "testnet",
+    "address": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+  },
+  "contract": {
+    "contractId": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+    "network": "testnet",
+    "createdAt": "2026-01-01T00:00:00Z",
+    "updatedAt": "2026-01-01T00:00:00Z"
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "contract.workspace.list"
+    ]
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.workspace.list"
+      ]
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.workspace.list"
+      ]
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.workspace.list"
+      ]
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.workspace.list"
+      ]
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.workspace.list"
+      ]
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## contract.workspace.forget
+
+Remove a contract from one signer workspace.
+
+**HTTP:** `DELETE /contracts`  
+**Access:** `principal:write` · **Effect:** `private-state`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Conditional / optional | Optional Human wallet selector. If supplied, must match the authenticated Human signer. Not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+
+**Request example**
+
+```json
+{
+  "network": "testnet",
+  "contractId": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.workspace.forget",
+  "version": 1,
+  "principal": {
+    "type": "signer",
+    "network": "testnet",
+    "address": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+  },
+  "contractId": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+  "removed": true
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "contract.workspace.list"
+    ]
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.workspace.list"
+      ]
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.workspace.list"
+      ]
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.workspace.list"
+      ]
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.workspace.list"
+      ]
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "contract.workspace.list"
+      ]
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```

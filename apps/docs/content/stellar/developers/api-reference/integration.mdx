@@ -1,0 +1,2784 @@
+---
+title: Service Integration
+description: Generated logical operation contracts for integration.
+---
+
+[All operations](/stellar/developers/api-reference)
+
+Contract revision: **1.1.3**. Generated from the same source as the [machine-readable OpenAPI](https://api-testnet.multisig.tools/stellar/openapi.json).
+
+Base URL: https://api-testnet.multisig.tools/stellar. Examples illustrate structure; replace all example credentials, identifiers, XDR and signatures with actual values. For conditional permissions, see [API and webhooks](/stellar/developers/api).
+
+Security alternatives: humanBearer = verified Human bearer token; humanSession = verified browser session; agentBearer = scoped MSA; integrationBearer = scoped MSI; treasuryAuditBearer = scoped MTA; requestCapability = private Request link; intentCapability = origin-bound browser capability.
+
+## integration.testnet.create
+
+Create an immediately active Testnet-only Integration Profile and receive its msi credential once.
+
+**HTTP:** `POST /integration-testnet`  
+**Access:** `public` · **Effect:** `private-state`
+
+**Authentication:** public
+
+**Request example**
+
+```json
+{
+  "serviceId": "example-finance-01",
+  "label": "Example integration",
+  "classicSourceAccounts": [
+    "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+  ],
+  "profile": {
+    "authorizationExperience": "hosted"
+  }
+}
+```
+
+**Response 201** — Created.
+
+```json
+{
+  "operation": "integration.testnet.create",
+  "version": 1,
+  "service": {
+    "serviceId": "example-finance-01",
+    "label": "Example integration",
+    "enabled": true,
+    "networks": [
+      "testnet"
+    ]
+  },
+  "apiKey": "msi_example_not_a_credential"
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "unsupported",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": [
+      "integration.testnet.create"
+    ],
+    "condition": "Keep the original serviceId and payload. Atomic create-only: a retry either creates the previously absent profile or returns a conflict, never replaces a credential."
+  },
+  "onError": {
+    "integration_service_exists": {
+      "strategy": "human_recovery",
+      "nextOperationIds": [],
+      "condition": "No public recovery of an existing secret. For a disposable Testnet profile, obtain approval to use a new unique serviceId; for the existing profile, an authorized operator must rotate its credential.",
+      "responseSchema": {
+        "$ref": "#/components/schemas/TestnetIntegrationExistsError"
+      }
+    },
+    "idempotency_key_unsupported": {
+      "strategy": "correct_input",
+      "nextOperationIds": [],
+      "condition": "Do not send Idempotency-Key for this operation."
+    }
+  },
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.testnet.create"
+      ],
+      "condition": "Keep the original serviceId and payload. Atomic create-only: a retry either creates the previously absent profile or returns a conflict, never replaces a credential."
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.testnet.create"
+      ],
+      "condition": "Keep the original serviceId and payload. Atomic create-only: a retry either creates the previously absent profile or returns a conflict, never replaces a credential."
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.testnet.create"
+      ],
+      "condition": "Keep the original serviceId and payload. Atomic create-only: a retry either creates the previously absent profile or returns a conflict, never replaces a credential."
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.testnet.create"
+      ],
+      "condition": "Keep the original serviceId and payload. Atomic create-only: a retry either creates the previously absent profile or returns a conflict, never replaces a credential."
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.testnet.create"
+      ],
+      "condition": "Keep the original serviceId and payload. Atomic create-only: a retry either creates the previously absent profile or returns a conflict, never replaces a credential."
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## integration.intent.create
+
+Create a scoped external-service Soroban Intent without granting the service signer authority.
+
+**HTTP:** `POST /intent`  
+**Access:** `integration:write` · **Effect:** `coordination-state`
+
+**Authentication:** `integrationBearer`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `Idempotency-Key` | header | Yes | Required for Agent or Integration Intent creation; Human sessions do not need it. | `example-transfer-01` |
+
+**Request example**
+
+```json
+{
+  "network": "testnet",
+  "contractId": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+  "method": "transfer",
+  "arguments": {
+    "from": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+    "to": "GDJXYXYMPGVWATWB7KUC6C5KGB3DDUWP76WBPBAL5V4WN6UUR6JKWWXB",
+    "amount": "15000000"
+  }
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.intent.create",
+  "version": 1,
+  "intent": {
+    "version": 1,
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intent": {
+      "version": 1,
+      "network": "testnet",
+      "hostFunctionXdr": "<HostFunction XDR>",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "authorizationPlan": {
+      "version": 1,
+      "network": "testnet",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "authorizationEntriesXdr": [
+        "<authorization entry XDR>"
+      ],
+      "effects": {
+        "version": 1,
+        "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "structureDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "stateChangeCount": 0,
+        "eventCount": 0,
+        "stateChanges": [],
+        "events": [],
+        "numericEffects": [],
+        "truncated": false
+      },
+      "executionBinding": "detached"
+    },
+    "authorizationPlanRevision": 1,
+    "createdAt": "2026-01-01T00:00:00Z",
+    "discoverySignerKeys": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+    ]
+  },
+  "authorization": {
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "executionBinding": "detached",
+    "status": "awaiting_authorization",
+    "authorizationEntriesXdr": [
+      "<authorization entry XDR>"
+    ],
+    "contributionCount": 0,
+    "authorizers": [
+      {
+        "entryIndex": 0,
+        "authorizer": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+        "credentialType": "address",
+        "expirationLedger": 6000000,
+        "threshold": 1,
+        "signedWeight": 0,
+        "signerEvidence": [],
+        "activeSigners": [
+          {
+            "publicKey": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+            "weight": 1
+          }
+        ],
+        "ready": false
+      }
+    ]
+  },
+  "replayed": true,
+  "job": {
+    "version": 1,
+    "id": "01EXAMP1E0000001",
+    "kind": "soroban_contract",
+    "network": "testnet",
+    "state": "waiting_for_authorization",
+    "nextActions": [],
+    "actionCalls": {},
+    "reviewUrl": "https://stellar-testnet.multisig.tools/a#01EXAMP1E0000001",
+    "waitingFor": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+    ],
+    "expiresAtLedger": 6000000
+  }
+}
+```
+
+**Response 201** — Created.
+
+```json
+{
+  "operation": "contract.intent.create",
+  "version": 1,
+  "intent": {
+    "version": 1,
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intent": {
+      "version": 1,
+      "network": "testnet",
+      "hostFunctionXdr": "<HostFunction XDR>",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "authorizationPlan": {
+      "version": 1,
+      "network": "testnet",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "authorizationEntriesXdr": [
+        "<authorization entry XDR>"
+      ],
+      "effects": {
+        "version": 1,
+        "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "structureDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "stateChangeCount": 0,
+        "eventCount": 0,
+        "stateChanges": [],
+        "events": [],
+        "numericEffects": [],
+        "truncated": false
+      },
+      "executionBinding": "detached"
+    },
+    "authorizationPlanRevision": 1,
+    "createdAt": "2026-01-01T00:00:00Z",
+    "discoverySignerKeys": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+    ]
+  },
+  "authorization": {
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "executionBinding": "detached",
+    "status": "awaiting_authorization",
+    "authorizationEntriesXdr": [
+      "<authorization entry XDR>"
+    ],
+    "contributionCount": 0,
+    "authorizers": [
+      {
+        "entryIndex": 0,
+        "authorizer": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+        "credentialType": "address",
+        "expirationLedger": 6000000,
+        "threshold": 1,
+        "signedWeight": 0,
+        "signerEvidence": [],
+        "activeSigners": [
+          {
+            "publicKey": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+            "weight": 1
+          }
+        ],
+        "ready": false
+      }
+    ]
+  },
+  "replayed": false,
+  "job": {
+    "version": 1,
+    "id": "01EXAMP1E0000001",
+    "kind": "soroban_contract",
+    "network": "testnet",
+    "state": "waiting_for_authorization",
+    "nextActions": [],
+    "actionCalls": {},
+    "reviewUrl": "https://stellar-testnet.multisig.tools/a#01EXAMP1E0000001",
+    "waitingFor": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+    ],
+    "expiresAtLedger": 6000000
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "required",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": [],
+    "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+  },
+  "onError": {
+    "idempotency_conflict": {
+      "strategy": "stop",
+      "nextOperationIds": [],
+      "condition": "Do not change the payload or key merely to bypass a conflict."
+    }
+  },
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "integration.intent.inspect"
+    ]
+  }
+}
+```
+
+## integration.intent.inspect
+
+Inspect an external service's own Soroban Intent and live authorization state.
+
+**HTTP:** `GET /intent`  
+**Access:** `integration:read` · **Effect:** `none`
+
+**Authentication:** `integrationBearer`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+| `includeMetadata` | query | Conditional / optional | Include optional current contract ABI names and read-only token metadata when available. Never substitutes for exact XDR or historical evidence. | `1` |
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.intent.inspect",
+  "version": 1,
+  "intent": {
+    "version": 1,
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intent": {
+      "version": 1,
+      "network": "testnet",
+      "hostFunctionXdr": "<HostFunction XDR>",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "authorizationPlan": {
+      "version": 1,
+      "network": "testnet",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "authorizationEntriesXdr": [
+        "<authorization entry XDR>"
+      ],
+      "effects": {
+        "version": 1,
+        "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "structureDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "stateChangeCount": 0,
+        "eventCount": 0,
+        "stateChanges": [],
+        "events": [],
+        "numericEffects": [],
+        "truncated": false
+      },
+      "executionBinding": "detached"
+    },
+    "authorizationPlanRevision": 1,
+    "createdAt": "2026-01-01T00:00:00Z",
+    "discoverySignerKeys": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+    ]
+  },
+  "authorization": {
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "executionBinding": "detached",
+    "status": "awaiting_authorization",
+    "authorizationEntriesXdr": [
+      "<authorization entry XDR>"
+    ],
+    "contributionCount": 0,
+    "authorizers": [
+      {
+        "entryIndex": 0,
+        "authorizer": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+        "credentialType": "address",
+        "expirationLedger": 6000000,
+        "threshold": 1,
+        "signedWeight": 0,
+        "signerEvidence": [],
+        "activeSigners": [
+          {
+            "publicKey": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+            "weight": 1
+          }
+        ],
+        "ready": false
+      }
+    ]
+  },
+  "evidence": [],
+  "callSummary": {
+    "contractAddress": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+    "functionName": "transfer",
+    "argumentPreviews": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+      "GDJXYXYMPGVWATWB7KUC6C5KGB3DDUWP76WBPBAL5V4WN6UUR6JKWWXB",
+      "15000000"
+    ],
+    "nativeXlmTransfer": {
+      "from": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+      "to": "GDJXYXYMPGVWATWB7KUC6C5KGB3DDUWP76WBPBAL5V4WN6UUR6JKWWXB",
+      "amount": "1.5"
+    }
+  },
+  "job": {
+    "version": 1,
+    "id": "01EXAMP1E0000001",
+    "kind": "soroban_contract",
+    "network": "testnet",
+    "state": "waiting_for_authorization",
+    "nextActions": [],
+    "actionCalls": {},
+    "reviewUrl": "https://stellar-testnet.multisig.tools/a#01EXAMP1E0000001",
+    "waitingFor": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+    ],
+    "expiresAtLedger": 6000000
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "integration.intent.inspect"
+    ]
+  }
+}
+```
+
+## integration.intent.browser.inspect
+
+Inspect one signer-scoped Browser authorization challenge for an Integration-owned Intent.
+
+**HTTP:** `GET /intent`  
+**Access:** `browser:read` · **Effect:** `none`
+
+**Authentication:** `intentCapability`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+| `includeMetadata` | query | Conditional / optional | Include optional current contract ABI names and read-only token metadata when available. Never substitutes for exact XDR or historical evidence. | `1` |
+| `X-MultiSig-Intent-Capability` | header | Yes | Short-lived signer-scoped Browser authorization capability (mic_...). | `mic_example_example` |
+| `Origin` | header | Yes | Exact origin bound when the browser capability was issued. The browser normally sets this header. | `https://example.com` |
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "integration.intent.browser.inspect",
+  "version": 1,
+  "browserAuthorization": {
+    "version": 1,
+    "intentId": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "authorizationPlanRevision": 1,
+    "signerAddress": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+    "status": "awaiting_authorization",
+    "expiresAt": "2026-01-01T01:00:00Z",
+    "challenges": [
+      {
+        "entryIndex": 0,
+        "authorizer": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+        "preimageXdr": "<signer AUTH preimage XDR>",
+        "expiresAtLedger": 6000000
+      }
+    ],
+    "hostedReviewUrl": "https://stellar-testnet.multisig.tools/a#01EXAMP1E0000001"
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "integration.intent.browser.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "integration.intent.browser.inspect"
+    ]
+  }
+}
+```
+
+## integration.intent.browser.contribute
+
+Submit one signer-scoped Browser signature to the existing Soroban Authorization Core.
+
+**HTTP:** `PATCH /intent`  
+**Access:** `browser:sign` · **Effect:** `coordination-state`
+
+**Authentication:** `intentCapability`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+| `X-MultiSig-Intent-Capability` | header | Yes | Short-lived signer-scoped Browser authorization capability (mic_...). | `mic_example_example` |
+| `Origin` | header | Yes | Exact origin bound when the browser capability was issued. The browser normally sets this header. | `https://example.com` |
+
+**Request example**
+
+```json
+{
+  "entryIndex": 0,
+  "signatureBase64": "<base64 AUTH signature>"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "integration.intent.browser.contribute",
+  "version": 1,
+  "added": true,
+  "browserAuthorization": {
+    "version": 1,
+    "intentId": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "authorizationPlanRevision": 1,
+    "signerAddress": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+    "status": "authorization_ready",
+    "expiresAt": "2026-01-01T01:00:00Z",
+    "challenges": [],
+    "hostedReviewUrl": "https://stellar-testnet.multisig.tools/a#01EXAMP1E0000001"
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "integration.intent.browser.inspect"
+    ]
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "integration.intent.browser.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.browser.inspect"
+      ]
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.browser.inspect"
+      ]
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.browser.inspect"
+      ]
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.browser.inspect"
+      ]
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.browser.inspect"
+      ]
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "integration.intent.browser.inspect"
+    ]
+  }
+}
+```
+
+## integration.intent.execution.prepare
+
+Resolve the Integration executor, enforce reviewed effects, and prepare or refresh the final unsigned Soroban execution package only after prior hashes are resolved.
+
+**HTTP:** `PUT /intent`  
+**Access:** `integration:write` · **Effect:** `coordination-state`
+
+**Authentication:** `integrationBearer`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+
+**Request example**
+
+```json
+{
+  "action": "prepare_execution",
+  "executor": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.intent.execution.prepare",
+  "version": 1,
+  "execution": {
+    "version": 1,
+    "intentId": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "authorizationPlanRevision": 1,
+    "executionSource": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+    "transactionSequence": "101",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "validUntil": "2026-01-01T01:00:00Z",
+    "latestLedger": 5999900,
+    "effectsDiff": {
+      "version": 1,
+      "kind": "unchanged",
+      "severity": "none",
+      "requiresExplicitReview": false,
+      "requiresReauthorization": false,
+      "expectedDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "currentDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "structureChanged": false,
+      "maxChangeBasisPoints": 0,
+      "numericChanges": []
+    },
+    "effects": {
+      "version": 1,
+      "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "structureDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "stateChangeCount": 0,
+      "eventCount": 0,
+      "stateChanges": [],
+      "events": [],
+      "numericEffects": [],
+      "truncated": false
+    },
+    "effectsAccepted": false,
+    "preparedAt": "2026-01-01T00:00:00Z",
+    "xdr": "<prepared envelope XDR>"
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "integration.intent.inspect"
+    ]
+  },
+  "onError": {
+    "intent_execution_outcome_unknown": {
+      "strategy": "reconcile_first",
+      "nextOperationIds": [
+        "integration.intent.inspect",
+        "integration.intent.execution.reconcile"
+      ],
+      "condition": "Reconcile every unresolvedTransactionHash before creating another execution package or plan."
+    },
+    "intent_already_executed": {
+      "strategy": "inspect_terminal",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "intent_execution_effects_reauthorization_required": {
+      "strategy": "review_and_reauthorize",
+      "nextOperationIds": [
+        "integration.intent.inspect",
+        "integration.intent.replan"
+      ]
+    }
+  },
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "integration.intent.inspect"
+    ]
+  }
+}
+```
+
+## integration.intent.execution.resume
+
+Retrieve the original unexpired execution package owned by this Integration. Never prepares a replacement.
+
+**HTTP:** `PUT /intent`  
+**Access:** `integration:write` · **Effect:** `none`
+
+**Authentication:** `integrationBearer`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+
+**Request example**
+
+```json
+{
+  "action": "resume_execution",
+  "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.intent.execution.resume",
+  "version": 1,
+  "execution": {
+    "version": 1,
+    "intentId": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "authorizationPlanRevision": 1,
+    "executionSource": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+    "transactionSequence": "101",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "validUntil": "2026-01-01T01:00:00Z",
+    "latestLedger": 5999900,
+    "effectsDiff": {
+      "version": 1,
+      "kind": "unchanged",
+      "severity": "none",
+      "requiresExplicitReview": false,
+      "requiresReauthorization": false,
+      "expectedDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "currentDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "structureChanged": false,
+      "maxChangeBasisPoints": 0,
+      "numericChanges": []
+    },
+    "effects": {
+      "version": 1,
+      "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "structureDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "stateChangeCount": 0,
+      "eventCount": 0,
+      "stateChanges": [],
+      "events": [],
+      "numericEffects": [],
+      "truncated": false
+    },
+    "effectsAccepted": false,
+    "preparedAt": "2026-01-01T00:00:00Z",
+    "xdr": "<prepared envelope XDR>"
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "integration.intent.inspect"
+    ]
+  }
+}
+```
+
+## integration.intent.execution.reconcile
+
+Independently verify an Integration-owned Soroban execution preparation against Stellar and retain the observed ledger result or verified non-inclusion.
+
+**HTTP:** `PUT /intent`  
+**Access:** `integration:write` · **Effect:** `coordination-state`
+
+**Authentication:** `integrationBearer`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+
+**Request example**
+
+```json
+{
+  "action": "reconcile_execution",
+  "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.intent.execution.reconcile",
+  "version": 1,
+  "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "replayed": false,
+  "outcome": "unknown",
+  "observed": false
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": [
+      "integration.intent.execution.reconcile"
+    ],
+    "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.intent.execution.reconcile"
+      ],
+      "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.intent.execution.reconcile"
+      ],
+      "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.intent.execution.reconcile"
+      ],
+      "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.intent.execution.reconcile"
+      ],
+      "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.intent.execution.reconcile"
+      ],
+      "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "integration.intent.inspect"
+    ]
+  },
+  "onOutcome": {
+    "unknown": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.intent.execution.reconcile"
+      ],
+      "condition": "Do not create or sign a replacement while execution remains unknown. Stop automatic polling and escalate for manual reconciliation if bounded retries do not resolve it, or the signed validity window or historical coverage is unavailable."
+    },
+    "successful": {
+      "strategy": "complete",
+      "nextOperationIds": [],
+      "condition": "Retain the verified ledger receipt. Do not repeat the business payment."
+    },
+    "failed": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ],
+      "condition": "Review the resolved attempt and current Intent before another attempt. Continue only the SAME Intent if all released hashes are resolved, current AUTH and effects allow it, and the caller explicitly decides to retry. Use replan and fresh AUTH when required. Actions marked reviewRequired are technically available, not automatic permission. Never create another business payment to recover this one."
+    },
+    "not_included": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ],
+      "condition": "Review the resolved attempt and current Intent before another attempt. Continue only the SAME Intent if all released hashes are resolved, current AUTH and effects allow it, and the caller explicitly decides to retry. Use replan and fresh AUTH when required. Actions marked reviewRequired are technically available, not automatic permission. Never create another business payment to recover this one."
+    }
+  }
+}
+```
+
+## integration.intent.replan
+
+Refresh an external service's own AuthorizationPlan when fresh signer AUTH is required.
+
+**HTTP:** `PUT /intent`  
+**Access:** `integration:write` · **Effect:** `coordination-state`
+
+**Authentication:** `integrationBearer`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+
+**Request example**
+
+```json
+{
+  "action": "replan"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.intent.replan",
+  "version": 1,
+  "intent": {
+    "version": 1,
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intent": {
+      "version": 1,
+      "network": "testnet",
+      "hostFunctionXdr": "<HostFunction XDR>",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "authorizationPlan": {
+      "version": 1,
+      "network": "testnet",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "authorizationPlanDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "authorizationEntriesXdr": [
+        "<authorization entry XDR>"
+      ],
+      "effects": {
+        "version": 1,
+        "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "structureDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "stateChangeCount": 0,
+        "eventCount": 0,
+        "stateChanges": [],
+        "events": [],
+        "numericEffects": [],
+        "truncated": false
+      },
+      "executionBinding": "detached"
+    },
+    "authorizationPlanRevision": 2,
+    "createdAt": "2026-01-01T00:00:00Z",
+    "discoverySignerKeys": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+    ]
+  },
+  "authorization": {
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "executionBinding": "detached",
+    "status": "awaiting_authorization",
+    "authorizationEntriesXdr": [
+      "<authorization entry XDR>"
+    ],
+    "contributionCount": 0,
+    "authorizers": [
+      {
+        "entryIndex": 0,
+        "authorizer": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+        "credentialType": "address",
+        "expirationLedger": 6000000,
+        "threshold": 1,
+        "signedWeight": 0,
+        "signerEvidence": [],
+        "activeSigners": [
+          {
+            "publicKey": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+            "weight": 1
+          }
+        ],
+        "ready": false
+      }
+    ]
+  },
+  "previousAuthorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "authorizationPlanRevision": 2
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "integration.intent.inspect"
+    ]
+  },
+  "onError": {
+    "intent_execution_outcome_unknown": {
+      "strategy": "reconcile_first",
+      "nextOperationIds": [
+        "integration.intent.inspect",
+        "integration.intent.execution.reconcile"
+      ],
+      "condition": "Reconcile every unresolvedTransactionHash before creating another execution package or plan."
+    },
+    "intent_already_executed": {
+      "strategy": "inspect_terminal",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "intent_execution_effects_reauthorization_required": {
+      "strategy": "review_and_reauthorize",
+      "nextOperationIds": [
+        "integration.intent.inspect",
+        "integration.intent.replan"
+      ]
+    }
+  },
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "integration.intent.inspect"
+    ]
+  }
+}
+```
+
+## integration.intent.cancel
+
+Cancel an Integration's own Soroban Intent inside MultiSigTools coordination without claiming Stellar-level AUTH revocation.
+
+**HTTP:** `PUT /intent`  
+**Access:** `integration:write` · **Effect:** `coordination-state`
+
+**Authentication:** `integrationBearer`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+
+**Request example**
+
+```json
+{
+  "action": "cancel"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "contract.intent.cancel",
+  "version": 1,
+  "replayed": false,
+  "intent": {
+    "version": 1,
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intent": {
+      "version": 1,
+      "network": "testnet",
+      "hostFunctionXdr": "<HostFunction XDR>",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "authorizationPlan": {
+      "version": 1,
+      "network": "testnet",
+      "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "authorizationEntriesXdr": [
+        "<authorization entry XDR>"
+      ],
+      "effects": {
+        "version": 1,
+        "digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "structureDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "stateChangeCount": 0,
+        "eventCount": 0,
+        "stateChanges": [],
+        "events": [],
+        "numericEffects": [],
+        "truncated": false
+      },
+      "executionBinding": "detached"
+    },
+    "authorizationPlanRevision": 1,
+    "createdAt": "2026-01-01T00:00:00Z",
+    "discoverySignerKeys": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+    ],
+    "cancellation": {
+      "version": 1,
+      "cancelledAt": "2026-01-01T00:00:00Z",
+      "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "authorizationPlanRevision": 1
+    }
+  },
+  "authorization": {
+    "id": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "executionBinding": "detached",
+    "status": "cancelled",
+    "authorizationEntriesXdr": [],
+    "contributionCount": 0,
+    "authorizers": [
+      {
+        "entryIndex": 0,
+        "authorizer": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+        "credentialType": "address",
+        "expirationLedger": 6000000,
+        "threshold": 1,
+        "signedWeight": 0,
+        "signerEvidence": [],
+        "activeSigners": [
+          {
+            "publicKey": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+            "weight": 1
+          }
+        ],
+        "ready": false
+      }
+    ]
+  },
+  "cancellation": {
+    "version": 1,
+    "cancelledAt": "2026-01-01T00:00:00Z",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "authorizationPlanRevision": 1
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "integration.intent.inspect"
+    ]
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "integration.intent.inspect"
+    ]
+  }
+}
+```
+
+## integration.intent.browser.issue
+
+Issue a short-lived signer/origin/current-plan Browser capability for an Integration-owned Intent.
+
+**HTTP:** `PUT /intent`  
+**Access:** `integration:write` · **Effect:** `private-state`
+
+**Authentication:** `integrationBearer`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `X-MultiSig-Intent-Id` | header | Yes | Soroban Intent id. | `01EXAMP1E0000001` |
+
+**Request example**
+
+```json
+{
+  "action": "issue_browser_authorization",
+  "signerAddress": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+  "origin": "https://example.com"
+}
+```
+
+**Response 201** — Created.
+
+```json
+{
+  "operation": "integration.intent.browser.issue",
+  "version": 1,
+  "capability": "mic_example_example",
+  "origin": "https://example.com",
+  "browserAuthorization": {
+    "version": 1,
+    "intentId": "01EXAMP1E0000001",
+    "network": "testnet",
+    "intentDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "authorizationPlanDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "authorizationPlanRevision": 1,
+    "signerAddress": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+    "status": "awaiting_authorization",
+    "expiresAt": "2026-01-01T01:00:00Z",
+    "challenges": [
+      {
+        "entryIndex": 0,
+        "authorizer": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+        "preimageXdr": "<signer AUTH preimage XDR>",
+        "expiresAtLedger": 6000000
+      }
+    ],
+    "hostedReviewUrl": "https://stellar-testnet.multisig.tools/a#01EXAMP1E0000001"
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "integration.intent.inspect"
+    ]
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.intent.inspect"
+      ]
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "integration.intent.inspect"
+    ]
+  }
+}
+```
+
+## integration.execution.inspect
+
+Inspect this owning Integration configuration, execution capability and public channel identities for the selected network. No secrets are returned.
+
+**HTTP:** `GET /integration-execution`  
+**Access:** `integration:read` · **Effect:** `none`
+
+**Authentication:** `integrationBearer`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `network` | query | Yes | Must match both this deployment and the Integration credential scope. | `testnet` |
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "integration.execution.inspect",
+  "version": 1,
+  "serviceId": "example-finance-01",
+  "network": "testnet",
+  "configuration": {
+    "serviceId": "example-finance-01",
+    "label": "Example integration",
+    "enabled": true,
+    "networks": [
+      "testnet"
+    ],
+    "source": "durable",
+    "classicSourceAccounts": [
+      "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+    ],
+    "classicExternalExecutionSourceAccounts": [],
+    "sorobanContracts": [],
+    "sorobanExecutionAccounts": [],
+    "profile": {
+      "version": 1,
+      "authorizationExperience": "hosted"
+    }
+  },
+  "classic": {
+    "scopeConfigured": true,
+    "managedAvailable": false,
+    "managedSourceAccountCount": 0,
+    "externalSourceAccountCount": 0,
+    "channelCount": 0,
+    "channelSoftLimit": 1,
+    "channelAccounts": []
+  },
+  "soroban": {
+    "managedAvailable": false,
+    "externalExecutorCount": 0
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## integration.classic.payment.prepare
+
+Prepare a scoped external-service Classic payment transaction without requiring the service to construct XDR.
+
+**HTTP:** `POST /payment-prepare`  
+**Access:** `integration:write` · **Effect:** `none`
+
+**Authentication:** `integrationBearer`
+
+**Request example**
+
+```json
+{
+  "network": "testnet",
+  "sourceAccount": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+  "payments": [
+    {
+      "destination": "GDJXYXYMPGVWATWB7KUC6C5KGB3DDUWP76WBPBAL5V4WN6UUR6JKWWXB",
+      "amount": "1.5",
+      "asset": {
+        "type": "native"
+      }
+    }
+  ],
+  "memo": "invoice-42",
+  "lifetimeSeconds": 3600
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "classic.payment.prepare",
+  "version": 1,
+  "network": "testnet",
+  "sourceAccount": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+  "sourceSequence": "100",
+  "feeStroops": "100",
+  "validUntil": "2026-01-01T01:00:00Z",
+  "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "xdr": "<prepared envelope XDR>",
+  "paymentCount": 1
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## integration.classic.account.create.prepare
+
+Prepare a scoped external-service CreateAccount transaction without silently treating it as Payment.
+
+**HTTP:** `POST /account-create-prepare`  
+**Access:** `integration:write` · **Effect:** `none`
+
+**Authentication:** `integrationBearer`
+
+**Request example**
+
+```json
+{
+  "network": "testnet",
+  "sourceAccount": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+  "destination": "GDJXYXYMPGVWATWB7KUC6C5KGB3DDUWP76WBPBAL5V4WN6UUR6JKWWXB",
+  "startingBalance": "5",
+  "lifetimeSeconds": 3600
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "classic.account.create.prepare",
+  "version": 1,
+  "network": "testnet",
+  "sourceAccount": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+  "sourceSequence": "100",
+  "feeStroops": "100",
+  "validUntil": "2026-01-01T01:00:00Z",
+  "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "xdr": "<prepared envelope XDR>",
+  "destination": "GDJXYXYMPGVWATWB7KUC6C5KGB3DDUWP76WBPBAL5V4WN6UUR6JKWWXB",
+  "startingBalance": "5"
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## integration.request.create
+
+Create a scoped external-service Classic Request; semantic managed execution can use MultiSigTools transaction-source channels.
+
+**HTTP:** `POST /request`  
+**Access:** `integration:write` · **Effect:** `coordination-state`
+
+**Authentication:** `integrationBearer`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-request-id` | header | Conditional / optional | Authorization or Proposal id. | `01EXAMP1E0000002` |
+| `Idempotency-Key` | header | Yes | Required for Agent or Integration Request creation; ignored for Human sessions. | `example-transfer-01` |
+
+**Request example**
+
+```json
+{
+  "network": "testnet",
+  "xdr": "<classic.payment.prepare xdr>"
+}
+```
+
+**Response 200** — Idempotent replay.
+
+```json
+{
+  "request": {
+    "id": "01EXAMP1E0000002",
+    "network": "testnet",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "baseXdr": "<prepared envelope XDR>",
+    "mergedXdr": "<prepared envelope XDR>",
+    "createdAt": "2026-01-01T00:00:00Z",
+    "expiresAt": "2026-01-01T01:00:00Z",
+    "contributionCount": 0,
+    "signatureCount": 0,
+    "status": "awaiting_signatures",
+    "statusReason": "signatures_required"
+  },
+  "replayed": true,
+  "job": {
+    "version": 1,
+    "id": "01EXAMP1E0000002",
+    "kind": "classic_transaction",
+    "network": "testnet",
+    "state": "waiting_for_authorization",
+    "nextActions": [],
+    "actionCalls": {},
+    "reviewUrl": "https://stellar-testnet.multisig.tools/s#01EXAMP1E0000002",
+    "statusReason": "signatures_required"
+  }
+}
+```
+
+**Response 201** — Created.
+
+```json
+{
+  "request": {
+    "id": "01EXAMP1E0000002",
+    "network": "testnet",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "baseXdr": "<prepared envelope XDR>",
+    "mergedXdr": "<prepared envelope XDR>",
+    "createdAt": "2026-01-01T00:00:00Z",
+    "expiresAt": "2026-01-01T01:00:00Z",
+    "contributionCount": 0,
+    "signatureCount": 0,
+    "status": "awaiting_signatures",
+    "statusReason": "signatures_required"
+  },
+  "replayed": false,
+  "job": {
+    "version": 1,
+    "id": "01EXAMP1E0000002",
+    "kind": "classic_transaction",
+    "network": "testnet",
+    "state": "waiting_for_authorization",
+    "nextActions": [],
+    "actionCalls": {},
+    "reviewUrl": "https://stellar-testnet.multisig.tools/s#01EXAMP1E0000002",
+    "statusReason": "signatures_required"
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "required",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": [],
+    "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+  },
+  "onError": {
+    "idempotency_conflict": {
+      "strategy": "stop",
+      "nextOperationIds": [],
+      "condition": "Do not change the payload or key merely to bypass a conflict."
+    }
+  },
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "integration.request.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "integration.request.inspect"
+    ]
+  }
+}
+```
+
+## integration.request.execution.reconcile
+
+Verify the owning Integration's exact external Classic transaction hash, preserving successful/failed ledger evidence or proven non-inclusion. Unknown never authorizes a replacement.
+
+**HTTP:** `GET /request`  
+**Access:** `integration:read` · **Effect:** `none`
+
+**Authentication:** `integrationBearer`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-request-id` | header | Yes | Authorization or Proposal id. | `01EXAMP1E0000002` |
+| `view` | query | Yes | Verify the exact stored hash of this external Classic Request. | `reconciliation` |
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "integration.request.execution.reconcile",
+  "version": 1,
+  "requestId": "01EXAMP1E0000002",
+  "network": "testnet",
+  "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "replayed": false,
+  "outcome": "unknown",
+  "observed": false
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": [
+      "integration.request.execution.reconcile"
+    ],
+    "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "integration.request.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.request.execution.reconcile"
+      ],
+      "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.request.execution.reconcile"
+      ],
+      "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.request.execution.reconcile"
+      ],
+      "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.request.execution.reconcile"
+      ],
+      "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.request.execution.reconcile"
+      ],
+      "condition": "Reconcile the same transactionHash; outcome unknown is not proof of non-inclusion."
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "integration.request.inspect"
+    ]
+  },
+  "onOutcome": {
+    "unknown": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "integration.request.execution.reconcile"
+      ],
+      "condition": "Do not create or sign a replacement while execution remains unknown. Stop automatic polling and escalate for manual reconciliation if bounded retries do not resolve it, or the signed validity window or historical coverage is unavailable."
+    },
+    "successful": {
+      "strategy": "complete",
+      "nextOperationIds": [],
+      "condition": "Retain the verified ledger receipt. Do not repeat the business payment."
+    },
+    "failed": {
+      "strategy": "human_review",
+      "nextOperationIds": [],
+      "condition": "The transaction was included but failed. Review the receipt before a separately authorized replacement."
+    },
+    "not_included": {
+      "strategy": "human_review",
+      "nextOperationIds": [],
+      "condition": "The original validity window is closed and non-inclusion is verified. Review before a separately authorized replacement."
+    }
+  }
+}
+```
+
+## integration.request.inspect
+
+Read an external service's own Classic multisig Request and merged authorization evidence.
+
+**HTTP:** `GET /request`  
+**Access:** `integration:read` · **Effect:** `none`
+
+**Authentication:** `integrationBearer`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-request-id` | header | Yes | Authorization or Proposal id. | `01EXAMP1E0000002` |
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "request": {
+    "id": "01EXAMP1E0000002",
+    "network": "testnet",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "baseXdr": "<prepared envelope XDR>",
+    "mergedXdr": "<prepared envelope XDR>",
+    "createdAt": "2026-01-01T00:00:00Z",
+    "expiresAt": "2026-01-01T01:00:00Z",
+    "contributionCount": 0,
+    "signatureCount": 0,
+    "status": "awaiting_signatures",
+    "statusReason": "signatures_required"
+  },
+  "job": {
+    "version": 1,
+    "id": "01EXAMP1E0000002",
+    "kind": "classic_transaction",
+    "network": "testnet",
+    "state": "waiting_for_authorization",
+    "nextActions": [],
+    "actionCalls": {},
+    "reviewUrl": "https://stellar-testnet.multisig.tools/s#01EXAMP1E0000002",
+    "statusReason": "signatures_required"
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "integration.request.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "integration.request.inspect"
+    ]
+  }
+}
+```
+
+## integration.request.submit
+
+Retry submission of an already-authorized MultiSigTools-managed Classic Request owned by this Integration.
+
+**HTTP:** `PUT /request`  
+**Access:** `integration:write` · **Effect:** `network-submit`
+
+**Authentication:** `integrationBearer`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-request-id` | header | Yes | Authorization or Proposal id. | `01EXAMP1E0000002` |
+
+**Request example**
+
+```json
+{}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "request": {
+    "id": "01EXAMP1E0000002",
+    "network": "testnet",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "baseXdr": "<prepared envelope XDR>",
+    "mergedXdr": "<signed envelope XDR>",
+    "createdAt": "2026-01-01T00:00:00Z",
+    "expiresAt": "2026-01-01T01:00:00Z",
+    "contributionCount": 1,
+    "signatureCount": 1,
+    "status": "submitted",
+    "statusReason": "ledger_confirmed",
+    "submission": {
+      "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "ledger": 5999900,
+      "submittedAt": "2026-01-01T00:00:00Z"
+    }
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "integration.request.inspect"
+    ],
+    "condition": "Check the existing Request and exact Stellar transaction hash; do not create a second payment."
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "integration.request.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.request.inspect"
+      ],
+      "condition": "Check the existing Request and exact Stellar transaction hash; do not create a second payment."
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.request.inspect"
+      ],
+      "condition": "Check the existing Request and exact Stellar transaction hash; do not create a second payment."
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.request.inspect"
+      ],
+      "condition": "Check the existing Request and exact Stellar transaction hash; do not create a second payment."
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.request.inspect"
+      ],
+      "condition": "Check the existing Request and exact Stellar transaction hash; do not create a second payment."
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "integration.request.inspect"
+      ],
+      "condition": "Check the existing Request and exact Stellar transaction hash; do not create a second payment."
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "integration.request.inspect"
+    ]
+  }
+}
+```

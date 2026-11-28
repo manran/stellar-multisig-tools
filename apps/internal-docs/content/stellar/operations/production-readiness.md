@@ -373,6 +373,8 @@ Current Testnet production topology:
 
 The pre-cutover Vercel API DNS target is recorded server-side as a rollback reference. It is no longer the canonical Testnet API authority, and stale Vercel Blob coordination/private objects must not be treated as a current data rollback target.
 
+Before every Testnet API rollout, verify the existing public G-address in STELLAR_SOROBAN_PLANNING_SOURCE_TESTNET is present in the runtime env and active on Testnet. Compose rejects a missing planning source. After rollout, a real disposable Soroban Intent must be created and inspected; process health and public discovery alone cannot verify the planning path.
+
 For an API application regression:
 
 ```text

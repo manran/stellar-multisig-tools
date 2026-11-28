@@ -1,0 +1,109 @@
+---
+title: Runtime configuration
+description: Generated logical operation contracts for runtime.
+---
+
+[All operations](/stellar/developers/api-reference)
+
+Contract revision: **1.1.3**. Generated from the same source as the [machine-readable OpenAPI](https://api-testnet.multisig.tools/stellar/openapi.json).
+
+Base URL: https://api-testnet.multisig.tools/stellar. Examples illustrate structure; replace all example credentials, identifiers, XDR and signatures with actual values. For conditional permissions, see [API and webhooks](/stellar/developers/api).
+
+Security alternatives: humanBearer = verified Human bearer token; humanSession = verified browser session; agentBearer = scoped MSA; integrationBearer = scoped MSI; treasuryAuditBearer = scoped MTA; requestCapability = private Request link; intentCapability = origin-bound browser capability.
+
+## runtime.config.inspect
+
+Read the deployment-owned Stellar network policy and Classic/Soroban managed execution availability.
+
+**HTTP:** `GET /runtime-config`  
+**Access:** `public` · **Effect:** `none`
+
+**Authentication:** public
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "operation": "runtime.config.inspect",
+  "version": 1,
+  "stellarNetwork": "testnet",
+  "fixedNetwork": "testnet",
+  "capabilities": {
+    "classicManagedExecution": {
+      "public": false,
+      "testnet": false
+    },
+    "sorobanManagedExecution": {
+      "public": false,
+      "testnet": false
+    }
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```

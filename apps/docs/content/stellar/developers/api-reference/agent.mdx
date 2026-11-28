@@ -1,0 +1,981 @@
+---
+title: Agent pairing and access
+description: Generated logical operation contracts for agent.
+---
+
+[All operations](/stellar/developers/api-reference)
+
+Contract revision: **1.1.3**. Generated from the same source as the [machine-readable OpenAPI](https://api-testnet.multisig.tools/stellar/openapi.json).
+
+Base URL: https://api-testnet.multisig.tools/stellar. Examples illustrate structure; replace all example credentials, identifiers, XDR and signatures with actual values. For conditional permissions, see [API and webhooks](/stellar/developers/api).
+
+Security alternatives: humanBearer = verified Human bearer token; humanSession = verified browser session; agentBearer = scoped MSA; integrationBearer = scoped MSI; treasuryAuditBearer = scoped MTA; requestCapability = private Request link; intentCapability = origin-bound browser capability.
+
+## agent.grant.inspect
+
+Inspect a short-lived Testnet Agent pairing request without credentials.
+
+**HTTP:** `GET /agent-grants`  
+**Access:** `public` · **Effect:** `none`
+
+**Authentication:** public
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `id` | query | Yes | Pairing request ID, not the secret device code. | `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` |
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "requestId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "userCode": "ABCD-EFGH",
+  "label": "Finance assistant",
+  "access": "read",
+  "network": "testnet",
+  "expiresAt": "2026-01-01T01:00:00Z",
+  "status": "pending"
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## agent.grant.challenge
+
+Prepare the distinct Agent approval challenge with id and challenge=1, using a Human session and matching signer address header.
+
+**HTTP:** `GET /agent-grants`  
+**Access:** `human` · **Effect:** `none`
+
+**Authentication:** `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Yes | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `id` | query | Yes | Pairing request ID, not the secret device code. | `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` |
+| `challenge` | query | Yes | Wallet approval challenge; requires a matching Human session. | `1` |
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "requestId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "userCode": "ABCD-EFGH",
+  "label": "Finance assistant",
+  "access": "read",
+  "network": "testnet",
+  "expiresAt": "2026-01-01T01:00:00Z",
+  "status": "pending",
+  "message": "<consent message>",
+  "transaction": "<consent challenge XDR>",
+  "signer": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## agent.grant.request
+
+Start a short-lived Agent pairing and receive a one-time device secret.
+
+**HTTP:** `POST /agent-grants`  
+**Access:** `public` · **Effect:** `private-state`
+
+**Authentication:** public
+
+**Request example**
+
+```json
+{
+  "action": "request",
+  "network": "testnet",
+  "label": "Finance assistant",
+  "access": "read"
+}
+```
+
+**Response 201** — Created.
+
+```json
+{
+  "requestId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "userCode": "ABCD-EFGH",
+  "label": "Finance assistant",
+  "access": "read",
+  "network": "testnet",
+  "expiresAt": "2026-01-01T01:00:00Z",
+  "status": "pending",
+  "deviceCode": "mgd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "verificationUri": "https://stellar-testnet.multisig.tools/agent-access?grant=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "intervalSeconds": 5
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "start_new_request",
+    "nextOperationIds": [
+      "agent.grant.request"
+    ],
+    "condition": "If no verification URL was delivered, the unapproved request expires. Send only the new approval link."
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "start_new_request",
+      "nextOperationIds": [
+        "agent.grant.request"
+      ],
+      "condition": "If no verification URL was delivered, the unapproved request expires. Send only the new approval link."
+    },
+    "500": {
+      "strategy": "start_new_request",
+      "nextOperationIds": [
+        "agent.grant.request"
+      ],
+      "condition": "If no verification URL was delivered, the unapproved request expires. Send only the new approval link."
+    },
+    "502": {
+      "strategy": "start_new_request",
+      "nextOperationIds": [
+        "agent.grant.request"
+      ],
+      "condition": "If no verification URL was delivered, the unapproved request expires. Send only the new approval link."
+    },
+    "503": {
+      "strategy": "start_new_request",
+      "nextOperationIds": [
+        "agent.grant.request"
+      ],
+      "condition": "If no verification URL was delivered, the unapproved request expires. Send only the new approval link."
+    },
+    "504": {
+      "strategy": "start_new_request",
+      "nextOperationIds": [
+        "agent.grant.request"
+      ],
+      "condition": "If no verification URL was delivered, the unapproved request expires. Send only the new approval link."
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## agent.grant.poll
+
+Exchange the approved one-time device secret for the signer Agent credential exactly once.
+
+**HTTP:** `POST /agent-grants`  
+**Access:** `public` · **Effect:** `private-state`
+
+**Authentication:** public
+
+**Request example**
+
+```json
+{
+  "action": "poll",
+  "deviceCode": "mgd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "status": "authorization_pending"
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": [
+      "agent.grant.poll"
+    ],
+    "condition": "Poll with the same deviceCode at the returned interval. A consumed claim cannot mint again."
+  },
+  "onError": {
+    "already_exchanged": {
+      "strategy": "human_recovery",
+      "nextOperationIds": [
+        "agent.access.list",
+        "agent.access.revoke",
+        "agent.grant.request"
+      ],
+      "condition": "Use details.credentialId to identify the exact reserved credential; check again if issuance is still uncertain. Revoke any issued credential before a fresh Human-approved pairing. No secret is returned again.",
+      "responseSchema": {
+        "$ref": "#/components/schemas/AgentGrantRecoveryError"
+      }
+    },
+    "exchange_outcome_unknown": {
+      "strategy": "human_recovery",
+      "nextOperationIds": [
+        "agent.access.list",
+        "agent.access.revoke",
+        "agent.grant.request"
+      ],
+      "condition": "Use details.credentialId to identify the exact reserved credential; check again if issuance is still uncertain. Revoke any issued credential before a fresh Human-approved pairing. No secret is returned again.",
+      "responseSchema": {
+        "$ref": "#/components/schemas/AgentGrantRecoveryError"
+      }
+    },
+    "grant_expired": {
+      "strategy": "human_recovery",
+      "nextOperationIds": [
+        "agent.access.list",
+        "agent.access.revoke",
+        "agent.grant.request"
+      ],
+      "condition": "Use details.credentialId to identify the exact reserved credential; check again if issuance is still uncertain. Revoke any issued credential before a fresh Human-approved pairing. No secret is returned again.",
+      "responseSchema": {
+        "$ref": "#/components/schemas/AgentGrantRecoveryError"
+      }
+    },
+    "agent_credential_limit_reached": {
+      "strategy": "human_recovery",
+      "nextOperationIds": [
+        "agent.access.list",
+        "agent.access.revoke",
+        "agent.grant.request"
+      ],
+      "condition": "Use details.credentialId to identify the exact reserved credential; check again if issuance is still uncertain. Revoke any issued credential before a fresh Human-approved pairing. No secret is returned again.",
+      "responseSchema": {
+        "$ref": "#/components/schemas/AgentGrantRecoveryError"
+      }
+    },
+    "agent_credential_conflict": {
+      "strategy": "human_recovery",
+      "nextOperationIds": [
+        "agent.access.list",
+        "agent.access.revoke",
+        "agent.grant.request"
+      ],
+      "condition": "Use details.credentialId to identify the exact reserved credential; check again if issuance is still uncertain. Revoke any issued credential before a fresh Human-approved pairing. No secret is returned again.",
+      "responseSchema": {
+        "$ref": "#/components/schemas/AgentGrantRecoveryError"
+      }
+    },
+    "agent_pairing_rate_limited": {
+      "strategy": "human_recovery",
+      "nextOperationIds": [
+        "agent.access.list",
+        "agent.access.revoke",
+        "agent.grant.request"
+      ],
+      "condition": "Use details.credentialId to identify the exact reserved credential; check again if issuance is still uncertain. Revoke any issued credential before a fresh Human-approved pairing. No secret is returned again.",
+      "responseSchema": {
+        "$ref": "#/components/schemas/AgentGrantRecoveryError"
+      }
+    }
+  },
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "agent.grant.poll"
+      ],
+      "condition": "Poll with the same deviceCode at the returned interval. A consumed claim cannot mint again."
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "agent.grant.poll"
+      ],
+      "condition": "Poll with the same deviceCode at the returned interval. A consumed claim cannot mint again."
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "agent.grant.poll"
+      ],
+      "condition": "Poll with the same deviceCode at the returned interval. A consumed claim cannot mint again."
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "agent.grant.poll"
+      ],
+      "condition": "Poll with the same deviceCode at the returned interval. A consumed claim cannot mint again."
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [
+        "agent.grant.poll"
+      ],
+      "condition": "Poll with the same deviceCode at the returned interval. A consumed claim cannot mint again."
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## agent.grant.approve
+
+Human signer approves a request with a distinct wallet consent signature.
+
+**HTTP:** `POST /agent-grants`  
+**Access:** `human` · **Effect:** `private-state`
+
+**Authentication:** `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Yes | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+
+**Request example**
+
+```json
+{
+  "action": "approve",
+  "requestId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "mode": "transaction",
+  "transaction": "<signed consent challenge XDR>"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "status": "approved"
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "agent.grant.inspect"
+    ],
+    "condition": "Read the pairing status before repeating a decision."
+  },
+  "onError": {
+    "grant_already_decided": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.grant.inspect"
+      ],
+      "condition": "Read the pairing status before repeating a decision."
+    },
+    "grant_expired": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    }
+  },
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.grant.inspect"
+      ],
+      "condition": "Read the pairing status before repeating a decision."
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.grant.inspect"
+      ],
+      "condition": "Read the pairing status before repeating a decision."
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.grant.inspect"
+      ],
+      "condition": "Read the pairing status before repeating a decision."
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.grant.inspect"
+      ],
+      "condition": "Read the pairing status before repeating a decision."
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.grant.inspect"
+      ],
+      "condition": "Read the pairing status before repeating a decision."
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## agent.grant.deny
+
+Human signer denies a pending pairing using a matching verified session.
+
+**HTTP:** `POST /agent-grants`  
+**Access:** `human` · **Effect:** `private-state`
+
+**Authentication:** `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Yes | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+
+**Request example**
+
+```json
+{
+  "action": "deny",
+  "requestId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "status": "denied"
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "agent.grant.inspect"
+    ],
+    "condition": "Read the pairing status before repeating a decision."
+  },
+  "onError": {
+    "grant_already_decided": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.grant.inspect"
+      ],
+      "condition": "Read the pairing status before repeating a decision."
+    },
+    "grant_expired": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    }
+  },
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.grant.inspect"
+      ],
+      "condition": "Read the pairing status before repeating a decision."
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.grant.inspect"
+      ],
+      "condition": "Read the pairing status before repeating a decision."
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.grant.inspect"
+      ],
+      "condition": "Read the pairing status before repeating a decision."
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.grant.inspect"
+      ],
+      "condition": "Read the pairing status before repeating a decision."
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.grant.inspect"
+      ],
+      "condition": "Read the pairing status before repeating a decision."
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## agent.access.list
+
+List the authenticated signer's Agent credential summaries; secrets are never returned.
+
+**HTTP:** `GET /agent-access`  
+**Access:** `human` · **Effect:** `none`
+
+**Authentication:** `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Yes | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "principal": {
+    "type": "signer",
+    "network": "testnet",
+    "address": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+  },
+  "credentials": []
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {
+    "agent_credential_not_found": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    }
+  },
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## agent.access.revoke
+
+Revoke one credential belonging to the authenticated signer using its credentialId.
+
+**HTTP:** `DELETE /agent-access`  
+**Access:** `human` · **Effect:** `private-state`
+
+**Authentication:** `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Yes | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+
+**Request example**
+
+```json
+{
+  "credentialId": "example-credential"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "principal": {
+    "type": "signer",
+    "network": "testnet",
+    "address": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P"
+  },
+  "credential": {
+    "credentialId": "example-credential",
+    "revokedAt": "2026-01-01T00:00:00Z"
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "agent.access.list"
+    ]
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.access.list"
+      ]
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.access.list"
+      ]
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.access.list"
+      ]
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.access.list"
+      ]
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "agent.access.list"
+      ]
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```

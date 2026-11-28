@@ -81,6 +81,10 @@ export async function signerWorkspaceCallerFromRequest(
     return { ...credential.principal, actor: 'agent' as const, access: credential.access };
   }
   const session = await requirePrivateWorkspaceSession(authStore, request, authConfigForRequest(request), missingMessage);
+  const selectedAddress = privateSessionAddressFromRequest(request);
+  if (selectedAddress && selectedAddress !== session.address) {
+    throw new CallerAuthenticationError('The selected wallet does not match the Human session. Unlock that wallet and retry.', 403, 'session_address_mismatch');
+  }
   assertDeploymentNetwork(session.network);
   return { type: 'signer' as const, address: session.address, network: session.network, actor: 'human' as const };
 }

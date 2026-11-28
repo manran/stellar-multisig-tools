@@ -11,6 +11,7 @@ interface Props {
   semantics?: 'name' | 'note';
   allowNotificationEmail?: boolean;
   showEmailPreview?: boolean;
+  standaloneContact?: boolean;
 }
 
 export default function AddressAliasEditor(props: Props) {
@@ -26,6 +27,7 @@ function ScopedAddressAliasEditor({
   semantics = 'name',
   allowNotificationEmail = false,
   showEmailPreview = true,
+  standaloneContact = false,
 }: Props) {
   const { labelFor, emailFor, saveAlias, removeAlias } = useAddressBook();
   const currentLabel = labelFor(address, subjectType);
@@ -33,6 +35,7 @@ function ScopedAddressAliasEditor({
   const noteMode = semantics === 'note';
   const noun = noteMode ? 'note' : 'name';
   const [editing, setEditing] = useState(false);
+  const [confirmRemoval, setConfirmRemoval] = useState(false);
   const [draft, setDraft] = useState(currentLabel);
   const [draftEmail, setDraftEmail] = useState(currentEmail);
   const [busy, setBusy] = useState(false);
@@ -64,11 +67,13 @@ function ScopedAddressAliasEditor({
   }
 
   async function remove() {
+    if (busy) return;
     setBusy(true);
     setError('');
     try {
       await removeAlias(address, subjectType);
       setEditing(false);
+      setConfirmRemoval(false);
       setDraft('');
       setDraftEmail('');
     } catch (cause) {
@@ -96,6 +101,15 @@ function ScopedAddressAliasEditor({
           <Pencil className="h-3.5 w-3.5" />
           {!compact && <span>{allowNotificationEmail ? (currentLabel || currentEmail ? 'Edit contact' : 'Add contact') : noteMode ? (currentLabel ? 'Edit note' : 'Add note') : (currentLabel ? 'Rename' : 'Name this')}</span>}
         </button>
+        {standaloneContact && currentLabel && (confirmRemoval ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span>Remove this saved contact?</span>
+            <button type="button" disabled={busy} className="font-semibold text-red-700 dark:text-red-300" onClick={() => void remove()}>Confirm removal</button>
+            <button type="button" disabled={busy} className="font-semibold" onClick={() => setConfirmRemoval(false)}>Keep contact</button>
+          </div>
+        ) : (
+          <button type="button" disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10" onClick={() => setConfirmRemoval(true)}><Trash2 className="h-3.5 w-3.5" />Remove contact</button>
+        ))}
         {allowNotificationEmail && showEmailPreview && currentEmail && <div className="mt-1 max-w-[240px] break-all text-[11px] text-neutral-400">{currentEmail}</div>}
         {error && <div className="mt-1 max-w-[240px] text-xs text-red-700 dark:text-red-300">{error}</div>}
       </div>
@@ -108,6 +122,7 @@ function ScopedAddressAliasEditor({
         <div className="min-w-0 flex-1 space-y-2">
           <input
             autoFocus
+            aria-label={noteMode ? 'Personal note' : 'Contact name'}
             value={draft}
             maxLength={64}
             onChange={(event) => setDraft(event.target.value)}
@@ -138,7 +153,7 @@ function ScopedAddressAliasEditor({
         </div>
         <button type="button" disabled={busy || !draft.trim()} onClick={save} className="rounded-lg p-2 text-emerald-700 hover:bg-emerald-500/10 disabled:opacity-40 dark:text-emerald-300" aria-label={allowNotificationEmail ? 'Save contact' : noteMode ? 'Save note' : 'Save name'}><Check className="h-4 w-4" /></button>
         <button type="button" disabled={busy} onClick={() => setEditing(false)} className="rounded-lg p-2 text-neutral-500 hover:bg-black/5 dark:hover:bg-white/10" aria-label={allowNotificationEmail ? 'Cancel contact editing' : noteMode ? 'Cancel note' : 'Cancel naming'}><X className="h-4 w-4" /></button>
-        {currentLabel && <button type="button" disabled={busy} onClick={() => void remove()} className="rounded-lg p-2 text-red-600 hover:bg-red-500/10 disabled:opacity-40" aria-label={allowNotificationEmail ? 'Remove contact' : noteMode ? 'Remove note' : 'Remove name'}><Trash2 className="h-4 w-4" /></button>}
+        {currentLabel && !standaloneContact && <button type="button" disabled={busy} onClick={() => void remove()} className="rounded-lg p-2 text-red-600 hover:bg-red-500/10 disabled:opacity-40" aria-label={allowNotificationEmail ? 'Remove contact' : noteMode ? 'Remove note' : 'Remove name'}><Trash2 className="h-4 w-4" /></button>}
       </div>
       {error && <div className="mt-1.5 text-xs text-red-700 dark:text-red-300">{error}</div>}
       <div className="mt-1 text-[11px] text-neutral-400">{allowNotificationEmail

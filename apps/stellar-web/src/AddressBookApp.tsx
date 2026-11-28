@@ -241,7 +241,7 @@ export default function AddressBookApp() {
               <div className="mst-operations-section-head"><h2>Saved contacts <span className="mst-operations-count">{visibleContacts.length}</span></h2><p>Other addresses saved for future payments and proposals.</p></div>
               <div className="mst-address-list">
                 {visibleContacts.map((entry) => (
-                  <div key={entry.address} className="mst-address-row"><div className="min-w-0 flex-1"><div className="font-bold">{visibleLabelFor(entry.address, 'account')}</div><div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{entry.address}</div></div><AddressAliasEditor address={entry.address} subjectType="account" /></div>
+                  <div key={entry.address} className="mst-address-row"><div className="min-w-0 flex-1"><div className="font-bold">{visibleLabelFor(entry.address, 'account')}</div><div className="mt-1 break-all font-mono text-xs text-neutral-500 dark:text-neutral-400">{entry.address}</div></div><AddressAliasEditor address={entry.address} subjectType="account" standaloneContact /></div>
                 ))}
               </div>
             </section>

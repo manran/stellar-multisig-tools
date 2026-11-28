@@ -93,6 +93,11 @@ test('Signer workspace accepts verified Human bearer and cookie sessions, not se
   ]) {
     assert.deepEqual(await signerWorkspaceCallerFromRequest(agentStore, authStore, request, 'read', 'Unlock wallet'), principal);
   }
+  const selected = (address: string) => new Request('https://stellar-testnet.multisig.tools/api/contracts', { headers: {
+    Authorization: 'Bearer ' + session.token, 'x-multisig-session-address': address,
+  } });
+  assert.deepEqual(await signerWorkspaceCallerFromRequest(agentStore, authStore, selected(signer.publicKey()), 'write', 'Unlock wallet'), principal);
+  await assert.rejects(() => signerWorkspaceCallerFromRequest(agentStore, authStore, selected(Keypair.random().publicKey()), 'write', 'Unlock wallet'), { status: 403, code: 'session_address_mismatch' });
   const agent = await createSignerAgentCredential(agentStore, { type: 'signer', network: 'testnet', address: signer.publicKey() }, 'Monitor', 'read', signer.publicKey());
   const caller = await signerWorkspaceCallerFromRequest(agentStore, authStore, bearer(agent.apiKey), 'read', 'Unlock wallet');
   assert.equal(caller.actor, 'agent');

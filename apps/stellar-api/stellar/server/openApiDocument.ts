@@ -56,8 +56,8 @@ function operationParameters(path: string, method: string): OpenApiObject[] {
       parameter('unlock_seconds', 'query', false, { type: 'integer', enum: [900, 3600, 28800] }, 'Requested session duration; defaults to 3600.'),
     );
   }
-  if (['/agent-grants', '/agent-access', '/intent', '/request', '/payment-prepare', '/account-create-prepare'].includes(path)) {
-    values.push(parameter('x-multisig-session-address', 'header', path === '/agent-access', { type: 'string', pattern: '^G[A-Z2-7]{55}$' }, 'Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials.'));
+  if (['/agent-grants', '/agent-access', '/intent', '/request', '/payment-prepare', '/account-create-prepare', '/contracts', '/address-book', '/inbox', '/activity'].includes(path)) {
+    values.push(parameter('x-multisig-session-address', 'header', path === '/agent-access', { type: 'string', pattern: '^G[A-Z2-7]{55}$' }, ['/contracts', '/address-book', '/inbox', '/activity'].includes(path) ? 'Optional Human wallet selector. If supplied, must match the authenticated Human signer. Not used for machine credentials.' : 'Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials.'));
   }
   if (path === '/agent-grants' && method === 'get') {
     values.push(
@@ -1982,7 +1982,7 @@ function logicalOperationContracts(paths: OpenApiObject): OpenApiObject {
     const { id, path, method, access, effect } = operation;
     const transport = (paths[path] as OpenApiObject)[method.toLowerCase()] as OpenApiObject;
     let parameters = ((transport.parameters ?? []) as OpenApiObject[]).filter((p) =>
-      (p.name !== 'x-multisig-session-address' || access === 'human' || (access.startsWith('principal:') && ['/intent', '/request'].includes(path)))
+      (p.name !== 'x-multisig-session-address' || access === 'human' || (access.startsWith('principal:') && ['/intent', '/request', '/contracts', '/address-book', '/inbox', '/activity'].includes(path)))
       && p.name !== 'x-multisig-capability'
       && (p.name !== 'X-MultiSig-Intent-Capability' || access.startsWith('browser:')));
     parameters = parameters.map((p) => ({

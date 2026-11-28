@@ -1,0 +1,757 @@
+---
+title: Classic Proposals
+description: Generated logical operation contracts for proposal.
+---
+
+[All operations](/stellar/developers/api-reference)
+
+Contract revision: **1.1.3**. Generated from the same source as the [machine-readable OpenAPI](https://api-testnet.multisig.tools/stellar/openapi.json).
+
+Base URL: https://api-testnet.multisig.tools/stellar. Examples illustrate structure; replace all example credentials, identifiers, XDR and signatures with actual values. For conditional permissions, see [API and webhooks](/stellar/developers/api).
+
+Security alternatives: humanBearer = verified Human bearer token; humanSession = verified browser session; agentBearer = scoped MSA; integrationBearer = scoped MSI; treasuryAuditBearer = scoped MTA; requestCapability = private Request link; intentCapability = origin-bound browser capability.
+
+## proposal.create
+
+Create a Signing Request from exact transaction XDR.
+
+**HTTP:** `POST /request`  
+**Access:** `principal:write` · **Effect:** `coordination-state`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Conditional / optional | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `x-multisig-request-id` | header | Conditional / optional | Authorization or Proposal id. | `01EXAMP1E0000002` |
+| `Idempotency-Key` | header | Conditional / optional | Required for Agent or Integration Request creation; ignored for Human sessions. | `example-transfer-01` |
+
+**Request example**
+
+```json
+{
+  "network": "testnet",
+  "xdr": "<classic.payment.prepare xdr>"
+}
+```
+
+**Response 200** — Idempotent replay.
+
+```json
+{
+  "request": {
+    "id": "01EXAMP1E0000002",
+    "network": "testnet",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "baseXdr": "<prepared envelope XDR>",
+    "mergedXdr": "<prepared envelope XDR>",
+    "createdAt": "2026-01-01T00:00:00Z",
+    "expiresAt": "2026-01-01T01:00:00Z",
+    "contributionCount": 0,
+    "signatureCount": 0,
+    "status": "awaiting_signatures",
+    "statusReason": "signatures_required"
+  },
+  "replayed": true
+}
+```
+
+**Response 201** — Created.
+
+```json
+{
+  "request": {
+    "id": "01EXAMP1E0000002",
+    "network": "testnet",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "baseXdr": "<prepared envelope XDR>",
+    "mergedXdr": "<prepared envelope XDR>",
+    "createdAt": "2026-01-01T00:00:00Z",
+    "expiresAt": "2026-01-01T01:00:00Z",
+    "contributionCount": 0,
+    "signatureCount": 0,
+    "status": "awaiting_signatures",
+    "statusReason": "signatures_required"
+  },
+  "replayed": false
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "required",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": [],
+    "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+  },
+  "onError": {
+    "idempotency_conflict": {
+      "strategy": "stop",
+      "nextOperationIds": [],
+      "condition": "Do not change the payload or key merely to bypass a conflict."
+    }
+  },
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "proposal.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": [],
+      "condition": "Same credential, Idempotency-Key and accepted input; never create a replacement to resolve uncertainty."
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "proposal.inspect"
+    ]
+  }
+}
+```
+
+## proposal.inspect
+
+Read current Signing Request state and evidence.
+
+**HTTP:** `GET /request`  
+**Access:** `principal:read` · **Effect:** `none`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession` or `requestCapability`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Conditional / optional | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `x-multisig-request-id` | header | Yes | Authorization or Proposal id. | `01EXAMP1E0000002` |
+| `view` | query | Conditional / optional | Retained signer history, or external Classic execution reconciliation for the owning Integration. | `history` |
+| `account` | query | Conditional / optional | Optional Treasury scope for history. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `x-multisig-capability` | header | Conditional / optional | Private share capability when using capability access. | `&lt;Request capability&gt;` |
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "request": {
+    "id": "01EXAMP1E0000002",
+    "network": "testnet",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "baseXdr": "<prepared envelope XDR>",
+    "mergedXdr": "<prepared envelope XDR>",
+    "createdAt": "2026-01-01T00:00:00Z",
+    "expiresAt": "2026-01-01T01:00:00Z",
+    "contributionCount": 0,
+    "signatureCount": 0,
+    "status": "awaiting_signatures",
+    "statusReason": "signatures_required"
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "retry_same_request",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "proposal.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "retry_same_request_with_backoff",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "proposal.inspect"
+    ]
+  }
+}
+```
+
+## proposal.contribute
+
+Add attributable Stellar authorization to a Signing Request.
+
+**HTTP:** `PATCH /request`  
+**Access:** `principal:sign` · **Effect:** `coordination-state`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession` or `requestCapability`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Conditional / optional | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `x-multisig-request-id` | header | Yes | Authorization or Proposal id. | `01EXAMP1E0000002` |
+| `x-multisig-capability` | header | Conditional / optional | Private share capability when using capability access. | `&lt;Request capability&gt;` |
+
+**Request example**
+
+```json
+{
+  "signedXdr": "<signed Request envelope XDR>"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "request": {
+    "id": "01EXAMP1E0000002",
+    "network": "testnet",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "baseXdr": "<prepared envelope XDR>",
+    "mergedXdr": "<signed envelope XDR>",
+    "createdAt": "2026-01-01T00:00:00Z",
+    "expiresAt": "2026-01-01T01:00:00Z",
+    "contributionCount": 1,
+    "signatureCount": 1,
+    "status": "ready",
+    "statusReason": "authorization_complete"
+  },
+  "addedSignatureCount": 1,
+  "duplicateSignatureCount": 0
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "proposal.inspect"
+    ]
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "proposal.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "proposal.inspect"
+      ]
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "proposal.inspect"
+      ]
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "proposal.inspect"
+      ]
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "proposal.inspect"
+      ]
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "proposal.inspect"
+      ]
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "proposal.inspect"
+    ]
+  }
+}
+```
+
+## proposal.decline
+
+Record a current signer decision to decline an active Proposal.
+
+**HTTP:** `PATCH /request`  
+**Access:** `principal:write` · **Effect:** `coordination-state`
+
+**Authentication:** `agentBearer` or `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Conditional / optional | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `x-multisig-request-id` | header | Yes | Authorization or Proposal id. | `01EXAMP1E0000002` |
+
+**Request example**
+
+```json
+{
+  "decision": "decline"
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "request": {
+    "id": "01EXAMP1E0000002",
+    "network": "testnet",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "baseXdr": "<prepared envelope XDR>",
+    "mergedXdr": "<prepared envelope XDR>",
+    "createdAt": "2026-01-01T00:00:00Z",
+    "expiresAt": "2026-01-01T01:00:00Z",
+    "contributionCount": 0,
+    "signatureCount": 0,
+    "status": "awaiting_signatures",
+    "statusReason": "signatures_required",
+    "declines": [
+      {
+        "signerAddress": "GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P",
+        "decidedAt": "2026-01-01T00:00:00Z"
+      }
+    ]
+  },
+  "decision": "declined"
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "inspect_then_decide",
+    "nextOperationIds": [
+      "proposal.inspect"
+    ]
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": [
+        "proposal.inspect"
+      ]
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "proposal.inspect"
+      ]
+    },
+    "500": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "proposal.inspect"
+      ]
+    },
+    "502": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "proposal.inspect"
+      ]
+    },
+    "503": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "proposal.inspect"
+      ]
+    },
+    "504": {
+      "strategy": "inspect_then_decide",
+      "nextOperationIds": [
+        "proposal.inspect"
+      ]
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": [
+      "proposal.inspect"
+    ]
+  }
+}
+```
+
+## proposal.activity.retain
+
+Retain an active Proposal in a verified Human signer Activity; Agent credentials cannot perform this operation.
+
+**HTTP:** `PATCH /request`  
+**Access:** `human` · **Effect:** `private-state`
+
+**Authentication:** `humanBearer` or `humanSession`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Yes | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `x-multisig-request-id` | header | Yes | Authorization or Proposal id. | `01EXAMP1E0000002` |
+
+**Request example**
+
+```json
+{
+  "retainActivity": true
+}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "request": {
+    "id": "01EXAMP1E0000002",
+    "network": "testnet",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "baseXdr": "<prepared envelope XDR>",
+    "mergedXdr": "<prepared envelope XDR>",
+    "createdAt": "2026-01-01T00:00:00Z",
+    "expiresAt": "2026-01-01T01:00:00Z",
+    "contributionCount": 0,
+    "signatureCount": 0,
+    "status": "awaiting_signatures",
+    "statusReason": "signatures_required"
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "human_review",
+    "nextOperationIds": []
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "human_review",
+      "nextOperationIds": []
+    },
+    "500": {
+      "strategy": "human_review",
+      "nextOperationIds": []
+    },
+    "502": {
+      "strategy": "human_review",
+      "nextOperationIds": []
+    },
+    "503": {
+      "strategy": "human_review",
+      "nextOperationIds": []
+    },
+    "504": {
+      "strategy": "human_review",
+      "nextOperationIds": []
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```
+
+## proposal.submit
+
+Submit an authorized transaction to Stellar after final review.
+
+**HTTP:** `PUT /request`  
+**Access:** `human` · **Effect:** `network-submit`
+
+**Authentication:** `humanBearer` or `humanSession` or `requestCapability`
+
+| Parameter | Location | Required | Description | Example |
+| --- | --- | --- | --- | --- |
+| `x-multisig-session-address` | header | Yes | Must match the Human session signer for selected-wallet verification. Required for Human-authorized operations that use a selected wallet; not used for machine credentials. | `GB6M5I2JKWBMJ6H6N3WGFE377VVGL4VOQD6PHFRZRA2VXKHZBT5QOP3P` |
+| `x-multisig-request-id` | header | Yes | Authorization or Proposal id. | `01EXAMP1E0000002` |
+| `x-multisig-capability` | header | Conditional / optional | Private share capability when using capability access. | `&lt;Request capability&gt;` |
+
+**Request example**
+
+```json
+{}
+```
+
+**Response 200** — Successful operation.
+
+```json
+{
+  "request": {
+    "id": "01EXAMP1E0000002",
+    "network": "testnet",
+    "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "baseXdr": "<prepared envelope XDR>",
+    "mergedXdr": "<signed envelope XDR>",
+    "createdAt": "2026-01-01T00:00:00Z",
+    "expiresAt": "2026-01-01T01:00:00Z",
+    "contributionCount": 1,
+    "signatureCount": 1,
+    "status": "submitted",
+    "statusReason": "ledger_confirmed",
+    "submission": {
+      "transactionHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "ledger": 5999900,
+      "submittedAt": "2026-01-01T00:00:00Z"
+    }
+  }
+}
+```
+
+**Retry rules**
+
+```json
+{
+  "idempotencyKey": "not_used",
+  "transportFailure": {
+    "strategy": "human_review",
+    "nextOperationIds": [],
+    "condition": "Check the existing Request and exact Stellar transaction hash; do not create a second payment."
+  },
+  "onError": {},
+  "onHttpStatus": {
+    "400": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "401": {
+      "strategy": "authenticate",
+      "nextOperationIds": []
+    },
+    "403": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "409": {
+      "strategy": "stop_and_inspect",
+      "nextOperationIds": []
+    },
+    "410": {
+      "strategy": "stop",
+      "nextOperationIds": []
+    },
+    "413": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "415": {
+      "strategy": "correct_input",
+      "nextOperationIds": []
+    },
+    "429": {
+      "strategy": "human_review",
+      "nextOperationIds": [],
+      "condition": "Check the existing Request and exact Stellar transaction hash; do not create a second payment."
+    },
+    "500": {
+      "strategy": "human_review",
+      "nextOperationIds": [],
+      "condition": "Check the existing Request and exact Stellar transaction hash; do not create a second payment."
+    },
+    "502": {
+      "strategy": "human_review",
+      "nextOperationIds": [],
+      "condition": "Check the existing Request and exact Stellar transaction hash; do not create a second payment."
+    },
+    "503": {
+      "strategy": "human_review",
+      "nextOperationIds": [],
+      "condition": "Check the existing Request and exact Stellar transaction hash; do not create a second payment."
+    },
+    "504": {
+      "strategy": "human_review",
+      "nextOperationIds": [],
+      "condition": "Check the existing Request and exact Stellar transaction hash; do not create a second payment."
+    }
+  },
+  "defaultError": {
+    "strategy": "stop_and_inspect",
+    "nextOperationIds": []
+  }
+}
+```

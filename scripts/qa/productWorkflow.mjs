@@ -284,6 +284,13 @@ async function fixturePage(width, options = {}) {
       return json(state.inboxStatus === 200 ? state.inbox : { error: 'Fixture inbox load failure.' }, state.inboxStatus);
     }
     if (url.pathname === '/api/address-book') {
+      if (request.method() === 'DELETE') {
+        const body = request.postDataJSON();
+        assert.equal(request.headers()['x-multisig-session-address'], state.contactOwner ?? addresses.alice);
+        state.contactRemoveCount = (state.contactRemoveCount ?? 0) + 1;
+        state.addressEntries = (state.addressEntries ?? []).filter(entry => !(entry.address === body.address && (entry.subject_type ?? entry.subjectType) === body.subject_type));
+        return json({ removed: true });
+      }
       if (request.method() === 'PUT') {
         const body = request.postDataJSON();
         if (state.contactSaveDelays?.[body.address]) await state.contactSaveDelays[body.address];
@@ -362,7 +369,25 @@ async function fixturePage(width, options = {}) {
         return json({ revoked: true });
       }
     }
-    if (url.pathname === '/api/contracts') return json({ contracts: [] });
+    if (url.pathname === '/api/contract-interface') {
+      const contractId = url.searchParams.get('contract');
+      return json({ contractId, network: 'testnet', methods: [{ name: 'transfer', doc: '', guided: true, inputs: [], outputs: [] }],
+        abi: { schema: 'fresnica-soroban-abi-v1', functions: [], types: [] } });
+    }
+    if (url.pathname === '/api/contracts') {
+      const owner = request.headers()['x-multisig-session-address'];
+      if (request.method() === 'GET') return json({ contracts: state.contractsByOwner?.[owner] ?? [] });
+      assert.ok(owner, 'Contract mutation missing wallet scope');
+      const { contractId, network } = request.postDataJSON();
+      const record = { contractId, network, createdAt: now, updatedAt: now };
+      state.contractsByOwner ??= {};
+      if (request.method() === 'PUT') {
+        state.contractsByOwner[owner] = [record, ...(state.contractsByOwner[owner] ?? []).filter(item => item.contractId !== contractId)];
+        return json({ contract: record });
+      }
+      state.contractsByOwner[owner] = (state.contractsByOwner[owner] ?? []).filter(item => item.contractId !== contractId);
+      return json({ removed: true });
+    }
     if (url.pathname === '/api/activity' && state.timeActivity) {
       if (url.searchParams.has('account')) return json({ address: addresses.alice, network: 'testnet', accountId: url.searchParams.get('account'), items: [state.timeActivity] });
       return json({ address: addresses.alice, network: 'testnet', actor: 'human', workItems: [{ kind: 'request', workId: requestId, activityAt: state.timeActivity.createdAt, request: state.timeActivity }] });
@@ -719,6 +744,36 @@ try {
         await visible(page, 'Vendor Example');
         assert.equal(state.contactSaveCount, 1);
         await snapshot(page, 'contacts-workbench', width);
+        const saved = page.locator('.mst-address-row').filter({ hasText: addresses.recipient });
+        await saved.getByRole('button', { name: 'Remove contact', exact: true }).click();
+        await saved.getByRole('button', { name: 'Keep contact', exact: true }).click();
+        assert.equal(state.contactRemoveCount ?? 0, 0);
+        await saved.getByRole('button', { name: 'Remove contact', exact: true }).click();
+        await snapshot(page, 'contact-removal-confirmation', width);
+        const removed = page.waitForResponse(response => response.url().endsWith('/api/address-book') && response.request().method() === 'DELETE');
+        await saved.getByRole('button', { name: 'Confirm removal' }).click();
+        await removed;
+        await saved.waitFor({ state: 'detached' });
+        assert.equal(state.contactRemoveCount, 1);
+      });
+
+      await run('contracts-save-scope', width, {}, async ({ page, state }) => {
+        const first = Asset.native().contractId(Networks.TESTNET);
+        const second = new Asset('QATEST', addresses.bob).contractId(Networks.TESTNET);
+        await page.goto(origin + '/new/contract?network=testnet&contract=' + first);
+        await page.getByRole('button', { name: 'Save to Contracts', exact: true }).click();
+        await visible(page, 'Saved contract');
+        assert.equal(state.contractsByOwner[addresses.alice][0].contractId, first);
+        await page.getByLabel('Contract', { exact: true }).fill(second);
+        await page.getByRole('button', { name: 'Save to Contracts', exact: true }).waitFor({ state: 'visible' });
+        await page.getByRole('button', { name: 'Save to Contracts', exact: true }).click();
+        await visible(page, 'Saved contract');
+        assert.equal(state.contractsByOwner[addresses.alice].length, 2);
+        await page.evaluate(wallet => window.__MST_QA_SET_WALLET__(wallet), walletState(addresses.bob));
+        await page.getByRole('button', { name: 'Save to Contracts', exact: true }).waitFor({ state: 'visible' });
+        assert.equal(await page.getByText('Saved contract', { exact: true }).count(), 0);
+        assert.equal(state.contractsByOwner[addresses.bob]?.length ?? 0, 0);
+        await snapshot(page, 'contract-wallet-scope', width);
       });
 
       if (width === 375) {

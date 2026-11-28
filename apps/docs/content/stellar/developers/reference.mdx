@@ -118,6 +118,11 @@ Testnet device pairing permits 20 attempts per actor per ten-minute window. When
 
 ## Contract change history
 
+### 1.1.3
+
+- Shared signer workspace operations accept an optional selected Human wallet header and reject a mismatch. Legacy clients may omit it; machine credentials retain their own scope.
+- Contract and contact views keep private data bound to its verified wallet.
+
 ### 1.1.2
 
 - Align logical operation parameters with conditional Human/Agent access.

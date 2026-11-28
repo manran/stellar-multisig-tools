@@ -1,0 +1,31 @@
+---
+title: Agent pairing recovery and independent signing
+description: Recover lost credential exchanges or approve an Agent using a separately controlled Stellar signing tool.
+---
+
+Return to the [Agent quickstart](/stellar/developers/agent-quickstart) for the normal pairing workflow.
+
+## Recover a lost poll response
+
+If a poll response is lost, retry **the same deviceCode** at the advised interval. A successful exchange requires both `apiKey` and `credential`. If the retry returns `already_exchanged` (409), `exchange_outcome_unknown` (503), or `grant_expired` (410), no new secret will be issued. Pass only `details.credentialId` and the recovery instruction to the Human signer, who lists and revokes that credential before approving another pairing. A credential not yet visible in the list is not proof that the prior write failed: check again if its outcome is uncertain. Older grants may not have a reserved credential ID; the signer must identify any issued credential from its name and creation time. Never share the device code. Do not start another pairing automatically.
+
+## Approve with an independent signing tool
+
+Browser wallets are optional. A signer who controls a Stellar CLI, hardware wallet, or separate signing service can use the same two signed challenges. Do this on the **signer side**, not in an untrusted requesting Agent. Never share a private key, device code, or Human session token with the requesting Agent.
+
+Use the fixed Testnet API base at https://api-testnet.multisig.tools/stellar. After the Agent has sent the verification link and code, obtain its public request ID from the link. The signer checks the request preview and explicitly approves the exact name, permission and code.
+
+1. Request a session challenge: `GET /auth?account=SIGNER_G_ADDRESS&network=testnet&unlock_seconds=3600` (operation signer.auth.challenge).
+2. Inspect the returned network, signing_key, message and transaction. Verify the sequence-zero SEP-10 XDR, server signature, signer operation source, web_auth_domain and expiry against the Testnet workspace. Ask the signer to sign the exact challenge XDR with their independent tool. Preserve the server signature. Never broadcast a challenge.
+3. Exchange the signed challenge: `POST /auth` with `{"network":"testnet","unlock_seconds":3600,"transaction":"SIGNED_CHALLENGE_XDR"}` (signer.auth.exchange). Verify the returned address and network. Keep its short-lived token private on the signer side.
+4. With Authorization: Bearer HUMAN_SESSION_TOKEN and X-MultiSig-Session-Address: SIGNER_G_ADDRESS, `GET /agent-grants?id=REQUEST_ID&challenge=1` (agent.grant.challenge). Verify the signer, permission, verification code and human-readable message. Inspect the separate sequence-zero approval XDR, server signature and exact consent message commitment. Ask the signer to approve and sign this new challenge. This is not payment approval.
+5. `POST /agent-grants` with the same two headers and `{"action":"approve","requestId":"REQUEST_ID","mode":"transaction","transaction":"SIGNED_APPROVAL_XDR"}`. A successful response is `{"status":"approved"}`; the Agent itself exchanges its private device code for the msa credential. A session alone cannot approve.
+6. To revoke, the signer uses the same session headers with `DELETE /agent-access` and `{"credentialId":"CREDENTIAL_ID"}`. `GET /agent-access` lists credential IDs and scopes, not secrets.
+
+To check the current session, call `GET /auth` without query parameters (signer.auth.status). An absent or expired session returns `{"unlocked":false,"authenticated":false}`. A valid session also returns its address, network and expiry. `DELETE /auth` (signer.auth.logout) clears the browser session cookie; it does not revoke an independently held bearer token or any Agent credential. Discard the local bearer token when ending an independent session.
+
+For message-signing tools that implement SEP-53, the auth exchange also accepts mode=sep53, challenge (the original XDR) and signature (base64); the grant approval accepts mode=sep53 and a fresh base64 signature of the returned approval message. Do not use a generic raw message signature or a private key as the proof.
+
+The Stellar transaction signature for a subsequent payment is separate again: inspect the exact Request baseXdr, obtain the signer's approval of that payment, sign it locally, and send signedXdr through proposal.contribute. The msa credential never signs for you.
+
+If browser wallet connection fails, return to the same verification link and choose another wallet, or use this independent signing flow while the request is pending. If an unexchanged request expires, ask the Agent to begin a new pairing. If credential delivery was uncertain, first follow the revocation recovery above.

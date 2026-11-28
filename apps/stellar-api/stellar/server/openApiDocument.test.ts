@@ -464,7 +464,7 @@ test('every logical Human-selected proposal or Intent action retains the conditi
   const doc = createOpenApiDocument();
   const ops = doc['x-multisig-operations'] as Record<string, any>;
   for (const op of Object.values(ops)) {
-    if (!['/request', '/intent'].includes(op.path)) continue;
+    if (!['/request', '/intent', '/contracts', '/address-book', '/inbox', '/activity'].includes(op.path)) continue;
     const human = op.security.some((s: any) => 'humanBearer' in s || 'humanSession' in s);
     const header = op.parameters.find((p: any) => p.name === 'x-multisig-session-address');
     assert.equal(Boolean(header), human, op.operationId);

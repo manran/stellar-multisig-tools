@@ -20,7 +20,7 @@
     "preview": "npm run preview -w @multisig-tools/stellar-web",
     "clean": "rm -rf dist apps/stellar-web/dist apps/directory/dist apps/web/dist",
     "lint": "tsc --noEmit",
-    "test": "tsx --test apps/stellar-web/src/stellar/*.test.ts apps/stellar-api/stellar/server/*.test.ts apps/stellar-api/stellar/platform/vercel/*.test.ts",
+    "test": "tsx --test apps/stellar-web/src/stellar/*.test.ts apps/stellar-api/stellar/server/*.test.ts apps/stellar-api/stellar/platform/vercel/*.test.ts && tsx scripts/generateApiReference.ts --check",
     "integration:credential": "tsx apps/stellar-api/scripts/createIntegrationCredential.ts",
     "integration:admin-secret": "tsx apps/stellar-api/scripts/createIntegrationAdminSecret.ts",
     "db:migrate": "tsx apps/stellar-api/scripts/applyPostgresMigrations.ts",
@@ -28,7 +28,8 @@
     "db:verify-recovery": "tsx apps/stellar-api/scripts/verifyPostgresRecovery.ts",
     "test:postgres": "tsx --test --test-concurrency=1 apps/stellar-api/stellar/db/*.test.ts",
     "dev:directory": "npm run dev -w @multisig-tools/directory",
-    "preview:directory": "npm run preview -w @multisig-tools/directory"
+    "preview:directory": "npm run preview -w @multisig-tools/directory",
+    "docs:api-reference": "tsx scripts/generateApiReference.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
